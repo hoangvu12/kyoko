@@ -67,7 +67,6 @@ kyoko --mock
 | Flag | Effect |
 | --- | --- |
 | `--mock` | Run against a local fake Discord server. |
-| `--safe-mode` | Start with every plugin disabled. Use it if a plugin misbehaves. |
 | `--data-dir <path>` | Keep settings, cache and logs under this folder, for example on a USB stick. |
 | `--log <filter>` | Log level, for example `debug`. Logs never contain the token or raw gateway payloads. |
 
@@ -91,7 +90,7 @@ cd kyoko
 cargo run --locked --release -p kyoko -- --mock
 ```
 
-Drop `--mock` to connect to Discord. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
+The desktop UI is being rebuilt on zgui. Until it lands, `kyoko --mock` runs a headless session against the mock server and logs a short connect summary until Ctrl-C, and `kyoko` without `--mock` only prints a notice and exits. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
 
 ## Disclaimer
 

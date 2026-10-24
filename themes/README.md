@@ -1,6 +1,6 @@
 # Themes
 
-First party themes. A theme is one `theme.json` of token overrides on top of a built-in theme, with no code. The format and the token list are in `docs/themes.md`. Plugins live in `plugins/` and have their own catalog.
+First party themes. A theme is one `theme.json` of token overrides on top of a built-in theme, with no code. The format and the token list are in `docs/themes.md`.
 
 | Theme | What it looks like |
 | --- | --- |
@@ -25,7 +25,7 @@ themes/<id>/README.md
 
 ## Catalog
 
-`catalog.json` lists every theme with the sha256 and length of its `theme.json`. `catalog.json.sig` is a base64 ed25519 signature over the exact bytes of `catalog.json`, made with the same key as `plugins/catalog.json.sig`.
+`catalog.json` lists every theme with the sha256 and length of its `theme.json`. `catalog.json.sig` is a base64 ed25519 signature over the exact bytes of `catalog.json`, made with the catalog key.
 
 ```
 cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/themes

@@ -4,4 +4,4 @@ Report vulnerabilities privately through GitHub security advisories on this repo
 
 Include the client version, platform, steps to reproduce, and the impact. Do not include session tokens, message content, or raw gateway payloads in a report.
 
-Scope: the client, its plugin sandbox, its updater, and the first-party plugins. Discord's own service is out of scope.
+Scope: the client and its plugin sandbox. Discord's own service is out of scope.

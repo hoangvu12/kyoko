@@ -23,4 +23,4 @@ Keep them small and on one topic. Write the description in plain words: what cha
 
 ## Plugins
 
-Plugin API changes are additive only. See `docs/plugin-api/`.
+The WebAssembly plugin host is gone. Luau plugins will attach to the session through `SessionHooks`, described in `docs/architecture.md`.

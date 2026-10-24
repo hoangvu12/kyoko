@@ -83,7 +83,7 @@ To add a theme, open a pull request that adds the folder to `themes/`. `themes/m
 
 ### Catalog
 
-`themes/catalog.json` lists every theme with the sha256 and length of its `theme.json`. `themes/catalog.json.sig` is a base64 ed25519 signature over the exact bytes of the catalog, made with the same key as the plugin catalog. After a theme is merged, a maintainer rebuilds and signs both files:
+`themes/catalog.json` lists every theme with the sha256 and length of its `theme.json`. `themes/catalog.json.sig` is a base64 ed25519 signature over the exact bytes of the catalog, made with the catalog key. The client has no catalog key yet, so it refuses every catalog until one is configured. `cargo xtask theme keygen <file>` writes a new key and prints its public half. After a theme is merged, a maintainer rebuilds and signs both files:
 
 ```bash
 cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/themes
@@ -93,8 +93,6 @@ cargo xtask theme sign themes/catalog.json <catalog key file>
 ### Install
 
 Open Settings, Themes and use the catalog section. Refresh loads the signed catalog, and Install downloads the theme, checks its length and sha256 against the signed entry and adds it to your themes list. Installed themes are plain files in the themes directory.
-
-A plugin package can also carry a `theme.json` (see `docs/plugin-api/building.md`), but first party themes ship through the themes catalog.
 
 ## Tips
 
