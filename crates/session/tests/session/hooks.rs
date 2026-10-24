@@ -73,7 +73,11 @@ async fn failing_hooks_never_stop_the_session() {
 	let broken = Arc::new(Broken::default());
 	let running = Running::start_with(Options::new("broken").hooks(broken.clone())).await;
 	let channel_id = running.open_text_channel().await;
-	assert!(broken.dispatches.load(Ordering::Relaxed) > 0);
+	running
+		.eventually("a dispatch to reach the broken hook", || {
+			broken.dispatches.load(Ordering::Relaxed) > 0
+		})
+		.await;
 	running.session().send(Command::Typing { channel_id });
 	let message_id = running
 		.send_and_wait(channel_id, "plain message", "plain message")
