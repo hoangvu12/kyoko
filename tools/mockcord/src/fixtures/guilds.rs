@@ -181,14 +181,14 @@ fn text_channel_name(index: usize) -> String {
 	}
 }
 
-fn presence_for(rng: &mut StdRng, user_id: u64, status: StatusKind, variant: usize) -> Presence {
+fn presence_for(rng: &mut StdRng, user_id: u64, status: StatusKind, variant: usize, now_ms: i64) -> Presence {
 	let activities = if status == StatusKind::Offline {
 		Vec::new()
 	} else {
 		match variant % 4 {
-			0 => vec![playing(rng)],
-			1 => vec![listening(rng)],
-			2 => vec![custom_status(rng)],
+			0 => vec![playing(rng, now_ms)],
+			1 => vec![listening(rng, now_ms)],
+			2 => vec![custom_status(rng, now_ms)],
 			_ => Vec::new(),
 		}
 	};
@@ -209,21 +209,17 @@ fn presence_for(rng: &mut StdRng, user_id: u64, status: StatusKind, variant: usi
 
 pub fn random_presence(rng: &mut StdRng, user_id: u64, status: StatusKind) -> Presence {
 	let variant = rng.random_range(0..4);
-	presence_for(rng, user_id, status, variant)
+	presence_for(rng, user_id, status, variant, Utc::now().timestamp_millis())
 }
 
-fn now_ms() -> i64 {
-	Utc::now().timestamp_millis()
-}
-
-fn playing(rng: &mut StdRng) -> Activity {
+fn playing(rng: &mut StdRng, now_ms: i64) -> Activity {
 	Activity {
 		id: Some(corpus::hex_hash(rng)),
 		name: (*corpus::pick(rng, corpus::GAMES)).to_owned(),
 		kind: ActivityKind::Playing,
-		created_at: Some(now_ms()),
+		created_at: Some(now_ms),
 		timestamps: Some(ActivityTimestamps {
-			start: Some(now_ms() - 3_600_000),
+			start: Some(now_ms - 3_600_000),
 			end: None,
 		}),
 		application_id: Some(Snowflake(rng.random_range(10u64.pow(17)..10u64.pow(18)))),
@@ -232,16 +228,16 @@ fn playing(rng: &mut StdRng) -> Activity {
 	}
 }
 
-fn listening(rng: &mut StdRng) -> Activity {
+fn listening(rng: &mut StdRng, now_ms: i64) -> Activity {
 	let (title, artist, album) = *corpus::pick(rng, corpus::SONGS);
 	Activity {
 		id: Some("spotify:1".to_owned()),
 		name: "Spotify".to_owned(),
 		kind: ActivityKind::Listening,
-		created_at: Some(now_ms()),
+		created_at: Some(now_ms),
 		timestamps: Some(ActivityTimestamps {
-			start: Some(now_ms() - 60_000),
-			end: Some(now_ms() + 180_000),
+			start: Some(now_ms - 60_000),
+			end: Some(now_ms + 180_000),
 		}),
 		details: Some(title.to_owned()),
 		state: Some(artist.to_owned()),
@@ -254,13 +250,13 @@ fn listening(rng: &mut StdRng) -> Activity {
 	}
 }
 
-fn custom_status(rng: &mut StdRng) -> Activity {
+fn custom_status(rng: &mut StdRng, now_ms: i64) -> Activity {
 	let (text, emoji) = *corpus::pick(rng, corpus::CUSTOM_STATUSES);
 	Activity {
 		id: Some("custom".to_owned()),
 		name: "Custom Status".to_owned(),
 		kind: ActivityKind::Custom,
-		created_at: Some(now_ms()),
+		created_at: Some(now_ms),
 		state: Some(text.to_owned()),
 		emoji: Some(PartialEmoji {
 			id: None,
@@ -563,7 +559,8 @@ fn build_presences(builder: &mut Builder, members: &[Member]) -> Vec<Presence> {
 		if status == StatusKind::Offline {
 			continue;
 		}
-		presences.push(presence_for(&mut builder.rng, user.id.0, status, index));
+		let now_ms = builder.anchor.timestamp_millis();
+		presences.push(presence_for(&mut builder.rng, user.id.0, status, index, now_ms));
 	}
 	presences
 }

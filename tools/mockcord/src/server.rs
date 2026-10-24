@@ -9,6 +9,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 use crate::config::MockConfig;
+use crate::control::Control;
 use crate::fixtures::Fixtures;
 use crate::rest;
 use crate::state::{Shared, Urls};
@@ -34,10 +35,11 @@ impl Server {
 	pub async fn start(config: MockConfig) -> io::Result<Server> {
 		let listener = TcpListener::bind(("127.0.0.1", config.port.unwrap_or(0))).await?;
 		let address = listener.local_addr()?;
-		let fixtures = Fixtures::generate(&config, fixture_anchor());
+		let fixtures = Fixtures::generate(&config, config.anchor.unwrap_or_else(fixture_anchor));
 		let (stop, stopped) = watch::channel(false);
 		let voice = voice::spawn(stopped.clone()).await?;
 		let urls = Urls {
+			origin: format!("http://{address}"),
 			rest: format!("http://{address}/api/v10"),
 			gateway: format!("ws://{address}/gateway"),
 			voice: voice.url,
@@ -64,6 +66,14 @@ impl Server {
 
 	pub fn rest_base_url(&self) -> &str {
 		&self.shared.urls.rest
+	}
+
+	pub fn rest_base_url_for(&self, version: u32) -> String {
+		format!("{}/api/v{version}", self.shared.urls.origin)
+	}
+
+	pub fn control(&self) -> Control {
+		Control::new(self.shared.clone())
 	}
 
 	pub fn gateway_url(&self) -> &str {

@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 #[derive(Debug, Clone)]
 pub struct MockConfig {
 	pub port: Option<u16>,
@@ -10,6 +12,8 @@ pub struct MockConfig {
 	pub heartbeat_interval_ms: u64,
 	pub chaos: bool,
 	pub live_traffic: bool,
+	pub record: bool,
+	pub anchor: Option<DateTime<Utc>>,
 }
 
 impl Default for MockConfig {
@@ -25,6 +29,8 @@ impl Default for MockConfig {
 			heartbeat_interval_ms: 41_250,
 			chaos: false,
 			live_traffic: false,
+			record: false,
+			anchor: None,
 		}
 	}
 }

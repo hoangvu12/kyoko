@@ -1,5 +1,6 @@
 mod admin;
 mod config;
+mod control;
 mod error;
 pub mod fixtures;
 mod forward;
@@ -11,7 +12,9 @@ mod media;
 mod member_list;
 mod ops;
 mod ready;
+mod record;
 mod rest;
+mod scenario;
 mod server;
 mod state;
 mod threads;
@@ -19,5 +22,8 @@ mod traffic;
 mod voice;
 
 pub use config::MockConfig;
+pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};
+pub use record::{GatewayClose, GatewayConnection, GatewayFrame, Headers, Recording, RestRequest};
+pub use scenario::{HeartbeatAcks, Reply};
 pub use server::Server;

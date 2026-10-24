@@ -1,10 +1,11 @@
 use std::io::Write;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
+use axum::extract::{Query, RawQuery, State};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
@@ -18,6 +19,8 @@ use crate::hub::{Link, Outgoing};
 use crate::json::{parse_id, to_json};
 use crate::member_list::{self, presence_json};
 use crate::ready;
+use crate::record::{GatewayClose, GatewayConnection, GatewayFrame, header_pairs};
+use crate::scenario::HeartbeatAcks;
 use crate::state::Shared;
 use crate::voice::VOICE_TOKEN;
 
@@ -28,6 +31,7 @@ const CLOSE_NOT_AUTHENTICATED: u16 = 4003;
 const CLOSE_ALREADY_AUTHENTICATED: u16 = 4005;
 const CLOSE_TIMED_OUT: u16 = 4009;
 const CLOSE_GOING_AWAY: u16 = 1001;
+const HEARTBEAT_ACK: &str = r#"{"op":11}"#;
 
 #[derive(Deserialize)]
 pub struct GatewayQuery {
@@ -37,10 +41,19 @@ pub struct GatewayQuery {
 pub async fn upgrade(
 	State(shared): State<Arc<Shared>>,
 	Query(query): Query<GatewayQuery>,
+	RawQuery(raw_query): RawQuery,
+	headers: HeaderMap,
 	socket: WebSocketUpgrade,
 ) -> Response {
 	let compress = query.compress.as_deref() == Some("zlib-stream");
-	socket.on_upgrade(move |socket| Connection::new(shared, socket, compress).run())
+	let link_id = shared.hub.next_link_id();
+	shared.recorder.connection(GatewayConnection {
+		id: link_id,
+		query: raw_query,
+		headers: header_pairs(&headers),
+		at: Instant::now(),
+	});
+	socket.on_upgrade(move |socket| Connection::new(shared, socket, link_id, compress).run())
 }
 
 struct Connection {
@@ -54,9 +67,8 @@ struct Connection {
 }
 
 impl Connection {
-	fn new(shared: Arc<Shared>, socket: WebSocket, compress: bool) -> Self {
+	fn new(shared: Arc<Shared>, socket: WebSocket, link_id: u64, compress: bool) -> Self {
 		let (tx, rx) = unbounded_channel();
-		let link_id = shared.hub.next_link_id();
 		Self {
 			shared,
 			socket,
@@ -142,7 +154,14 @@ impl Connection {
 	async fn handle_message(&mut self, message: Message) -> bool {
 		match message {
 			Message::Text(text) => self.handle_payload(text.as_str()).await,
-			Message::Close(_) => false,
+			Message::Close(frame) => {
+				self.shared.recorder.close(GatewayClose {
+					connection: self.link_id,
+					code: frame.map(|frame| frame.code),
+					at: Instant::now(),
+				});
+				false
+			}
 			Message::Ping(_) | Message::Pong(_) => true,
 			Message::Binary(_) => {
 				self.close(CLOSE_DECODE_ERROR, "Binary frames are not supported")
@@ -162,8 +181,16 @@ impl Connection {
 			.as_deref()
 			.and_then(|raw| serde_json::from_str::<Value>(raw.get()).ok())
 			.unwrap_or(Value::Null);
+		if self.shared.recorder.enabled() {
+			self.shared.recorder.frame(GatewayFrame {
+				connection: self.link_id,
+				op: payload.op,
+				data: data.clone(),
+				at: Instant::now(),
+			});
+		}
 		match payload.opcode() {
-			Opcode::Heartbeat => self.send_text(r#"{"op":11}"#).await,
+			Opcode::Heartbeat => self.acknowledge_heartbeat().await,
 			Opcode::Identify => self.identify(&data).await,
 			Opcode::Resume => self.resume(&data).await,
 			Opcode::QosHeartbeat => true,
@@ -178,9 +205,28 @@ impl Connection {
 		}
 	}
 
+	async fn acknowledge_heartbeat(&mut self) -> bool {
+		match self.shared.scenario.acks() {
+			HeartbeatAcks::Prompt => self.send_text(HEARTBEAT_ACK).await,
+			HeartbeatAcks::Withheld => true,
+			HeartbeatAcks::Delayed(delay) => {
+				let tx = self.tx.clone();
+				tokio::spawn(async move {
+					tokio::time::sleep(delay).await;
+					let _ = tx.send(Outgoing::Frame(HEARTBEAT_ACK.into()));
+				});
+				true
+			}
+		}
+	}
+
 	async fn identify(&mut self, data: &Value) -> bool {
 		if data["token"].as_str() != Some(self.shared.config.token.as_str()) {
 			self.close(CLOSE_AUTH_FAILED, "Authentication failed.").await;
+			return false;
+		}
+		if let Some(code) = self.shared.scenario.take_identify_close() {
+			self.close(code, "Closed by scenario").await;
 			return false;
 		}
 		if self.session.is_some() {
@@ -193,7 +239,10 @@ impl Connection {
 			id: self.link_id,
 			tx: self.tx.clone(),
 		});
-		let (ready, supplemental) = ready::build(&self.shared, &session_id);
+		let (mut ready, supplemental) = ready::build(&self.shared, &session_id);
+		if let Some(transform) = self.shared.scenario.ready() {
+			transform(data, &mut ready);
+		}
 		hub.dispatch_to(&session_id, "READY", &ready);
 		hub.dispatch_to(&session_id, "READY_SUPPLEMENTAL", &supplemental);
 		self.session = Some(session_id);
@@ -213,7 +262,7 @@ impl Connection {
 			id: self.link_id,
 			tx: self.tx.clone(),
 		};
-		if self.shared.hub.resume(session_id, seq, link) {
+		if !self.shared.scenario.take_resume_failure() && self.shared.hub.resume(session_id, seq, link) {
 			self.session = Some(session_id.to_owned());
 			true
 		} else {

@@ -115,6 +115,15 @@ impl Hub {
 		}
 	}
 
+	pub fn send_all(&self, payload: &Value) {
+		let frame: Arc<str> = payload.to_string().into();
+		for record in self.sessions.lock().values() {
+			if let Some(link) = &record.link {
+				let _ = link.tx.send(Outgoing::Frame(frame.clone()));
+			}
+		}
+	}
+
 	pub fn close_all(&self, code: u16) {
 		for record in self.sessions.lock().values() {
 			if let Some(link) = &record.link {

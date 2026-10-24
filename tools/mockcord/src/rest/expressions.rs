@@ -68,7 +68,6 @@ const GIF_HEIGHT: u32 = 300;
 const DEFAULT_GIF_LIMIT: usize = 100;
 const MAX_GIF_LIMIT: usize = 500;
 const DEFAULT_SUGGEST_LIMIT: usize = 20;
-const API_SUFFIX: &str = "/api/v10";
 
 const PACKS: [(&str, &str); 3] = [
 	("Mock Friends", "A few faces for testing the picker"),
@@ -121,7 +120,7 @@ pub fn routes() -> Router<Arc<Shared>> {
 }
 
 fn media_base(shared: &Shared) -> &str {
-	shared.urls.rest.trim_end_matches(API_SUFFIX)
+	&shared.urls.origin
 }
 
 fn gif(base: &str, index: usize) -> Value {

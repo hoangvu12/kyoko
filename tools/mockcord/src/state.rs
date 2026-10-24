@@ -13,11 +13,14 @@ use crate::config::MockConfig;
 use crate::fixtures::Fixtures;
 use crate::hub::Hub;
 use crate::ids::snowflake_at;
+use crate::record::Recorder;
+use crate::scenario::Scenario;
 
 const WINDOW_SECONDS: f64 = 2.0;
 const BUCKET_LIMIT: u32 = 5;
 
 pub struct Urls {
+	pub origin: String,
 	pub rest: String,
 	pub gateway: String,
 	pub voice: String,
@@ -172,12 +175,15 @@ pub struct Shared {
 	pub hub: Hub,
 	pub urls: Urls,
 	pub shutdown: watch::Receiver<bool>,
+	pub recorder: Recorder,
+	pub scenario: Scenario,
 	windows: Mutex<HashMap<String, Window>>,
 }
 
 impl Shared {
 	pub fn new(config: MockConfig, fixtures: Fixtures, urls: Urls, shutdown: watch::Receiver<bool>) -> Self {
 		let store = Mutex::new(Store::new(&fixtures));
+		let recorder = Recorder::new(config.record);
 		Self {
 			config,
 			fixtures,
@@ -185,6 +191,8 @@ impl Shared {
 			hub: Hub::default(),
 			urls,
 			shutdown,
+			recorder,
+			scenario: Scenario::default(),
 			windows: Mutex::new(HashMap::new()),
 		}
 	}

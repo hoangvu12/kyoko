@@ -7,7 +7,9 @@ mod users;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::time::Instant;
 
+use axum::body::{Body, to_bytes};
 use axum::extract::{DefaultBodyLimit, MatchedPath, Request, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
@@ -22,6 +24,7 @@ use rand::Rng;
 use crate::error::ApiError;
 use crate::gateway;
 use crate::media;
+use crate::record::{RestRequest, header_pairs};
 use crate::state::{RateLimitSnapshot, Shared};
 
 const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
@@ -161,10 +164,61 @@ pub fn router(shared: Arc<Shared>) -> Router {
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))
 		.route("/media/{name}", get(media::media))
+		.nest("/api/v9", api.clone())
 		.nest("/api/v10", api)
 		.fallback(not_found)
+		.layer(middleware::from_fn_with_state(shared.clone(), observe))
 		.layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
 		.with_state(shared)
+}
+
+fn api_path(path: &str) -> Option<(u32, &str)> {
+	let rest = path.strip_prefix("/api/v")?;
+	let digits = rest
+		.find(|character: char| !character.is_ascii_digit())
+		.unwrap_or(rest.len());
+	let version = rest[..digits].parse().ok()?;
+	Some((version, &rest[digits..]))
+}
+
+async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next) -> Response {
+	let at = Instant::now();
+	let Some((version, path)) = api_path(request.uri().path()) else {
+		return next.run(request).await;
+	};
+	let path = path.to_owned();
+	let method = request.method().as_str().to_owned();
+	let injected = shared.scenario.take_reply(&method, &path);
+	if !shared.recorder.enabled() {
+		return match injected {
+			Some(reply) => reply.into_response(),
+			None => next.run(request).await,
+		};
+	}
+	let query = request.uri().query().map(str::to_owned);
+	let headers = header_pairs(request.headers());
+	let (parts, body) = request.into_parts();
+	let body = to_bytes(body, MAX_BODY_BYTES).await.unwrap_or_default();
+	let was_injected = injected.is_some();
+	let response = match injected {
+		Some(reply) => reply.into_response(),
+		None => {
+			next.run(Request::from_parts(parts, Body::from(body.clone())))
+				.await
+		}
+	};
+	shared.recorder.request(RestRequest {
+		method,
+		version,
+		path,
+		query,
+		headers,
+		body: body.to_vec(),
+		status: response.status().as_u16(),
+		injected: was_injected,
+		at,
+	});
+	response
 }
 
 async fn not_found() -> ApiError {
