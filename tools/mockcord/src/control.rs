@@ -77,6 +77,10 @@ impl Control {
 		self.shared.scenario.close_next_identify(code);
 	}
 
+	pub fn close_next_connections(&self, code: u16, count: usize) {
+		self.shared.scenario.close_next_connections(code, count);
+	}
+
 	pub fn fail_next_resume(&self) {
 		self.shared.scenario.fail_resumes(1);
 	}
@@ -86,7 +90,7 @@ impl Control {
 	}
 
 	pub fn invalidate_session(&self, resumable: bool) {
-		self.shared.hub.send_all(&json!({ "op": 9, "d": resumable }));
+		self.shared.hub.invalidate_all(resumable);
 	}
 
 	pub fn request_heartbeat(&self) {

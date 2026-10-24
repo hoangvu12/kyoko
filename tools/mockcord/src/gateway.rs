@@ -81,6 +81,10 @@ impl Connection {
 	}
 
 	async fn run(mut self) {
+		if let Some(code) = self.shared.scenario.take_connection_close() {
+			self.close(code, "Closed by scenario").await;
+			return;
+		}
 		let hello =
 			json!({ "op": 10, "d": { "heartbeat_interval": self.shared.config.heartbeat_interval_ms } });
 		if !self.send_text(&hello.to_string()).await {
@@ -108,6 +112,18 @@ impl Connection {
 					Some(Outgoing::Close(code)) => {
 						self.close(code, "Closed by mock").await;
 						break;
+					}
+					Some(Outgoing::Invalidate { resumable }) => {
+						if !resumable && let Some(session) = self.session.take() {
+							self.shared.hub.end(&session);
+							identify_deadline
+								.as_mut()
+								.reset(tokio::time::Instant::now() + IDENTIFY_TIMEOUT);
+						}
+						let invalid = json!({ "op": 9, "d": resumable }).to_string();
+						if !self.send_text(&invalid).await {
+							break;
+						}
 					}
 					None => break,
 				},

@@ -14,6 +14,7 @@ const DETACHED_TTL: Duration = Duration::from_secs(300);
 pub enum Outgoing {
 	Frame(Arc<str>),
 	Close(u16),
+	Invalidate { resumable: bool },
 }
 
 #[derive(Clone)]
@@ -125,9 +126,21 @@ impl Hub {
 	}
 
 	pub fn close_all(&self, code: u16) {
+		self.signal_all(|| Outgoing::Close(code));
+	}
+
+	pub fn invalidate_all(&self, resumable: bool) {
+		self.signal_all(|| Outgoing::Invalidate { resumable });
+	}
+
+	pub fn end(&self, session_id: &str) {
+		self.sessions.lock().remove(session_id);
+	}
+
+	fn signal_all(&self, signal: impl Fn() -> Outgoing) {
 		for record in self.sessions.lock().values() {
 			if let Some(link) = &record.link {
-				let _ = link.tx.send(Outgoing::Close(code));
+				let _ = link.tx.send(signal());
 			}
 		}
 	}

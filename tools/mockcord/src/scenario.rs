@@ -127,6 +127,7 @@ pub struct Scenario {
 	rules: Mutex<Vec<Rule>>,
 	failing_resumes: AtomicUsize,
 	closing_identifies: Mutex<Vec<u16>>,
+	closing_connections: Mutex<Vec<u16>>,
 	acks: Mutex<HeartbeatAcks>,
 	ready: Mutex<Option<ReadyTransform>>,
 }
@@ -181,6 +182,17 @@ impl Scenario {
 
 	pub fn take_identify_close(&self) -> Option<u16> {
 		let mut codes = self.closing_identifies.lock();
+		(!codes.is_empty()).then(|| codes.remove(0))
+	}
+
+	pub fn close_next_connections(&self, code: u16, count: usize) {
+		self.closing_connections
+			.lock()
+			.extend(std::iter::repeat_n(code, count));
+	}
+
+	pub fn take_connection_close(&self) -> Option<u16> {
+		let mut codes = self.closing_connections.lock();
 		(!codes.is_empty()).then(|| codes.remove(0))
 	}
 
