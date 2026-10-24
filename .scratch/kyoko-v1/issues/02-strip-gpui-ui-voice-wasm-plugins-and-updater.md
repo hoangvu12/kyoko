@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Rebrand fork to kyoko)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The GPUI ui crate, voice, plugin-host, plugin-sdk, updater, the WASM first-party plugins and the plugin packs are removed
 - [ ] The session builds and runs without voice or plugin dependencies. An optional hook interface exists for a future plugin runtime, and a hook failure cannot stop the session
