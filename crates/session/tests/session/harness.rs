@@ -103,6 +103,7 @@ impl Running {
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks: options.hooks,
 			gateway: options.gateway,
+			remember_account: true,
 		})
 		.expect("session starts");
 		Running {

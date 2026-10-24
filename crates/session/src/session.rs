@@ -93,6 +93,7 @@ impl Session {
 			search: search.clone(),
 			stats: stats.clone(),
 			token,
+			remember_account: config.remember_account,
 		});
 		let (done, finished) = std::sync::mpsc::channel();
 		handle.spawn(async move {

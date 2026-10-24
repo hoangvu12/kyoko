@@ -22,4 +22,5 @@ pub struct SessionConfig {
 	pub notify: NotifyFn,
 	pub hooks: Option<Arc<dyn SessionHooks>>,
 	pub gateway: GatewayTuning,
+	pub remember_account: bool,
 }

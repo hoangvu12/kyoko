@@ -103,6 +103,7 @@ pub(crate) struct CoreParts {
 	pub(crate) themes: Arc<ThemeCatalogs>,
 	pub(crate) locale: String,
 	pub(crate) token: Arc<Token>,
+	pub(crate) remember_account: bool,
 }
 
 pub(crate) struct Core {
@@ -190,7 +191,7 @@ impl Core {
 			themes: parts.themes,
 			locale: parts.locale,
 			token: parts.token,
-			account_saved: false,
+			account_saved: !parts.remember_account,
 			select_created_guild: false,
 		}
 	}
