@@ -1,6 +1,6 @@
 # Themes
 
-A theme is one JSON file of overrides on top of a built-in theme. There is no code and nothing runs, so a theme cannot do anything except change how Oxidcord looks.
+A theme is one JSON file of overrides on top of a built-in theme. There is no code and nothing runs, so a theme cannot do anything except change how Kyoko looks.
 
 ## Quick start
 
@@ -86,7 +86,7 @@ To add a theme, open a pull request that adds the folder to `themes/`. `themes/m
 `themes/catalog.json` lists every theme with the sha256 and length of its `theme.json`. `themes/catalog.json.sig` is a base64 ed25519 signature over the exact bytes of the catalog, made with the same key as the plugin catalog. After a theme is merged, a maintainer rebuilds and signs both files:
 
 ```bash
-cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/Master0fFate/oxidcord/main/themes
+cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/themes
 cargo xtask theme sign themes/catalog.json <catalog key file>
 ```
 

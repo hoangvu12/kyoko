@@ -56,7 +56,7 @@ pub(crate) async fn download(
 		.await
 		.map_err(|error| UpdaterError::io(&dir, error))?;
 	let file_name = format!(
-		"oxidcord-{version}-{}.{}",
+		"kyoko-{version}-{}.{}",
 		artifact.target.as_str(),
 		artifact.kind.extension()
 	);

@@ -35,7 +35,7 @@ pub(crate) struct AppHandle(WeakEntity<AppRoot>);
 
 impl Global for AppHandle {}
 
-const APP_TITLE: &str = "Oxidcord";
+const APP_TITLE: &str = "Kyoko";
 const MIN_WIDTH: f32 = 940.;
 const MIN_HEIGHT: f32 = 500.;
 const TICK_INTERVAL: Duration = Duration::from_secs(30);

@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>oxidcord</string>
+	<string>kyoko</string>
 	<key>CFBundleIconFile</key>
 	<string>icon</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.oxidcord.Oxidcord</string>
+	<string>io.github.hoangvu12.Kyoko</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Oxidcord</string>
+	<string>Kyoko</string>
 	<key>CFBundleDisplayName</key>
-	<string>Oxidcord</string>
+	<string>Kyoko</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -31,8 +31,8 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Oxidcord uses the microphone for voice calls.</string>
+	<string>Kyoko uses the microphone for voice calls.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Oxidcord uses the camera for video calls.</string>
+	<string>Kyoko uses the camera for video calls.</string>
 </dict>
 </plist>

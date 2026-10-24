@@ -44,7 +44,7 @@ The `wasm32-wasip2` target links the crate straight into a WebAssembly component
 
 The output is `target/wasm32-wasip2/release/<crate_name>.wasm`. Copy it next to `plugin.toml` under the name given by `entry`, or point `Package::from_files` at it.
 
-Inside this workspace the SDK is a workspace dependency named `plugin-sdk`, so first-party plugins write `use plugin_sdk::...`. Outside it, depend on the `oxidcord-plugin-sdk` package and write `use oxidcord_plugin_sdk::...`.
+Inside this workspace the SDK is a workspace dependency named `plugin-sdk`, so first-party plugins write `use plugin_sdk::...`. Outside it, depend on the `kyoko-plugin-sdk` package and write `use kyoko_plugin_sdk::...`.
 
 ## Install layout
 
@@ -52,11 +52,11 @@ Installed plugins live in `<plugins_dir>/<id>/<version>/` and contain `plugin.to
 
 ## Pack
 
-A `.oxidcord-plugin` file is a zip archive with `plugin.toml`, the entry wasm, optional `theme.json`, optional `assets/` and optional `signature` at its root.
+A `.kyoko-plugin` file is a zip archive with `plugin.toml`, the entry wasm, optional `theme.json`, optional `assets/` and optional `signature` at its root.
 
 ```rust
 let package = plugin_host::Package::from_files(manifest_path, Some(wasm_path))?;
-package.pack(Path::new("my-plugin.oxidcord-plugin"))?;
+package.pack(Path::new("my-plugin.kyoko-plugin"))?;
 ```
 
 `Package::open` reads an archive and rejects entries with `..`, absolute paths or symlinks, and archives whose declared or actual uncompressed size exceeds 64 MB. `Package::install_into(plugins_dir)` extracts to `<plugins_dir>/<id>/<version>/`, staging first and renaming into place.

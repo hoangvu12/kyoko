@@ -37,8 +37,8 @@ update-signing.key
 *.db-shm
 *.sqlite
 *.sqlite3
-oxidcord-headless-*
-oxidcord-conformance-*
+kyoko-headless-*
+kyoko-conformance-*
 oxshots*
 *.log
 *.orig

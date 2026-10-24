@@ -3,5 +3,5 @@
 *.ico binary
 *.wasm binary
 *.ogg binary
-*.oxidcord-plugin binary
+*.kyoko-plugin binary
 *.sig text eol=lf

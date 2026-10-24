@@ -1,12 +1,12 @@
 [package]
-name = "oxidcord"
+name = "kyoko"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "oxidcord"
+name = "kyoko"
 path = "src/main.rs"
 
 [dependencies]
@@ -31,26 +31,26 @@ clap.workspace = true
 embed-resource.workspace = true
 
 [package.metadata.deb]
-name = "oxidcord"
-maintainer = "Oxidcord contributors"
-copyright = "Oxidcord contributors"
+name = "kyoko"
+maintainer = "Kyoko contributors"
+copyright = "Kyoko contributors"
 extended-description = "A native Discord client with a sandboxed plugin system."
 section = "net"
 priority = "optional"
 depends = "$auto"
 assets = [
-	["target/release/oxidcord", "usr/bin/oxidcord", "755"],
-	["../../packaging/linux/oxidcord.desktop", "usr/share/applications/dev.oxidcord.Oxidcord.desktop", "644"],
-	["../../packaging/linux/dev.oxidcord.Oxidcord.metainfo.xml", "usr/share/metainfo/dev.oxidcord.Oxidcord.metainfo.xml", "644"],
-	["../../assets/icon.png", "usr/share/icons/hicolor/256x256/apps/dev.oxidcord.Oxidcord.png", "644"],
+	["target/release/kyoko", "usr/bin/kyoko", "755"],
+	["../../packaging/linux/kyoko.desktop", "usr/share/applications/io.github.hoangvu12.Kyoko.desktop", "644"],
+	["../../packaging/linux/io.github.hoangvu12.Kyoko.metainfo.xml", "usr/share/metainfo/io.github.hoangvu12.Kyoko.metainfo.xml", "644"],
+	["../../assets/icon.png", "usr/share/icons/hicolor/256x256/apps/io.github.hoangvu12.Kyoko.png", "644"],
 ]
 
 [package.metadata.generate-rpm]
-name = "oxidcord"
+name = "kyoko"
 summary = "A native Discord client with a sandboxed plugin system."
 assets = [
-	{ source = "target/release/oxidcord", dest = "/usr/bin/oxidcord", mode = "755" },
-	{ source = "../../packaging/linux/oxidcord.desktop", dest = "/usr/share/applications/dev.oxidcord.Oxidcord.desktop", mode = "644" },
-	{ source = "../../packaging/linux/dev.oxidcord.Oxidcord.metainfo.xml", dest = "/usr/share/metainfo/dev.oxidcord.Oxidcord.metainfo.xml", mode = "644" },
-	{ source = "../../assets/icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/dev.oxidcord.Oxidcord.png", mode = "644" },
+	{ source = "target/release/kyoko", dest = "/usr/bin/kyoko", mode = "755" },
+	{ source = "../../packaging/linux/kyoko.desktop", dest = "/usr/share/applications/io.github.hoangvu12.Kyoko.desktop", mode = "644" },
+	{ source = "../../packaging/linux/io.github.hoangvu12.Kyoko.metainfo.xml", dest = "/usr/share/metainfo/io.github.hoangvu12.Kyoko.metainfo.xml", mode = "644" },
+	{ source = "../../assets/icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.hoangvu12.Kyoko.png", mode = "644" },
 ]

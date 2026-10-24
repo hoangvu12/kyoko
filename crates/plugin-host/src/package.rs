@@ -11,7 +11,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::error::{Error, Result};
 use crate::manifest::{MANIFEST_FILE, Manifest, is_safe_relative};
 
-pub const PACKAGE_EXTENSION: &str = "oxidcord-plugin";
+pub const PACKAGE_EXTENSION: &str = "kyoko-plugin";
 pub const SIGNATURE_FILE: &str = "signature";
 pub const THEME_FILE: &str = "theme.json";
 pub const MAX_PACKAGE_BYTES: u64 = 64 * 1024 * 1024;

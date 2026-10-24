@@ -149,7 +149,7 @@ const SECTIONS: [(Option<&str>, &[Page]); 3] = [
 		],
 	),
 	(
-		Some("settings-section-oxidcord"),
+		Some("settings-section-kyoko"),
 		&[Page::Plugins, Page::Themes, Page::Developer, Page::Updates],
 	),
 ];

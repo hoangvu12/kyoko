@@ -8,7 +8,7 @@ fn main() {
 	}
 	let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 	let root = manifest_dir.ancestors().nth(2).unwrap();
-	let template_path = root.join("packaging").join("windows").join("oxidcord.rc");
+	let template_path = root.join("packaging").join("windows").join("kyoko.rc");
 	let icon_path = root.join("assets").join("icon.ico");
 	println!("cargo:rerun-if-changed={}", template_path.display());
 	println!("cargo:rerun-if-changed={}", icon_path.display());
@@ -26,7 +26,7 @@ fn main() {
 			),
 		)
 		.replace("@VERSION@", &version("CARGO_PKG_VERSION"));
-	let output = PathBuf::from(env::var("OUT_DIR").unwrap()).join("oxidcord.rc");
+	let output = PathBuf::from(env::var("OUT_DIR").unwrap()).join("kyoko.rc");
 	fs::write(&output, script).unwrap();
 	embed_resource::compile(&output, embed_resource::NONE)
 		.manifest_required()

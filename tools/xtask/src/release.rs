@@ -94,7 +94,7 @@ fn keygen(out: &Path) -> Result<()> {
 	println!("secret key written to {}", out.display());
 	println!("store its contents as the UPDATE_SIGNING_KEY repository secret, then delete the file");
 	println!("public key for crates/updater/src/keys.rs:");
-	println!("pub const UPDATE_PUBLIC_KEY: [u8; 32] = [{bytes}];");
+	println!("pub const UPDATE_PUBLIC_KEY: Option<[u8; 32]> = Some([{bytes}]);");
 	Ok(())
 }
 
@@ -104,7 +104,7 @@ fn manifest(args: ManifestArgs) -> Result<()> {
 		None => std::env::var(REPOSITORY_ENV).context("pass --repo or set GITHUB_REPOSITORY")?,
 	};
 	let version = args.version.trim_start_matches('v').to_owned();
-	let prefix = format!("oxidcord-{version}-");
+	let prefix = format!("kyoko-{version}-");
 	let mut artifacts = Vec::new();
 	let mut names = fs::read_dir(&args.artifacts_dir)
 		.with_context(|| format!("read {}", args.artifacts_dir.display()))?

@@ -7,17 +7,17 @@
 )]
 pub mod bindings {
 	wit_bindgen::generate!({
-		path: "../plugin-host/wit/oxidcord.wit",
+		path: "../plugin-host/wit/kyoko.wit",
 		world: "plugin",
 		pub_export_macro: true,
 		export_macro_name: "export_guest",
-		default_bindings_module: "oxidcord_plugin_sdk::bindings",
+		default_bindings_module: "kyoko_plugin_sdk::bindings",
 		additional_derives: [PartialEq],
 	});
 }
 
 pub mod host {
-	pub use crate::bindings::oxidcord::plugin::host::*;
+	pub use crate::bindings::kyoko::plugin::host::*;
 }
 
 pub mod log;
@@ -27,7 +27,7 @@ pub mod storage;
 pub mod ui;
 
 pub mod types {
-	pub use crate::bindings::oxidcord::plugin::types::*;
+	pub use crate::bindings::kyoko::plugin::types::*;
 }
 
 pub use md::Md;

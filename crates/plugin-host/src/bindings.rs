@@ -1,5 +1,5 @@
 wasmtime::component::bindgen!({
-	path: "wit/oxidcord.wit",
+	path: "wit/kyoko.wit",
 	world: "plugin",
 	additional_derives: [PartialEq],
 });

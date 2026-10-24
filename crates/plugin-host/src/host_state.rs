@@ -11,7 +11,7 @@ use crate::api::{
 	ChannelSummary, FetchRequest, FetchResponse, GuildSummary, HostError, MemberSummary, MessageRef,
 	MessageView, OutgoingMessage, UiTree, User, VoiceInfo,
 };
-use crate::bindings::oxidcord::plugin::{host, types};
+use crate::bindings::kyoko::plugin::{host, types};
 use crate::broker::HostBroker;
 use crate::config::RuntimeConfig;
 use crate::convert::validate_ui_tree;

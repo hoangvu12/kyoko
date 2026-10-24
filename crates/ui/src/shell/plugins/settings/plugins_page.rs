@@ -27,8 +27,7 @@ use crate::shell::plugins::bridge::PluginBridge;
 use crate::shell::plugins::overlays::GrantRequest;
 use crate::theme::{Theme, rem};
 
-const DEFAULT_CATALOG_URL: &str =
-	"https://raw.githubusercontent.com/Master0fFate/oxidcord/main/plugins/catalog.json";
+const DEFAULT_CATALOG_URL: &str = "";
 const URL_HEIGHT: f32 = 32.;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -132,7 +131,7 @@ impl PluginsPage {
 		let filter = cx.t("plugin-file-filter").to_string();
 		cx.spawn_in(window, async move |this, cx| {
 			let Some(handle) = rfd::AsyncFileDialog::new()
-				.add_filter(filter, &["oxidcord-plugin"])
+				.add_filter(filter, &["kyoko-plugin"])
 				.pick_file()
 				.await
 			else {

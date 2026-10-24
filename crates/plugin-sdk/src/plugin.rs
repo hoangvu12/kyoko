@@ -58,14 +58,14 @@ pub mod __private {
 macro_rules! export_plugin {
 	($plugin:ty) => {
 		const _: () = {
-			struct OxidcordExport;
+			struct KyokoExport;
 
 			::std::thread_local! {
 				static STATE: ::std::cell::RefCell<$plugin> =
 					::std::cell::RefCell::new(<$plugin as ::core::default::Default>::default());
 			}
 
-			impl $crate::bindings::exports::oxidcord::plugin::guest::Guest for OxidcordExport {
+			impl $crate::bindings::exports::kyoko::plugin::guest::Guest for KyokoExport {
 				fn init() -> ::core::result::Result<(), ::std::string::String> {
 					STATE.with(|state| $crate::Plugin::init(&mut *state.borrow_mut()))
 				}
@@ -119,7 +119,7 @@ macro_rules! export_plugin {
 				}
 			}
 
-	$crate::bindings::export_guest!(OxidcordExport with_types_in $crate::bindings);
+	$crate::bindings::export_guest!(KyokoExport with_types_in $crate::bindings);
 		};
 	};
 }

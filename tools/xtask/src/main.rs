@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "xtask", about = "Oxidcord development tasks")]
+#[command(name = "xtask", about = "Kyoko development tasks")]
 struct Cli {
 	#[command(subcommand)]
 	task: Task,

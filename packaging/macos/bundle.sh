@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="${VERSION:?set VERSION to the release version without the leading v}"
-binary="${BINARY:-$root/target/release/oxidcord}"
+binary="${BINARY:-$root/target/release/kyoko}"
 out_dir="${OUT_DIR:-$root/dist}"
 
 case "${ARCH:-$(uname -m)}" in
@@ -14,10 +14,10 @@ esac
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-app="$work/Oxidcord.app"
+app="$work/Kyoko.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$out_dir"
 
-cp "$binary" "$app/Contents/MacOS/oxidcord"
+cp "$binary" "$app/Contents/MacOS/kyoko"
 sed "s/@VERSION@/$version/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
 
 iconset="$work/icon.iconset"
@@ -37,12 +37,12 @@ fi
 
 stage="$work/dmg"
 mkdir -p "$stage"
-cp -R "$app" "$stage/Oxidcord.app"
+cp -R "$app" "$stage/Kyoko.app"
 ln -s /Applications "$stage/Applications"
 
-dmg="$out_dir/oxidcord-$version-$target-dmg.dmg"
+dmg="$out_dir/kyoko-$version-$target-dmg.dmg"
 rm -f "$dmg"
-hdiutil create -volname "Oxidcord" -srcfolder "$stage" -ov -format UDZO "$dmg"
+hdiutil create -volname "Kyoko" -srcfolder "$stage" -ov -format UDZO "$dmg"
 
 if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
 	codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" "$dmg"

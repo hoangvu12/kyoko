@@ -28,7 +28,7 @@ themes/<id>/README.md
 `catalog.json` lists every theme with the sha256 and length of its `theme.json`. `catalog.json.sig` is a base64 ed25519 signature over the exact bytes of `catalog.json`, made with the same key as `plugins/catalog.json.sig`.
 
 ```
-cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/Master0fFate/oxidcord/main/themes
+cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/themes
 cargo xtask theme sign themes/catalog.json <catalog key file>
 ```
 

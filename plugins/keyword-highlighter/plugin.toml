@@ -1,4 +1,4 @@
-id = "dev.oxidcord.keyword-highlighter"
+id = "kyoko.keyword-highlighter"
 name = "Keyword Highlighter"
 version = "0.1.0"
 api = "^1.0"

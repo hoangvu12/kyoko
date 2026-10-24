@@ -7,25 +7,25 @@ default-members = ["crates/*", "apps/*", "tools/*"]
 version = "0.2.0-beta.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/Master0fFate/oxidcord"
+repository = "https://github.com/hoangvu12/kyoko"
 rust-version = "1.99"
 
 [workspace.dependencies]
-protocol = { path = "crates/protocol", package = "oxidcord-protocol" }
-rest = { path = "crates/rest", package = "oxidcord-rest" }
-gateway = { path = "crates/gateway", package = "oxidcord-gateway" }
-state = { path = "crates/state", package = "oxidcord-state" }
-store = { path = "crates/store", package = "oxidcord-store" }
-markdown = { path = "crates/markdown", package = "oxidcord-markdown" }
-plugin-host = { path = "crates/plugin-host", package = "oxidcord-plugin-host" }
-plugin-sdk = { path = "crates/plugin-sdk", package = "oxidcord-plugin-sdk" }
-ui = { path = "crates/ui", package = "oxidcord-ui" }
-platform = { path = "crates/platform", package = "oxidcord-platform" }
-media = { path = "crates/media", package = "oxidcord-media" }
-session = { path = "crates/session", package = "oxidcord-session" }
-voice = { path = "crates/voice", package = "oxidcord-voice" }
-login = { path = "crates/login", package = "oxidcord-login" }
-updater = { path = "crates/updater", package = "oxidcord-updater" }
+protocol = { path = "crates/protocol", package = "kyoko-protocol" }
+rest = { path = "crates/rest", package = "kyoko-rest" }
+gateway = { path = "crates/gateway", package = "kyoko-gateway" }
+state = { path = "crates/state", package = "kyoko-state" }
+store = { path = "crates/store", package = "kyoko-store" }
+markdown = { path = "crates/markdown", package = "kyoko-markdown" }
+plugin-host = { path = "crates/plugin-host", package = "kyoko-plugin-host" }
+plugin-sdk = { path = "crates/plugin-sdk", package = "kyoko-plugin-sdk" }
+ui = { path = "crates/ui", package = "kyoko-ui" }
+platform = { path = "crates/platform", package = "kyoko-platform" }
+media = { path = "crates/media", package = "kyoko-media" }
+session = { path = "crates/session", package = "kyoko-session" }
+voice = { path = "crates/voice", package = "kyoko-voice" }
+login = { path = "crates/login", package = "kyoko-login" }
+updater = { path = "crates/updater", package = "kyoko-updater" }
 mockcord = { path = "tools/mockcord" }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }

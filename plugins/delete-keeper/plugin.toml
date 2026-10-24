@@ -1,4 +1,4 @@
-id = "dev.oxidcord.delete-keeper"
+id = "kyoko.delete-keeper"
 name = "Delete Keeper"
 version = "0.1.0"
 api = "^1.0"

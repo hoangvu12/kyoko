@@ -3,7 +3,7 @@ use gpui::{App, KeyBinding, actions};
 pub const SHELL_CONTEXT: &str = "Shell";
 
 actions!(
-	oxidcord,
+	kyoko,
 	[
 		OpenQuickSwitcher,
 		OpenSettings,

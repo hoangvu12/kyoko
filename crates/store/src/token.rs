@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::atomic::write_atomic;
 use crate::error::Result;
 
-const KEYRING_SERVICE: &str = "oxidcord";
+const KEYRING_SERVICE: &str = "kyoko";
 const KEYRING_USER: &str = "session-token";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

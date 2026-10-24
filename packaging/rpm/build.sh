@@ -14,4 +14,4 @@ if [[ "$version" == *-* ]]; then
 fi
 
 cd "$root"
-cargo generate-rpm -p apps/desktop "${overrides[@]}" -o "$out_dir/oxidcord-$version-linux-$arch-rpm.rpm"
+cargo generate-rpm -p apps/desktop "${overrides[@]}" -o "$out_dir/kyoko-$version-linux-$arch-rpm.rpm"

@@ -132,7 +132,7 @@ impl Net {
 fn client(policy: &UrlPolicy, configure: impl FnOnce(ClientBuilder) -> ClientBuilder) -> Result<Client> {
 	let redirect_policy = policy.clone();
 	let builder = Client::builder()
-		.user_agent(concat!("oxidcord-updater/", env!("CARGO_PKG_VERSION")))
+		.user_agent(concat!("kyoko-updater/", env!("CARGO_PKG_VERSION")))
 		.https_only(!policy.relaxed)
 		.referer(false)
 		.redirect(Policy::custom(move |attempt| {

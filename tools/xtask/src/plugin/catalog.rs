@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 
 use super::{pack_plugin, plugin_dirs, read_manifest};
 
-const FIXTURE_PLUGIN_ID: &str = "dev.oxidcord.conformance-probe";
+const FIXTURE_PLUGIN_ID: &str = "kyoko.conformance-probe";
 
 #[derive(Args)]
 pub struct CatalogArgs {

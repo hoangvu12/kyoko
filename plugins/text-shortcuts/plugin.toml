@@ -1,4 +1,4 @@
-id = "dev.oxidcord.text-shortcuts"
+id = "kyoko.text-shortcuts"
 name = "Text Shortcuts"
 version = "0.1.0"
 api = "^1.0"

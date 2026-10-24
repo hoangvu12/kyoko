@@ -16,7 +16,7 @@ use super::transform::DaveTransform;
 use crate::error::{Result, VoiceError};
 use crate::wire::{ClientDisconnect, ClientsConnect, RawFrame, opcode};
 
-const GATEWAY_IDENTITY: &[u8] = b"oxidcord test gateway";
+const GATEWAY_IDENTITY: &[u8] = b"kyoko test gateway";
 const BINARY_HEADER_BYTES: usize = 3;
 const ADD_OPERATION: u8 = 0;
 

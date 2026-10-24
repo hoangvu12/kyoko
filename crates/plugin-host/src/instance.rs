@@ -361,7 +361,7 @@ impl WorkerContext {
 			Ok(plugin) => plugin,
 			Err(error) => return Err(self.classify(&error, store.data().limits.memory_exceeded)),
 		};
-		match plugin.oxidcord_plugin_guest().call_init(&mut store) {
+		match plugin.kyoko_plugin_guest().call_init(&mut store) {
 			Ok(Ok(())) => Ok(Running { store, plugin }),
 			Ok(Err(message)) => Err(CallError::InitFailed(message)),
 			Err(error) => Err(self.classify(&error, store.data().limits.memory_exceeded)),
@@ -370,7 +370,7 @@ impl WorkerContext {
 
 	fn execute(&self, running: &mut Running, kind: CallKind, timeout: Duration) -> Result<Output, CallError> {
 		running.store.set_epoch_deadline(self.epoch_ticks(timeout));
-		let guest = running.plugin.oxidcord_plugin_guest();
+		let guest = running.plugin.kyoko_plugin_guest();
 		let store = &mut running.store;
 		let result = match kind {
 			CallKind::Init => Ok(Output::Done),

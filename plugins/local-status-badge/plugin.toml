@@ -1,4 +1,4 @@
-id = "dev.oxidcord.local-status-badge"
+id = "kyoko.local-status-badge"
 name = "Local Status Badge"
 version = "0.1.0"
 api = "^1.0"

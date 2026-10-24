@@ -28,7 +28,7 @@ Prereleases are skipped by `releases/latest`, so only clients on the beta channe
 
 ## Asset names
 
-`oxidcord-<version>-<target>-<kind>.<ext>` where target is one of `windows-x86_64`, `macos-aarch64`, `macos-x86_64`, `linux-x86_64`, `linux-aarch64` and kind is `installer` (`exe`), `portable` (`zip`), `appimage` (`AppImage`), `dmg`, `deb`, `rpm`. `cargo xtask release manifest` ignores files that do not match.
+`kyoko-<version>-<target>-<kind>.<ext>` where target is one of `windows-x86_64`, `macos-aarch64`, `macos-x86_64`, `linux-x86_64`, `linux-aarch64` and kind is `installer` (`exe`), `portable` (`zip`), `appimage` (`AppImage`), `dmg`, `deb`, `rpm`. `cargo xtask release manifest` ignores files that do not match.
 
 ## Manifest
 
@@ -41,7 +41,7 @@ Prereleases are skipped by `releases/latest`, so only clients on the beta channe
     {
       "target": "windows-x86_64",
       "kind": "installer",
-      "url": "https://github.com/owner/name/releases/download/v0.2.0/oxidcord-0.2.0-windows-x86_64-installer.exe",
+      "url": "https://github.com/owner/name/releases/download/v0.2.0/kyoko-0.2.0-windows-x86_64-installer.exe",
       "sha256": "64 hex digits",
       "length": 12345678
     }
@@ -53,6 +53,6 @@ Prereleases are skipped by `releases/latest`, so only clients on the beta channe
 
 - The update check uses a credential-free client, follows redirects only to `github.com`, `objects.githubusercontent.com` and `release-assets.githubusercontent.com`, caps the API body at 1 MB and the manifest at 1 MB.
 - The manifest signature is verified before anything in it is trusted. An update is offered only when its version is higher than the running one.
-- The package kind matches the running install: NSIS installer under `%LOCALAPPDATA%\Programs\Oxidcord`, portable zip elsewhere on Windows, dmg inside an `.app` bundle on macOS, AppImage when `APPIMAGE` is set on Linux. Anything else (deb, rpm, Flatpak) is managed by the package manager and only gets a notification.
+- The package kind matches the running install: NSIS installer under `%LOCALAPPDATA%\Programs\Kyoko`, portable zip elsewhere on Windows, dmg inside an `.app` bundle on macOS, AppImage when `APPIMAGE` is set on Linux. Anything else (deb, rpm, Flatpak) is managed by the package manager and only gets a notification.
 - The download is streamed to `updates/<version>/<name>.part` under the data directory, length-capped, then its length and sha256 are checked before the rename and again right before install.
 - Portable and AppImage and dmg installs keep the previous files as `<name>.old` and record a trial in `updates/trial.json`. The first start of the new version marks it started; `mark_start_ok` after the window opens removes the backup. If a started version never confirms, the next start restores the `.old` files.

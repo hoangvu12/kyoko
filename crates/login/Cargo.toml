@@ -1,5 +1,5 @@
 [package]
-name = "oxidcord-login"
+name = "kyoko-login"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

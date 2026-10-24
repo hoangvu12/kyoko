@@ -83,7 +83,7 @@ pub use self::voice::{Textures, VideoTextures, VoiceHotkeys};
 
 const MEMBER_LIST_MIN_WIDTH: f32 = 1200.;
 const SIDEBAR_MIN_WIDTH: f32 = 900.;
-const WINDOW_TITLE: &str = "Oxidcord";
+const WINDOW_TITLE: &str = "Kyoko";
 const NOTIFICATION_BODY_LIMIT: usize = 140;
 const RECENT_TARGETS: usize = 8;
 

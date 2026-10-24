@@ -44,7 +44,7 @@ const VOICE_SAMPLE_RATE: f32 = 48_000.0;
 const VOICE_TONE_AMPLITUDE: f32 = 8_000.0;
 const VOICE_POLL: Duration = Duration::from_millis(20);
 const LINK_CLEANER: &str = "link-cleaner";
-const LINK_CLEANER_ID: &str = "dev.oxidcord.link-cleaner";
+const LINK_CLEANER_ID: &str = "kyoko.link-cleaner";
 const HELLO_TIMESTAMPS: &str = "hello-timestamps";
 const DIRTY_LINK: &str = "https://example.com/x?utm_source=a&b=1";
 const CLEAN_LINK: &str = "https://example.com/x?b=1";
@@ -340,7 +340,7 @@ fn first_text_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
 }
 
 fn scratch_dir() -> Result<std::path::PathBuf> {
-	let root = std::env::temp_dir().join(format!("oxidcord-headless-{}", std::process::id()));
+	let root = std::env::temp_dir().join(format!("kyoko-headless-{}", std::process::id()));
 	match fs::remove_dir_all(&root) {
 		Ok(()) => {}
 		Err(error) if error.kind() == io::ErrorKind::NotFound => {}

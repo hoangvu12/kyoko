@@ -13,13 +13,13 @@ BEGIN
 	BEGIN
 		BLOCK "040904b0"
 		BEGIN
-			VALUE "CompanyName", "Oxidcord"
-			VALUE "FileDescription", "Oxidcord"
+			VALUE "CompanyName", "Kyoko"
+			VALUE "FileDescription", "Kyoko"
 			VALUE "FileVersion", "@VERSION@"
-			VALUE "InternalName", "oxidcord"
+			VALUE "InternalName", "kyoko"
 			VALUE "LegalCopyright", "MIT OR Apache-2.0"
-			VALUE "OriginalFilename", "oxidcord.exe"
-			VALUE "ProductName", "Oxidcord"
+			VALUE "OriginalFilename", "kyoko.exe"
+			VALUE "ProductName", "Kyoko"
 			VALUE "ProductVersion", "@VERSION@"
 		END
 	END

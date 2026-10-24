@@ -1,9 +1,9 @@
 use plugin_sdk::{Event, HostError, OutgoingMessage, Plugin, export_plugin, host};
 
-const SPIN_KEY: &str = "oxidcord.conformance.spin";
-const SEND_COMMAND: &str = "oxidcord.conformance.send";
-const CONTEXT_COMMAND: &str = "oxidcord.conformance.context";
-const ALLOC_KEY: &str = "oxidcord.conformance.alloc";
+const SPIN_KEY: &str = "kyoko.conformance.spin";
+const SEND_COMMAND: &str = "kyoko.conformance.send";
+const CONTEXT_COMMAND: &str = "kyoko.conformance.context";
+const ALLOC_KEY: &str = "kyoko.conformance.alloc";
 const ALLOC_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Default)]

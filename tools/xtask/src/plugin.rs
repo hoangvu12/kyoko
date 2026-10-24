@@ -27,7 +27,7 @@ enum PluginCommand {
 	New(scaffold::NewArgs),
 	#[command(about = "Build a plugin for wasm32-wasip2")]
 	Build(BuildArgs),
-	#[command(about = "Build a plugin and pack it into a .oxidcord-plugin file")]
+	#[command(about = "Build a plugin and pack it into a .kyoko-plugin file")]
 	Pack(PackArgs),
 	#[command(about = "Pack every plugin in a directory and run the conformance suite")]
 	Conformance(ConformanceArgs),
@@ -171,7 +171,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
 	fn new() -> Result<Self> {
-		let path = std::env::temp_dir().join(format!("oxidcord-xtask-{}", std::process::id()));
+		let path = std::env::temp_dir().join(format!("kyoko-xtask-{}", std::process::id()));
 		fs::create_dir_all(&path).with_context(|| format!("could not create {}", path.display()))?;
 		Ok(Self(path))
 	}

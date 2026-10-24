@@ -1,5 +1,5 @@
 [package]
-name = "oxidcord-plugin-host"
+name = "kyoko-plugin-host"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

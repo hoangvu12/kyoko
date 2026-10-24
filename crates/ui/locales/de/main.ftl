@@ -1,4 +1,4 @@
-app-name = Oxidcord
+app-name = Kyoko
 badge-bot = BOT
 
 rail-home = Direct Messages
@@ -78,7 +78,7 @@ quick-switcher-tip = PROTIP: Start searches with @, #, ! or * to narrow results.
 quick-switcher-dm = Direct Message
 
 settings-section-app = App-Einstellungen
-settings-section-oxidcord = Oxidcord
+settings-section-kyoko = Kyoko
 settings-my-account = Mein Konto
 settings-profiles = Profile
 settings-privacy = Privatsphäre & Sicherheit
@@ -99,7 +99,7 @@ settings-plugins = Plugins
 settings-themes = Themes
 settings-developer = Developer
 settings-log-out = Abmelden
-settings-version = Oxidcord { $version }
+settings-version = Kyoko { $version }
 settings-close-hint = ESC
 settings-theme = Theme
 settings-theme-dark = Dark
@@ -223,7 +223,7 @@ lightbox-loading = Loading image...
 lightbox-open = Open original
 lightbox-close = Close
 
-link-title = Leave Oxidcord?
+link-title = Leave Kyoko?
 link-body = This link goes to an external site:
 link-trust = Always trust { $host }
 link-open = Open link
@@ -283,7 +283,7 @@ voice-keybind-unset = Not set
 voice-keybind-record = Record Keybind
 voice-keybind-clear = Clear keybind
 voice-keybind-invalid = That key combination can't be used.
-voice-keybind-hint = Keybinds work while Oxidcord is in the background.
+voice-keybind-hint = Keybinds work while Kyoko is in the background.
 voice-device-default = Default
 voice-input-device = Input Device
 voice-output-device = Output Device
@@ -317,9 +317,9 @@ plugin-slot-empty = This plugin page is no longer available.
 plugin-tab-installed = Installed
 plugin-tab-catalog = Catalog
 plugin-install-file = Install from File
-plugin-file-filter = Oxidcord plugin
+plugin-file-filter = Kyoko plugin
 plugin-safe-mode = Safe mode
-plugin-safe-mode-note = Starts Oxidcord with every plugin disabled. Applies after a restart.
+plugin-safe-mode-note = Starts Kyoko with every plugin disabled. Applies after a restart.
 plugin-safe-banner = Safe mode is on. Plugins stay disabled until you restart without it.
 plugin-review-banner = Some plugins ask for permissions you have not reviewed yet.
 plugin-empty = No plugins are installed.
@@ -354,7 +354,7 @@ catalog-permissions = { $count ->
    *[other] { $count } permissions
 }
 catalog-consent-title = Download the Catalog?
-catalog-consent-body = Oxidcord will download { $url } and its signature over HTTPS.
+catalog-consent-body = Kyoko will download { $url } and its signature over HTTPS.
 
 perm-title = Allow { $name }?
 perm-version = Version { $version }
@@ -418,7 +418,7 @@ login-qr-refresh = Refresh
 login-web-waiting = Complete the login in the window that opened...
 login-web-cancel = Cancel
 login-web-failed = Web login failed: { $reason }
-login-notice = Oxidcord is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk.
+login-notice = Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk.
 login-understand = I understand
 
 status-online = Online
@@ -526,7 +526,7 @@ group-members-title = Members — { $count }
 
 settings-note-privacy = Privacy & Safety settings are managed in Discord's web app.
 settings-note-connections = Connections are managed in Discord's web app.
-settings-note-clips = Clips are not supported in Oxidcord.
+settings-note-clips = Clips are not supported in Kyoko.
 
 account-web-note = Change these in Discord's web app.
 account-open-web = Open Discord
@@ -564,11 +564,11 @@ notifications-test-sent = Notification sent.
 notifications-test-failed = Could not show a notification.
 
 advanced-startup = Startup
-advanced-open-on-login = Open Oxidcord on Login
-advanced-open-on-login-note = Start Oxidcord when you sign in to your computer.
+advanced-open-on-login = Open Kyoko on Login
+advanced-open-on-login-note = Start Kyoko when you sign in to your computer.
 advanced-startup-failed = Could not change the startup setting.
 advanced-minimize-to-tray = Minimize to Tray
-advanced-minimize-to-tray-note = Closing the window keeps Oxidcord running in the tray.
+advanced-minimize-to-tray-note = Closing the window keeps Kyoko running in the tray.
 advanced-developer = Developer
 advanced-developer-mode = Developer Mode
 advanced-developer-mode-note = Show Copy ID in menus everywhere.

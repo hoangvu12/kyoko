@@ -1,5 +1,5 @@
 [package]
-name = "oxidcord-plugin-sdk"
+name = "kyoko-plugin-sdk"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [lib]
-name = "oxidcord_plugin_sdk"
+name = "kyoko_plugin_sdk"
 
 [dependencies]
 wit-bindgen.workspace = true

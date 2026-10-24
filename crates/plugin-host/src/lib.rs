@@ -19,7 +19,7 @@ mod slots;
 mod storage;
 
 pub mod api {
-	pub use crate::bindings::oxidcord::plugin::types::*;
+	pub use crate::bindings::kyoko::plugin::types::*;
 }
 
 pub use broker::{HostBroker, NoopBroker};

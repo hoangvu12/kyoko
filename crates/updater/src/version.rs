@@ -8,7 +8,7 @@ pub struct VersionInfo {
 pub fn version_info() -> VersionInfo {
 	VersionInfo {
 		version: env!("CARGO_PKG_VERSION"),
-		git_sha: option_env!("OXIDCORD_GIT_SHA"),
-		build_date: env!("OXIDCORD_BUILD_DATE"),
+		git_sha: option_env!("KYOKO_GIT_SHA"),
+		build_date: env!("KYOKO_BUILD_DATE"),
 	}
 }

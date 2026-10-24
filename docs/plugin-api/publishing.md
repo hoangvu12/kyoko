@@ -13,7 +13,7 @@ Settings, Plugins has a catalog section with a Catalog URL field and a Refresh b
 
 1. Scaffold: `cargo xtask plugin new dev.example.my-plugin`.
 2. Build and test: `cargo xtask plugin build plugins/my-plugin --release`, then `cargo xtask plugin conformance`.
-3. Pack: `cargo xtask plugin pack plugins/my-plugin --sign <your key file>` writes `<id>-<version>.oxidcord-plugin`. Make a key once with `cargo xtask plugin keygen <file>` and keep the file private.
+3. Pack: `cargo xtask plugin pack plugins/my-plugin --sign <your key file>` writes `<id>-<version>.kyoko-plugin`. Make a key once with `cargo xtask plugin keygen <file>` and keep the file private.
 4. Share the archive directly (users install it from Settings, Plugins, Install from file), or host your own catalog.
 
 ## Host a catalog
@@ -25,12 +25,12 @@ cargo xtask plugin sign-catalog plugins/catalog.json <catalog key file>
 
 Upload `catalog.json`, `catalog.json.sig` and the archives next to each other. Users enter the URL of `catalog.json`.
 
-Clients only accept catalogs signed by the key built into them. A custom catalog therefore needs a build of Oxidcord with your public key in `crates/session/src/catalog.rs`, which is how forks run their own store. The official catalog key stays with the maintainers.
+Clients only accept catalogs signed by the key built into them. A custom catalog therefore needs a build of Kyoko with your public key in `crates/session/src/catalog.rs`, which is how forks run their own store. Kyoko does not ship a catalog key yet, so it trusts and fetches no catalog until one is built in.
 
 ## For maintainers: update the official catalog
 
 1. Bump `version` in the plugin's `plugin.toml` for every change. Clients compare versions and reinstall only newer ones.
-2. Rebuild everything and regenerate: `cargo xtask plugin catalog --dir plugins --packed packs --base-url https://raw.githubusercontent.com/Master0fFate/oxidcord/main/packs`.
+2. Rebuild everything and regenerate: `cargo xtask plugin catalog --dir plugins --packed packs --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/packs`.
 3. Review the diff of `plugins/catalog.json`: only the plugins that changed should have a new `sha256`. Set `reviewed` to `true` for the ones whose source you read.
 4. Sign: `cargo xtask plugin sign-catalog plugins/catalog.json <catalog key file>`.
 5. Commit `catalog.json`, `catalog.json.sig` and `packs`, and push to `main`. The catalog section picks it up on the next refresh.

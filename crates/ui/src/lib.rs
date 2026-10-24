@@ -16,4 +16,4 @@ pub mod zoom;
 
 pub use app::{AppFlags, LaunchConfig, StartSession, run};
 
-pub const APP_ID: &str = "dev.oxidcord.Oxidcord";
+pub const APP_ID: &str = "io.github.hoangvu12.Kyoko";

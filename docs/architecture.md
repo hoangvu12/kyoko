@@ -1,6 +1,6 @@
 # Architecture
 
-Oxidcord is a Cargo workspace. Data flows one way: gateway event, state reducer, revision bump, UI re-render of the views whose revision changed. The UI never performs network calls; it sends `Command` values to the session, which owns the REST client and the gateway task.
+Kyoko is a Cargo workspace. Data flows one way: gateway event, state reducer, revision bump, UI re-render of the views whose revision changed. The UI never performs network calls; it sends `Command` values to the session, which owns the REST client and the gateway task.
 
 ```
 apps/desktop        binary: wiring, window, lifecycle, CLI flags (--mock, --safe-mode)

@@ -13,15 +13,15 @@ RequestExecutionLevel user
 	!define VERSION_QUAD "0.0.0.0"
 !endif
 !ifndef BINARY
-	!define BINARY "..\..\target\release\oxidcord.exe"
+	!define BINARY "..\..\target\release\kyoko.exe"
 !endif
 !ifndef OUTFILE
-	!define OUTFILE "oxidcord-setup.exe"
+	!define OUTFILE "kyoko-setup.exe"
 !endif
 
-!define APP_NAME "Oxidcord"
-!define APP_ID "dev.oxidcord.Oxidcord"
-!define APP_EXE "oxidcord.exe"
+!define APP_NAME "Kyoko"
+!define APP_ID "io.github.hoangvu12.Kyoko"
+!define APP_EXE "kyoko.exe"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 !define SHORTCUT "$SMPROGRAMS\${APP_NAME}.lnk"
 

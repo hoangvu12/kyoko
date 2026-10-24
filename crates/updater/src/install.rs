@@ -14,7 +14,7 @@ use crate::swap::{Replacement, remove_path, sibling, swap_in};
 use crate::target::{InstallEnv, InstallKind};
 
 const MAX_EXTRACT_BYTES: u64 = 1024 * 1024 * 1024;
-const MAIN_EXE: &str = "oxidcord.exe";
+const MAIN_EXE: &str = "kyoko.exe";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallOutcome {

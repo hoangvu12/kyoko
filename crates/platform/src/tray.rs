@@ -8,10 +8,10 @@ use crate::{PlatformError, Result};
 
 static CREATED: AtomicBool = AtomicBool::new(false);
 
-const OPEN_ID: &str = "oxidcord.open";
-const MUTE_ID: &str = "oxidcord.mute";
-const DEAFEN_ID: &str = "oxidcord.deafen";
-const QUIT_ID: &str = "oxidcord.quit";
+const OPEN_ID: &str = "kyoko.open";
+const MUTE_ID: &str = "kyoko.mute";
+const DEAFEN_ID: &str = "kyoko.deafen";
+const QUIT_ID: &str = "kyoko.quit";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrayItem {

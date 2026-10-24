@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Oxidcord
+Name=Kyoko
 GenericName=Chat Client
 Comment=A native Discord client with a sandboxed plugin system
-Exec=oxidcord %U
-Icon=dev.oxidcord.Oxidcord
+Exec=kyoko %U
+Icon=io.github.hoangvu12.Kyoko
 Terminal=false
 Categories=Network;InstantMessaging;Chat;
 StartupNotify=true
-StartupWMClass=dev.oxidcord.Oxidcord
+StartupWMClass=io.github.hoangvu12.Kyoko

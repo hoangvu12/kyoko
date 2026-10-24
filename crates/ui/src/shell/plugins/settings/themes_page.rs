@@ -23,8 +23,7 @@ use crate::theme::{Theme, rem};
 const CARD_WIDTH: f32 = 220.;
 const SWATCH_HEIGHT: f32 = 32.;
 const URL_HEIGHT: f32 = 32.;
-const DEFAULT_CATALOG_URL: &str =
-	"https://raw.githubusercontent.com/Master0fFate/oxidcord/main/themes/catalog.json";
+const DEFAULT_CATALOG_URL: &str = "";
 const BUILTIN: [(&str, &str); 3] = [
 	("dark", "settings-theme-dark"),
 	("light", "settings-theme-light"),

@@ -1,4 +1,4 @@
-id = "dev.oxidcord.hello-timestamps"
+id = "kyoko.hello-timestamps"
 name = "Hello Timestamps"
 version = "0.1.0"
 api = "^1.0"

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::bindings::oxidcord::plugin::types as api;
+use crate::bindings::kyoko::plugin::types as api;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

@@ -4,9 +4,9 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="${VERSION:?set VERSION to the release version without the leading v}"
 arch="${ARCH:-$(uname -m)}"
-binary="${BINARY:-$root/target/release/oxidcord}"
+binary="${BINARY:-$root/target/release/kyoko}"
 out_dir="${OUT_DIR:-$root/dist}"
-app_id="dev.oxidcord.Oxidcord"
+app_id="io.github.hoangvu12.Kyoko"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -21,14 +21,14 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 linuxdeploy \
 	--appdir "$appdir" \
 	--executable "$binary" \
-	--desktop-file "$root/packaging/linux/oxidcord.desktop" \
+	--desktop-file "$root/packaging/linux/kyoko.desktop" \
 	--icon-file "$work/$app_id.png" \
 	--icon-filename "$app_id"
 
 install -Dm644 "$root/packaging/linux/$app_id.metainfo.xml" \
 	"$appdir/usr/share/metainfo/$app_id.metainfo.xml"
 
-output="$out_dir/oxidcord-$version-linux-$arch-appimage.AppImage"
+output="$out_dir/kyoko-$version-linux-$arch-appimage.AppImage"
 appimagetool "$appdir" "$output"
 chmod +x "$output"
 echo "$output"

@@ -2,15 +2,15 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
-	println!("cargo:rerun-if-env-changed=OXIDCORD_GIT_SHA");
-	println!("cargo:rerun-if-env-changed=OXIDCORD_BUILD_DATE");
+	println!("cargo:rerun-if-env-changed=KYOKO_GIT_SHA");
+	println!("cargo:rerun-if-env-changed=KYOKO_BUILD_DATE");
 	println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
 	println!("cargo:rerun-if-changed=../../.git/HEAD");
-	if let Some(sha) = std::env::var("OXIDCORD_GIT_SHA").ok().or_else(git_sha) {
-		println!("cargo:rustc-env=OXIDCORD_GIT_SHA={sha}");
+	if let Some(sha) = std::env::var("KYOKO_GIT_SHA").ok().or_else(git_sha) {
+		println!("cargo:rustc-env=KYOKO_GIT_SHA={sha}");
 	}
-	let date = std::env::var("OXIDCORD_BUILD_DATE").unwrap_or_else(|_| build_date());
-	println!("cargo:rustc-env=OXIDCORD_BUILD_DATE={date}");
+	let date = std::env::var("KYOKO_BUILD_DATE").unwrap_or_else(|_| build_date());
+	println!("cargo:rustc-env=KYOKO_BUILD_DATE={date}");
 }
 
 fn git_sha() -> Option<String> {

@@ -15,7 +15,7 @@ pub struct Paths {
 
 impl Paths {
 	pub fn discover() -> Result<Self> {
-		let dirs = ProjectDirs::from("dev", "oxidcord", "Oxidcord").ok_or_else(|| {
+		let dirs = ProjectDirs::from("io.github", "hoangvu12", "Kyoko").ok_or_else(|| {
 			io::Error::new(
 				io::ErrorKind::NotFound,
 				"no home directory to place application data in",
@@ -61,7 +61,7 @@ impl Paths {
 	}
 
 	pub fn database_path(&self) -> PathBuf {
-		self.data.join("oxidcord.db")
+		self.data.join("kyoko.db")
 	}
 
 	pub fn settings_path(&self) -> PathBuf {

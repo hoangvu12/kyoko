@@ -9,7 +9,7 @@ use crate::migrations;
 use crate::seal::{Sealer, is_sealed};
 
 const CANARY_KEY: &str = "seal-check";
-const CANARY_VALUE: &[u8] = b"oxidcord";
+const CANARY_VALUE: &[u8] = b"kyoko";
 const SEALED_COLUMNS: [(&str, &str, &str); 6] = [
 	("kv", "value", "key"),
 	("guilds", "json", "id"),

@@ -50,7 +50,7 @@ fn runtime_for(requested: Option<Handle>) -> (Option<Runtime>, Handle) {
 		None => {
 			let runtime = Builder::new_multi_thread()
 				.worker_threads(RUNTIME_WORKERS)
-				.thread_name("oxidcord-session")
+				.thread_name("kyoko-session")
 				.enable_all()
 				.build()
 				.expect("session runtime initializes");

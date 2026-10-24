@@ -33,7 +33,7 @@ cargo xtask plugin sign-catalog <catalog.json> <secret key file>
 
 - `new` scaffolds `Cargo.toml`, `plugin.toml`, `src/lib.rs` and `README.md` in `<dir>/<last part of the id>`.
 - `build` builds the crate for `wasm32-wasip2` and prints the path of the `.wasm`. A directory without a `Cargo.toml` has nothing to build.
-- `pack` builds in release mode and writes `<id>-<version>.oxidcord-plugin`. With `--sign` the archive carries a publisher signature.
+- `pack` builds in release mode and writes `<id>-<version>.kyoko-plugin`. With `--sign` the archive carries a publisher signature.
 - `conformance` packs every plugin in the directory into a temporary directory, installs the archives there and runs `plugin_host::conformance::run` over the result. It prints one row per plugin and exits non-zero when a check fails.
 - `catalog` packs every plugin (except `conformance-probe`) into `--packed` and writes the catalog with the sha256 and length of each archive. `--base-url` is put in front of the archive name to form each `url`, without it the url is the file name. Entries start as `reviewed: false`.
 - `keygen` writes a base64 ed25519 secret key (mode 0600 on unix, refuses to overwrite) and prints the base64 public key.

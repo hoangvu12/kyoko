@@ -25,7 +25,7 @@ const RELAUNCH_ATTEMPTS: u32 = 100;
 const RELAUNCH_RETRY: Duration = Duration::from_millis(100);
 
 #[derive(Parser)]
-#[command(name = "oxidcord", version, about = "A native Discord client")]
+#[command(name = "kyoko", version, about = "A native Discord client")]
 struct Cli {
 	#[arg(long, help = "Run against the mock Discord server")]
 	mock: bool,
@@ -152,7 +152,7 @@ fn main() -> anyhow::Result<()> {
 
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
-		.thread_name("oxidcord-worker")
+		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
 

@@ -1,4 +1,4 @@
-package oxidcord:plugin@1.0.0;
+package kyoko:plugin@1.0.0;
 
 interface types {
 	type snowflake = u64;

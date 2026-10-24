@@ -148,7 +148,7 @@ impl InstallEnv {
 
 	pub fn windows(exe: PathBuf, local_app_data: Option<OsString>) -> Self {
 		let installed = local_app_data.is_some_and(|base| {
-			let base = Path::new(&base).join("Programs").join("Oxidcord");
+			let base = Path::new(&base).join("Programs").join("Kyoko");
 			Path::new(&lowercase(&exe)).starts_with(lowercase(&base))
 		});
 		let kind = if installed {

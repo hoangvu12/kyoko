@@ -1,6 +1,6 @@
 # Plugin API overview
 
-Plugins are WebAssembly components that implement the `oxidcord:plugin@1.0.0` WIT package (`crates/plugin-host/wit/oxidcord.wit`). The host runs each plugin on its own worker thread inside wasmtime. A plugin can only reach the outside world through the `host` interface, and every function there is gated by a permission the user granted.
+Plugins are WebAssembly components that implement the `kyoko:plugin@1.0.0` WIT package (`crates/plugin-host/wit/kyoko.wit`). The host runs each plugin on its own worker thread inside wasmtime. A plugin can only reach the outside world through the `host` interface, and every function there is gated by a permission the user granted.
 
 ## Shape of the API
 
@@ -88,10 +88,10 @@ WIT has no recursive types, so markdown and UI nodes are flat. An `md-tree` or `
 
 ## Writing a plugin
 
-Create a library crate with `crate-type = ["cdylib"]`, depend on `oxidcord-plugin-sdk`, implement `Plugin` and call `export_plugin!`.
+Create a library crate with `crate-type = ["cdylib"]`, depend on `kyoko-plugin-sdk`, implement `Plugin` and call `export_plugin!`.
 
 ```rust
-use oxidcord_plugin_sdk::{Md, MessageView, Plugin, export_plugin, host};
+use kyoko_plugin_sdk::{Md, MessageView, Plugin, export_plugin, host};
 
 #[derive(Default)]
 struct Example;
@@ -116,7 +116,7 @@ Every method of `Plugin` has a no-op default. Helpers: `log::info!` and friends,
 - ungranted calls to every gated host function return `denied`, and `send-message` is rate limited after a burst of three;
 - `init` succeeds and each hook the manifest has a permission for answers within its deadline;
 - `settings-schema` returns valid JSON;
-- a `setting-changed` event with key `oxidcord.conformance.spin` that makes the plugin loop forever is interrupted within the `on-event` deadline and the instance restarts;
-- a `setting-changed` event with key `oxidcord.conformance.alloc` that makes the plugin allocate past the memory cap traps and the instance restarts.
+- a `setting-changed` event with key `kyoko.conformance.spin` that makes the plugin loop forever is interrupted within the `on-event` deadline and the instance restarts;
+- a `setting-changed` event with key `kyoko.conformance.alloc` that makes the plugin allocate past the memory cap traps and the instance restarts.
 
 Well behaved plugins ignore the two probe keys and those checks are reported as skipped.

@@ -1,5 +1,5 @@
 [package]
-name = "oxidcord-rest"
+name = "kyoko-rest"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

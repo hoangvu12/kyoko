@@ -8,7 +8,7 @@ use store::{Paths, Store};
 use crate::api::{
 	Event, FetchRequest, HostError, MessageRef, MessageView, OutgoingMessage, SettingChange, UiTree, User,
 };
-use crate::bindings::oxidcord::plugin::host::Host;
+use crate::bindings::kyoko::plugin::host::Host;
 use crate::broker::NoopBroker;
 use crate::config::RuntimeConfig;
 use crate::convert::md_to_tree;
@@ -21,10 +21,10 @@ use crate::package::{Package, discover};
 use crate::permission::Permission;
 use crate::runtime::Runtime;
 
-pub const PROBE_SPIN_KEY: &str = "oxidcord.conformance.spin";
-pub const PROBE_ALLOC_KEY: &str = "oxidcord.conformance.alloc";
-pub const PROBE_SEND_COMMAND: &str = "oxidcord.conformance.send";
-pub const PROBE_CONTEXT_COMMAND: &str = "oxidcord.conformance.context";
+pub const PROBE_SPIN_KEY: &str = "kyoko.conformance.spin";
+pub const PROBE_ALLOC_KEY: &str = "kyoko.conformance.alloc";
+pub const PROBE_SEND_COMMAND: &str = "kyoko.conformance.send";
+pub const PROBE_CONTEXT_COMMAND: &str = "kyoko.conformance.context";
 
 const SCRATCH_REMOVE_ATTEMPTS: u32 = 20;
 const SCRATCH_REMOVE_PAUSE: Duration = Duration::from_millis(100);
@@ -157,7 +157,7 @@ fn sandbox() -> Result<Sandbox, String> {
 	let nanos = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.map_or(0, |elapsed| elapsed.as_nanos());
-	let root = std::env::temp_dir().join(format!("oxidcord-conformance-{}-{nanos}", std::process::id()));
+	let root = std::env::temp_dir().join(format!("kyoko-conformance-{}-{nanos}", std::process::id()));
 	let paths = Paths::at(&root).map_err(|error| error.to_string())?;
 	let store = Arc::new(Store::open(paths).map_err(|error| error.to_string())?);
 	let tokio = tokio::runtime::Builder::new_multi_thread()

@@ -1,4 +1,4 @@
-id = "dev.oxidcord.edit-history"
+id = "kyoko.edit-history"
 name = "Edit History"
 version = "0.1.0"
 api = "^1.0"

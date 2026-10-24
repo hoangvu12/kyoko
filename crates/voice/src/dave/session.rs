@@ -655,7 +655,7 @@ impl DaveSession {
 	pub fn exporter_check(&self) -> Option<[u8; 16]> {
 		let group = self.group.as_ref().filter(|_| self.established)?;
 		group
-			.export_secret(self.provider.crypto(), "oxidcord test check", &[], 16)
+			.export_secret(self.provider.crypto(), "kyoko test check", &[], 16)
 			.ok()?
 			.try_into()
 			.ok()

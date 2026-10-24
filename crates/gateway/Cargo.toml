@@ -1,5 +1,5 @@
 [package]
-name = "oxidcord-gateway"
+name = "kyoko-gateway"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

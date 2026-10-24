@@ -1,4 +1,4 @@
-id = "dev.oxidcord.link-cleaner"
+id = "kyoko.link-cleaner"
 name = "Link Cleaner"
 version = "0.1.0"
 api = "^1.0"
