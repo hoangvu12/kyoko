@@ -28,7 +28,34 @@ pub struct SessionInfo {
 	pub session_id: String,
 	pub resume_url: Option<String>,
 	pub connected: bool,
+	pub connection: ConnectionStatus,
 	pub latency: Option<Duration>,
+}
+
+impl SessionInfo {
+	pub(crate) fn set_connection(&mut self, status: ConnectionStatus) {
+		self.connected = status == ConnectionStatus::Connected;
+		self.connection = status;
+	}
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ConnectionStatus {
+	#[default]
+	Connecting,
+	Resuming,
+	Connected,
+	Reconnecting {
+		attempt: u32,
+		retry_in: Duration,
+	},
+	Disconnected(DisconnectReason),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DisconnectReason {
+	AuthenticationFailed,
+	Rejected { code: Option<u16>, message: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -413,8 +440,8 @@ impl State {
 					self.mark_channel_dirty(*channel_id, &mut changes);
 				}
 			}
-			LocalEvent::ConnectionChanged { connected } => {
-				self.session.connected = *connected;
+			LocalEvent::Connection(status) => {
+				self.session.set_connection(status.clone());
 				changes.session = true;
 			}
 			LocalEvent::LatencyMeasured(latency) => {

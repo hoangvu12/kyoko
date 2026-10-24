@@ -1,5 +1,8 @@
 use thiserror::Error;
 
+pub const AUTHENTICATION_FAILED: u16 = 4004;
+pub const MESSAGE_TOO_BIG: u16 = 1009;
+
 #[derive(Debug, Error)]
 pub enum GatewayError {
 	#[error("gateway rejected the session: {}", fatal_meaning(*.code))]
@@ -18,6 +21,20 @@ pub enum GatewayError {
 	Transport(String),
 }
 
+impl GatewayError {
+	pub fn close_code(&self) -> Option<u16> {
+		match self {
+			Self::Fatal { code } => Some(*code),
+			Self::OverSized => Some(MESSAGE_TOO_BIG),
+			_ => None,
+		}
+	}
+
+	pub fn is_authentication_failure(&self) -> bool {
+		self.close_code() == Some(AUTHENTICATION_FAILED)
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum SendError {
 	#[error("gateway send queue is full")]
@@ -26,11 +43,11 @@ pub enum SendError {
 	Closed,
 }
 
-pub(crate) const FATAL_CLOSE_CODES: [u16; 6] = [4004, 4010, 4011, 4012, 4013, 4014];
+pub const FATAL_CLOSE_CODES: [u16; 8] = [AUTHENTICATION_FAILED, 4010, 4011, 4012, 4013, 4014, 4015, 4016];
 
 fn fatal_meaning(code: u16) -> &'static str {
 	match code {
-		4004 => "authentication failed",
+		AUTHENTICATION_FAILED => "authentication failed",
 		4010 => "invalid shard",
 		4011 => "sharding required",
 		4012 => "invalid api version",

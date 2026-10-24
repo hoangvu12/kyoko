@@ -14,20 +14,17 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tracing::{debug, warn};
 
 use crate::config::GatewayConfig;
-use crate::error::{FATAL_CLOSE_CODES, GatewayError};
+use crate::error::{FATAL_CLOSE_CODES, GatewayError, MESSAGE_TOO_BIG};
 use crate::event::GatewayEvent;
 use crate::frames;
-use crate::limiter::RateLimiter;
+use crate::outbox::Outbox;
 use crate::transport::{self, Socket, ZlibStream};
 
-const SEND_PERMITS: u32 = 120;
-const SEND_WINDOW: Duration = Duration::from_secs(60);
-const BACKOFF_CAP_SECS: f64 = 60.0;
 const MIN_HEARTBEAT: Duration = Duration::from_millis(100);
 const MAX_HEARTBEAT: Duration = Duration::from_secs(300);
 const LIBRARY_CLOSE: u16 = 4000;
 const NORMAL_CLOSE: u16 = 1000;
-const TOO_BIG_CLOSE: u16 = 1009;
+const REIDENTIFY_CLOSE_CODES: [u16; 3] = [4003, 4007, 4009];
 
 struct Shutdown;
 
@@ -67,24 +64,6 @@ impl Ended {
 			reason: reason.into(),
 			error,
 		}
-	}
-}
-
-struct Outbox {
-	commands: mpsc::Receiver<String>,
-	limiter: RateLimiter,
-}
-
-impl Outbox {
-	async fn next(&mut self) -> Option<String> {
-		self.limiter.ready().await;
-		let frame = self.commands.recv().await?;
-		self.limiter.take();
-		Some(frame)
-	}
-
-	fn discard_queued(&mut self) {
-		while self.commands.try_recv().is_ok() {}
 	}
 }
 
@@ -129,18 +108,17 @@ impl Session {
 	pub fn new(
 		config: GatewayConfig,
 		events: mpsc::Sender<GatewayEvent>,
-		commands: mpsc::Receiver<String>,
+		urgent: mpsc::Receiver<String>,
+		bulk: mpsc::Receiver<String>,
 		reconnect: Arc<Notify>,
 		shutdown: watch::Receiver<bool>,
 		latency: Arc<AtomicU64>,
 	) -> Self {
+		let outbox = Outbox::new(config.tuning.send_budget, urgent, bulk);
 		Self {
 			config,
 			events,
-			outbox: Outbox {
-				commands,
-				limiter: RateLimiter::new(SEND_PERMITS, SEND_WINDOW),
-			},
+			outbox,
 			reconnect,
 			shutdown,
 			latency,
@@ -157,11 +135,9 @@ impl Session {
 
 	async fn serve(&mut self) -> Result<(), Shutdown> {
 		loop {
-			if self.failures > 0 {
-				self.pause(backoff(self.failures)).await?;
-			}
 			self.emit(GatewayEvent::Connecting {
 				attempt: self.failures + 1,
+				resuming: self.resumable().is_some(),
 			})
 			.await?;
 			match self.connect_and_drive().await? {
@@ -173,26 +149,21 @@ impl Session {
 					if failure {
 						self.failures += 1;
 					}
-					debug!(
-						?code,
-						will_resume = self.session_id.is_some(),
-						"gateway disconnected"
-					);
+					let retry_in = self.config.tuning.backoff.delay(self.failures);
+					let will_resume = self.resumable().is_some();
+					debug!(?code, will_resume, ?retry_in, "gateway disconnected");
 					self.emit(GatewayEvent::Disconnected {
 						code,
 						reason,
-						will_resume: self.session_id.is_some(),
+						will_resume,
+						attempt: self.failures + 1,
+						retry_in,
 					})
 					.await?;
+					self.pause(retry_in).await?;
 				}
 				Ended::Fatal { code, reason, error } => {
-					warn!(%error, "gateway stopped");
-					self.emit(GatewayEvent::Disconnected {
-						code,
-						reason,
-						will_resume: false,
-					})
-					.await?;
+					warn!(?code, reason, %error, "gateway stopped");
 					return self.emit(GatewayEvent::Fatal(error)).await;
 				}
 			}
@@ -212,15 +183,22 @@ impl Session {
 			Ok(socket) => socket,
 			Err(error) => return Ok(Ended::lost(error.to_string())),
 		};
-		self.outbox.discard_queued();
+		self.outbox.clear_control();
 		self.reconnect.notified().now_or_never();
 		self.drive(Connection::new(socket)).await
 	}
 
+	fn resumable(&self) -> Option<(&str, &str, u64)> {
+		match (&self.session_id, &self.resume_url, self.seq) {
+			(Some(session_id), Some(url), Some(seq)) => Some((session_id, url, seq)),
+			_ => None,
+		}
+	}
+
 	fn endpoint(&self) -> Result<url::Url, GatewayError> {
-		let base = match (&self.session_id, &self.resume_url) {
-			(Some(_), Some(url)) => url,
-			_ => &self.config.gateway_url,
+		let base = match self.resumable() {
+			Some((_, url, _)) => url,
+			None => &self.config.gateway_url,
 		};
 		transport::endpoint(base)
 	}
@@ -230,8 +208,8 @@ impl Session {
 			let ended = tokio::select! {
 				message = connection.socket.next() => self.on_socket(&mut connection, message).await?,
 				_ = next_tick(&mut connection.heartbeat) => self.on_heartbeat_due(&mut connection).await,
-				_ = until(connection.identify_at) => self.on_identify_due(&mut connection).await,
-				frame = self.outbox.next(), if connection.ready => match frame {
+				_ = until(connection.identify_at) => self.on_identify_due(&mut connection),
+				frame = self.outbox.next(connection.ready) => match frame {
 					Some(frame) => self.transmit(&mut connection, frame).await,
 					None => return Err(Shutdown),
 				},
@@ -301,7 +279,7 @@ impl Session {
 			Some(code) if FATAL_CLOSE_CODES.contains(&code) => {
 				return Ended::fatal(Some(code), reason, GatewayError::Fatal { code });
 			}
-			Some(4007 | 4009) => self.clear_session(),
+			Some(code) if REIDENTIFY_CLOSE_CODES.contains(&code) => self.clear_session(),
 			_ => {}
 		}
 		Ended::Reconnect {
@@ -323,7 +301,7 @@ impl Session {
 				self.on_dispatch(connection, payload).await?;
 				Ok(None)
 			}
-			Opcode::Heartbeat => Ok(self.send_heartbeat(connection).await),
+			Opcode::Heartbeat => Ok(self.send_heartbeat(connection)),
 			Opcode::Reconnect => Ok(Some(
 				self.hangup(connection, LIBRARY_CLOSE, "reconnect requested", false)
 					.await,
@@ -333,14 +311,20 @@ impl Session {
 					.d
 					.and_then(|data| serde_json::from_str::<bool>(data.get()).ok())
 					.unwrap_or(false);
-				if resumable && self.session_id.is_some() {
+				if resumable && self.resumable().is_some() {
 					return Ok(Some(
 						self.hangup(connection, LIBRARY_CLOSE, "invalid session", false)
 							.await,
 					));
 				}
 				self.clear_session();
+				connection.ready = false;
 				connection.identify_at = Some(Instant::now() + identify_delay());
+				self.emit(GatewayEvent::Connecting {
+					attempt: self.failures + 1,
+					resuming: false,
+				})
+				.await?;
 				Ok(None)
 			}
 			Opcode::Hello => self.on_hello(connection, payload).await,
@@ -387,29 +371,36 @@ impl Session {
 		);
 		timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
 		connection.heartbeat = Some(timer);
-		Ok(self.authenticate(connection).await)
+		Ok(self.authenticate())
 	}
 
-	async fn authenticate(&mut self, connection: &mut Connection) -> Option<Ended> {
-		let frame = match &self.session_id {
-			Some(session_id) => {
+	fn authenticate(&mut self) -> Option<Ended> {
+		let frame = match self.resumable() {
+			Some((session_id, _, seq)) => {
 				debug!("gateway resume");
-				frames::resume(&self.config.token, session_id, self.seq.unwrap_or(0))
+				frames::resume(&self.config.token, session_id, seq)
 			}
 			None => {
 				debug!("gateway identify");
 				frames::identify(&self.config)
 			}
 		};
-		match frame {
-			Ok(frame) => self.transmit(connection, frame).await,
-			Err(error) => Some(Ended::fatal(None, error.to_string(), error)),
-		}
+		self.queue_control(frame)
 	}
 
-	async fn on_identify_due(&mut self, connection: &mut Connection) -> Option<Ended> {
+	fn on_identify_due(&mut self, connection: &mut Connection) -> Option<Ended> {
 		connection.identify_at = None;
-		self.authenticate(connection).await
+		self.authenticate()
+	}
+
+	fn queue_control(&mut self, frame: Result<String, GatewayError>) -> Option<Ended> {
+		match frame {
+			Ok(frame) => {
+				self.outbox.push_control(frame);
+				None
+			}
+			Err(error) => Some(Ended::fatal(None, error.to_string(), error)),
+		}
 	}
 
 	async fn on_heartbeat_due(&mut self, connection: &mut Connection) -> Option<Ended> {
@@ -420,16 +411,13 @@ impl Session {
 					.await,
 			);
 		}
-		self.send_heartbeat(connection).await
+		self.send_heartbeat(connection)
 	}
 
-	async fn send_heartbeat(&mut self, connection: &mut Connection) -> Option<Ended> {
+	fn send_heartbeat(&mut self, connection: &mut Connection) -> Option<Ended> {
 		connection.awaiting_ack = true;
 		connection.heartbeat_sent = Instant::now();
-		match frames::heartbeat(self.seq) {
-			Ok(frame) => self.transmit(connection, frame).await,
-			Err(error) => Some(Ended::fatal(None, error.to_string(), error)),
-		}
+		self.queue_control(frames::heartbeat(self.seq))
 	}
 
 	async fn on_dispatch(
@@ -500,8 +488,8 @@ impl Session {
 	}
 
 	async fn oversized(&mut self, connection: &mut Connection) -> Ended {
-		transport::hangup(&mut connection.socket, TOO_BIG_CLOSE, "message too big").await;
-		Ended::fatal(Some(TOO_BIG_CLOSE), "message too big", GatewayError::OverSized)
+		transport::hangup(&mut connection.socket, MESSAGE_TOO_BIG, "message too big").await;
+		Ended::fatal(Some(MESSAGE_TOO_BIG), "message too big", GatewayError::OverSized)
 	}
 
 	fn clear_session(&mut self) {
@@ -533,12 +521,6 @@ fn decode_payload(bytes: &[u8]) -> Option<GatewayPayload> {
 			None
 		}
 	}
-}
-
-fn backoff(failures: u32) -> Duration {
-	let base = 2f64.powi(failures.saturating_sub(1).min(6) as i32);
-	let jittered = base * rand::random_range(0.75..=1.25);
-	Duration::from_secs_f64(jittered.min(BACKOFF_CAP_SECS))
 }
 
 fn identify_delay() -> Duration {

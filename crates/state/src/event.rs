@@ -4,6 +4,7 @@ use std::time::Duration;
 use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
 
 use crate::loaded::Loaded;
+use crate::state::ConnectionStatus;
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
 
@@ -57,9 +58,7 @@ pub enum LocalEvent {
 		channel_id: Snowflake,
 		collapsed: bool,
 	},
-	ConnectionChanged {
-		connected: bool,
-	},
+	Connection(ConnectionStatus),
 	LatencyMeasured(Duration),
 	VoiceConnection {
 		status: VoiceStatus,

@@ -1,4 +1,41 @@
+use std::time::Duration;
+
 use protocol::{IdentifyProperties, Token};
+
+use crate::outbox::SendBudget;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Backoff {
+	pub base: Duration,
+	pub cap: Duration,
+}
+
+impl Default for Backoff {
+	fn default() -> Self {
+		Self {
+			base: Duration::from_secs(1),
+			cap: Duration::from_secs(60),
+		}
+	}
+}
+
+impl Backoff {
+	pub fn delay(&self, failures: u32) -> Duration {
+		if failures == 0 {
+			return Duration::ZERO;
+		}
+		let doublings = failures.saturating_sub(1).min(16) as i32;
+		let jitter = rand::random_range(0.75..=1.25);
+		let delay = self.base.as_secs_f64() * 2f64.powi(doublings) * jitter;
+		Duration::from_secs_f64(delay.min(self.cap.as_secs_f64()))
+	}
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GatewayTuning {
+	pub backoff: Backoff,
+	pub send_budget: SendBudget,
+}
 
 #[derive(Debug)]
 pub struct GatewayConfig {
@@ -8,6 +45,7 @@ pub struct GatewayConfig {
 	pub capabilities: u64,
 	pub initial_status: String,
 	pub large_threshold: u32,
+	pub tuning: GatewayTuning,
 }
 
 impl GatewayConfig {
@@ -24,6 +62,7 @@ impl GatewayConfig {
 			capabilities: Self::DEFAULT_CAPABILITIES,
 			initial_status: "online".to_owned(),
 			large_threshold: Self::DEFAULT_LARGE_THRESHOLD,
+			tuning: GatewayTuning::default(),
 		}
 	}
 }

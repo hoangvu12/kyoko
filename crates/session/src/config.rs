@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use gateway::GatewayTuning;
 use protocol::Token;
 use protocol::gateway::IdentifyProperties;
 use state::Changes;
@@ -20,4 +21,5 @@ pub struct SessionConfig {
 	pub runtime: Option<Handle>,
 	pub notify: NotifyFn,
 	pub hooks: Option<Arc<dyn SessionHooks>>,
+	pub gateway: GatewayTuning,
 }

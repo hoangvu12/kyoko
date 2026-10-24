@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant as StdInstant};
 
 use chrono::Utc;
-use gateway::{GatewayEvent, GatewayHandle};
+use gateway::{GatewayError, GatewayEvent, GatewayHandle};
 use parking_lot::Mutex;
 use protocol::{
 	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, Message, MessageAck,
@@ -15,7 +15,8 @@ use rest::api::SearchQuery;
 use rest::{RestClient, UploadFile};
 use serde_json::json;
 use state::{
-	Changes, Event, LoadDirection, Loaded, LocalEvent, RenderedMessage, SharedState, TYPING_TIMEOUT,
+	Changes, ConnectionStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent, RenderedMessage,
+	SharedState, TYPING_TIMEOUT,
 };
 use store::Store;
 use tokio::runtime::Handle;
@@ -144,6 +145,16 @@ fn page_query(
 	}
 }
 
+fn disconnect_reason(error: &GatewayError) -> DisconnectReason {
+	if error.is_authentication_failure() {
+		return DisconnectReason::AuthenticationFailed;
+	}
+	DisconnectReason::Rejected {
+		code: error.close_code(),
+		message: error.to_string(),
+	}
+}
+
 fn ack_day() -> i64 {
 	(Utc::now().timestamp_millis() - DISCORD_EPOCH_MS) / DAY_MILLIS
 }
@@ -246,7 +257,7 @@ impl Core {
 				mention_count: Some(i64::from(read_state.mention_count)),
 			}));
 		}
-		self.apply_local(LocalEvent::ConnectionChanged { connected: false });
+		self.apply_local(LocalEvent::Connection(ConnectionStatus::Connecting));
 	}
 
 	fn apply(&mut self, event: Event<'_>) {
@@ -280,8 +291,13 @@ impl Core {
 
 	fn on_gateway(&mut self, event: GatewayEvent) {
 		match event {
-			GatewayEvent::Connecting { .. } => {
-				self.apply_local(LocalEvent::ConnectionChanged { connected: false });
+			GatewayEvent::Connecting { resuming, .. } => {
+				let status = if resuming {
+					ConnectionStatus::Resuming
+				} else {
+					ConnectionStatus::Connecting
+				};
+				self.apply_local(LocalEvent::Connection(status));
 			}
 			GatewayEvent::Hello { .. } => {}
 			GatewayEvent::Ready(ready) => {
@@ -301,14 +317,28 @@ impl Core {
 				code,
 				reason,
 				will_resume,
+				attempt,
+				retry_in,
 			} => {
-				tracing::info!(?code, reason, will_resume, "gateway disconnected");
+				tracing::info!(
+					?code,
+					reason,
+					will_resume,
+					attempt,
+					?retry_in,
+					"gateway disconnected"
+				);
 				self.stats.reconnects.fetch_add(1, Ordering::Relaxed);
-				self.apply_local(LocalEvent::ConnectionChanged { connected: false });
+				self.apply_local(LocalEvent::Connection(ConnectionStatus::Reconnecting {
+					attempt,
+					retry_in,
+				}));
 			}
 			GatewayEvent::Fatal(error) => {
 				tracing::error!(%error, "gateway stopped");
-				self.apply_local(LocalEvent::ConnectionChanged { connected: false });
+				self.apply_local(LocalEvent::Connection(ConnectionStatus::Disconnected(
+					disconnect_reason(&error),
+				)));
 			}
 			GatewayEvent::Latency { heartbeat_rtt } => {
 				self.apply_local(LocalEvent::LatencyMeasured(heartbeat_rtt));

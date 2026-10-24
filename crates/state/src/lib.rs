@@ -31,7 +31,9 @@ pub use member_list::{MemberList, MemberSlot};
 pub use messages::{ChannelMessages, MESSAGE_CAP, PendingMessage};
 pub use permissions::DM_PERMISSIONS;
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};
-pub use state::{Rejection, Selection, SessionInfo, SharedState, State, TYPING_TIMEOUT};
+pub use state::{
+	ConnectionStatus, DisconnectReason, Rejection, Selection, SessionInfo, SharedState, State, TYPING_TIMEOUT,
+};
 pub use threads::ForumPost;
 pub use views::{
 	ChannelRow, ChannelTreeNode, DmRow, GuildSummary, MemberListRow, MemberRow, MessageRow, MessageView,

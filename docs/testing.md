@@ -8,7 +8,7 @@ Kyoko's behaviour tests drive a real `Session` against an in-process mockcord. T
 cargo xtask test
 ```
 
-This runs `cargo test -p kyoko-session -p mockcord`. CI runs the same tests on Windows as part of `cargo test --workspace --locked`. To run a single test: `cargo test -p kyoko-session --test session <name>`.
+This runs `cargo test -p kyoko-session -p kyoko-gateway -p mockcord`. CI runs the same tests on Windows as part of `cargo test --workspace --locked`. To run a single test: `cargo test -p kyoko-session --test session <name>`.
 
 ## Layout
 
@@ -29,7 +29,12 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 
 `Running` starts mockcord on a random loopback port and opens a store in a scratch directory under the temp dir, named after the test and the process id. It sets the plaintext-token setting so the mock token never reaches Credential Manager, then starts a `Session` pointed at mockcord's REST and gateway URLs. Test names must be unique within the binary. Always finish with `running.stop().await`, which shuts the session down, stops mockcord and removes the scratch directory.
 
-`Options` sets recording on and pins the fixture anchor (see "Determinism"). Change `MockConfig` through `Options` when a test needs other fixtures or a shorter `heartbeat_interval_ms`.
+`Options` sets recording on and pins the fixture anchor (see "Determinism"). Its builders:
+
+- `hooks(..)` installs session hooks.
+- `heartbeat_ms(ms)` shortens mockcord's heartbeat interval.
+- `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
+- `prepare(|mock| ..)` runs against mockcord's `Control` before the session starts, for example `transform_ready` for the very first READY.
 
 ## Waiting
 
@@ -37,7 +42,8 @@ Never sleep for a fixed time. Wait on an observable event:
 
 - `running.until("what", |state| ...)` re-checks the predicate every time the session publishes changes, and panics with the description after `STEP_TIMEOUT` (15 s).
 - `running.until_wire("what", |recording| Some(..))` re-checks every time mockcord records traffic, and returns the first `Some`.
-- `running.connected()` waits for READY and a live connection. `running.open_text_channel()` selects the first guild text channel and waits for its history to load.
+- `running.connected()` waits for READY and a live connection. `running.identified_connection()` returns the id of the connection that sent the first IDENTIFY. `running.open_text_channel()` selects the first guild text channel and waits for its history to load.
+- `state.session().connection` holds the `ConnectionStatus` (see `docs/gateway.md`). Wait on it to see reconnect attempts, their `retry_in`, and stop reasons.
 
 Wait on the effect you are about to assert. For example, wait for a RESUME frame on a new connection, not for "connected", which was already true before the drop.
 
@@ -72,8 +78,9 @@ Gateway controls:
 
 - `close_gateway(code)` closes every identified connection with the code: 4000 for a resumable drop, 4004 and other fatal codes for fatal closes.
 - `close_next_identify(code)` closes the next IDENTIFY with the code instead of sending READY.
+- `close_next_connections(code, count)` closes the next `count` new sockets with the code before HELLO. Use it for consecutive failed reconnects.
 - `fail_next_resume()` answers the next RESUME with op 9 `false`.
-- `invalidate_session(resumable)` sends op 9. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
+- `invalidate_session(resumable)` sends op 9. With `false`, mockcord also ends the session, so the client can IDENTIFY again on the same socket. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
 - `set_heartbeat_acks(HeartbeatAcks::Prompt | Delayed(d) | Withheld)` controls op 11 replies.
 - `dispatch(event, data)` sends a dispatch to every session, with sequence numbers, buffered for resume. Use it for late private channels and other events that arrive after READY.
 - `transform_ready(|identify, ready| ..)` edits READY before it is sent. It sees the IDENTIFY payload, so READY can depend on the advertised capabilities. `reset_ready()` removes it.
@@ -89,8 +96,10 @@ Two approaches apply, depending on the code under test.
   - make the waits they provoke short, for example `Reply::rate_limited(0.25, false)`, `HeartbeatAcks::Delayed(..)`, or a small `heartbeat_interval_ms` (the gateway clamps intervals to at least 100 ms);
   - assert durations as lower bounds from recorded `at` timestamps, never as upper bounds.
 
-  Waits the session chooses itself, such as gateway reconnect backoff (about 1 s on the first failure) and the 1 to 5 s identify delay after op 9 `false`, fit inside `STEP_TIMEOUT`.
-- **Paused clock for pure tokio-time logic.** Code that only uses `tokio::time`, with no sockets, can be tested with `#[tokio::test(start_paused = true)]` and `tokio::time::advance`. An example is the gateway send-window limiter. Prefer this for unit-level timing logic when a ticket asks for such a test.
+  Waits the session chooses itself, such as gateway reconnect backoff (about 1 s on the first failure by default) and the 1 to 5 s identify delay after op 9 `false`, fit inside `STEP_TIMEOUT`. Shorten the backoff with `Options::gateway` when a test provokes several failures.
+
+  To prove something did not happen, such as no reconnect after a fatal close, wait a short, fixed time that is several times the tuned backoff cap. This is the one place a fixed sleep is acceptable.
+- **Paused clock for pure tokio-time logic.** Code that only uses `tokio::time`, with no sockets, can be tested with `#[tokio::test(start_paused = true)]` and `tokio::time::advance`. An example is the gateway outbox test in `crates/gateway/src/outbox.rs`. Prefer this for unit-level timing logic when a ticket asks for such a test.
 
 ## Determinism
 

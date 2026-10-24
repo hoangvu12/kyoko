@@ -185,6 +185,7 @@ impl Harness {
 			runtime: None,
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks,
+			gateway: Default::default(),
 		})
 		.context("session did not start")?;
 		let state = session.state().clone();

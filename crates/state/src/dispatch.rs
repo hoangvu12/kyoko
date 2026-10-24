@@ -14,7 +14,7 @@ use crate::changes::Changes;
 use crate::guild::{is_thread, stripped_member};
 use crate::member_list::MemberSlot;
 use crate::messages::{add_reaction, apply_update, remove_emoji, remove_reaction};
-use crate::state::{State, intern_user};
+use crate::state::{ConnectionStatus, State, intern_user};
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
@@ -34,7 +34,7 @@ impl State {
 		match event {
 			DispatchEvent::Ready(ready) => self.apply_ready(ready),
 			DispatchEvent::ReadySupplemental(supplemental) => self.apply_supplemental(supplemental),
-			DispatchEvent::Resumed => self.set_connected(true),
+			DispatchEvent::Resumed => self.set_connected(),
 			DispatchEvent::MessageCreate(message) => self.message_create(message),
 			DispatchEvent::MessageUpdate(update) => self.message_update(update),
 			DispatchEvent::MessageDelete(delete) => self.messages_delete(delete.channel_id, &[delete.id]),
@@ -167,8 +167,8 @@ impl State {
 		}
 	}
 
-	fn set_connected(&mut self, connected: bool) -> Changes {
-		self.session.connected = connected;
+	fn set_connected(&mut self) -> Changes {
+		self.session.set_connection(ConnectionStatus::Connected);
 		Changes {
 			session: true,
 			..Changes::default()

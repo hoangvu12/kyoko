@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
+use protocol::Opcode;
 use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
 use protocol::{ChannelType, Snowflake, Token};
-use session::{Command, Session, SessionConfig, SessionHooks};
+use session::{Command, GatewayTuning, Session, SessionConfig, SessionHooks};
 use state::State;
 use store::{Paths, Store};
 use tokio::sync::Notify;
@@ -17,10 +18,14 @@ pub const STEP_TIMEOUT: Duration = Duration::from_secs(15);
 pub const LOCALE: &str = "en-US";
 const FIXTURE_ANCHOR_MS: i64 = 1_767_225_600_000;
 
+type Prepare = Box<dyn FnOnce(&Control)>;
+
 pub struct Options {
 	name: &'static str,
 	mock: MockConfig,
 	hooks: Option<Arc<dyn SessionHooks>>,
+	gateway: GatewayTuning,
+	prepare: Option<Prepare>,
 }
 
 impl Options {
@@ -33,11 +38,28 @@ impl Options {
 				..MockConfig::default()
 			},
 			hooks: None,
+			gateway: GatewayTuning::default(),
+			prepare: None,
 		}
 	}
 
 	pub fn hooks(mut self, hooks: Arc<dyn SessionHooks>) -> Self {
 		self.hooks = Some(hooks);
+		self
+	}
+
+	pub fn heartbeat_ms(mut self, interval: u64) -> Self {
+		self.mock.heartbeat_interval_ms = interval;
+		self
+	}
+
+	pub fn gateway(mut self, tuning: GatewayTuning) -> Self {
+		self.gateway = tuning;
+		self
+	}
+
+	pub fn prepare(mut self, prepare: impl FnOnce(&Control) + 'static) -> Self {
+		self.prepare = Some(Box::new(prepare));
 		self
 	}
 }
@@ -58,6 +80,9 @@ impl Running {
 	pub async fn start_with(options: Options) -> Running {
 		let server = Server::start(options.mock).await.expect("mock server starts");
 		let mock = server.control();
+		if let Some(prepare) = options.prepare {
+			prepare(&mock);
+		}
 		let scratch =
 			std::env::temp_dir().join(format!("kyoko-session-{}-{}", options.name, std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
@@ -77,6 +102,7 @@ impl Running {
 			runtime: None,
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks: options.hooks,
+			gateway: options.gateway,
 		})
 		.expect("session starts");
 		Running {
@@ -128,6 +154,16 @@ impl Running {
 			state.current_user().is_some() && state.session().connected
 		})
 		.await;
+	}
+
+	pub async fn identified_connection(&self) -> u64 {
+		self.until_wire("the first IDENTIFY", |recording| {
+			recording
+				.frames_with(Opcode::Identify)
+				.next()
+				.map(|frame| frame.connection)
+		})
+		.await
 	}
 
 	pub async fn open_text_channel(&self) -> Snowflake {

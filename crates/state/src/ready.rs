@@ -4,7 +4,7 @@ use protocol::{
 
 use crate::changes::Changes;
 use crate::guild::{GuildState, stripped_member};
-use crate::state::{State, intern_user};
+use crate::state::{ConnectionStatus, State, intern_user};
 
 impl State {
 	pub(crate) fn apply_ready(&mut self, ready: &Ready) -> Changes {
@@ -13,7 +13,7 @@ impl State {
 		intern_user(&mut self.users, &ready.user);
 		self.session.session_id.clone_from(&ready.session_id);
 		self.session.resume_url.clone_from(&ready.resume_gateway_url);
-		self.session.connected = true;
+		self.session.set_connection(ConnectionStatus::Connected);
 		for user in ready.users.iter() {
 			intern_user(&mut self.users, user);
 		}

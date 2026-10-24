@@ -5,7 +5,7 @@ Kyoko is a Cargo workspace. Data flows one way: gateway event, state reducer, re
 ```
 apps/desktop        binary: for now only `kyoko --mock`, a headless session against mockcord; the zgui host replaces it
 crates/protocol     typed Discord REST and gateway models, lenient serde decoding
-crates/gateway      websocket session: identify, heartbeat, resume, zlib-stream, backoff
+crates/gateway      websocket session: identify, heartbeat, resume, zlib-stream, send window, backoff
 crates/rest         HTTP client: rate-limit buckets, 429 retry, Authorization redaction
 crates/state        normalized store, permission math, read state, message cache
 crates/store        sqlite cache and settings, token in the OS keyring
@@ -20,7 +20,7 @@ tools/xtask         test, headless-run, theme catalog tooling, release notes
 
 Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `apps/desktop` depends on `session`, `state`, `store`, `protocol` and `mockcord`. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown` or `session` has a UI dependency.
 
-Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`.
+Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`.
 
 ## Session hooks
 

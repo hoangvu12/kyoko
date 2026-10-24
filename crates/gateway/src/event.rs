@@ -8,6 +8,7 @@ use crate::error::GatewayError;
 pub enum GatewayEvent {
 	Connecting {
 		attempt: u32,
+		resuming: bool,
 	},
 	Hello {
 		heartbeat_interval: Duration,
@@ -23,6 +24,8 @@ pub enum GatewayEvent {
 		code: Option<u16>,
 		reason: String,
 		will_resume: bool,
+		attempt: u32,
+		retry_in: Duration,
 	},
 	Fatal(GatewayError),
 	Latency {

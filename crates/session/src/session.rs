@@ -71,6 +71,7 @@ impl Session {
 		let token = Arc::new(Token::new(config.token.as_str()));
 		let mut gateway_config = GatewayConfig::new(config.token, config.identify);
 		gateway_config.gateway_url = config.gateway_url;
+		gateway_config.tuning = config.gateway;
 		let (gateway, gateway_events) = Gateway::spawn(gateway_config, handle.clone());
 		let state = State::shared();
 		let search = SharedSearch::default();

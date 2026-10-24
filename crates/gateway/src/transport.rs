@@ -19,7 +19,7 @@ pub(crate) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 const WEB_ORIGIN: &str = "https://discord.com";
 
-const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
+const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
 const RETAINED_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 const INFLATE_CHUNK_BYTES: usize = 64 * 1024;

@@ -125,14 +125,7 @@ async fn an_injected_rate_limit_is_waited_out_before_the_retry() {
 async fn a_dropped_gateway_resumes_and_receives_late_dispatches() {
 	let running = Running::start("resume").await;
 	running.connected().await;
-	let first = running
-		.until_wire("the first IDENTIFY", |recording| {
-			recording
-				.frames_with(Opcode::Identify)
-				.next()
-				.map(|frame| frame.connection)
-		})
-		.await;
+	let first = running.identified_connection().await;
 	running.mock().close_gateway(4000);
 	let resume = running
 		.until_wire("a RESUME on a new connection", |recording| {

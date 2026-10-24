@@ -24,7 +24,15 @@ pub fn lint() -> Result<()> {
 }
 
 pub fn test() -> Result<()> {
-	cargo(&["test", "-p", "kyoko-session", "-p", "mockcord"])
+	cargo(&[
+		"test",
+		"-p",
+		"kyoko-session",
+		"-p",
+		"kyoko-gateway",
+		"-p",
+		"mockcord",
+	])
 }
 
 pub fn check_all() -> Result<()> {

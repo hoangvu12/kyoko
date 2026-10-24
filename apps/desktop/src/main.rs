@@ -128,6 +128,7 @@ async fn drive_session(cli: &Cli, server: &Server) -> Result<()> {
 		runtime: Some(tokio::runtime::Handle::current()),
 		notify: Arc::new(move |_| notifier.notify_one()),
 		hooks: None,
+		gateway: Default::default(),
 	})
 	.context("start the session")?;
 	let state = session.state().clone();

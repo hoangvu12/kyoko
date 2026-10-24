@@ -13,10 +13,12 @@ use crate::config::GatewayConfig;
 use crate::error::SendError;
 use crate::event::GatewayEvent;
 use crate::frames;
+use crate::outbox::Lane;
 use crate::session::Session;
 
 const EVENT_CAPACITY: usize = 1024;
-const COMMAND_CAPACITY: usize = 256;
+const URGENT_CAPACITY: usize = 256;
+const BULK_CAPACITY: usize = 1024;
 pub(crate) const NO_LATENCY: u64 = u64::MAX;
 
 pub struct Gateway;
@@ -24,10 +26,12 @@ pub struct Gateway;
 impl Gateway {
 	pub fn spawn(config: GatewayConfig, handle: Handle) -> (GatewayHandle, mpsc::Receiver<GatewayEvent>) {
 		let (events, event_receiver) = mpsc::channel(EVENT_CAPACITY);
-		let (commands, command_receiver) = mpsc::channel(COMMAND_CAPACITY);
+		let (urgent, urgent_receiver) = mpsc::channel(URGENT_CAPACITY);
+		let (bulk, bulk_receiver) = mpsc::channel(BULK_CAPACITY);
 		let (shutdown, shutdown_receiver) = watch::channel(false);
 		let gateway_handle = GatewayHandle {
-			commands,
+			urgent,
+			bulk,
 			reconnect: Arc::new(Notify::new()),
 			shutdown: Arc::new(shutdown),
 			latency: Arc::new(AtomicU64::new(NO_LATENCY)),
@@ -35,7 +39,8 @@ impl Gateway {
 		let session = Session::new(
 			config,
 			events,
-			command_receiver,
+			urgent_receiver,
+			bulk_receiver,
 			gateway_handle.reconnect.clone(),
 			shutdown_receiver,
 			gateway_handle.latency.clone(),
@@ -47,7 +52,8 @@ impl Gateway {
 
 #[derive(Clone)]
 pub struct GatewayHandle {
-	commands: mpsc::Sender<String>,
+	urgent: mpsc::Sender<String>,
+	bulk: mpsc::Sender<String>,
 	reconnect: Arc<Notify>,
 	shutdown: Arc<watch::Sender<bool>>,
 	latency: Arc<AtomicU64>,
@@ -201,8 +207,11 @@ impl GatewayHandle {
 	}
 
 	fn queue(&self, opcode: Opcode, data: Value) -> Result<(), SendError> {
-		self.commands
-			.try_send(frames::command(opcode, data))
+		let lane = match Lane::of(opcode) {
+			Lane::Bulk => &self.bulk,
+			Lane::Urgent | Lane::Control => &self.urgent,
+		};
+		lane.try_send(frames::command(opcode, data))
 			.map_err(|error| match error {
 				mpsc::error::TrySendError::Full(_) => SendError::Full,
 				mpsc::error::TrySendError::Closed(_) => SendError::Closed,

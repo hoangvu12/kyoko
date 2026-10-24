@@ -12,6 +12,7 @@ mod task;
 pub use catalog::{ThemeCatalog, ThemeEntry};
 pub use command::Command;
 pub use config::{NotifyFn, SessionConfig};
+pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::SessionHooks;
 pub use search::SearchResults;
 pub use session::Session;
