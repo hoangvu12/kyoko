@@ -222,18 +222,7 @@ fn detect_os_version() -> String {
 			String::new()
 		}
 	}
-	#[cfg(target_os = "macos")]
-	{
-		std::process::Command::new("sw_vers")
-			.arg("-productVersion")
-			.output()
-			.ok()
-			.and_then(|output| String::from_utf8(output.stdout).ok())
-			.map(|value| value.trim().to_owned())
-			.filter(|value| !value.is_empty())
-			.unwrap_or_default()
-	}
-	#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+	#[cfg(not(target_os = "windows"))]
 	{
 		String::new()
 	}

@@ -20,6 +20,4 @@ thiserror.workspace = true
 tracing.workspace = true
 tray-icon.workspace = true
 url.workspace = true
-
-[target.'cfg(windows)'.dependencies]
 windows.workspace = true
