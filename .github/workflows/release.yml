@@ -63,101 +63,13 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  macos:
-    needs: verify
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-latest
-            rust_target: aarch64-apple-darwin
-            arch: aarch64
-          - runner: macos-15-intel
-            rust_target: x86_64-apple-darwin
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
-    env:
-      VERSION: ${{ needs.verify.outputs.version }}
-      ARCH: ${{ matrix.arch }}
-      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p kyoko --target ${{ matrix.rust_target }}
-      - name: Import signing certificate
-        if: env.MACOS_CERTIFICATE != ''
-        run: |
-          keychain="$RUNNER_TEMP/release.keychain-db"
-          keychain_password="$(uuidgen)"
-          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
-          security list-keychains -d user -s "$keychain" login.keychain-db
-          rm "$RUNNER_TEMP/certificate.p12"
-      - name: Package
-        run: BINARY="target/${{ matrix.rust_target }}/release/kyoko" bash packaging/macos/bundle.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-macos-${{ matrix.arch }}
-          path: dist/*
-          if-no-files-found: error
-
-  linux:
-    needs: verify
-    runs-on: ubuntu-22.04
-    env:
-      VERSION: ${{ needs.verify.outputs.version }}
-      ARCH: x86_64
-      LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-      APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-      LINUXDEPLOY_SHA256: ${{ vars.LINUXDEPLOY_SHA256 }}
-      APPIMAGETOOL_SHA256: ${{ vars.APPIMAGETOOL_SHA256 }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev libfontconfig1-dev libdbus-1-dev libwebkit2gtk-4.1-dev libgtk-3-dev cmake pkg-config rpm
-      - run: cargo install --locked cargo-deb cargo-generate-rpm
-      - run: cargo build --release --locked -p kyoko
-      - name: Packaging tools
-        run: |
-          : "${LINUXDEPLOY_SHA256:?set the LINUXDEPLOY_SHA256 repository variable}"
-          : "${APPIMAGETOOL_SHA256:?set the APPIMAGETOOL_SHA256 repository variable}"
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL "$LINUXDEPLOY_URL" -o "$HOME/.local/bin/linuxdeploy"
-          curl -fsSL "$APPIMAGETOOL_URL" -o "$HOME/.local/bin/appimagetool"
-          echo "$LINUXDEPLOY_SHA256  $HOME/.local/bin/linuxdeploy" | sha256sum --check
-          echo "$APPIMAGETOOL_SHA256  $HOME/.local/bin/appimagetool" | sha256sum --check
-          chmod +x "$HOME/.local/bin/linuxdeploy" "$HOME/.local/bin/appimagetool"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: bash packaging/appimage/build.sh
-      - run: bash packaging/deb/build.sh
-      - run: bash packaging/rpm/build.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-linux-x86_64
-          path: dist/*
-          if-no-files-found: error
-
   publish:
-    needs: [verify, windows, macos, linux]
+    needs: [verify, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       VERSION: ${{ needs.verify.outputs.version }}
-      UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -165,19 +77,11 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev libfontconfig1-dev libdbus-1-dev libwebkit2gtk-4.1-dev libgtk-3-dev cmake pkg-config
       - uses: actions/download-artifact@v4
         with:
           path: dist
           pattern: dist-*
           merge-multiple: true
-      - name: Manifest
-        run: |
-          cargo xtask release manifest --version "$VERSION" --artifacts-dir dist --out dist/manifest.json --repo "$GITHUB_REPOSITORY"
-          cargo xtask release sign-manifest dist/manifest.json
       - name: Notes
         run: |
           previous="$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)"
