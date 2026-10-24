@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] REST and the gateway use API v9
 - [ ] A reduced Chrome user agent (<major>.0.0.0) and complete super-properties are used, consistent between gateway and REST

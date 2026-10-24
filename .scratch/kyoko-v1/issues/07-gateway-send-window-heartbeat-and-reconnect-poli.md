@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Outbound frames, heartbeats included, never exceed 120 per 60 seconds. A priority lane keeps heartbeats and urgent frames ahead of bulk work
 - [ ] The first heartbeat is jittered. A missing ACK closes the connection and resumes
