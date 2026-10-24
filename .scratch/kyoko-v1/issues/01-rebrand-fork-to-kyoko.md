@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Crate packages, binary, app id, data and config directories, env prefixes, window titles and icon all say kyoko. oxidcord's name and icon are no longer used
 - [ ] oxidcord's update-signing key, plugin-catalog signing key and GitHub update/catalog endpoints are removed or replaced
