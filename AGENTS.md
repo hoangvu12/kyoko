@@ -21,3 +21,21 @@ Pinned in the workspace `Cargo.toml`. Rust 1.99.0 via `rust-toolchain.toml`. Che
 ## Commit style
 
 Subject under 60 characters, imperative, no period. Optional plain body. No emoji, no bullet walls.
+
+## Research
+
+Background for the kyoko fork (zgui + Luau UI on oxidcord's core) lives in `docs/research/`. Start with `docs/research/README.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, label string equal to role name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
