@@ -270,6 +270,19 @@ pub struct Ready {
 	pub user_settings: Option<Value>,
 }
 
+#[derive(Deserialize)]
+struct ReadyAuth {
+	#[serde(default)]
+	auth_token: Option<Token>,
+}
+
+pub fn refreshed_token(ready: &RawValue) -> Option<Token> {
+	serde_json::from_str::<ReadyAuth>(ready.get())
+		.ok()?
+		.auth_token
+		.filter(|token| !token.as_str().trim().is_empty())
+}
+
 impl Ready {
 	pub fn normalize_guilds(&mut self) {
 		for guild in self.guilds.iter_mut() {

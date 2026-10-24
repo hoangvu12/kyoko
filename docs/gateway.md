@@ -7,6 +7,42 @@
 - JSON encoding with `compress=zlib-stream`. Each connection gets its own inflate context. A message is complete when the buffered bytes end in `00 00 ff ff`.
 - Inbound WebSocket messages, buffered compressed bytes and inflated output are each capped at 64 MiB. A user READY can pass 16 MiB. Going over the cap closes with 1009 and stops the session with a reason.
 
+## Capabilities
+
+IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the named bits in `protocol::capability`. A bit is advertised only when kyoko fully handles what it changes. The value is 509 until the real-traffic spike (ticket 04) compares it with the web client; change it there and nowhere else.
+
+| Bit | Name | Advertised | Why |
+|---|---|---|---|
+| 0 | LAZY_USER_NOTES | yes | READY leaves out `notes`. Kyoko doesn't show notes. |
+| 1 | NO_AFFINE_USER_IDS | no | Changes which presences and members arrive for implicit relationships. Not needed, and untested against real traffic. |
+| 2 | VERSIONED_READ_STATES | yes | `read_state` is an `{entries, version, partial}` container. `EntryContainer` reads both shapes. |
+| 3 | VERSIONED_USER_GUILD_SETTINGS | yes | The same container for `user_guild_settings`. |
+| 4 | DEDUPE_USER_OBJECTS | yes | Users come once in READY `users`. DMs carry `recipient_ids`, relationships carry ids. State resolves both. |
+| 5 | PRIORITIZED_READY_PAYLOAD | yes | Presences, merged members and voice states arrive in READY_SUPPLEMENTAL, which state applies. |
+| 6 | MULTIPLE_GUILD_EXPERIMENT_POPULATIONS | yes | Only changes the experiments shape. Kyoko reads no experiments. |
+| 7 | NON_CHANNEL_READ_STATES | yes | `read_state` gains entries for guild events, the notification centre and so on. State keeps only channel entries. |
+| 8 | AUTH_TOKEN_REFRESH | yes | READY may carry `auth_token`. See "Refreshed token" below. |
+| 9 | USER_SETTINGS_PROTO | no | READY drops the JSON `user_settings`. Kyoko decodes only guild folders from the protobuf. |
+| 10 | CLIENT_STATE_V2 | no | Undocumented. |
+| 11 | PASSIVE_GUILD_UPDATE | no | Replaces CHANNEL_UNREAD_UPDATE for unsubscribed guilds with PASSIVE_UPDATE_V1, which kyoko doesn't parse. |
+| 12 | AUTO_CALL_CONNECT | no | Sends CALL_CREATE for existing calls without op 13. Kyoko has no calls. |
+| 13 | DEBOUNCE_MESSAGE_REACTIONS | no | Batches reactions into MESSAGE_REACTION_ADD_MANY, which kyoko doesn't parse. |
+| 14 | PASSIVE_GUILD_UPDATE_V2 | no | Same as bit 11, with PASSIVE_UPDATE_V2. |
+| 15 | CHANNEL_OBFUSCATION | no | Undocumented. |
+| 16 | AUTO_LOBBY_CONNECT | no | Kyoko has no lobbies. |
+
+Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead. Kyoko doesn't parse that event yet either, so unread state for those guilds can go stale until the read-state work handles it.
+
+## Refreshed token
+
+When READY carries a non-empty string `auth_token`, it replaces the token everywhere:
+
+- The gateway swaps `GatewayConfig.token` before it handles READY, so every later RESUME and IDENTIFY uses the new token.
+- It then emits `GatewayEvent::TokenRefreshed` ahead of `GatewayEvent::Ready`. The session hands the token to the REST client before it applies READY, so every request after READY uses it.
+- The session saves it with `store.tokens` (keyring, or the opted-in plaintext file) and re-saves the account entry under `store.accounts`.
+
+`auth_token` is read on its own with `protocol::refreshed_token`. A missing, empty or non-string value is ignored and never fails READY. The token is never logged.
+
 ## Send window
 
 Every outbound frame counts against one sliding window: `SendBudget::frames` per `SendBudget::period`, 120 per 60 s by default. Heartbeats, IDENTIFY and RESUME count too. Frames go out in three lanes, highest priority first:

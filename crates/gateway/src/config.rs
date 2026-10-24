@@ -1,8 +1,21 @@
 use std::time::Duration;
 
+use protocol::capability::{
+	AUTH_TOKEN_REFRESH, DEDUPE_USER_OBJECTS, LAZY_USER_NOTES, MULTIPLE_GUILD_EXPERIMENT_POPULATIONS,
+	NON_CHANNEL_READ_STATES, PRIORITIZED_READY_PAYLOAD, VERSIONED_READ_STATES, VERSIONED_USER_GUILD_SETTINGS,
+};
 use protocol::{IdentifyProperties, Token};
 
 use crate::outbox::SendBudget;
+
+pub const ADVERTISED_CAPABILITIES: u64 = LAZY_USER_NOTES
+	| VERSIONED_READ_STATES
+	| VERSIONED_USER_GUILD_SETTINGS
+	| DEDUPE_USER_OBJECTS
+	| PRIORITIZED_READY_PAYLOAD
+	| MULTIPLE_GUILD_EXPERIMENT_POPULATIONS
+	| NON_CHANNEL_READ_STATES
+	| AUTH_TOKEN_REFRESH;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Backoff {
@@ -50,8 +63,6 @@ pub struct GatewayConfig {
 
 impl GatewayConfig {
 	pub const DEFAULT_GATEWAY_URL: &'static str = "wss://gateway.discord.gg";
-	pub const DEFAULT_CAPABILITIES: u64 =
-		1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384;
 	pub const DEFAULT_LARGE_THRESHOLD: u32 = 250;
 
 	pub fn new(token: Token, identify: IdentifyProperties) -> Self {
@@ -59,7 +70,7 @@ impl GatewayConfig {
 			token,
 			gateway_url: Self::DEFAULT_GATEWAY_URL.to_owned(),
 			identify,
-			capabilities: Self::DEFAULT_CAPABILITIES,
+			capabilities: ADVERTISED_CAPABILITIES,
 			initial_status: "online".to_owned(),
 			large_threshold: Self::DEFAULT_LARGE_THRESHOLD,
 			tuning: GatewayTuning::default(),

@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 
+use protocol::capability::{
+	DEDUPE_USER_OBJECTS, LAZY_USER_NOTES, NON_CHANNEL_READ_STATES, PRIORITIZED_READY_PAYLOAD,
+	VERSIONED_READ_STATES, VERSIONED_USER_GUILD_SETTINGS, has,
+};
 use protocol::{Channel, ChannelType, Presence, RelationshipKind, Snowflake, User};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::fixtures::{Fixtures, GuildFixture};
@@ -11,6 +16,7 @@ const API_VERSION: i64 = 10;
 const CONTAINER_VERSION: i64 = 1;
 const MOCK_FOLDER_ID: i64 = 1_001;
 const MOCK_FOLDER_COLOR: i64 = 0x6666ff;
+const GUILD_EVENT_READ_STATE: i64 = 1;
 
 pub fn is_thread(kind: ChannelType) -> bool {
 	matches!(
@@ -123,37 +129,96 @@ fn friend_presences<'a>(fixtures: &Fixtures, store: &'a Store) -> Vec<&'a Presen
 		.collect()
 }
 
-pub fn build(shared: &Shared, session_id: &str) -> (Value, Value) {
+fn container<T: Serialize>(entries: Vec<T>, versioned: bool) -> Value {
+	if versioned {
+		json!({ "entries": entries, "version": CONTAINER_VERSION, "partial": false })
+	} else {
+		json!(entries)
+	}
+}
+
+fn read_states(fixtures: &Fixtures, store: &Store, capabilities: u64) -> Value {
+	let mut entries: Vec<Value> = store.read_states.values().map(to_json).collect();
+	if has(capabilities, NON_CHANNEL_READ_STATES) {
+		entries.extend(live_guilds(fixtures, store).map(|guild| {
+			json!({
+				"id": guild.id.to_string(),
+				"read_state_type": GUILD_EVENT_READ_STATE,
+				"last_acked_id": "0",
+				"badge_count": 0,
+			})
+		}));
+	}
+	container(entries, has(capabilities, VERSIONED_READ_STATES))
+}
+
+fn private_channels(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Vec<Value> {
+	store
+		.private_channel_ids
+		.iter()
+		.filter_map(|id| store.channels.get(id))
+		.map(|channel| {
+			let mut value = to_json(channel);
+			if !dedupe {
+				let recipients: Vec<&User> = channel
+					.recipient_ids
+					.iter()
+					.filter_map(|id| fixtures.users.get(&id.0))
+					.collect();
+				value["recipients"] = json!(recipients);
+				if let Some(fields) = value.as_object_mut() {
+					fields.remove("recipient_ids");
+				}
+			}
+			value
+		})
+		.collect()
+}
+
+fn relationships(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Vec<Value> {
+	store
+		.relationships
+		.values()
+		.map(|relationship| {
+			let mut value = to_json(relationship);
+			if !dedupe && let Some(user) = fixtures.users.get(&relationship.id.0) {
+				value["user"] = to_json(user);
+			}
+			value
+		})
+		.collect()
+}
+
+pub fn build(shared: &Shared, session_id: &str, capabilities: u64) -> (Value, Value) {
+	let dedupe = has(capabilities, DEDUPE_USER_OBJECTS);
+	let prioritized = has(capabilities, PRIORITIZED_READY_PAYLOAD);
+
 	let fixtures = &shared.fixtures;
 	let store = shared.store.lock();
 	let guilds: Vec<Value> = live_guilds(fixtures, &store)
-		.map(|guild| ready_guild(&store, guild))
+		.map(|guild| {
+			let mut value = ready_guild(&store, guild);
+			if !prioritized {
+				value["presences"] = json!(guild_presences(&store, guild.id));
+			}
+			value
+		})
 		.collect();
 	let folder_guild_ids: Vec<String> = live_guilds(fixtures, &store)
 		.take(2)
 		.map(|guild| guild.id.to_string())
 		.collect();
-	let private_channels: Vec<&Channel> = store
-		.private_channel_ids
-		.iter()
-		.filter_map(|id| store.channels.get(id))
-		.collect();
-	let ready = json!({
+	let mut ready = json!({
 		"v": API_VERSION,
 		"user": store.current_user,
 		"guilds": guilds,
-		"private_channels": private_channels,
-		"relationships": store.relationships.values().collect::<Vec<_>>(),
-		"read_state": {
-			"entries": store.read_states.values().collect::<Vec<_>>(),
-			"version": CONTAINER_VERSION,
-			"partial": false,
-		},
-		"user_guild_settings": {
-			"entries": store.settings.values().collect::<Vec<_>>(),
-			"version": CONTAINER_VERSION,
-			"partial": false,
-		},
+		"private_channels": private_channels(fixtures, &store, dedupe),
+		"relationships": relationships(fixtures, &store, dedupe),
+		"read_state": read_states(fixtures, &store, capabilities),
+		"user_guild_settings": container(
+			store.settings.values().collect(),
+			has(capabilities, VERSIONED_USER_GUILD_SETTINGS),
+		),
 		"session_id": session_id,
 		"resume_gateway_url": shared.urls.gateway,
 		"sessions": [{
@@ -163,7 +228,6 @@ pub fn build(shared: &Shared, session_id: &str) -> (Value, Value) {
 			"client_info": { "client": "desktop", "os": "windows", "version": 0 },
 			"active": true,
 		}],
-		"users": referenced_users(fixtures, &store),
 		"merged_members": merged_members(fixtures, &store),
 		"analytics_token": "x",
 		"user_settings_proto": null,
@@ -176,13 +240,24 @@ pub fn build(shared: &Shared, session_id: &str) -> (Value, Value) {
 			}],
 		},
 	});
-	let supplemental = json!({
-		"merged_presences": {
+	if dedupe {
+		ready["users"] = json!(referenced_users(fixtures, &store));
+	}
+	if !has(capabilities, LAZY_USER_NOTES) {
+		ready["notes"] = json!({});
+	}
+	let merged_presences = if prioritized {
+		json!({
 			"guilds": live_guilds(fixtures, &store)
 				.map(|guild| guild_presences(&store, guild.id))
 				.collect::<Vec<_>>(),
 			"friends": friend_presences(fixtures, &store),
-		},
+		})
+	} else {
+		json!({ "guilds": [], "friends": [] })
+	};
+	let supplemental = json!({
+		"merged_presences": merged_presences,
 		"merged_members": merged_members(fixtures, &store),
 		"guilds": live_guilds(fixtures, &store)
 			.map(|guild| json!({ "id": guild.id.to_string(), "voice_states": guild.voice_states }))

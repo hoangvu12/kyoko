@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use futures_util::{FutureExt, SinkExt, StreamExt};
-use protocol::gateway::{DispatchEvent, GatewayPayload, Hello, Opcode};
+use protocol::Token;
+use protocol::gateway::{DispatchEvent, GatewayPayload, Hello, Opcode, refreshed_token};
 use serde_json::value::RawValue;
 use tokio::sync::{Notify, mpsc, watch};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at, sleep, sleep_until};
@@ -432,6 +433,13 @@ impl Session {
 			self.seq = Some(seq);
 		}
 		let data = payload.d.as_deref().unwrap_or(RawValue::NULL);
+		if name == "READY"
+			&& let Some(token) = refreshed_token(data)
+		{
+			debug!("gateway token refreshed");
+			self.config.token = Token::new(token.as_str());
+			self.emit(GatewayEvent::TokenRefreshed(token)).await?;
+		}
 		let event = match DispatchEvent::parse(name, data) {
 			Ok(event) => event,
 			Err(error) => {

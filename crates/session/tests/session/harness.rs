@@ -15,6 +15,7 @@ use tokio::time::{Instant, timeout_at};
 use url::Url;
 
 pub const STEP_TIMEOUT: Duration = Duration::from_secs(15);
+const POLL_INTERVAL: Duration = Duration::from_millis(10);
 pub const LOCALE: &str = "en-US";
 const FIXTURE_ANCHOR_MS: i64 = 1_767_225_600_000;
 
@@ -68,6 +69,7 @@ pub struct Running {
 	server: Server,
 	mock: Control,
 	session: Option<Session>,
+	store: Arc<Store>,
 	wake: Arc<Notify>,
 	scratch: PathBuf,
 }
@@ -90,10 +92,11 @@ impl Running {
 		store
 			.update_settings(|settings| settings.storage.plaintext_token = true)
 			.expect("settings save");
+		let store = Arc::new(store);
 		let wake = Arc::new(Notify::new());
 		let notifier = wake.clone();
 		let session = Session::start(SessionConfig {
-			store: Arc::new(store),
+			store: store.clone(),
 			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
 			gateway_url: server.gateway_url().to_owned(),
 			token: Token::new(server.token()),
@@ -110,6 +113,7 @@ impl Running {
 			server,
 			mock,
 			session: Some(session),
+			store,
 			wake,
 			scratch,
 		}
@@ -140,6 +144,20 @@ impl Running {
 			if timeout_at(deadline, self.wake.notified()).await.is_err() {
 				panic!("timed out waiting for {what}");
 			}
+		}
+	}
+
+	pub fn store(&self) -> &Store {
+		&self.store
+	}
+
+	pub async fn eventually(&self, what: &str, done: impl Fn() -> bool) {
+		let deadline = Instant::now() + STEP_TIMEOUT;
+		while !done() {
+			if Instant::now() >= deadline {
+				panic!("timed out waiting for {what}");
+			}
+			tokio::time::sleep(POLL_INTERVAL).await;
 		}
 	}
 

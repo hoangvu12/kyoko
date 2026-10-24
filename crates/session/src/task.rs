@@ -301,6 +301,7 @@ impl Core {
 				self.apply_local(LocalEvent::Connection(status));
 			}
 			GatewayEvent::Hello { .. } => {}
+			GatewayEvent::TokenRefreshed(token) => self.adopt_token(token),
 			GatewayEvent::Ready(ready) => {
 				self.apply(Event::Ready(&ready));
 				self.remember_account();

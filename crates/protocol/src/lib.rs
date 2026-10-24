@@ -1,3 +1,4 @@
+pub mod capability;
 mod channel;
 mod command;
 mod emoji;

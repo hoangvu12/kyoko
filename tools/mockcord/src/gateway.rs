@@ -9,6 +9,7 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
+use protocol::capability::{AUTH_TOKEN_REFRESH, has};
 use protocol::{GatewayPayload, Opcode};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -237,7 +238,7 @@ impl Connection {
 	}
 
 	async fn identify(&mut self, data: &Value) -> bool {
-		if data["token"].as_str() != Some(self.shared.config.token.as_str()) {
+		if !self.authorized(data) {
 			self.close(CLOSE_AUTH_FAILED, "Authentication failed.").await;
 			return false;
 		}
@@ -250,23 +251,47 @@ impl Connection {
 				.await;
 			return false;
 		}
+		let capabilities = data["capabilities"].as_u64().unwrap_or_default();
 		let hub = &self.shared.hub;
-		let session_id = hub.create_session(Link {
-			id: self.link_id,
-			tx: self.tx.clone(),
-		});
-		let (mut ready, supplemental) = ready::build(&self.shared, &session_id);
+		let session_id = hub.create_session(
+			Link {
+				id: self.link_id,
+				tx: self.tx.clone(),
+			},
+			capabilities,
+		);
+		let (mut ready, supplemental) = ready::build(&self.shared, &session_id, capabilities);
 		if let Some(transform) = self.shared.scenario.ready() {
 			transform(data, &mut ready);
 		}
+		self.issue_refreshed_token(capabilities, &mut ready);
 		hub.dispatch_to(&session_id, "READY", &ready);
 		hub.dispatch_to(&session_id, "READY_SUPPLEMENTAL", &supplemental);
 		self.session = Some(session_id);
 		true
 	}
 
+	fn authorized(&self, data: &Value) -> bool {
+		data["token"]
+			.as_str()
+			.is_some_and(|token| self.shared.accepts_token(token))
+	}
+
+	fn issue_refreshed_token(&self, capabilities: u64, ready: &mut Value) {
+		let Some(fields) = ready.as_object_mut() else {
+			return;
+		};
+		if !has(capabilities, AUTH_TOKEN_REFRESH) {
+			fields.remove("auth_token");
+			return;
+		}
+		if let Some(token) = fields.get("auth_token").and_then(Value::as_str) {
+			self.shared.replace_token(token);
+		}
+	}
+
 	async fn resume(&mut self, data: &Value) -> bool {
-		if data["token"].as_str() != Some(self.shared.config.token.as_str()) {
+		if !self.authorized(data) {
 			self.close(CLOSE_AUTH_FAILED, "Authentication failed.").await;
 			return false;
 		}

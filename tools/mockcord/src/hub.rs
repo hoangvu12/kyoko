@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
+use protocol::capability::has;
 use rand::Rng;
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
@@ -24,6 +25,7 @@ pub struct Link {
 }
 
 struct SessionRecord {
+	capabilities: u64,
 	seq: u64,
 	buffer: VecDeque<(u64, Arc<str>)>,
 	link: Option<Link>,
@@ -55,13 +57,14 @@ impl Hub {
 		self.next_link.fetch_add(1, Ordering::Relaxed)
 	}
 
-	pub fn create_session(&self, link: Link) -> String {
+	pub fn create_session(&self, link: Link, capabilities: u64) -> String {
 		let session_id = format!("{:032x}", rand::rng().random::<u128>());
 		let mut sessions = self.sessions.lock();
 		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
 		sessions.insert(
 			session_id.clone(),
 			SessionRecord {
+				capabilities,
 				seq: 0,
 				buffer: VecDeque::new(),
 				link: Some(link),
@@ -84,6 +87,20 @@ impl Hub {
 		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
 		for record in sessions.values_mut() {
 			record.push_event(name, &text);
+		}
+	}
+
+	pub fn broadcast_by_capability(&self, capability: u64, with: (&str, &Value), without: (&str, &Value)) {
+		let with_text = with.1.to_string();
+		let without_text = without.1.to_string();
+		let mut sessions = self.sessions.lock();
+		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
+		for record in sessions.values_mut() {
+			if has(record.capabilities, capability) {
+				record.push_event(with.0, &with_text);
+			} else {
+				record.push_event(without.0, &without_text);
+			}
 		}
 	}
 

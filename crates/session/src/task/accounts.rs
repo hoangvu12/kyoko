@@ -1,4 +1,6 @@
-use protocol::{ChannelType, Snowflake};
+use std::sync::Arc;
+
+use protocol::{ChannelType, Snowflake, Token};
 
 use super::{Core, Internal};
 
@@ -20,6 +22,19 @@ impl Core {
 				.and_then(|_| store.accounts.set_current(user.id));
 			if let Err(error) = saved {
 				tracing::warn!(%error, "account was not saved");
+			}
+		});
+	}
+
+	pub(super) fn adopt_token(&mut self, token: Token) {
+		self.rest.set_token(Token::new(token.as_str()));
+		self.token = Arc::new(token);
+		self.account_saved = false;
+		let store = self.store.clone();
+		let token = self.token.clone();
+		self.runtime.spawn_blocking(move || {
+			if let Err(error) = store.tokens.save(token.as_str()) {
+				tracing::warn!(%error, "refreshed token was not saved");
 			}
 		});
 	}

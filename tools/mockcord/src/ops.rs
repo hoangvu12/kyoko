@@ -1,4 +1,5 @@
 use chrono::{SecondsFormat, Utc};
+use protocol::capability::DEBOUNCE_MESSAGE_REACTIONS;
 use protocol::{
 	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, LenientVec, Message, MessageFlags,
 	MessageReference, MessageReferenceKind, MessageType, Nonce, ReadState, ReadStateKind, Snowflake,
@@ -349,14 +350,16 @@ impl Shared {
 			}
 		}
 		drop(store);
-		self.hub.broadcast(
-			if add {
-				"MESSAGE_REACTION_ADD"
-			} else {
-				"MESSAGE_REACTION_REMOVE"
-			},
-			&data,
-		);
+		if add {
+			let batched = batched_reaction(&data);
+			self.hub.broadcast_by_capability(
+				DEBOUNCE_MESSAGE_REACTIONS,
+				("MESSAGE_REACTION_ADD_MANY", &batched),
+				("MESSAGE_REACTION_ADD", &data),
+			);
+		} else {
+			self.hub.broadcast("MESSAGE_REACTION_REMOVE", &data);
+		}
 		Ok(())
 	}
 
@@ -451,4 +454,16 @@ fn uploaded_attachment(
 		flags: Some(0),
 		..Attachment::default()
 	}
+}
+
+fn batched_reaction(single: &Value) -> Value {
+	let mut batched = json!({
+		"channel_id": single["channel_id"],
+		"message_id": single["message_id"],
+		"reactions": [{ "emoji": single["emoji"], "users": [single["user_id"]] }],
+	});
+	if !single["guild_id"].is_null() {
+		batched["guild_id"] = single["guild_id"].clone();
+	}
+	batched
 }

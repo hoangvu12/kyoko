@@ -177,6 +177,7 @@ pub struct Shared {
 	pub shutdown: watch::Receiver<bool>,
 	pub recorder: Recorder,
 	pub scenario: Scenario,
+	token: Mutex<String>,
 	windows: Mutex<HashMap<String, Window>>,
 }
 
@@ -184,6 +185,7 @@ impl Shared {
 	pub fn new(config: MockConfig, fixtures: Fixtures, urls: Urls, shutdown: watch::Receiver<bool>) -> Self {
 		let store = Mutex::new(Store::new(&fixtures));
 		let recorder = Recorder::new(config.record);
+		let token = Mutex::new(config.token.clone());
 		Self {
 			config,
 			fixtures,
@@ -193,8 +195,17 @@ impl Shared {
 			shutdown,
 			recorder,
 			scenario: Scenario::default(),
+			token,
 			windows: Mutex::new(HashMap::new()),
 		}
+	}
+
+	pub fn accepts_token(&self, token: &str) -> bool {
+		*self.token.lock() == token
+	}
+
+	pub fn replace_token(&self, token: &str) {
+		token.clone_into(&mut self.token.lock());
 	}
 
 	pub fn touch_bucket(&self, key: &str) -> RateLimitSnapshot {

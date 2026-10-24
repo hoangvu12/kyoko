@@ -43,6 +43,7 @@ Never sleep for a fixed time. Wait on an observable event:
 - `running.until("what", |state| ...)` re-checks the predicate every time the session publishes changes, and panics with the description after `STEP_TIMEOUT` (15 s).
 - `running.until_wire("what", |recording| Some(..))` re-checks every time mockcord records traffic, and returns the first `Some`.
 - `running.connected()` waits for READY and a live connection. `running.identified_connection()` returns the id of the connection that sent the first IDENTIFY. `running.open_text_channel()` selects the first guild text channel and waits for its history to load.
+- `running.eventually("what", || ...)` polls a condition every 10 ms until `STEP_TIMEOUT`. Use it only for effects that publish no state change, such as a token reaching `running.store()` or a hook recording a call.
 - `state.session().connection` holds the `ConnectionStatus` (see `docs/gateway.md`). Wait on it to see reconnect attempts, their `retry_in`, and stop reasons.
 
 Wait on the effect you are about to assert. For example, wait for a RESUME frame on a new connection, not for "connected", which was already true before the drop.
@@ -85,7 +86,20 @@ Gateway controls:
 - `dispatch(event, data)` sends a dispatch to every session, with sequence numbers, buffered for resume. Use it for late private channels and other events that arrive after READY.
 - `transform_ready(|identify, ready| ..)` edits READY before it is sent. It sees the IDENTIFY payload, so READY can depend on the advertised capabilities. `reset_ready()` removes it.
 
-mockcord serves REST under both `/api/v9` and `/api/v10`. `Server::rest_base_url_for(version)` builds either base URL. mockcord does not check the capabilities value.
+mockcord serves REST under both `/api/v9` and `/api/v10`. `Server::rest_base_url_for(version)` builds either base URL.
+
+## Tokens and capabilities
+
+mockcord accepts one token at a time for REST, IDENTIFY and RESUME. It starts as `MockConfig::token`, which `Server::token()` returns. A READY whose transform sets `auth_token` issues that token: mockcord accepts only the new one from then on, so a client still using the old token gets a 401 or a 4004 close. mockcord drops `auth_token` from READY when IDENTIFY did not advertise AUTH_TOKEN_REFRESH.
+
+mockcord shapes its replies by the capabilities in IDENTIFY, so tests prove each bit's effect:
+
+- VERSIONED_READ_STATES and VERSIONED_USER_GUILD_SETTINGS: containers, otherwise plain arrays.
+- NON_CHANNEL_READ_STATES: one guild-event read state per guild.
+- DEDUPE_USER_OBJECTS: READY `users` plus recipient ids, otherwise full `recipients` and relationship `user` objects.
+- PRIORITIZED_READY_PAYLOAD: presences in READY_SUPPLEMENTAL, otherwise in each READY guild.
+- LAZY_USER_NOTES: without it, READY carries `notes`.
+- DEBOUNCE_MESSAGE_REACTIONS: reaction adds go out as MESSAGE_REACTION_ADD_MANY, otherwise as MESSAGE_REACTION_ADD.
 
 ## Time
 
