@@ -106,7 +106,7 @@ impl Core {
 			Command::SendGif { channel_id, gif } => {
 				let url = gif.url.clone();
 				self.remember_gif(gif);
-				self.send_message(channel_id, url, None, Vec::new(), None);
+				self.send_message(channel_id, url, None, Vec::new());
 			}
 			Command::SendSticker {
 				channel_id,

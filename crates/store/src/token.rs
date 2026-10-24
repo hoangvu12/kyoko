@@ -39,7 +39,7 @@ impl SecretSlot {
 				Err(error) => tracing::warn!(%error, "keyring unavailable, storing token in a file"),
 			}
 		}
-		write_atomic(&self.file_path, token.as_bytes(), true)?;
+		write_atomic(&self.file_path, token.as_bytes())?;
 		Ok(TokenBackend::PlaintextFile)
 	}
 

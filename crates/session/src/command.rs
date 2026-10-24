@@ -1,15 +1,10 @@
-use std::path::PathBuf;
-
 use chrono::{DateTime, Utc};
-use plugin_host::Permission;
 use protocol::{
 	ChannelType, Gif, NotificationLevel, PermissionOverwriteKind, Permissions, Snowflake, StatusKind,
 };
 use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
-use voice::video::VideoQuality;
-use voice::video::capture::ScreenTarget;
 
 #[derive(Debug)]
 pub enum Command {
@@ -32,7 +27,6 @@ pub enum Command {
 		content: String,
 		reply_to: Option<Snowflake>,
 		files: Vec<UploadFile>,
-		by_plugin: Option<String>,
 	},
 	EditMessage {
 		channel_id: Snowflake,
@@ -88,103 +82,11 @@ pub enum Command {
 		guild_id: Snowflake,
 		category_id: Snowflake,
 	},
-	JoinVoice {
-		guild_id: Option<Snowflake>,
-		channel_id: Snowflake,
-	},
-	LeaveVoice,
-	SetSelfMute(bool),
-	SetSelfDeaf(bool),
-	SetVoiceDevices {
-		input: Option<String>,
-		output: Option<String>,
-	},
-	SetUserVolume {
-		user_id: Snowflake,
-		volume: f32,
-	},
-	SetInputMode(voice::InputMode),
-	SetPushToTalk(bool),
-	SetInputVolume(f32),
-	SetOutputVolume(f32),
-	SetNoiseSuppression(bool),
-	SetVadThreshold {
-		auto: bool,
-		threshold_db: f32,
-	},
-	SetDefaultVideoQuality(VideoQuality),
-	StartMicTest {
-		seconds: u32,
-	},
-	StopMicTest,
-	RequestToSpeak {
-		guild_id: Snowflake,
-		channel_id: Snowflake,
-		request: bool,
-	},
-	StartCall {
-		channel_id: Snowflake,
-	},
-	DeclineCall {
-		channel_id: Snowflake,
-	},
-	RunPluginCommand {
-		name: String,
-		args: String,
-		channel_id: Snowflake,
-	},
-	PluginUiAction {
-		plugin_id: String,
-		id: String,
-		payload: String,
-	},
-	PluginEnable(String),
-	PluginDisable(String),
-	PluginReload(String),
-	PluginInstall {
-		path: PathBuf,
-	},
-	PluginUninstall(String),
-	PluginGrant {
-		id: String,
-		permissions: Vec<Permission>,
-		hosts: Vec<String>,
-	},
-	PluginSetSetting {
-		id: String,
-		key: String,
-		value: String,
-	},
-	PluginsChanged,
-	CatalogRefresh {
-		url: String,
-	},
-	CatalogInstall {
-		id: String,
-	},
 	ThemeCatalogRefresh {
 		url: String,
 	},
 	ThemeInstall {
 		id: String,
-	},
-	StartCamera {
-		device_id: Option<String>,
-		quality: VideoQuality,
-	},
-	StopCamera,
-	StartScreenShare {
-		target: ScreenTarget,
-		quality: VideoQuality,
-		with_audio: bool,
-	},
-	StopScreenShare,
-	SetVideoQuality(VideoQuality),
-	WatchStream {
-		stream_key: String,
-	},
-	StopWatchingStream {
-		stream_key: String,
 	},
 	CreateThread {
 		channel_id: Snowflake,

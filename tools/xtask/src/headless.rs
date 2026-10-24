@@ -1,23 +1,21 @@
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
-use markdown::Node;
 use mockcord::{FixtureSummary, MockConfig, Server};
-use plugin_host::{Grants, MANIFEST_FILE, Package};
 use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER};
 use protocol::{Channel, ChannelType, IdentifyProperties, Snowflake, Token};
 use serde_json::json;
-use session::{Command, PluginState, Session, SessionConfig, VoiceIo};
-use state::{SharedState, State, VoiceStatus};
+use session::{Command, Session, SessionConfig, SessionHooks};
+use state::{SharedState, State};
 use store::{Paths, Store};
 use tokio::sync::Notify;
-use tokio::time::{Instant, sleep, sleep_until, timeout_at};
+use tokio::time::{Instant, sleep_until, timeout_at};
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::filter::{EnvFilter, Targets};
@@ -37,18 +35,10 @@ const UNREACHABLE_GATEWAY: &str = "ws://127.0.0.1:9/gateway";
 const DRAFT_TEXT: &str = "headless draft";
 const REACTION: &str = "\u{1F44D}";
 const HISTORY_PAGES: usize = 2;
-const VOICE_TEST_FRAMES: usize = 50;
-const VOICE_FRAME_SAMPLES: usize = 960;
-const VOICE_TONE_HZ: f32 = 440.0;
-const VOICE_SAMPLE_RATE: f32 = 48_000.0;
-const VOICE_TONE_AMPLITUDE: f32 = 8_000.0;
-const VOICE_POLL: Duration = Duration::from_millis(20);
-const LINK_CLEANER: &str = "link-cleaner";
-const LINK_CLEANER_ID: &str = "kyoko.link-cleaner";
-const HELLO_TIMESTAMPS: &str = "hello-timestamps";
 const DIRTY_LINK: &str = "https://example.com/x?utm_source=a&b=1";
 const CLEAN_LINK: &str = "https://example.com/x?b=1";
-const TIMESTAMP_PREFIX: &str = "sent ";
+const LINK_HOOK: &str = "headless.link-cleaner";
+const BROKEN_HOOK_TEXT: &str = "headless hook panics";
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -149,6 +139,27 @@ impl Counts {
 	}
 }
 
+struct LinkHook {
+	rewrites: AtomicU64,
+}
+
+impl SessionHooks for LinkHook {
+	fn name(&self) -> &str {
+		LINK_HOOK
+	}
+
+	fn before_send(&self, _channel_id: Snowflake, content: &str) -> Result<Option<String>> {
+		if content == BROKEN_HOOK_TEXT {
+			panic!("headless hook panic");
+		}
+		if content == DIRTY_LINK {
+			self.rewrites.fetch_add(1, Ordering::Relaxed);
+			return Ok(Some(CLEAN_LINK.to_owned()));
+		}
+		Ok(None)
+	}
+}
+
 struct Harness {
 	session: Session,
 	state: SharedState,
@@ -156,72 +167,26 @@ struct Harness {
 }
 
 impl Harness {
-	async fn voice_call(&self, guild_id: Snowflake, channel_id: Snowflake) -> Result<(usize, bool)> {
-		let me = self.state.read().current_user_id().context("no signed in user")?;
-		self.session.send(Command::JoinVoice {
-			guild_id: Some(guild_id),
-			channel_id,
-		});
-		self.until("the voice connection", |state| {
-			state
-				.voice()
-				.is_some_and(|voice| voice.status == VoiceStatus::Connected)
-		})
-		.await?;
-		self.until("the channel row to list the caller", |state| {
-			state
-				.guild(guild_id)
-				.is_some_and(|guild| guild.voice_states.contains_key(&me))
-		})
-		.await?;
-		for index in 0..VOICE_TEST_FRAMES {
-			ensure!(
-				self.session.push_voice_test_frame(&tone_frame(index)),
-				"voice connection is not reachable for test frames"
-			);
-		}
-		self.until("a speaking event", |state| {
-			state.voice().is_some_and(|voice| !voice.speaking.is_empty())
-		})
-		.await?;
-		let deadline = Instant::now() + STEP_TIMEOUT;
-		let mut echoed = 0;
-		while echoed < VOICE_TEST_FRAMES / 2 {
-			ensure!(
-				Instant::now() < deadline,
-				"timed out waiting for echoed voice frames"
-			);
-			echoed += self.session.take_voice_output_frames().len();
-			sleep(VOICE_POLL).await;
-		}
-		let screen_share_started = self.screen_share().await?;
-		self.session.send(Command::LeaveVoice);
-		self.until("the voice session to end", |state| {
-			state.voice().is_none()
-				&& state
-					.guild(guild_id)
-					.is_some_and(|guild| !guild.voice_states.contains_key(&me))
-		})
-		.await?;
-		Ok((echoed, screen_share_started))
-	}
-
-	fn start(store: Arc<Store>, rest_base: &str, gateway_url: &str) -> Result<Self> {
+	fn start(
+		store: Arc<Store>,
+		rest_base: &str,
+		gateway_url: &str,
+		hooks: Option<Arc<dyn SessionHooks>>,
+	) -> Result<Self> {
 		let wake = Arc::new(Notify::new());
 		let notifier = wake.clone();
-		let session = Session::start_with(
-			SessionConfig {
-				store,
-				rest_base: Url::parse(rest_base).context("rest url is invalid")?,
-				gateway_url: gateway_url.to_owned(),
-				token: Token::new(MOCK_TOKEN),
-				identify: IdentifyProperties::web_client("en-US", FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-				locale: "en-US".to_owned(),
-				runtime: None,
-				notify: Arc::new(move |_| notifier.notify_one()),
-			},
-			VoiceIo::Silent,
-		);
+		let session = Session::start(SessionConfig {
+			store,
+			rest_base: Url::parse(rest_base).context("rest url is invalid")?,
+			gateway_url: gateway_url.to_owned(),
+			token: Token::new(MOCK_TOKEN),
+			identify: IdentifyProperties::web_client("en-US", FALLBACK_BUILD_NUMBER, CHROME_VERSION),
+			locale: "en-US".to_owned(),
+			runtime: None,
+			notify: Arc::new(move |_| notifier.notify_one()),
+			hooks,
+		})
+		.context("session did not start")?;
 		let state = session.state().clone();
 		Ok(Self { session, state, wake })
 	}
@@ -252,7 +217,6 @@ impl Harness {
 			content: sent.to_owned(),
 			reply_to: None,
 			files: Vec::new(),
-			by_plugin: None,
 		});
 		self.until("the sent message to replace its pending row", |state| {
 			state.messages(channel_id).is_some_and(|cache| {
@@ -279,54 +243,6 @@ impl Harness {
 			.await
 			.context("session shutdown panicked")
 	}
-}
-
-fn plugins_root() -> PathBuf {
-	Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins")
-}
-
-async fn install_plugins(store: &Arc<Store>) -> Result<()> {
-	let grants = Grants::new(store.clone());
-	let plugins_dir = store.paths.plugins_dir();
-	for name in [LINK_CLEANER, HELLO_TIMESTAMPS] {
-		let dir = plugins_root().join(name);
-		let built = dir.clone();
-		let wasm = tokio::task::spawn_blocking(move || crate::plugin::build_wasm(&built, true))
-			.await
-			.context("plugin build panicked")??
-			.with_context(|| format!("{name} has no crate to build"))?;
-		let package = Package::from_files(&dir.join(MANIFEST_FILE), Some(&wasm))?;
-		package.install_into(&plugins_dir)?;
-		grants.grant_manifest(&package.manifest)?;
-	}
-	Ok(())
-}
-
-fn ends_with_timestamp(nodes: &[Node]) -> bool {
-	matches!(
-		nodes.last(),
-		Some(Node::Subtext(children))
-			if matches!(children.first(), Some(Node::Text(text)) if text.starts_with(TIMESTAMP_PREFIX))
-	)
-}
-
-fn first_voice_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
-	let guild = state.guilds().next()?;
-	guild
-		.channels
-		.values()
-		.find(|channel| channel.kind == ChannelType::GuildVoice)
-		.map(|channel| (guild.id, channel.id))
-}
-
-fn tone_frame(index: usize) -> Vec<i16> {
-	(0..VOICE_FRAME_SAMPLES)
-		.map(|offset| {
-			let sample = (index * VOICE_FRAME_SAMPLES + offset) as f32;
-			let phase = std::f32::consts::TAU * VOICE_TONE_HZ * sample / VOICE_SAMPLE_RATE;
-			(phase.sin() * VOICE_TONE_AMPLITUDE) as i16
-		})
-		.collect()
 }
 
 fn first_text_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
@@ -370,7 +286,7 @@ pub fn run(args: Args) -> Result<()> {
 	let root = scratch_dir()?;
 	let outcome = runtime.block_on(mock_run(args, &root, retries));
 	runtime.shutdown_timeout(RUNTIME_GRACE);
-	plugin_host::conformance::remove_scratch(&root);
+	let _ = fs::remove_dir_all(&root);
 	outcome
 }
 
@@ -398,11 +314,17 @@ async fn scenario(
 	let expected = server.fixtures().summary();
 	let store = Arc::new(Store::open(Paths::at(root)?)?);
 	store.update_settings(|settings| {
-		settings.voice.noise_suppression = false;
 		settings.storage.plaintext_token = true;
 	})?;
-	install_plugins(&store).await?;
-	let harness = Harness::start(store.clone(), server.rest_base_url(), server.gateway_url())?;
+	let link_hook = Arc::new(LinkHook {
+		rewrites: AtomicU64::new(0),
+	});
+	let harness = Harness::start(
+		store.clone(),
+		server.rest_base_url(),
+		server.gateway_url(),
+		Some(link_hook.clone()),
+	)?;
 
 	harness
 		.until("the gateway to become ready", |state| {
@@ -450,18 +372,19 @@ async fn scenario(
 		.and_then(|cache| cache.ordered.first().map(|message| message.id))
 		.context("no loaded message to render")?;
 	harness
-		.until("the render plugin to decorate a loaded message", |state| {
+		.until("a loaded message to render", |state| {
 			state
 				.messages(channel_id)
 				.and_then(|cache| cache.rendered.get(&first_message))
-				.is_some_and(|rendered| ends_with_timestamp(&rendered.ast))
+				.is_some_and(|rendered| !rendered.ast.is_empty())
 		})
 		.await?;
 	let cleaned_id = harness.round_trip_as(channel_id, DIRTY_LINK, CLEAN_LINK).await?;
 	ensure!(
-		harness.state.read().altered_by(cleaned_id) == Some(LINK_CLEANER_ID),
-		"the cleaned message is not marked as altered by the link cleaner"
+		harness.state.read().altered_by(cleaned_id) == Some(LINK_HOOK),
+		"the cleaned message is not marked as altered by the link hook"
 	);
+	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
 
 	let sent_id = harness
 		.round_trip(
@@ -528,13 +451,9 @@ async fn scenario(
 			.await?;
 	}
 
-	let (voice_guild_id, voice_channel_id) =
-		first_voice_channel(&harness.state.read()).context("no voice channel in the fixtures")?;
 	let text = harness
 		.text_features(server.fixtures(), guild_id, channel_id, sent_id)
 		.await?;
-	let (voice_frames_echoed, screen_share_started) =
-		harness.voice_call(voice_guild_id, voice_channel_id).await?;
 
 	sleep_until(started + Duration::from_secs(args.duration)).await;
 	harness
@@ -543,13 +462,6 @@ async fn scenario(
 
 	let counts = Counts::measure(&harness.state.read());
 	let reconnects = harness.session.reconnects();
-	let plugins_loaded = harness
-		.session
-		.plugin_list()
-		.iter()
-		.filter(|plugin| plugin.state == PluginState::Loaded)
-		.count();
-	let render_p95 = harness.session.plugin_render_ms_p95().unwrap_or_default();
 	println!(
 		"{}",
 		json!({
@@ -560,14 +472,10 @@ async fn scenario(
 			"total_mentions": baseline.total_mentions,
 			"reconnects": reconnects,
 			"rest_calls_429_retried": retries.load(Ordering::Relaxed),
-			"voice_connected": true,
-			"screen_share_started": screen_share_started,
 			"threads_created": text.threads_created,
 			"moderation_ok": text.moderation_ok,
 			"expressions_ok": text.expressions_ok,
-			"voice_frames_echoed": voice_frames_echoed,
-			"plugins_loaded": plugins_loaded,
-			"plugin_render_ms_p95": (render_p95 * 100.0).round() / 100.0,
+			"hook_rewrites": link_hook.rewrites.load(Ordering::Relaxed),
 		})
 	);
 	ensure!(
@@ -607,7 +515,7 @@ async fn cached_start(
 	channel_id: Snowflake,
 	guilds: usize,
 ) -> Result<()> {
-	let offline = Harness::start(store.clone(), UNREACHABLE_REST, UNREACHABLE_GATEWAY)?;
+	let offline = Harness::start(store.clone(), UNREACHABLE_REST, UNREACHABLE_GATEWAY, None)?;
 	offline
 		.until("cached guilds to load", |state| state.guilds().count() == guilds)
 		.await?;

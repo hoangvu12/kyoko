@@ -115,7 +115,7 @@ impl AccountStore {
 
 	fn write(&self, index: &AccountIndex) -> Result<()> {
 		let bytes = serde_json::to_vec_pretty(index)?;
-		write_atomic(&self.index_path, &bytes, false)
+		write_atomic(&self.index_path, &bytes)
 	}
 }
 

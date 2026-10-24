@@ -332,6 +332,6 @@ impl Settings {
 
 	pub fn save(&self, paths: &Paths) -> Result<()> {
 		let bytes = serde_json::to_vec_pretty(self)?;
-		write_atomic(&paths.settings_path(), &bytes, false)
+		write_atomic(&paths.settings_path(), &bytes)
 	}
 }

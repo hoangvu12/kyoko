@@ -49,17 +49,6 @@ fn forum_body(name: String, content: String, tags: Vec<Snowflake>, files: &[Uplo
 impl Core {
 	pub(super) fn on_extra(&mut self, command: Command) {
 		match command {
-			Command::StartCamera { device_id, quality } => self.start_camera(device_id, quality),
-			Command::StopCamera => self.stop_camera(),
-			Command::StartScreenShare {
-				target,
-				quality,
-				with_audio,
-			} => self.start_screen_share(target, quality, with_audio),
-			Command::StopScreenShare => self.stop_screen_share(),
-			Command::SetVideoQuality(quality) => self.set_video_quality(quality),
-			Command::WatchStream { stream_key } => self.watch_stream(stream_key),
-			Command::StopWatchingStream { stream_key } => self.stop_watching_stream(&stream_key),
 			command @ (Command::CreateThread { .. }
 			| Command::JoinThread { .. }
 			| Command::LeaveThread { .. }

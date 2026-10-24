@@ -1,25 +1,22 @@
+use std::io;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use gateway::{Gateway, GatewayConfig, GatewayHandle};
-use plugin_host::catalog::{Catalog, ThemeCatalog};
-use plugin_host::{CommandEntry, Grants, PluginInfo, PluginManager, RuntimeConfig, Slots};
-use protocol::Token;
+use protocol::{Message, Token};
 use rest::{RestClient, RestConfig};
 use state::{SharedState, State};
 use tokio::runtime::{Builder, Handle, Runtime};
 use tokio::sync::mpsc;
-use voice::video::VideoSink;
 
-use crate::broker::SessionBroker;
-use crate::catalog::catalog_key;
+use crate::catalog::{ThemeCatalog, ThemeCatalogs};
 use crate::command::Command;
-use crate::config::{PluginOptions, SessionConfig, VoiceIo};
+use crate::config::SessionConfig;
+use crate::hooks::{Hooks, guarded};
 use crate::notifier::Notifier;
-use crate::plugins::PluginHub;
 use crate::search::SearchResults;
-use crate::task::{Core, CoreParts, SharedSearch, SharedVideo, SharedVoice, Stats};
+use crate::task::{Core, CoreParts, SharedSearch, Stats};
 
 const COMMAND_CAPACITY: usize = 256;
 const RUNTIME_WORKERS: usize = 4;
@@ -31,11 +28,9 @@ pub struct Session {
 	commands: mpsc::Sender<Command>,
 	gateway: GatewayHandle,
 	search: SharedSearch,
-	#[cfg_attr(not(feature = "mock"), allow(dead_code))]
-	voice: SharedVoice,
-	video: SharedVideo,
 	stats: Arc<Stats>,
-	hub: Arc<PluginHub>,
+	themes: Arc<ThemeCatalogs>,
+	hooks: Hooks,
 	finished: std::sync::mpsc::Receiver<()>,
 	runtime: Option<Runtime>,
 }
@@ -44,34 +39,25 @@ fn install_crypto_provider() {
 	let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-fn runtime_for(requested: Option<Handle>) -> (Option<Runtime>, Handle) {
+fn runtime_for(requested: Option<Handle>) -> io::Result<(Option<Runtime>, Handle)> {
 	match requested {
-		Some(handle) => (None, handle),
+		Some(handle) => Ok((None, handle)),
 		None => {
 			let runtime = Builder::new_multi_thread()
 				.worker_threads(RUNTIME_WORKERS)
 				.thread_name("kyoko-session")
 				.enable_all()
-				.build()
-				.expect("session runtime initializes");
+				.build()?;
 			let handle = runtime.handle().clone();
-			(Some(runtime), handle)
+			Ok((Some(runtime), handle))
 		}
 	}
 }
 
 impl Session {
-	pub fn start(config: SessionConfig) -> Session {
-		Self::start_with(config, VoiceIo::default())
-	}
-
-	pub fn start_with(config: SessionConfig, voice_io: VoiceIo) -> Session {
-		Self::start_with_plugins(config, voice_io, PluginOptions::default())
-	}
-
-	pub fn start_with_plugins(config: SessionConfig, voice_io: VoiceIo, plugins: PluginOptions) -> Session {
+	pub fn start(config: SessionConfig) -> io::Result<Session> {
 		install_crypto_provider();
-		let (runtime, handle) = runtime_for(config.runtime);
+		let (runtime, handle) = runtime_for(config.runtime)?;
 		let locale = config.locale.clone();
 		let rest = RestClient::new(
 			RestConfig {
@@ -88,50 +74,23 @@ impl Session {
 		let (gateway, gateway_events) = Gateway::spawn(gateway_config, handle.clone());
 		let state = State::shared();
 		let search = SharedSearch::default();
-		let voice = SharedVoice::default();
-		let video = SharedVideo::default();
 		let stats = Arc::new(Stats::default());
+		let themes = Arc::new(ThemeCatalogs::default());
 		let (commands, command_receiver) = mpsc::channel(COMMAND_CAPACITY);
 		let (internal, internal_receiver) = mpsc::unbounded_channel();
-		let broker = Arc::new(SessionBroker {
-			state: state.clone(),
-			commands: commands.clone(),
-			internal: internal.clone(),
-			sink: plugins.sink,
-		});
-		let grants = Arc::new(Grants::new(config.store.clone()));
-		let plugin_runtime = plugin_host::Runtime::new(
-			RuntimeConfig {
-				catalog_key: catalog_key(),
-				..RuntimeConfig::default()
-			},
-			handle.clone(),
-			config.store.clone(),
-			grants.clone(),
-			broker,
-		)
-		.expect("plugin runtime initializes");
-		let hub = Arc::new(PluginHub::new(
-			Arc::new(PluginManager::new(plugin_runtime)),
-			grants,
-			config.store.clone(),
-		));
 		let core = Core::new(CoreParts {
 			state: state.clone(),
 			rest,
 			gateway: gateway.clone(),
 			store: config.store,
 			internal,
-			hub: hub.clone(),
-			safe_mode: plugins.safe_mode,
+			hooks: config.hooks.clone(),
+			themes: themes.clone(),
 			locale,
 			notifier: Notifier::new(config.notify),
 			runtime: handle.clone(),
 			search: search.clone(),
 			stats: stats.clone(),
-			voice_io,
-			shared_voice: voice.clone(),
-			video: video.clone(),
 			token,
 		});
 		let (done, finished) = std::sync::mpsc::channel();
@@ -140,18 +99,17 @@ impl Session {
 				.await;
 			let _ = done.send(());
 		});
-		Session {
+		Ok(Session {
 			state,
 			commands,
 			gateway,
 			search,
-			voice,
-			video,
 			stats,
-			hub,
+			themes,
+			hooks: config.hooks,
 			finished,
 			runtime,
-		}
+		})
 	}
 
 	pub fn state(&self) -> &SharedState {
@@ -164,74 +122,23 @@ impl Session {
 		}
 	}
 
-	pub fn plugins(&self) -> &Arc<PluginManager> {
-		&self.hub.manager
-	}
-
-	pub fn plugin_slots(&self) -> Arc<Slots> {
-		Arc::clone(self.hub.manager.slots())
-	}
-
-	pub fn plugin_commands(&self) -> Vec<(String, CommandEntry)> {
-		self.hub.manager.commands()
-	}
-
-	pub fn plugin_list(&self) -> Vec<PluginInfo> {
-		self.hub.manager.list()
-	}
-
-	pub fn plugin_error(&self) -> Option<String> {
-		self.hub.last_error()
-	}
-
-	pub fn plugin_render_ms_p95(&self) -> Option<f64> {
-		self.hub.stats.p95_ms()
-	}
-
-	pub fn catalog(&self) -> Option<Arc<Catalog>> {
-		self.hub.catalog()
-	}
-
-	pub fn catalog_error(&self) -> Option<String> {
-		self.hub.catalog_error()
+	pub fn should_notify(&self, message: &Message) -> bool {
+		guarded(&self.hooks, "allow_notification", |hooks| {
+			hooks.allow_notification(message)
+		})
+		.unwrap_or(true)
 	}
 
 	pub fn theme_catalog(&self) -> Option<Arc<ThemeCatalog>> {
-		self.hub.theme_catalog()
+		self.themes.catalog()
 	}
 
 	pub fn theme_catalog_error(&self) -> Option<String> {
-		self.hub.theme_catalog_error()
-	}
-
-	pub fn theme_files(&self) -> Vec<std::path::PathBuf> {
-		self.hub.theme_files()
+		self.themes.error()
 	}
 
 	pub fn search_results(&self) -> Option<Arc<SearchResults>> {
 		self.search.lock().clone()
-	}
-
-	#[cfg(feature = "mock")]
-	pub fn push_voice_test_frame(&self, pcm: &[i16]) -> bool {
-		self.voice
-			.lock()
-			.as_ref()
-			.map(|connection| connection.push_test_frame(pcm))
-			.is_some()
-	}
-
-	#[cfg(feature = "mock")]
-	pub fn take_voice_output_frames(&self) -> Vec<Vec<i16>> {
-		self.voice
-			.lock()
-			.as_ref()
-			.map(|connection| connection.take_output_frames())
-			.unwrap_or_default()
-	}
-
-	pub fn set_video_sink(&self, sink: Arc<dyn VideoSink>) {
-		self.video.lock().set_sink(sink);
 	}
 
 	pub fn reconnects(&self) -> u64 {

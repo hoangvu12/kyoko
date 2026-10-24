@@ -7,8 +7,6 @@ use std::time::{Duration, Instant as StdInstant};
 use chrono::Utc;
 use gateway::{GatewayEvent, GatewayHandle};
 use parking_lot::Mutex;
-use plugin_host::SendDecision;
-use plugin_host::api::VoiceInfo;
 use protocol::{
 	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, Message, MessageAck,
 	MessageReference, MessagesQuery, Nonce, Snowflake, StatusKind, Token, User,
@@ -16,35 +14,26 @@ use protocol::{
 use rest::api::SearchQuery;
 use rest::{RestClient, UploadFile};
 use serde_json::json;
-use state::{Changes, Event, LoadDirection, Loaded, LocalEvent, SharedState, TYPING_TIMEOUT, UserOverride};
+use state::{
+	Changes, Event, LoadDirection, Loaded, LocalEvent, RenderedMessage, SharedState, TYPING_TIMEOUT,
+};
 use store::Store;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 
+use crate::catalog::ThemeCatalogs;
 use crate::command::Command;
-use crate::config::VoiceIo;
+use crate::hooks::{Hooks, guarded, guarded_blocking};
 use crate::notifier::Notifier;
 use crate::persist::{self, Job, Persistor};
-use crate::plugins::{PluginFlags, PluginHub};
-use crate::render::{RenderResult, RenderWorker};
 use crate::search::SearchResults;
 
 mod accounts;
 mod actions;
 mod commands;
 mod expressions;
-mod mic_test;
-mod plugin_link;
-mod streams;
-mod video;
-mod voice_link;
-
-use mic_test::MicTestRun;
-use streams::StreamLink;
-pub(crate) use video::SharedVideo;
-pub(crate) use voice_link::SharedVoice;
-use voice_link::VoiceLink;
+mod themes;
 
 const PAGE_SIZE: u8 = 50;
 const TYPING_THROTTLE: Duration = Duration::from_secs(9);
@@ -53,7 +42,7 @@ const MEMBER_SEARCH_LIMIT: u32 = 100;
 const MEMBER_LIST_RANGE: [u32; 2] = [0, 99];
 const DAY_MILLIS: i64 = 86_400_000;
 const NONCE_SEQUENCE_BITS: u32 = 22;
-const INITIAL_EPOCH: u64 = 1;
+const RENDER_REVISION: u64 = 1;
 
 #[derive(Default)]
 pub(crate) struct Stats {
@@ -83,69 +72,19 @@ pub(crate) enum Internal {
 	ThreadOpened(Box<Channel>),
 	Loaded(Loaded),
 	Rejected(String),
-	CameraStarted {
-		generation: u64,
-		result: Result<(), String>,
-	},
-	StreamTimeout {
-		generation: u64,
-	},
-	StreamConnected {
-		generation: u64,
-		result: Result<Arc<::voice::VoiceConnection>, ::voice::VoiceError>,
-	},
-	StreamVideo {
-		generation: u64,
-		result: Result<(), String>,
-	},
-	StreamEvent {
-		generation: u64,
-		event: ::voice::VoiceEvent,
-	},
 	Draft {
 		channel_id: Snowflake,
 		content: String,
 	},
-	JoinVoice {
-		guild_id: Option<Snowflake>,
-		channel_id: Snowflake,
-	},
-	VoiceJoinTimeout(u64),
-	VoiceConnected {
-		generation: u64,
-		result: Result<Arc<::voice::VoiceConnection>, ::voice::VoiceError>,
-	},
-	VoiceEvent {
-		generation: u64,
-		event: ::voice::VoiceEvent,
-	},
-	VoiceLevels {
-		generation: u64,
-		input: f32,
-		output: f32,
-	},
-	Rendered(Vec<RenderResult>),
-	PluginsChanged,
-	SlotsChanged,
-	CatalogChanged,
 	BeforeSend {
 		nonce: Nonce,
 		channel_id: Snowflake,
 		content: String,
 		reply_to: Option<Snowflake>,
 		files: Vec<UploadFile>,
-		decision: SendDecision,
+		rewritten: Option<String>,
 	},
-	Overrides(Vec<(Option<Snowflake>, Snowflake, Option<UserOverride>)>),
-	MicTestLevel {
-		generation: u64,
-		level: f32,
-		remaining_secs: u32,
-	},
-	MicTestFinished {
-		generation: u64,
-		result: Result<(), String>,
-	},
+	ThemeCatalogChanged,
 	AccountSwitch(Snowflake),
 }
 
@@ -158,12 +97,9 @@ pub(crate) struct CoreParts {
 	pub(crate) runtime: Handle,
 	pub(crate) search: SharedSearch,
 	pub(crate) stats: Arc<Stats>,
-	pub(crate) voice_io: VoiceIo,
-	pub(crate) shared_voice: SharedVoice,
-	pub(crate) video: SharedVideo,
 	pub(crate) internal: mpsc::UnboundedSender<Internal>,
-	pub(crate) hub: Arc<PluginHub>,
-	pub(crate) safe_mode: bool,
+	pub(crate) hooks: Hooks,
+	pub(crate) themes: Arc<ThemeCatalogs>,
 	pub(crate) locale: String,
 	pub(crate) token: Arc<Token>,
 }
@@ -184,25 +120,15 @@ pub(crate) struct Core {
 	selected_guild: Option<Snowflake>,
 	typing_expiry: Option<Instant>,
 	nonce_sequence: u64,
-	voice: VoiceLink,
-	video: SharedVideo,
-	streams: StreamLink,
 	status: StatusKind,
 	afk: bool,
 	custom_status: Option<CustomStatus>,
-	hub: Arc<PluginHub>,
-	render_worker: RenderWorker,
-	safe_mode: bool,
+	hooks: Hooks,
+	themes: Arc<ThemeCatalogs>,
 	locale: String,
-	flags: PluginFlags,
-	epoch: u64,
-	overrides_due: Option<Instant>,
-	overrides_busy: bool,
-	mic_test: MicTestRun,
 	token: Arc<Token>,
 	account_saved: bool,
 	select_created_guild: bool,
-	last_voice_info: Option<VoiceInfo>,
 }
 
 fn page_query(
@@ -230,12 +156,6 @@ struct CustomStatus {
 impl Core {
 	pub(crate) fn new(parts: CoreParts) -> Self {
 		let persist = Persistor::spawn(parts.store.clone(), &parts.runtime);
-		let render_worker = RenderWorker::spawn(
-			Arc::clone(&parts.hub.manager),
-			Arc::clone(&parts.hub.stats),
-			parts.internal.clone(),
-			INITIAL_EPOCH,
-		);
 		Self {
 			state: parts.state,
 			rest: parts.rest,
@@ -252,25 +172,15 @@ impl Core {
 			selected_guild: None,
 			typing_expiry: None,
 			nonce_sequence: 0,
-			voice: VoiceLink::new(parts.voice_io, parts.shared_voice),
-			video: parts.video,
-			streams: StreamLink::default(),
 			status: StatusKind::Online,
 			afk: false,
 			custom_status: None,
-			hub: parts.hub,
-			render_worker,
-			safe_mode: parts.safe_mode,
+			hooks: parts.hooks,
+			themes: parts.themes,
 			locale: parts.locale,
-			flags: PluginFlags::default(),
-			epoch: INITIAL_EPOCH,
-			overrides_due: None,
-			overrides_busy: false,
-			mic_test: MicTestRun::default(),
 			token: parts.token,
 			account_saved: false,
 			select_created_guild: false,
-			last_voice_info: None,
 		}
 	}
 
@@ -280,14 +190,12 @@ impl Core {
 		mut commands: mpsc::Receiver<Command>,
 		mut internal: mpsc::UnboundedReceiver<Internal>,
 	) {
-		self.start_plugins();
 		self.restore().await;
 		self.restore_recents().await;
 		let mut gateway_open = true;
 		loop {
 			let flush_at = self.notifier.deadline();
 			let expire_at = self.typing_expiry;
-			let overrides_at = self.overrides_due;
 			tokio::select! {
 				event = gateway_events.recv(), if gateway_open => match event {
 					Some(event) => self.on_gateway(event),
@@ -307,9 +215,6 @@ impl Core {
 				}
 				() = sleep_until(expire_at.unwrap_or_else(Instant::now)), if expire_at.is_some() => {
 					self.expire_typing();
-				}
-				() = sleep_until(overrides_at.unwrap_or_else(Instant::now)), if overrides_at.is_some() => {
-					self.refresh_overrides();
 				}
 			}
 		}
@@ -345,26 +250,13 @@ impl Core {
 	}
 
 	fn apply(&mut self, event: Event<'_>) {
-		let (changes, fresh, connection) = {
+		let (changes, fresh) = {
 			let mut state = self.state.write();
-			let was_connected = state.session().connected;
 			let changes = state.apply(&event);
-			let connected = state.session().connected;
-			(
-				changes,
-				state.take_unrendered(),
-				(connected != was_connected).then_some(connected),
-			)
+			(changes, state.take_unrendered())
 		};
-		if let Some(connected) = connection {
-			self.forward_connection(connected);
-		}
 		if !fresh.is_empty() {
 			self.render_messages(fresh);
-		}
-		self.watch_overrides(&changes);
-		if changes.voice_session {
-			self.forward_voice();
 		}
 		if !changes.typing.is_empty() {
 			self.typing_expiry = Some(Instant::now() + TYPING_TIMEOUT + TYPING_EXPIRY_SLACK);
@@ -396,7 +288,6 @@ impl Core {
 				self.apply(Event::Ready(&ready));
 				self.remember_account();
 				self.subscribe_selected();
-				self.resend_voice_state();
 				self.persist.submit(Job::Ready(ready));
 			}
 			GatewayEvent::ReadySupplemental(supplemental) => {
@@ -404,7 +295,6 @@ impl Core {
 			}
 			GatewayEvent::Resumed => {
 				self.apply_dispatch(&DispatchEvent::Resumed);
-				self.resend_voice_state();
 			}
 			GatewayEvent::Dispatch { event, .. } => self.on_dispatch(event),
 			GatewayEvent::Disconnected {
@@ -431,7 +321,7 @@ impl Core {
 
 	fn on_dispatch(&mut self, event: DispatchEvent) {
 		self.apply_dispatch(&event);
-		self.forward_dispatch(&event);
+		guarded(&self.hooks, "on_dispatch", |hooks| hooks.on_dispatch(&event));
 		match event {
 			DispatchEvent::MessageCreate(message) => {
 				let channel_id = message.channel_id;
@@ -461,11 +351,6 @@ impl Core {
 				self.persist.submit(Job::DeleteMessages(delete.ids));
 			}
 			DispatchEvent::MessageAck(ack) => self.persist_read_state(ack.channel_id),
-			DispatchEvent::VoiceStateUpdate(update) => self.voice_state_update(&update),
-			DispatchEvent::VoiceServerUpdate(update) => self.voice_server_update(update),
-			DispatchEvent::StreamCreate(stream) => self.stream_created(&stream),
-			DispatchEvent::StreamServerUpdate(update) => self.stream_server_updated(update),
-			DispatchEvent::StreamDelete(delete) => self.stream_deleted(&delete),
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
 			_ => {}
@@ -527,44 +412,23 @@ impl Core {
 			Internal::ThreadOpened(thread) => self.on_thread_opened(thread),
 			Internal::Loaded(loaded) => self.on_loaded(loaded),
 			Internal::Rejected(reason) => self.reject(reason),
-			Internal::CameraStarted { generation, result } => self.on_camera_started(generation, result),
-			Internal::StreamTimeout { generation } => self.on_stream_timeout(generation),
-			Internal::StreamConnected { generation, result } => self.on_stream_connected(generation, result),
-			Internal::StreamVideo { generation, result } => self.on_stream_video(generation, result),
-			Internal::StreamEvent { generation, event } => self.on_stream_event(generation, event),
 			Internal::Draft { channel_id, content } => {
 				if self.state.read().draft(channel_id).is_none() {
 					self.apply_local(LocalEvent::DraftChanged { channel_id, content });
 				}
 			}
-			Internal::JoinVoice { guild_id, channel_id } => self.join_voice(guild_id, channel_id),
-			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
-			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
-			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
-			Internal::VoiceLevels {
-				generation,
-				input,
-				output,
-			} => self.on_voice_levels(generation, input, output),
-			Internal::Rendered(results) => self.on_rendered(results),
-			Internal::PluginsChanged => self.on_plugins_changed(),
-			Internal::SlotsChanged => self.on_slots_changed(),
-			Internal::CatalogChanged => self.on_catalog_changed(),
 			Internal::BeforeSend {
 				nonce,
 				channel_id,
 				content,
 				reply_to,
 				files,
-				decision,
-			} => self.on_before_send(nonce, channel_id, content, reply_to, files, decision),
-			Internal::Overrides(entries) => self.on_overrides(entries),
-			Internal::MicTestLevel {
-				generation,
-				level,
-				remaining_secs,
-			} => self.on_mic_test_level(generation, level, remaining_secs),
-			Internal::MicTestFinished { generation, result } => self.on_mic_test_finished(generation, result),
+				rewritten,
+			} => self.on_before_send(nonce, channel_id, content, reply_to, files, rewritten),
+			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
+				theme_catalog: true,
+				..Changes::default()
+			}),
 			Internal::AccountSwitch(user_id) => self.apply_local(LocalEvent::AccountSwitchRequested(user_id)),
 		}
 	}
@@ -628,19 +492,12 @@ impl Core {
 				content,
 				reply_to,
 				files,
-				by_plugin,
-			} => self.send_message(channel_id, content, reply_to, files, by_plugin),
+			} => self.send_message(channel_id, content, reply_to, files),
 			Command::EditMessage {
 				channel_id,
 				message_id,
 				content,
-			} => self.spawn_rest("edit message", move |rest| async move {
-				let body = EditMessage {
-					content: Some(content),
-					..EditMessage::default()
-				};
-				rest.edit_message(channel_id, message_id, body).await.map(drop)
-			}),
+			} => self.edit_message(channel_id, message_id, content),
 			Command::DeleteMessage {
 				channel_id,
 				message_id,
@@ -684,7 +541,6 @@ impl Core {
 			Command::SubscribeGuild { guild_id } => {
 				let channel_id = self.subscription_channel(guild_id);
 				self.subscribe(guild_id, channel_id);
-				self.schedule_overrides(Duration::ZERO);
 			}
 			Command::SearchMembers { guild_id, query } => {
 				if let Err(error) =
@@ -707,43 +563,10 @@ impl Core {
 					collapsed,
 				});
 			}
-			Command::JoinVoice { guild_id, channel_id } => self.join_voice(guild_id, channel_id),
-			Command::LeaveVoice => self.leave_voice(),
-			Command::SetSelfMute(muted) => self.set_self_mute(muted),
-			Command::SetSelfDeaf(deafened) => self.set_self_deaf(deafened),
-			Command::SetVoiceDevices { input, output } => self.set_voice_devices(input, output),
-			Command::SetUserVolume { user_id, volume } => self.set_user_volume(user_id, volume),
-			Command::SetInputMode(mode) => self.set_input_mode(mode),
-			Command::SetPushToTalk(transmitting) => self.set_push_to_talk(transmitting),
-			Command::SetInputVolume(volume) => self.set_input_volume(volume),
-			Command::SetOutputVolume(volume) => self.set_output_volume(volume),
-			Command::SetNoiseSuppression(enabled) => self.set_noise_suppression(enabled),
-			Command::SetVadThreshold { auto, threshold_db } => self.set_vad_threshold(auto, threshold_db),
-			Command::SetDefaultVideoQuality(quality) => self.set_default_video_quality(quality),
-			Command::StartMicTest { seconds } => self.start_mic_test(seconds),
-			Command::StopMicTest => self.stop_mic_test(),
-			Command::RequestToSpeak {
-				guild_id,
-				channel_id,
-				request,
-			} => self.request_to_speak(guild_id, channel_id, request),
 			Command::SwitchAccount(user_id) => self.switch_account(user_id),
-			Command::StartCall { channel_id } => self.start_call(channel_id),
-			Command::DeclineCall { channel_id } => self.decline_call(channel_id),
-			command @ (Command::RunPluginCommand { .. }
-			| Command::PluginUiAction { .. }
-			| Command::PluginEnable(_)
-			| Command::PluginDisable(_)
-			| Command::PluginReload(_)
-			| Command::PluginInstall { .. }
-			| Command::PluginUninstall(_)
-			| Command::PluginGrant { .. }
-			| Command::PluginSetSetting { .. }
-			| Command::PluginsChanged
-			| Command::CatalogRefresh { .. }
-			| Command::CatalogInstall { .. }
-			| Command::ThemeCatalogRefresh { .. }
-			| Command::ThemeInstall { .. }) => self.on_plugin_command(command),
+			command @ (Command::ThemeCatalogRefresh { .. } | Command::ThemeInstall { .. }) => {
+				self.on_theme_command(command)
+			}
 			Command::Reconnect => self.gateway.reconnect(),
 			Command::Logout => {
 				self.store.tokens.clear();
@@ -773,10 +596,6 @@ impl Core {
 
 	fn select_channel(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
 		self.apply_local(LocalEvent::ChannelSelected { guild_id, channel_id });
-		self.render_worker.select(channel_id);
-		self.rerender_stale(channel_id);
-		self.forward_channel_switch(guild_id, channel_id);
-		self.schedule_overrides(Duration::ZERO);
 		if let Some(guild_id) = guild_id
 			&& self.selected_guild != Some(guild_id)
 		{
@@ -950,27 +769,112 @@ impl Core {
 		content: String,
 		reply_to: Option<Snowflake>,
 		files: Vec<UploadFile>,
-		by_plugin: Option<String>,
 	) {
 		let Some(author) = self.current_user() else {
 			tracing::warn!("message not sent, no signed in user");
 			return;
 		};
-		if by_plugin.is_none() {
-			self.remember_message_emoji(&content);
-		}
+		self.remember_message_emoji(&content);
 		let nonce = self.next_nonce();
 		self.apply_local(LocalEvent::PendingMessage {
 			channel_id,
 			nonce: nonce.clone(),
 			content: content.clone(),
 			author: Box::new(author),
-			by_plugin: by_plugin.clone(),
+			by_plugin: None,
 		});
-		if by_plugin.is_none() && self.flags.send && !content.is_empty() {
+		if self.hooks.is_some() && !content.is_empty() {
 			self.hook_before_send(nonce, channel_id, content, reply_to, files);
 		} else {
 			self.dispatch_send(nonce, channel_id, content, reply_to, files);
+		}
+	}
+
+	fn hook_before_send(
+		&self,
+		nonce: Nonce,
+		channel_id: Snowflake,
+		content: String,
+		reply_to: Option<Snowflake>,
+		files: Vec<UploadFile>,
+	) {
+		let hooks = self.hooks.clone();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			let original = content.clone();
+			let rewritten = guarded_blocking(&hooks, "before_send", move |hooks| {
+				hooks.before_send(channel_id, &original)
+			})
+			.await
+			.flatten()
+			.filter(|rewritten| *rewritten != content);
+			let _ = internal.send(Internal::BeforeSend {
+				nonce,
+				channel_id,
+				content,
+				reply_to,
+				files,
+				rewritten,
+			});
+		});
+	}
+
+	fn on_before_send(
+		&mut self,
+		nonce: Nonce,
+		channel_id: Snowflake,
+		content: String,
+		reply_to: Option<Snowflake>,
+		files: Vec<UploadFile>,
+		rewritten: Option<String>,
+	) {
+		let Some(rewritten) = rewritten else {
+			self.dispatch_send(nonce, channel_id, content, reply_to, files);
+			return;
+		};
+		let by = self
+			.hooks
+			.as_deref()
+			.map_or_else(String::new, |hooks| hooks.name().to_owned());
+		self.apply_local(LocalEvent::PendingAltered {
+			nonce: nonce.clone(),
+			content: rewritten.clone(),
+			by,
+		});
+		self.dispatch_send(nonce, channel_id, rewritten, reply_to, files);
+	}
+
+	fn edit_message(&self, channel_id: Snowflake, message_id: Snowflake, content: String) {
+		let hooks = self.hooks.clone();
+		let rest = self.rest.clone();
+		self.runtime.spawn(async move {
+			let original = content.clone();
+			let content = guarded_blocking(&hooks, "before_edit", move |hooks| {
+				hooks.before_edit(channel_id, message_id, &original)
+			})
+			.await
+			.flatten()
+			.unwrap_or(content);
+			let body = EditMessage {
+				content: Some(content),
+				..EditMessage::default()
+			};
+			if let Err(error) = rest.edit_message(channel_id, message_id, body).await {
+				tracing::warn!(%error, what = "edit message", "rest call failed");
+			}
+		});
+	}
+
+	fn render_messages(&mut self, messages: Vec<Arc<Message>>) {
+		let mut state = self.state.write();
+		for message in messages {
+			let rendered = Arc::new(RenderedMessage::plain(&message.content, false, RENDER_REVISION));
+			state.apply(&Event::Local(LocalEvent::MessageRendered {
+				channel_id: message.channel_id,
+				id: message.id,
+				source: message,
+				rendered,
+			}));
 		}
 	}
 
@@ -1018,7 +922,16 @@ impl Core {
 			return;
 		}
 		self.typing_sent.insert(channel_id, now);
+		let hooks = self.hooks.clone();
 		self.spawn_rest("typing", move |rest| async move {
+			let allowed = guarded_blocking(&hooks, "allow_typing", move |hooks| {
+				hooks.allow_typing(channel_id)
+			})
+			.await
+			.unwrap_or(true);
+			if !allowed {
+				return Ok(());
+			}
 			rest.trigger_typing(channel_id).await
 		});
 	}

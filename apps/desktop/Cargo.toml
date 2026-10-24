@@ -10,17 +10,12 @@ name = "kyoko"
 path = "src/main.rs"
 
 [dependencies]
-ui.workspace = true
-store.workspace = true
 session.workspace = true
+state.workspace = true
+store.workspace = true
 protocol.workspace = true
-rest.workspace = true
-gateway.workspace = true
 mockcord.workspace = true
 url.workspace = true
-platform.workspace = true
-updater.workspace = true
-login.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -30,27 +25,3 @@ clap.workspace = true
 [build-dependencies]
 embed-resource.workspace = true
 
-[package.metadata.deb]
-name = "kyoko"
-maintainer = "Kyoko contributors"
-copyright = "Kyoko contributors"
-extended-description = "A native Discord client with a sandboxed plugin system."
-section = "net"
-priority = "optional"
-depends = "$auto"
-assets = [
-	["target/release/kyoko", "usr/bin/kyoko", "755"],
-	["../../packaging/linux/kyoko.desktop", "usr/share/applications/io.github.hoangvu12.Kyoko.desktop", "644"],
-	["../../packaging/linux/io.github.hoangvu12.Kyoko.metainfo.xml", "usr/share/metainfo/io.github.hoangvu12.Kyoko.metainfo.xml", "644"],
-	["../../assets/icon.png", "usr/share/icons/hicolor/256x256/apps/io.github.hoangvu12.Kyoko.png", "644"],
-]
-
-[package.metadata.generate-rpm]
-name = "kyoko"
-summary = "A native Discord client with a sandboxed plugin system."
-assets = [
-	{ source = "target/release/kyoko", dest = "/usr/bin/kyoko", mode = "755" },
-	{ source = "../../packaging/linux/kyoko.desktop", dest = "/usr/share/applications/io.github.hoangvu12.Kyoko.desktop", mode = "644" },
-	{ source = "../../packaging/linux/io.github.hoangvu12.Kyoko.metainfo.xml", dest = "/usr/share/metainfo/io.github.hoangvu12.Kyoko.metainfo.xml", mode = "644" },
-	{ source = "../../assets/icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.hoangvu12.Kyoko.png", mode = "644" },
-]

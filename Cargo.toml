@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/*", "tools/*", "plugins/*"]
-default-members = ["crates/*", "apps/*", "tools/*"]
+members = ["crates/*", "apps/*", "tools/*"]
 
 [workspace.package]
 version = "0.2.0-beta.1"
@@ -17,15 +16,10 @@ gateway = { path = "crates/gateway", package = "kyoko-gateway" }
 state = { path = "crates/state", package = "kyoko-state" }
 store = { path = "crates/store", package = "kyoko-store" }
 markdown = { path = "crates/markdown", package = "kyoko-markdown" }
-plugin-host = { path = "crates/plugin-host", package = "kyoko-plugin-host" }
-plugin-sdk = { path = "crates/plugin-sdk", package = "kyoko-plugin-sdk" }
-ui = { path = "crates/ui", package = "kyoko-ui" }
 platform = { path = "crates/platform", package = "kyoko-platform" }
 media = { path = "crates/media", package = "kyoko-media" }
 session = { path = "crates/session", package = "kyoko-session" }
-voice = { path = "crates/voice", package = "kyoko-voice" }
 login = { path = "crates/login", package = "kyoko-login" }
-updater = { path = "crates/updater", package = "kyoko-updater" }
 mockcord = { path = "tools/mockcord" }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
@@ -34,7 +28,6 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-serde_repr = "0.1"
 rusqlite = { version = "0.40", features = ["bundled"] }
 keyring = "4.2"
 flate2 = "1.1"
@@ -68,11 +61,9 @@ lru = "0.19"
 base64 = "0.23"
 interprocess = { version = "2.4", features = ["tokio"] }
 notify-rust = "4.18"
-tray-icon = { version = "0.26", default-features = false, features = ["ksni"] }
+tray-icon = { version = "0.26", default-features = false }
 auto-launch = "0.6"
 arboard = "3.7"
-raw-window-handle = "0.6"
-rfd = "0.17"
 global-hotkey = "0.9"
 windows = { version = "0.62", features = [
 	"Win32_Foundation",
@@ -84,38 +75,14 @@ windows = { version = "0.62", features = [
 	"Wdk_System_SystemServices",
 ] }
 
-wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "runtime", "parallel-compilation", "std"] }
-wit-bindgen = "0.63"
-wasmtime-wasi = { version = "50", default-features = false, features = ["p2"] }
 toml = "1.1"
-semver = "1.0"
 ed25519-dalek = "3.0"
-zip = { version = "9.0", default-features = false, features = ["deflate-flate2"] }
 
-fluent-bundle = "0.16"
-fluent-langneg = "0.14"
-unic-langid = "0.9"
 clap = { version = "4.6", features = ["derive"] }
 embed-resource = "3.0"
 
-cpal = "0.18"
-opus = "0.4"
-rubato = "5.0"
 aes-gcm = { version = "0.11", features = ["hazmat"] }
 chacha20poly1305 = "0.11"
-nnnoiseless = { version = "0.5", default-features = false }
-openh264 = { version = "0.9", default-features = false, features = ["source"] }
-openmls = "0.9"
-openmls_rust_crypto = "0.6"
-openmls_basic_credential = "0.6"
-openmls_traits = "0.6"
-tls_codec = "0.5"
-hmac = "0.12"
-
-gpui = { package = "gpui-pre", version = "=0.3.9" }
-gpui-platform = { package = "gpui-pre-platform", version = "=0.3.9" }
-gpui-component = "0.8.0"
-gpui-kit-assets = "0.8.0"
 
 [profile.release]
 opt-level = 3
@@ -130,8 +97,3 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
-[patch.crates-io]
-gpui-pre = { git = "https://github.com/longbridge/gpui-fast", rev = "124f79b0f14c688ae87877e370c015a9dc9d7ce5" }
-gpui-pre-platform = { git = "https://github.com/longbridge/gpui-fast", rev = "124f79b0f14c688ae87877e370c015a9dc9d7ce5" }
-gpui-pre-macros = { git = "https://github.com/longbridge/gpui-fast", rev = "124f79b0f14c688ae87877e370c015a9dc9d7ce5" }
-gpui-pre-sum-tree = { git = "https://github.com/longbridge/gpui-fast", rev = "124f79b0f14c688ae87877e370c015a9dc9d7ce5" }

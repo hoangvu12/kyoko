@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, ensure};
 use mockcord::Fixtures;
 use protocol::{ChannelType, Message, Snowflake};
-use session::{Command, ScreenSource, ScreenTarget, ScreenTargetKind, VideoQuality};
+use session::Command;
 use state::{MemberListRow, State};
 
 use super::Harness;
@@ -11,8 +11,6 @@ const KICK_REASON: &str = "headless";
 const AUDIT_KICK: i64 = 20;
 const GROUP_MEMBERS: usize = 2;
 const MOCK_USER_ID: u64 = 100;
-const SHARE_WIDTH: u32 = 1280;
-const SHARE_HEIGHT: u32 = 720;
 const ARCHIVE_MINUTES: u32 = 60;
 const GIF_QUERY: &str = "cat";
 const STICKER_PACKS: usize = 3;
@@ -29,35 +27,6 @@ pub(super) struct TextOutcome {
 }
 
 impl Harness {
-	pub(super) async fn screen_share(&self) -> Result<bool> {
-		let target = ScreenSource::list()
-			.ok()
-			.and_then(|targets| targets.into_iter().next())
-			.unwrap_or_else(|| ScreenTarget {
-				kind: ScreenTargetKind::Monitor,
-				id: 0,
-				name: "headless".to_owned(),
-				width: SHARE_WIDTH,
-				height: SHARE_HEIGHT,
-				primary: true,
-			});
-		self.session.send(Command::StartScreenShare {
-			target,
-			quality: VideoQuality::default(),
-			with_audio: false,
-		});
-		self.until("the screen share to start", |state| {
-			state.voice().is_some_and(|voice| voice.screen_share.is_some())
-		})
-		.await?;
-		self.session.send(Command::StopScreenShare);
-		self.until("the screen share to stop", |state| {
-			state.voice().is_some_and(|voice| voice.screen_share.is_none())
-		})
-		.await?;
-		Ok(true)
-	}
-
 	pub(super) async fn text_features(
 		&self,
 		fixtures: &Fixtures,

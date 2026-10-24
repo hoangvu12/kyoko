@@ -1,7 +1,7 @@
 mod checks;
 mod headless;
-mod plugin;
 mod release;
+mod signing;
 mod theme;
 
 use std::process::ExitCode;
@@ -18,7 +18,6 @@ struct Cli {
 #[derive(Subcommand)]
 enum Task {
 	HeadlessRun(headless::Args),
-	Plugin(plugin::PluginArgs),
 	Release(release::ReleaseArgs),
 	Theme(theme::ThemeArgs),
 	FmtCheck,
@@ -30,7 +29,6 @@ fn main() -> ExitCode {
 	let cli = Cli::parse();
 	let outcome = match cli.task {
 		Task::HeadlessRun(args) => headless::run(args),
-		Task::Plugin(args) => plugin::run(args),
 		Task::Release(args) => release::run(args),
 		Task::Theme(args) => theme::run(args),
 		Task::FmtCheck => checks::fmt_check(),

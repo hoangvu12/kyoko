@@ -1,21 +1,21 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use ed25519_dalek::VerifyingKey;
-use plugin_host::MAX_PACKAGE_BYTES;
-use plugin_host::catalog::{
-	Catalog, CatalogEntry, ThemeCatalog, ThemeEntry, is_valid_theme_id, verify_catalog, verify_theme_catalog,
-};
+use ed25519_dalek::{Signature, VerifyingKey};
+use parking_lot::Mutex;
 use reqwest::{Client, Response, redirect};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt;
 
-pub(crate) const CATALOG_PUBLIC_KEY: Option<&str> = None;
+const CATALOG_PUBLIC_KEY: Option<&str> = None;
 
-const MAX_CATALOG_BYTES: usize = 4 * 1024 * 1024;
+const CATALOG_VERSION: u32 = 1;
+const MAX_THEME_ID_LEN: usize = 64;
 const MAX_THEME_CATALOG_BYTES: usize = 1024 * 1024;
 const MAX_THEME_BYTES: u64 = 256 * 1024;
 const MAX_SIGNATURE_BYTES: usize = 1024;
@@ -23,9 +23,100 @@ const MAX_REDIRECTS: usize = 3;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const SIGNATURE_SUFFIX: &str = ".sig";
 
-pub(crate) fn catalog_key() -> Option<VerifyingKey> {
+fn catalog_key() -> Option<VerifyingKey> {
 	let bytes: [u8; 32] = STANDARD.decode(CATALOG_PUBLIC_KEY?).ok()?.try_into().ok()?;
 	VerifyingKey::from_bytes(&bytes).ok()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ThemeEntry {
+	pub id: String,
+	pub name: String,
+	pub version: String,
+	#[serde(default)]
+	pub description: String,
+	#[serde(default)]
+	pub author: String,
+	pub url: String,
+	pub sha256: String,
+	pub length: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ThemeCatalog {
+	pub version: u32,
+	pub generated_at: String,
+	#[serde(deserialize_with = "lenient_theme_entries")]
+	pub themes: Vec<ThemeEntry>,
+}
+
+#[derive(Default)]
+pub(crate) struct ThemeCatalogs {
+	catalog: Mutex<Option<Arc<ThemeCatalog>>>,
+	error: Mutex<Option<String>>,
+}
+
+impl ThemeCatalogs {
+	pub(crate) fn catalog(&self) -> Option<Arc<ThemeCatalog>> {
+		self.catalog.lock().clone()
+	}
+
+	pub(crate) fn error(&self) -> Option<String> {
+		self.error.lock().clone()
+	}
+
+	pub(crate) fn record_fetch(&self, outcome: Result<ThemeCatalog>) {
+		match outcome {
+			Ok(catalog) => {
+				*self.catalog.lock() = Some(Arc::new(catalog));
+				*self.error.lock() = None;
+			}
+			Err(error) => self.record_error(Some(error)),
+		}
+	}
+
+	pub(crate) fn record_error(&self, error: Option<anyhow::Error>) {
+		*self.error.lock() = error.map(|error| format!("{error:#}"));
+	}
+}
+
+fn is_valid_theme_id(id: &str) -> bool {
+	(1..=MAX_THEME_ID_LEN).contains(&id.len())
+		&& id
+			.bytes()
+			.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn lenient_theme_entries<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ThemeEntry>, D::Error> {
+	let mut entries: Vec<ThemeEntry> = lenient_entries(deserializer)?;
+	entries.retain(|entry| is_valid_theme_id(&entry.id));
+	Ok(entries)
+}
+
+fn lenient_entries<'de, T: DeserializeOwned, D: Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<T>, D::Error> {
+	let raw = Vec::<serde_json::Value>::deserialize(deserializer)?;
+	Ok(raw
+		.into_iter()
+		.filter_map(|value| serde_json::from_value(value).ok())
+		.collect())
+}
+
+fn verify_signature(bytes: &[u8], signature_base64: &[u8], key: &VerifyingKey) -> Result<()> {
+	let raw = STANDARD
+		.decode(signature_base64.trim_ascii())
+		.context("signature is not base64")?;
+	let signature = Signature::from_slice(&raw).context("signature is not 64 bytes")?;
+	key.verify_strict(bytes, &signature)
+		.context("signature does not match the catalog")
+}
+
+fn verify_theme_catalog(bytes: &[u8], signature_base64: &[u8], key: &VerifyingKey) -> Result<ThemeCatalog> {
+	verify_signature(bytes, signature_base64, key)?;
+	let catalog: ThemeCatalog = serde_json::from_slice(bytes).context("catalog is not valid json")?;
+	ensure!(catalog.version == CATALOG_VERSION, "unsupported catalog version");
+	Ok(catalog)
 }
 
 fn client() -> Result<Client> {
@@ -68,19 +159,13 @@ async fn fetch_signed(url: &str, limit: usize) -> Result<(Vec<u8>, Vec<u8>)> {
 	Ok((bytes, signature))
 }
 
-pub(crate) async fn fetch_catalog(url: &str) -> Result<Catalog> {
-	let key = catalog_key().context("the catalog key is not configured")?;
-	let (bytes, signature) = fetch_signed(url, MAX_CATALOG_BYTES).await?;
-	Ok(verify_catalog(&bytes, &signature, &key)?)
-}
-
 pub(crate) async fn fetch_theme_catalog(url: &str) -> Result<ThemeCatalog> {
 	let key = catalog_key().context("the catalog key is not configured")?;
 	let (bytes, signature) = fetch_signed(url, MAX_THEME_CATALOG_BYTES).await?;
-	Ok(verify_theme_catalog(&bytes, &signature, &key)?)
+	verify_theme_catalog(&bytes, &signature, &key)
 }
 
-pub(crate) async fn download_theme(entry: &ThemeEntry) -> Result<Vec<u8>> {
+async fn download_theme(entry: &ThemeEntry) -> Result<Vec<u8>> {
 	ensure!(
 		entry.length > 0 && entry.length <= MAX_THEME_BYTES,
 		"catalog length for {} is out of range",
@@ -92,7 +177,7 @@ pub(crate) async fn download_theme(entry: &ThemeEntry) -> Result<Vec<u8>> {
 	Ok(bytes)
 }
 
-pub(crate) fn check_theme(entry: &ThemeEntry, bytes: &[u8]) -> Result<()> {
+fn check_theme(entry: &ThemeEntry, bytes: &[u8]) -> Result<()> {
 	ensure!(
 		bytes.len() as u64 == entry.length,
 		"download is {} bytes, the catalog says {}",
@@ -108,48 +193,27 @@ pub(crate) fn check_theme(entry: &ThemeEntry, bytes: &[u8]) -> Result<()> {
 	Ok(())
 }
 
-pub(crate) fn write_theme(themes_dir: &Path, entry: &ThemeEntry, bytes: &[u8]) -> Result<()> {
+fn write_theme(themes_dir: &Path, entry: &ThemeEntry, bytes: &[u8]) -> Result<()> {
 	ensure!(
 		is_valid_theme_id(&entry.id),
 		"theme id {:?} is not allowed",
 		entry.id
 	);
 	std::fs::create_dir_all(themes_dir).context("could not create the themes folder")?;
-	store::write_atomic(&themes_dir.join(format!("{}.json", entry.id)), bytes, false)
+	store::write_atomic(&themes_dir.join(format!("{}.json", entry.id)), bytes)
 		.context("could not write the theme")
 }
 
-pub(crate) async fn download_plugin(entry: &CatalogEntry, destination: &Path) -> Result<()> {
-	ensure!(
-		entry.length > 0 && entry.length <= MAX_PACKAGE_BYTES,
-		"catalog length for {} is out of range",
-		entry.id
-	);
-	let client = client()?;
-	let mut response = get(&client, &entry.url).await?;
-	let mut file = tokio::fs::File::create(destination)
+pub(crate) async fn install_theme(
+	catalog: Option<Arc<ThemeCatalog>>,
+	themes_dir: PathBuf,
+	id: &str,
+) -> Result<()> {
+	let entry = catalog
+		.and_then(|catalog| catalog.themes.iter().find(|entry| entry.id == id).cloned())
+		.context("theme is not in the catalog")?;
+	let bytes = download_theme(&entry).await?;
+	tokio::task::spawn_blocking(move || write_theme(&themes_dir, &entry, &bytes))
 		.await
-		.context("could not create the download file")?;
-	let mut hasher = Sha256::new();
-	let mut received: u64 = 0;
-	while let Some(chunk) = response.chunk().await.context("download interrupted")? {
-		received += chunk.len() as u64;
-		ensure!(
-			received <= entry.length,
-			"download is larger than the catalog says"
-		);
-		hasher.update(&chunk);
-		file.write_all(&chunk)
-			.await
-			.context("could not write the download")?;
-	}
-	file.flush().await.context("could not write the download")?;
-	if received != entry.length {
-		bail!("download is {received} bytes, the catalog says {}", entry.length);
-	}
-	ensure!(
-		hex::encode(hasher.finalize()).eq_ignore_ascii_case(&entry.sha256),
-		"download does not match the catalog hash"
-	);
-	Ok(())
+		.context("install task failed")?
 }

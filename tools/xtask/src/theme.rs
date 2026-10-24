@@ -6,7 +6,7 @@ use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::plugin::{SignArgs, sign};
+use crate::signing::{KeygenArgs, SignArgs, keygen, sign};
 
 const CATALOG_VERSION: u32 = 1;
 const MAX_ID_LENGTH: usize = 64;
@@ -21,6 +21,8 @@ pub struct ThemeArgs {
 enum ThemeCommand {
 	#[command(about = "Read every theme folder and write a catalog json")]
 	Catalog(CatalogArgs),
+	#[command(about = "Write an ed25519 key for signing catalogs")]
+	Keygen(KeygenArgs),
 	#[command(about = "Sign a catalog json with an ed25519 key")]
 	Sign(SignArgs),
 }
@@ -38,6 +40,7 @@ struct CatalogArgs {
 pub fn run(args: ThemeArgs) -> Result<()> {
 	match args.command {
 		ThemeCommand::Catalog(args) => catalog(&args),
+		ThemeCommand::Keygen(args) => keygen(&args),
 		ThemeCommand::Sign(args) => sign(&args),
 	}
 }
