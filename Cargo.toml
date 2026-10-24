@@ -21,6 +21,11 @@ media = { path = "crates/media", package = "kyoko-media" }
 session = { path = "crates/session", package = "kyoko-session" }
 login = { path = "crates/login", package = "kyoko-login" }
 mockcord = { path = "tools/mockcord" }
+bridge = { path = "crates/bridge", package = "kyoko-bridge" }
+
+zgui = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+zgui-desktop = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+zgui-script = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
@@ -83,6 +88,17 @@ embed-resource = "3.0"
 
 aes-gcm = { version = "0.11", features = ["hazmat"] }
 chacha20poly1305 = "0.11"
+
+[patch.crates-io]
+wgpu-hal = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+cosmic-text = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+taffy = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+accesskit_macos = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+accesskit_atspi_common = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+accesskit_unix = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+accesskit_windows = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+winit = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+mlua = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
 
 [profile.release]
 opt-level = 3

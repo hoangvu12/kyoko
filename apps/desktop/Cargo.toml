@@ -10,10 +10,13 @@ name = "kyoko"
 path = "src/main.rs"
 
 [dependencies]
+bridge.workspace = true
 session.workspace = true
 state.workspace = true
 store.workspace = true
 protocol.workspace = true
+rest.workspace = true
+gateway.workspace = true
 mockcord.workspace = true
 url.workspace = true
 tokio.workspace = true
@@ -21,7 +24,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+zgui.workspace = true
+zgui-desktop.workspace = true
+zgui-script.workspace = true
 
 [build-dependencies]
 embed-resource.workspace = true
-

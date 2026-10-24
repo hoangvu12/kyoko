@@ -1,0 +1,22 @@
+[package]
+name = "kyoko-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "bridge"
+
+[dependencies]
+protocol.workspace = true
+state.workspace = true
+session.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+mockcord.workspace = true
+store.workspace = true
+tokio.workspace = true
+url.workspace = true

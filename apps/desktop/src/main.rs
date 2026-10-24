@@ -1,26 +1,31 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod churn;
+mod ui;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
+use bridge::{Inbox, changes_notifier};
 use clap::Parser;
 use mockcord::{MockConfig, Server};
 use protocol::Token;
 use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
 use session::{Session, SessionConfig};
-use state::State;
-use store::{Paths, Store};
-use tokio::sync::Notify;
+use state::Changes;
+use store::{Paths, Settings, Store};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
 const MOCK_LOCALE: &str = "en-US";
-const SUMMARY_TIMEOUT: Duration = Duration::from_secs(30);
+const TOKEN_VARIABLE: &str = "KYOKO_TOKEN";
 
 #[derive(Parser)]
 #[command(name = "kyoko", version, about = "A native Discord client")]
 struct Cli {
-	#[arg(long, help = "Run headless against the in-process mock Discord server")]
+	#[arg(long, help = "Run against the in-process mock Discord server")]
 	mock: bool,
 	#[arg(
 		long,
@@ -40,6 +45,12 @@ struct Cli {
 	live_traffic: bool,
 	#[arg(
 		long,
+		value_name = "SECONDS",
+		help = "Create a channel or guild on the mock server every few seconds, used with --mock"
+	)]
+	churn: Option<u64>,
+	#[arg(
+		long,
 		value_name = "PATH",
 		help = "Store settings and cache under this directory instead of a scratch one"
 	)]
@@ -53,126 +64,138 @@ struct Cli {
 	log: String,
 }
 
-struct Summary {
-	guilds: usize,
-	channels: usize,
-	private_channels: usize,
-	unread_channels: usize,
+struct Backend {
+	rest_base: Url,
+	gateway_url: String,
+	token: Token,
+	identify: IdentifyProperties,
+	locale: String,
+	remember_account: bool,
 }
 
-impl Summary {
-	fn measure(state: &State) -> Self {
-		let mut summary = Self {
-			guilds: state.guilds().count(),
-			channels: 0,
-			private_channels: state.private_channels().count(),
-			unread_channels: 0,
-		};
-		let channels = state
-			.guilds()
-			.flat_map(|guild| guild.channels.values())
-			.chain(state.private_channels());
-		for channel in channels {
-			summary.channels += 1;
-			let read = state
-				.read_state(channel.id)
-				.and_then(|read_state| read_state.last_message_id);
-			if matches!((read, channel.last_message_id), (Some(read), Some(last)) if read < last) {
-				summary.unread_channels += 1;
-			}
+struct Scratch(Option<PathBuf>);
+
+impl Drop for Scratch {
+	fn drop(&mut self) {
+		if let Some(path) = self.0.take() {
+			let _ = std::fs::remove_dir_all(path);
 		}
-		summary
 	}
 }
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
 	init_tracing(&cli.log);
-	if !cli.mock {
-		println!("kyoko: the desktop UI is not built yet; run with --mock for a headless session");
-		return Ok(());
-	}
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	runtime.block_on(run_mock(cli))
-}
-
-async fn run_mock(cli: Cli) -> Result<()> {
-	let server = Server::start(MockConfig {
-		seed: cli.seed,
-		chaos: cli.chaos,
-		live_traffic: cli.live_traffic,
-		..MockConfig::default()
+	let (store, scratch) = open_store(cli.data_dir.clone())?;
+	let server = if cli.mock {
+		Some(Arc::new(
+			runtime
+				.block_on(Server::start(MockConfig {
+					seed: cli.seed,
+					chaos: cli.chaos,
+					live_traffic: cli.live_traffic,
+					..MockConfig::default()
+				}))
+				.context("start the mock server")?,
+		))
+	} else {
+		None
+	};
+	let backend = match &server {
+		Some(server) => mock_backend(server)?,
+		None => discord_backend(&store)?,
+	};
+	let churn = match (&server, cli.churn) {
+		(Some(server), Some(seconds)) => {
+			Some(runtime.spawn(churn::run(server.clone(), Duration::from_secs(seconds.max(1)))))
+		}
+		_ => None,
+	};
+	let inbox: Inbox<Changes> = Inbox::new();
+	let session = Session::start(SessionConfig {
+		store: Arc::new(store),
+		rest_base: backend.rest_base,
+		gateway_url: backend.gateway_url,
+		token: backend.token,
+		identify: backend.identify,
+		locale: backend.locale,
+		runtime: Some(runtime.handle().clone()),
+		notify: changes_notifier(inbox.clone()),
+		hooks: None,
+		gateway: Default::default(),
+		remember_account: backend.remember_account,
 	})
-	.await
-	.context("start the mock server")?;
-	let outcome = drive_session(&cli, &server).await;
-	server.shutdown().await;
+	.context("start the session")?;
+	let outcome = ui::run(session, inbox);
+	if let Some(churn) = churn {
+		churn.abort();
+	}
+	if let Some(server) = server {
+		runtime.block_on(async move {
+			if let Ok(server) = Arc::try_unwrap(server) {
+				server.shutdown().await;
+			}
+		});
+	}
+	drop(scratch);
 	outcome
 }
 
-async fn drive_session(cli: &Cli, server: &Server) -> Result<()> {
-	let store = Arc::new(open_store(cli.data_dir.clone())?);
-	let wake = Arc::new(Notify::new());
-	let notifier = wake.clone();
-	let session = Session::start(SessionConfig {
-		store,
+fn mock_backend(server: &Server) -> Result<Backend> {
+	Ok(Backend {
 		rest_base: Url::parse(server.rest_base_url()).context("mock rest url")?,
 		gateway_url: server.gateway_url().to_owned(),
 		token: Token::new(server.token()),
 		identify: IdentifyProperties::web_client(MOCK_LOCALE, FALLBACK_BUILD_NUMBER, CHROME_VERSION),
 		locale: MOCK_LOCALE.to_owned(),
-		runtime: Some(tokio::runtime::Handle::current()),
-		notify: Arc::new(move |_| notifier.notify_one()),
-		hooks: None,
-		gateway: Default::default(),
+		remember_account: true,
 	})
-	.context("start the session")?;
-	let state = session.state().clone();
-	let ready = tokio::time::timeout(SUMMARY_TIMEOUT, async {
-		loop {
-			let connected = {
-				let state = state.read();
-				state.current_user().is_some() && state.session().connected
-			};
-			if connected {
-				break;
-			}
-			wake.notified().await;
-		}
-	})
-	.await;
-	match ready {
-		Ok(()) => {
-			let summary = Summary::measure(&state.read());
-			tracing::info!(
-				guilds = summary.guilds,
-				channels = summary.channels,
-				private_channels = summary.private_channels,
-				unread_channels = summary.unread_channels,
-				"connected to the mock server, press Ctrl-C to stop"
-			);
-		}
-		Err(_) => tracing::warn!("the mock session did not become ready in time"),
-	}
-	let stopped = tokio::signal::ctrl_c().await;
-	tokio::task::spawn_blocking(move || session.shutdown())
-		.await
-		.context("session shutdown panicked")?;
-	stopped.context("wait for Ctrl-C")
 }
 
-fn open_store(data_dir: Option<PathBuf>) -> Result<Store> {
-	let root =
-		data_dir.unwrap_or_else(|| std::env::temp_dir().join(format!("kyoko-mock-{}", std::process::id())));
-	let store = Store::open(Paths::at(&root).context("prepare data directories")?).context("open store")?;
-	store
-		.update_settings(|settings| settings.storage.plaintext_token = true)
-		.context("configure the mock store")?;
-	Ok(store)
+fn discord_backend(store: &Store) -> Result<Backend> {
+	let token = std::env::var(TOKEN_VARIABLE)
+		.ok()
+		.map(|token| token.trim().to_owned())
+		.filter(|token| !token.is_empty());
+	let Some(token) = token else {
+		bail!("set {TOKEN_VARIABLE} to sign in, or run with --mock");
+	};
+	let settings = store.settings.read();
+	Ok(Backend {
+		rest_base: rest::RestConfig::default().base_url,
+		gateway_url: gateway::GatewayConfig::DEFAULT_GATEWAY_URL.to_owned(),
+		token: Token::new(token),
+		identify: IdentifyProperties::web_client(
+			&settings.locale,
+			settings.client.build_number,
+			&settings.client.chrome_version,
+		),
+		locale: settings.locale.clone(),
+		remember_account: false,
+	})
+}
+
+fn open_store(data_dir: Option<PathBuf>) -> Result<(Store, Scratch)> {
+	let (root, scratch) = match data_dir {
+		Some(path) => (path, Scratch(None)),
+		None => {
+			let path = std::env::temp_dir().join(format!("kyoko-scratch-{}", std::process::id()));
+			(path.clone(), Scratch(Some(path)))
+		}
+	};
+	let paths = Paths::at(&root).context("prepare data directories")?;
+	if scratch.0.is_some() {
+		let mut settings = Settings::load(&paths);
+		settings.storage.plaintext_token = true;
+		settings.save(&paths).context("configure the scratch store")?;
+	}
+	let store = Store::open(paths).context("open store")?;
+	Ok((store, scratch))
 }
 
 fn init_tracing(filter: &str) {

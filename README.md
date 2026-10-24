@@ -67,6 +67,7 @@ kyoko --mock
 | Flag | Effect |
 | --- | --- |
 | `--mock` | Run against a local fake Discord server. |
+| `--churn <seconds>` | With `--mock`, create a channel or server on the fake server every few seconds. |
 | `--data-dir <path>` | Keep settings, cache and logs under this folder, for example on a USB stick. |
 | `--log <filter>` | Log level, for example `debug`. Logs never contain the token or raw gateway payloads. |
 
@@ -90,7 +91,7 @@ cd kyoko
 cargo run --locked --release -p kyoko -- --mock
 ```
 
-The desktop UI is being rebuilt on zgui. Until it lands, `kyoko --mock` runs a headless session against the mock server and logs a short connect summary until Ctrl-C, and `kyoko` without `--mock` only prints a notice and exits. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
+The desktop UI is being rebuilt on zgui. For now the window shows the server list and the selected server's channels. `kyoko --mock` runs it against the mock server; `kyoko` without `--mock` signs in with the token in the `KYOKO_TOKEN` environment variable and keeps it in memory only. Without `--data-dir`, settings and cache go to a scratch folder that is deleted on exit. Debug builds reload the Luau interface in `apps/desktop/ui/` as you save it. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
 
 ## Disclaimer
 
