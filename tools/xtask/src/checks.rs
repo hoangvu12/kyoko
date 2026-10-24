@@ -23,6 +23,10 @@ pub fn lint() -> Result<()> {
 	cargo(&["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
 }
 
+pub fn test() -> Result<()> {
+	cargo(&["test", "-p", "kyoko-session", "-p", "mockcord"])
+}
+
 pub fn check_all() -> Result<()> {
 	fmt_check()?;
 	lint()?;

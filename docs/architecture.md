@@ -14,11 +14,13 @@ crates/media        image and animation decoding, texture cache
 crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes
 crates/login        token, QR and web login
 crates/platform     Windows tray, notifications, single instance, hotkeys, clipboard
-tools/mockcord      mock Discord REST and gateway server driven by fixtures
-tools/xtask         headless-run, theme catalog tooling, release notes
+tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
+tools/xtask         test, headless-run, theme catalog tooling, release notes
 ```
 
 Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `apps/desktop` depends on `session`, `state`, `store`, `protocol` and `mockcord`. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown` or `session` has a UI dependency.
+
+Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`.
 
 ## Session hooks
 

@@ -22,6 +22,7 @@ enum Task {
 	Theme(theme::ThemeArgs),
 	FmtCheck,
 	Lint,
+	Test,
 	CheckAll,
 }
 
@@ -33,6 +34,7 @@ fn main() -> ExitCode {
 		Task::Theme(args) => theme::run(args),
 		Task::FmtCheck => checks::fmt_check(),
 		Task::Lint => checks::lint(),
+		Task::Test => checks::test(),
 		Task::CheckAll => checks::check_all(),
 	};
 	match outcome {

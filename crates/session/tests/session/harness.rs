@@ -1,0 +1,198 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
+use chrono::DateTime;
+use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
+use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
+use protocol::{ChannelType, Snowflake, Token};
+use session::{Command, Session, SessionConfig, SessionHooks};
+use state::State;
+use store::{Paths, Store};
+use tokio::sync::Notify;
+use tokio::time::{Instant, timeout_at};
+use url::Url;
+
+pub const STEP_TIMEOUT: Duration = Duration::from_secs(15);
+pub const LOCALE: &str = "en-US";
+const FIXTURE_ANCHOR_MS: i64 = 1_767_225_600_000;
+
+pub struct Options {
+	name: &'static str,
+	mock: MockConfig,
+	hooks: Option<Arc<dyn SessionHooks>>,
+}
+
+impl Options {
+	pub fn new(name: &'static str) -> Self {
+		Self {
+			name,
+			mock: MockConfig {
+				record: true,
+				anchor: DateTime::from_timestamp_millis(FIXTURE_ANCHOR_MS),
+				..MockConfig::default()
+			},
+			hooks: None,
+		}
+	}
+
+	pub fn hooks(mut self, hooks: Arc<dyn SessionHooks>) -> Self {
+		self.hooks = Some(hooks);
+		self
+	}
+}
+
+pub struct Running {
+	server: Server,
+	mock: Control,
+	session: Option<Session>,
+	wake: Arc<Notify>,
+	scratch: PathBuf,
+}
+
+impl Running {
+	pub async fn start(name: &'static str) -> Running {
+		Self::start_with(Options::new(name)).await
+	}
+
+	pub async fn start_with(options: Options) -> Running {
+		let server = Server::start(options.mock).await.expect("mock server starts");
+		let mock = server.control();
+		let scratch =
+			std::env::temp_dir().join(format!("kyoko-session-{}-{}", options.name, std::process::id()));
+		let _ = std::fs::remove_dir_all(&scratch);
+		let store = Store::open(Paths::at(&scratch).expect("scratch paths")).expect("store opens");
+		store
+			.update_settings(|settings| settings.storage.plaintext_token = true)
+			.expect("settings save");
+		let wake = Arc::new(Notify::new());
+		let notifier = wake.clone();
+		let session = Session::start(SessionConfig {
+			store: Arc::new(store),
+			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
+			gateway_url: server.gateway_url().to_owned(),
+			token: Token::new(server.token()),
+			identify: IdentifyProperties::web_client(LOCALE, FALLBACK_BUILD_NUMBER, CHROME_VERSION),
+			locale: LOCALE.to_owned(),
+			runtime: None,
+			notify: Arc::new(move |_| notifier.notify_one()),
+			hooks: options.hooks,
+		})
+		.expect("session starts");
+		Running {
+			server,
+			mock,
+			session: Some(session),
+			wake,
+			scratch,
+		}
+	}
+
+	pub fn session(&self) -> &Session {
+		self.session.as_ref().expect("session is running")
+	}
+
+	pub fn mock(&self) -> &Control {
+		&self.mock
+	}
+
+	pub fn fixtures(&self) -> &Fixtures {
+		self.server.fixtures()
+	}
+
+	pub fn token(&self) -> &str {
+		self.server.token()
+	}
+
+	pub async fn until(&self, what: &str, ready: impl Fn(&State) -> bool) {
+		let deadline = Instant::now() + STEP_TIMEOUT;
+		loop {
+			if ready(&self.session().state().read()) {
+				return;
+			}
+			if timeout_at(deadline, self.wake.notified()).await.is_err() {
+				panic!("timed out waiting for {what}");
+			}
+		}
+	}
+
+	pub async fn until_wire<T>(&self, what: &str, found: impl FnMut(&Recording) -> Option<T>) -> T {
+		match self.mock.wait_for(STEP_TIMEOUT, found).await {
+			Some(value) => value,
+			None => panic!("timed out waiting on the wire for {what}"),
+		}
+	}
+
+	pub async fn connected(&self) {
+		self.until("the gateway to become ready", |state| {
+			state.current_user().is_some() && state.session().connected
+		})
+		.await;
+	}
+
+	pub async fn open_text_channel(&self) -> Snowflake {
+		self.connected().await;
+		let (guild_id, channel_id) = self
+			.session()
+			.state()
+			.read()
+			.guilds()
+			.find_map(|guild| {
+				guild
+					.channels
+					.values()
+					.find(|channel| channel.kind == ChannelType::GuildText)
+					.map(|channel| (guild.id, channel.id))
+			})
+			.expect("a text channel in the fixtures");
+		self.session().send(Command::SelectChannel {
+			guild_id: Some(guild_id),
+			channel_id,
+		});
+		self.until("the channel history to load", |state| {
+			state
+				.messages(channel_id)
+				.is_some_and(|cache| !cache.ordered.is_empty())
+		})
+		.await;
+		channel_id
+	}
+
+	pub async fn send_and_wait(&self, channel_id: Snowflake, sent: &str, echoed: &str) -> Snowflake {
+		self.session().send(Command::SendMessage {
+			channel_id,
+			content: sent.to_owned(),
+			reply_to: None,
+			files: Vec::new(),
+		});
+		self.until("the sent message to arrive", |state| {
+			state.messages(channel_id).is_some_and(|cache| {
+				cache.pending.is_empty() && cache.ordered.iter().any(|message| message.content == echoed)
+			})
+		})
+		.await;
+		self.session()
+			.state()
+			.read()
+			.messages(channel_id)
+			.and_then(|cache| {
+				cache
+					.ordered
+					.iter()
+					.rev()
+					.find(|message| message.content == echoed)
+					.map(|message| message.id)
+			})
+			.expect("the sent message is cached")
+	}
+
+	pub async fn stop(mut self) {
+		if let Some(session) = self.session.take() {
+			tokio::task::spawn_blocking(move || session.shutdown())
+				.await
+				.expect("session shuts down");
+		}
+		self.server.shutdown().await;
+		let _ = std::fs::remove_dir_all(&self.scratch);
+	}
+}

@@ -1,20 +1,12 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 
 use anyhow::{Result, bail};
-use mockcord::{MockConfig, Server};
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
-use protocol::{ChannelType, DispatchEvent, Snowflake, Token};
-use session::{Command, Session, SessionConfig, SessionHooks};
-use state::State;
-use store::{Paths, Store};
-use tokio::sync::Notify;
-use tokio::time::{Instant, timeout_at};
-use url::Url;
+use protocol::{DispatchEvent, Snowflake};
+use session::{Command, SessionHooks};
 
-const STEP_TIMEOUT: Duration = Duration::from_secs(15);
+use crate::harness::{Options, Running};
+
 const HOOK_NAME: &str = "test.rewriter";
 
 struct Rewriter;
@@ -62,135 +54,9 @@ impl SessionHooks for Broken {
 	}
 }
 
-struct Running {
-	server: Server,
-	session: Option<Session>,
-	wake: Arc<Notify>,
-	scratch: PathBuf,
-}
-
-impl Running {
-	async fn start(name: &str, hooks: Arc<dyn SessionHooks>) -> Running {
-		let server = Server::start(MockConfig::default())
-			.await
-			.expect("mock server starts");
-		let scratch = std::env::temp_dir().join(format!("kyoko-session-{name}-{}", std::process::id()));
-		let _ = std::fs::remove_dir_all(&scratch);
-		let store = Store::open(Paths::at(&scratch).expect("scratch paths")).expect("store opens");
-		store
-			.update_settings(|settings| settings.storage.plaintext_token = true)
-			.expect("settings save");
-		let wake = Arc::new(Notify::new());
-		let notifier = wake.clone();
-		let session = Session::start(SessionConfig {
-			store: Arc::new(store),
-			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
-			gateway_url: server.gateway_url().to_owned(),
-			token: Token::new(server.token()),
-			identify: IdentifyProperties::web_client("en-US", FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-			locale: "en-US".to_owned(),
-			runtime: None,
-			notify: Arc::new(move |_| notifier.notify_one()),
-			hooks: Some(hooks),
-		})
-		.expect("session starts");
-		Running {
-			server,
-			session: Some(session),
-			wake,
-			scratch,
-		}
-	}
-
-	fn session(&self) -> &Session {
-		self.session.as_ref().expect("session is running")
-	}
-
-	async fn until(&self, what: &str, ready: impl Fn(&State) -> bool) {
-		let deadline = Instant::now() + STEP_TIMEOUT;
-		loop {
-			if ready(&self.session().state().read()) {
-				return;
-			}
-			if timeout_at(deadline, self.wake.notified()).await.is_err() {
-				panic!("timed out waiting for {what}");
-			}
-		}
-	}
-
-	async fn open_text_channel(&self) -> Snowflake {
-		self.until("the gateway to become ready", |state| {
-			state.current_user().is_some() && state.session().connected
-		})
-		.await;
-		let (guild_id, channel_id) = self
-			.session()
-			.state()
-			.read()
-			.guilds()
-			.find_map(|guild| {
-				guild
-					.channels
-					.values()
-					.find(|channel| channel.kind == ChannelType::GuildText)
-					.map(|channel| (guild.id, channel.id))
-			})
-			.expect("a text channel in the fixtures");
-		self.session().send(Command::SelectChannel {
-			guild_id: Some(guild_id),
-			channel_id,
-		});
-		self.until("the channel history to load", |state| {
-			state
-				.messages(channel_id)
-				.is_some_and(|cache| !cache.ordered.is_empty())
-		})
-		.await;
-		channel_id
-	}
-
-	async fn send_and_wait(&self, channel_id: Snowflake, sent: &str, echoed: &str) -> Snowflake {
-		self.session().send(Command::SendMessage {
-			channel_id,
-			content: sent.to_owned(),
-			reply_to: None,
-			files: Vec::new(),
-		});
-		self.until("the sent message to arrive", |state| {
-			state.messages(channel_id).is_some_and(|cache| {
-				cache.pending.is_empty() && cache.ordered.iter().any(|message| message.content == echoed)
-			})
-		})
-		.await;
-		self.session()
-			.state()
-			.read()
-			.messages(channel_id)
-			.and_then(|cache| {
-				cache
-					.ordered
-					.iter()
-					.rev()
-					.find(|message| message.content == echoed)
-					.map(|message| message.id)
-			})
-			.expect("the sent message is cached")
-	}
-
-	async fn stop(mut self) {
-		if let Some(session) = self.session.take() {
-			tokio::task::spawn_blocking(move || session.shutdown())
-				.await
-				.expect("session shuts down");
-		}
-		self.server.shutdown().await;
-		let _ = std::fs::remove_dir_all(&self.scratch);
-	}
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn before_send_rewrites_the_outgoing_message() {
-	let running = Running::start("rewrite", Arc::new(Rewriter)).await;
+	let running = Running::start_with(Options::new("rewrite").hooks(Arc::new(Rewriter))).await;
 	let channel_id = running.open_text_channel().await;
 	let message_id = running
 		.send_and_wait(channel_id, "hooked message", "HOOKED MESSAGE")
@@ -205,7 +71,7 @@ async fn before_send_rewrites_the_outgoing_message() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn failing_hooks_never_stop_the_session() {
 	let broken = Arc::new(Broken::default());
-	let running = Running::start("broken", broken.clone()).await;
+	let running = Running::start_with(Options::new("broken").hooks(broken.clone())).await;
 	let channel_id = running.open_text_channel().await;
 	assert!(broken.dispatches.load(Ordering::Relaxed) > 0);
 	running.session().send(Command::Typing { channel_id });
