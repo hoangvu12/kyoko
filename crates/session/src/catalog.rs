@@ -13,7 +13,7 @@ use reqwest::{Client, Response, redirect};
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 
-pub(crate) const CATALOG_PUBLIC_KEY: &str = "GA7yuW3UjVN/kRI3EPirIoYzx9kGIhdLjagsxpcwPJY=";
+pub(crate) const CATALOG_PUBLIC_KEY: Option<&str> = None;
 
 const MAX_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 const MAX_THEME_CATALOG_BYTES: usize = 1024 * 1024;
@@ -24,7 +24,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const SIGNATURE_SUFFIX: &str = ".sig";
 
 pub(crate) fn catalog_key() -> Option<VerifyingKey> {
-	let bytes: [u8; 32] = STANDARD.decode(CATALOG_PUBLIC_KEY).ok()?.try_into().ok()?;
+	let bytes: [u8; 32] = STANDARD.decode(CATALOG_PUBLIC_KEY?).ok()?.try_into().ok()?;
 	VerifyingKey::from_bytes(&bytes).ok()
 }
 

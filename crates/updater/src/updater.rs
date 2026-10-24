@@ -88,7 +88,8 @@ pub struct Updater {
 
 impl Updater {
 	pub fn new(config: UpdaterConfig) -> Result<Self> {
-		Self::with_public_key(config, UPDATE_PUBLIC_KEY)
+		let public_key = UPDATE_PUBLIC_KEY.ok_or(UpdaterError::NoSigningKey)?;
+		Self::with_public_key(config, public_key)
 	}
 
 	pub fn with_public_key(config: UpdaterConfig, public_key: [u8; 32]) -> Result<Self> {

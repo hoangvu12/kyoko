@@ -14,6 +14,8 @@ pub enum UpdaterError {
 	MissingAsset(&'static str),
 	#[error("invalid release data: {0}")]
 	Invalid(String),
+	#[error("no update signing key is configured")]
+	NoSigningKey,
 	#[error("manifest signature is invalid")]
 	BadSignature,
 	#[error("sha256 mismatch")]
