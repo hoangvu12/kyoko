@@ -4,6 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use protocol::Snowflake;
+use serde_json::json;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -11,6 +13,7 @@ use tokio::task::JoinHandle;
 use crate::config::MockConfig;
 use crate::control::Control;
 use crate::fixtures::Fixtures;
+use crate::json::parse_id;
 use crate::rest;
 use crate::state::{Shared, Urls};
 use crate::traffic;
@@ -90,6 +93,19 @@ impl Server {
 
 	pub fn fixtures(&self) -> &Fixtures {
 		&self.shared.fixtures
+	}
+
+	pub fn create_guild(&self, name: &str) -> Option<Snowflake> {
+		let guild = self.shared.create_guild(&json!({ "name": name })).ok()?;
+		parse_id(&guild["id"]).map(Snowflake)
+	}
+
+	pub fn create_channel(&self, guild_id: Snowflake, name: &str) -> Option<Snowflake> {
+		let channel = self
+			.shared
+			.create_channel(guild_id.0, &json!({ "name": name, "type": 0 }))
+			.ok()?;
+		parse_id(&channel["id"]).map(Snowflake)
 	}
 
 	pub async fn shutdown(mut self) {
