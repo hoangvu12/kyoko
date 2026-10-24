@@ -4,10 +4,10 @@ Read `AGENTS.md` first. It holds the rules every change follows.
 
 ## Setup
 
-Rust 1.99 is pinned by `rust-toolchain.toml`. Windows needs the MSVC toolchain and cmake. Linux needs ALSA, xkbcommon, Wayland, X11, fontconfig, dbus, WebKitGTK 4.1 and GTK 3 development headers. macOS needs Xcode command line tools.
+Rust 1.99 is pinned by `rust-toolchain.toml`. Kyoko v1 builds on Windows only and needs the MSVC toolchain and cmake.
 
 ```bash
-cargo run -p oxidcord -- --mock
+cargo run -p kyoko -- --mock
 ```
 
 ## Before opening a pull request

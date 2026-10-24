@@ -1,11 +1,11 @@
-# Oxidcord contributor rules
+# Kyoko contributor rules
 
-Oxidcord is a native Discord client in Rust with a sandboxed plugin system. Read `docs/architecture.md` for the crate graph.
+Kyoko is a lightweight native Discord client for Windows: a Rust core with a zgui window, a Luau interface and sandboxed Luau plugins. Read `docs/architecture.md` for the crate graph.
 
 ## Hard rules
 
 - No code comments of any kind. Names and small functions carry the meaning. Docs live in `docs/`.
-- No unit tests unless a task explicitly asks for one. Verify by running the real thing: `cargo xtask headless-run --mock`, the desktop app, or the plugin conformance runner.
+- Behaviour tests at the session seam, the session driven against an in-process mockcord, are required. Other unit tests only when a task explicitly asks for one. Also verify by running the real thing: `cargo xtask headless-run --mock` or the desktop app.
 - No telemetry, analytics, crash upload, or remote logging. Never log the token, the Authorization header, or raw gateway payloads.
 - Everything from the network, a plugin, or disk is untrusted. Lenient decoding: unknown enum values become `Unknown(i64)`, extra fields are ignored, a bad element never fails the whole payload.
 - `protocol`, `rest`, `gateway`, `state`, `store`, `markdown` have no UI dependency and must build headless.
@@ -24,7 +24,7 @@ Subject under 60 characters, imperative, no period. Optional plain body. No emoj
 
 ## Research
 
-Background for the kyoko fork (zgui + Luau UI on oxidcord's core) lives in `docs/research/`. Start with `docs/research/README.md`.
+Background for kyoko (zgui + Luau UI on the forked core) lives in `docs/research/`. Start with `docs/research/README.md`.
 
 ## Agent skills
 
