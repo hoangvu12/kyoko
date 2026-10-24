@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Strip GPUI UI, voice, WASM plugins and updater)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] zgui is pinned to a recorded commit, and the workspace carries zgui's required crate patches
 - [ ] The desktop app opens a zgui window on Windows and hot-reloads its Luau scripts in development

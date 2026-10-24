@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Strip GPUI UI, voice, WASM plugins and updater)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Mockcord records the gateway frames and REST requests it receives (method, route, headers, body, timing), and tests can query them
 - [ ] Tests can inject 401, 403, 429 with retry-after, captcha errors, close codes, resume failures and late-arriving dispatches
