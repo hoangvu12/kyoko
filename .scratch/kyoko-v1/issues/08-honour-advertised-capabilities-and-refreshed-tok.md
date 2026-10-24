@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The advertised capability set contains only bits whose effects are implemented, guided by the spike findings
 - [ ] A refreshed token delivered on connect replaces the stored one
