@@ -38,6 +38,7 @@ pub(crate) async fn discover_build_number(identity: &ClientIdentity, store: &Arc
 		tracing::debug!("build number discovery failed, keeping the last known build");
 		return;
 	};
+	tracing::info!(build_number, "discovered the web client build number");
 	identity.set_build_number(build_number);
 	if store.settings.read().client.build_number == build_number {
 		return;

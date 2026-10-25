@@ -62,6 +62,12 @@ impl reqwest::cookie::CookieStore for CookieJar {
 		if cookies.is_empty() {
 			return;
 		}
+		let names = cookies
+			.iter()
+			.map(|cookie| cookie.name())
+			.collect::<Vec<_>>()
+			.join(",");
+		tracing::debug!(%names, host = url.host_str().unwrap_or_default(), "cookies set");
 		self.store.lock().store_response_cookies(cookies.into_iter(), url);
 		self.changed.notify_one();
 	}

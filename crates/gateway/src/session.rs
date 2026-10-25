@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::future::pending;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -433,6 +434,9 @@ impl Session {
 			self.seq = Some(seq);
 		}
 		let data = payload.d.as_deref().unwrap_or(RawValue::NULL);
+		if name == "READY" {
+			log_ready_shape(data);
+		}
 		if name == "READY"
 			&& let Some(token) = refreshed_token(data)
 		{
@@ -553,4 +557,13 @@ async fn until(deadline: Option<Instant>) {
 
 async fn stopped(shutdown: &mut watch::Receiver<bool>) {
 	let _ = shutdown.wait_for(|stop| *stop).await;
+}
+
+fn log_ready_shape(data: &RawValue) {
+	let Ok(fields) = serde_json::from_str::<BTreeMap<&str, &RawValue>>(data.get()) else {
+		return;
+	};
+	let keys = fields.keys().copied().collect::<Vec<_>>().join(",");
+	let version = fields.get("v").map(|value| value.get()).unwrap_or("none");
+	debug!(%keys, version, auth_token = fields.contains_key("auth_token"), "gateway ready shape");
 }
