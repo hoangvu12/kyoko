@@ -10,6 +10,7 @@ apps/desktop/src/
   theme.rs         oxidcord's theme tokens, theme files, zgx theme data
   fonts.rs         installed font families, picking the first of a font list
   frame.rs         the native window: maximized state, the exit waker
+  timeline/        the message timeline, a Rust view in the timeline slot (below)
 apps/desktop/ui/
   .luaurc          strict mode; aliases @components and @shell
   app.luau         the entry: requires the shell and returns its root
@@ -34,7 +35,7 @@ A screen or component is one module that returns a function building its node. U
 | Channel or DM sidebar, with the guild header | `channel_sidebar.luau` | `channel_sidebar_width` 240, top-left corner `radius_md`; hidden below 900 wide | 23, 24 |
 | User panel at the bottom of the sidebar | `user_panel.luau` | `user_panel_height` 52 | 30 |
 | Top bar: channel icon, name, topic, threads, notifications, pins, members, search, inbox, help | `top_bar.luau` | `top_bar_height` 48 with a 1-point bottom border | 20 (done); 31 search, 33 threads and pins, 35 notifications |
-| Timeline | `timeline.luau` | grows; reports its box as the timeline slot | 25 replaces it with the Rust view, 26 renders messages |
+| Timeline | `timeline.luau` (an empty box) and `src/timeline/` | grows; reports its box as the timeline slot | 25 (done); 26 rich content |
 | Composer | `composer.luau` | 44-point field, 16 sides, 24 below | 27 |
 | Member list | `member_list.luau` | `member_list_width` 240, `background_secondary`; shown at 1200 wide and up, toggled by the members button | 29 |
 
@@ -42,7 +43,19 @@ Overlays (menus, popovers, dialogs, toasts, the lightbox, settings) are added be
 
 ### The timeline slot
 
-zgx cannot place a Rust view inside a Luau tree, so the Rust root layout in `ui.rs` is an overlay: the Luau view fills the window, and a Rust view is absolutely positioned above it at the box the Luau timeline reports. `shell/timeline.luau` calls `actions.report_slot("timeline", element)` from `on_resize`. The host function `frame.slot` turns that into the `Slot` signal `timeline_slot` follows. Today the Rust slot is empty and lets the pointer through, and the spike's Luau message list shows beneath it. Ticket 25 puts the Rust timeline view in the slot and removes the Luau list.
+zgx cannot place a Rust view inside a Luau tree, so the Rust root layout in `ui.rs` is an overlay: the Luau view fills the window, and a Rust view is absolutely positioned above it at the box the Luau timeline reports. `shell/timeline.luau` is an empty box that calls `actions.report_slot("timeline", element)` from `on_resize`. The host function `frame.slot` turns that into the `Slot` signal `timeline_slot` follows, and tells the timeline its size. Because the Rust view sits above the whole Luau tree, a Luau overlay (menu, popover, dialog, lightbox) that covers the timeline's box is drawn under it: a ticket adding one either draws it in Rust above the slot or hides the slot while it is open.
+
+## The timeline
+
+`src/timeline/` is the message list. `bridge::Timeline` projects the open channel's `State::channel_rows` into keyed rows (`RowKey`: `Loading`, `Start`, `Day(date)`, `Unread`, `Message(id)`, `Pending(nonce)`) and publishes what changed since the last publish as a `bridge::Delta`: `reset` (a channel switch or a wholesale reload), `prepended` and `appended` counts, and `inserted`, `updated` and `removed` keys. `Link` hands the rows and the delta to `TimelineView::apply`; nothing goes through a shared value.
+
+- Rows: zgx's `measured_virtual_list` over the keys. Heights are kept by key across inserts and removals, rows not yet mounted take an estimate from their text (`rows::estimate`), and mounted rows are measured. Each key has a signal holding its `Row`, so an edit restyles one row. `rows::render` has one renderer per row kind (skeleton, welcome, day separator, unread marker, first message of a group, follow-up, system message); ticket 26 extends the message body there.
+- Follow: `VariableHeights::anchor_end` keeps a viewport resting at the end there when rows are added or measured. A channel switch scrolls to the end.
+- Anchoring: when the rows change and the reader is not at the bottom, the view remembers the first visible rows by key and their distance from the viewport top, and after the change sets the offset so the first of them that survived sits exactly where it was. zgx re-anchors only point height changes, so this covers prepends, inserts and removals above (`scroll::Anchor`).
+- Paging: within 14 rows of the top (or with fewer than 14 rows), while the channel has older history, the view sends `LoadOlder`; while the window is detached and the reader is at the bottom it sends `LoadNewer`. Each is sent once per edge message, again after 3 seconds (`scroll::Paging`); the session also drops a duplicate in-flight page.
+- Viewport: the first and last visible message ids and whether the reader is at the bottom (within 2 points) go to the session as `SetViewport`, at most once per 250 ms and only when they change (`scroll::Reporter`). The session decides acks from it; the timeline never acks.
+- Avatars: `timeline::Avatars` requests each author's avatar (`Circle`, 40 points) through the gallery and shows decoded images from `Link::show_image`. The avatars of the visible rows (and two rows either side) are merged with the user panel's avatar and the Luau `media.visible` set into one `Gallery::set_visible` call.
+- Text in the list is selectable and copies with Ctrl+C (`selectable`). Timestamps are local time, formatted as oxidcord does (`bridge::message_time`, `clock_text`, `day_label`).
 
 ## Theme
 
@@ -81,7 +94,7 @@ Names are `<area>.<name>` in snake case, with the area the region or service tha
 
 | Kind | Names |
 |---|---|
-| Shared values (Rust publishes, Luau reads) | `session.status`, `rail.guilds`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `timeline.messages`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
+| Shared values (Rust publishes, Luau reads) | `session.status`, `rail.guilds`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
 | Actions (`ui.action`, fire and forget) | `rail.select_guild`, `sidebar.select_channel`, `window.minimize`, `window.maximize`, `window.close`, `media.copy_image` |
 | Functions (`ui.call_sync`) | `media.visible`, `media.hover`, `media.reduced_motion`, `frame.slot` |
 

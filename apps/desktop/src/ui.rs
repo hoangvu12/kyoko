@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, OpenChannel, Sidebar, Timeline};
+use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, OpenChannel, Sidebar, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
@@ -21,6 +21,7 @@ use crate::capture::{self, Capture, Opening};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::theme::Catalog;
+use crate::timeline::TimelineView;
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
@@ -114,6 +115,7 @@ pub fn run(
 				.is_none()
 				.then(|| Integration::install(cx, &host, &link, desktop));
 			let slot = link.window.slot.clone();
+			let transcript = link.timeline_view.view();
 			cx.on_closed(move || {
 				frame::wake_until_loop_ends();
 				if let Some(integration) = integration {
@@ -127,7 +129,7 @@ pub fn run(
 					.w_full()
 					.h_full()
 					.child(host.view())
-					.child(timeline_slot(slot)),
+					.child(timeline_slot(slot, transcript)),
 			);
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
@@ -141,8 +143,8 @@ pub fn hand_over(app_id: &str) -> Result<()> {
 		.map_err(|error| anyhow!("the running kyoko did not answer: {error}"))
 }
 
-fn timeline_slot(slot: Signal<Slot>) -> View {
-	div().pointer_events(false).reactive_style(move || {
+fn timeline_slot(slot: Signal<Slot>, transcript: View) -> View {
+	div().child(transcript).reactive_style(move || {
 		let slot = slot.get();
 		Styles::new()
 			.absolute()
@@ -194,6 +196,8 @@ pub(crate) struct Link {
 	opening: Cell<Option<Opening>>,
 	sidebar: RefCell<Sidebar>,
 	timeline: RefCell<Timeline>,
+	timeline_view: Rc<TimelineView>,
+	luau_visible: RefCell<Vec<String>>,
 	guilds: Shared,
 	channels: Shared,
 	selected: Shared,
@@ -202,7 +206,6 @@ pub(crate) struct Link {
 	open_channel: Shared,
 	channel_name: Shared,
 	channel_topic: Shared,
-	messages: Shared,
 	avatar_ready: Shared,
 	avatar_name: Shared,
 	observer: RefCell<Option<Observer>>,
@@ -225,6 +228,7 @@ impl Link {
 		images
 			.gallery
 			.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
+		let timeline_view = TimelineView::new(&window.runtime, images.gallery.clone(), images.cdn.clone());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -238,6 +242,8 @@ impl Link {
 			opening: Cell::new(None),
 			sidebar: RefCell::new(Sidebar::default()),
 			timeline: RefCell::new(Timeline::default()),
+			timeline_view,
+			luau_visible: RefCell::new(Vec::new()),
 			guilds: host.shared("rail.guilds", Value::List(Rc::new([]))),
 			channels: host.shared("sidebar.channels", Value::List(Rc::new([]))),
 			selected: host.shared("sidebar.guild_id", ""),
@@ -246,7 +252,6 @@ impl Link {
 			open_channel: host.shared("timeline.channel_id", ""),
 			channel_name: host.shared("timeline.channel_name", ""),
 			channel_topic: host.shared("timeline.channel_topic", ""),
-			messages: host.shared("timeline.messages", Value::List(Rc::new([]))),
 			avatar_ready: host.shared("user.avatar_ready", false),
 			avatar_name: host.shared("user.avatar", ""),
 			maximized: host.shared("window.maximized", false),
@@ -266,10 +271,25 @@ impl Link {
 				link.select_channel(channel_id);
 			}
 		});
-		let gallery = link.images.gallery.clone();
+		let actions = Rc::downgrade(&link);
 		host.function("media.visible", move |names| {
-			gallery.set_visible(texts(&names));
+			if let Some(link) = actions.upgrade() {
+				*link.luau_visible.borrow_mut() = texts(&names).into_iter().map(str::to_owned).collect();
+				link.refresh_visible();
+			}
 			Value::Nil
+		});
+		let actions = Rc::downgrade(&link);
+		link.timeline_view.on_command(move |command| {
+			if let Some(link) = actions.upgrade() {
+				link.send(command);
+			}
+		});
+		let actions = Rc::downgrade(&link);
+		link.timeline_view.on_visible_changed(move |()| {
+			if let Some(link) = actions.upgrade() {
+				link.refresh_visible();
+			}
 		});
 		let gallery = link.images.gallery.clone();
 		host.function("media.hover", move |name| {
@@ -312,6 +332,7 @@ impl Link {
 				&& name == TIMELINE_SLOT
 			{
 				link.window.slot.set(slot);
+				link.timeline_view.resize(slot.width, slot.height);
 			}
 			Value::Nil
 		});
@@ -349,14 +370,21 @@ impl Link {
 		match update {
 			Update::Show { name, pixels } => {
 				match ImageData::new(pixels.width, pixels.height, pixels.rgba) {
-					Ok(image) => self.host.image(&name, Some(Arc::new(image))),
+					Ok(image) => {
+						let image = Arc::new(image);
+						self.timeline_view.show_image(&name, Some(image.clone()));
+						self.host.image(&name, Some(image));
+					}
 					Err(error) => tracing::warn!(error, "a decoded image was not usable"),
 				}
 				if self.avatar.borrow().as_ref() == Some(&name) {
 					self.avatar_shown();
 				}
 			}
-			Update::Clear { name } => self.host.image(&name, None),
+			Update::Clear { name } => {
+				self.timeline_view.show_image(&name, None);
+				self.host.image(&name, None);
+			}
 		}
 	}
 
@@ -443,14 +471,14 @@ impl Link {
 
 	fn settled(&self) -> bool {
 		self.opening.get().is_none()
-			&& !self.timeline.borrow().messages().is_empty()
+			&& self.timeline.borrow().messages().next().is_some()
+			&& self.timeline_view.settled()
 			&& self.avatar_shown.get()
 	}
 
 	fn publish(&self, changes: &Changes) -> Option<(Opening, OpenChannel)> {
 		let state = self.state()?;
 		let state = state.read();
-		let newest = self.timeline.borrow().messages().last().map(|message| message.id);
 		let refresh = self.sidebar.borrow_mut().apply(&state, changes);
 		let moved = refresh.selected && self.open_guild() != self.sidebar.borrow().selected();
 		let messages = if moved {
@@ -475,15 +503,6 @@ impl Link {
 				self.publish_timeline(&state);
 			}
 		});
-		if messages {
-			let timeline = self.timeline.borrow();
-			let appended = timeline
-				.messages()
-				.iter()
-				.filter(|message| newest.is_some_and(|newest| message.id > newest))
-				.count();
-			tracing::debug!(shown = timeline.messages().len(), appended, "timeline published");
-		}
 		let opening = self.opening.get()?;
 		if self.sidebar.borrow().guilds().is_empty() {
 			return None;
@@ -560,10 +579,10 @@ impl Link {
 		};
 		self.avatar_requested_at.set(Some(Instant::now()));
 		let name = self.images.gallery.request(request);
-		self.images.gallery.set_visible([name.as_str()]);
 		self.avatar_name.set(format!("host:{name}").as_str().into());
 		tracing::info!(scale, "avatar requested");
 		*self.avatar.borrow_mut() = Some(name);
+		self.refresh_visible();
 	}
 
 	fn scale_factor(&self) -> f64 {
@@ -612,8 +631,6 @@ impl Link {
 
 	fn publish_timeline(&self, state: &State) {
 		let timeline = self.timeline.borrow();
-		let items = timeline.messages().iter().map(message_value).collect();
-		self.messages.set(Value::List(items));
 		let open = timeline.open();
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
@@ -626,6 +643,32 @@ impl Link {
 			.and_then(|channel| channel.topic.as_deref())
 			.unwrap_or_default();
 		self.channel_topic.set(topic.into());
+		drop(timeline);
+		self.timeline_view.set_scale(self.scale_factor());
+		let delta = self.timeline.borrow_mut().take_delta();
+		if let Some(delta) = delta {
+			let timeline = self.timeline.borrow();
+			tracing::debug!(
+				reset = delta.reset,
+				prepended = delta.prepended,
+				appended = delta.appended,
+				rows = timeline.rows().len(),
+				"timeline rows published"
+			);
+			self.timeline_view.apply(&timeline, &delta, name);
+		}
+	}
+
+	fn refresh_visible(&self) {
+		let mut names: Vec<String> = self.luau_visible.borrow().clone();
+		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
+		names.extend(
+			self.timeline_view
+				.visible_images()
+				.iter()
+				.map(|name| name.to_string()),
+		);
+		self.images.gallery.set_visible(names.iter().map(String::as_str));
 	}
 
 	fn shutdown(&self) {
@@ -745,15 +788,6 @@ fn channel_value(channel: &ChannelEntry) -> Value {
 		("unread", channel.unread.into()),
 		("muted", channel.muted.into()),
 		("mentions", f64::from(channel.mentions).into()),
-	])
-}
-
-fn message_value(message: &MessageEntry) -> Value {
-	record([
-		("id", message.id.to_string().as_str().into()),
-		("author", message.author.as_str().into()),
-		("content", message.content.as_str().into()),
-		("timestamp", message.timestamp.as_str().into()),
 	])
 }
 

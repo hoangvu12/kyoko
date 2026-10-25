@@ -1,17 +1,170 @@
-use protocol::{Message, Snowflake};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+use chrono::{DateTime, NaiveDate, Utc};
+use protocol::{Message, MessageType, Snowflake};
 use session::Command;
-use state::{Changes, State};
+use state::{Changes, MessageRow, MessageView, RenderedMessage, State};
 
 use crate::sidebar::ChannelKind;
 
-pub const WINDOW: usize = 50;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum RowKey {
+	Loading,
+	Start,
+	Day(NaiveDate),
+	Unread,
+	Message(Snowflake),
+	Pending(String),
+}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Row {
+	Loading,
+	Start,
+	Day(NaiveDate),
+	Unread,
+	Message(Box<MessageEntry>),
+}
+
+#[derive(Debug, Clone)]
 pub struct MessageEntry {
 	pub id: Snowflake,
 	pub author: String,
+	pub author_color: Option<u32>,
 	pub content: String,
-	pub timestamp: String,
+	pub sent_at: DateTime<Utc>,
+	pub kind: MessageType,
+	pub grouped: bool,
+	pub edited: bool,
+	pub pending: bool,
+	pub failed: bool,
+	pub deleted: bool,
+	pub bot: bool,
+	pub message: Arc<Message>,
+	pub rendered: Option<Arc<RenderedMessage>>,
+}
+
+impl PartialEq for MessageEntry {
+	fn eq(&self, other: &Self) -> bool {
+		self.id == other.id
+			&& self.author == other.author
+			&& self.author_color == other.author_color
+			&& self.content == other.content
+			&& self.sent_at == other.sent_at
+			&& self.kind == other.kind
+			&& self.grouped == other.grouped
+			&& self.edited == other.edited
+			&& self.pending == other.pending
+			&& self.failed == other.failed
+			&& self.deleted == other.deleted
+			&& self.bot == other.bot
+			&& (Arc::ptr_eq(&self.message, &other.message) || self.message == other.message)
+			&& same_rendered(&self.rendered, &other.rendered)
+	}
+}
+
+fn same_rendered(left: &Option<Arc<RenderedMessage>>, right: &Option<Arc<RenderedMessage>>) -> bool {
+	match (left, right) {
+		(Some(left), Some(right)) => Arc::ptr_eq(left, right) || left == right,
+		(None, None) => true,
+		_ => false,
+	}
+}
+
+impl MessageEntry {
+	pub fn is_plain(&self) -> bool {
+		matches!(
+			self.kind,
+			MessageType::Default
+				| MessageType::Reply
+				| MessageType::ChatInputCommand
+				| MessageType::ContextMenuCommand
+				| MessageType::PollResult
+		)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineRow {
+	pub key: RowKey,
+	pub row: Row,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Delta {
+	pub reset: bool,
+	pub prepended: usize,
+	pub appended: usize,
+	pub inserted: Vec<RowKey>,
+	pub updated: Vec<RowKey>,
+	pub removed: Vec<RowKey>,
+}
+
+impl Delta {
+	pub fn is_empty(&self) -> bool {
+		!self.reset
+			&& self.prepended == 0
+			&& self.appended == 0
+			&& self.inserted.is_empty()
+			&& self.updated.is_empty()
+			&& self.removed.is_empty()
+	}
+
+	pub fn merge(&mut self, later: Delta) {
+		if later.reset {
+			*self = later;
+			return;
+		}
+		if self.reset {
+			return;
+		}
+		self.prepended += later.prepended;
+		self.appended += later.appended;
+		for (mine, theirs) in [
+			(&mut self.inserted, later.inserted),
+			(&mut self.updated, later.updated),
+			(&mut self.removed, later.removed),
+		] {
+			for key in theirs {
+				if !mine.contains(&key) {
+					mine.push(key);
+				}
+			}
+		}
+	}
+
+	fn between(old: &[TimelineRow], new: &[TimelineRow]) -> Delta {
+		let before: HashMap<&RowKey, &Row> = old.iter().map(|row| (&row.key, &row.row)).collect();
+		let after: HashSet<&RowKey> = new.iter().map(|row| &row.key).collect();
+		let common_message = |row: &&TimelineRow| {
+			matches!(row.key, RowKey::Message(_) | RowKey::Pending(_)) && before.contains_key(&row.key)
+		};
+		let first_common = new.iter().position(|row| common_message(&row));
+		let last_common = new.iter().rposition(|row| common_message(&row));
+		let (Some(first_common), Some(last_common)) = (first_common, last_common) else {
+			return Delta {
+				reset: true,
+				..Delta::default()
+			};
+		};
+		let mut delta = Delta::default();
+		for (index, row) in new.iter().enumerate() {
+			match before.get(&row.key) {
+				None if index < first_common => delta.prepended += 1,
+				None if index > last_common => delta.appended += 1,
+				None => delta.inserted.push(row.key.clone()),
+				Some(previous) if **previous != row.row => delta.updated.push(row.key.clone()),
+				Some(_) => {}
+			}
+		}
+		delta.removed = old
+			.iter()
+			.filter(|row| !after.contains(&row.key))
+			.map(|row| row.key.clone())
+			.collect();
+		delta
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +176,9 @@ pub struct OpenChannel {
 #[derive(Debug, Default)]
 pub struct Timeline {
 	open: Option<OpenChannel>,
-	messages: Vec<MessageEntry>,
+	rows: Vec<TimelineRow>,
+	detached: bool,
+	pending: Delta,
 }
 
 impl Timeline {
@@ -31,8 +186,28 @@ impl Timeline {
 		self.open
 	}
 
-	pub fn messages(&self) -> &[MessageEntry] {
-		&self.messages
+	pub fn rows(&self) -> &[TimelineRow] {
+		&self.rows
+	}
+
+	pub fn messages(&self) -> impl DoubleEndedIterator<Item = &MessageEntry> {
+		self.rows.iter().filter_map(|row| match &row.row {
+			Row::Message(entry) => Some(entry.as_ref()),
+			_ => None,
+		})
+	}
+
+	pub fn is_detached(&self) -> bool {
+		self.detached
+	}
+
+	pub fn has_older(&self) -> bool {
+		matches!(self.rows.first().map(|row| &row.row), Some(Row::Loading))
+	}
+
+	pub fn take_delta(&mut self) -> Option<Delta> {
+		let delta = std::mem::take(&mut self.pending);
+		(!delta.is_empty()).then_some(delta)
 	}
 
 	pub fn select(
@@ -46,13 +221,20 @@ impl Timeline {
 			return None;
 		}
 		self.open = Some(channel);
-		self.messages = entries(state, channel);
+		self.rows = rows(state, channel_id);
+		self.detached = detached(state, channel_id);
+		self.record_reset();
 		Some(Command::SelectChannel { guild_id, channel_id })
 	}
 
 	pub fn close(&mut self) -> bool {
-		self.open = None;
-		!std::mem::take(&mut self.messages).is_empty()
+		let was_open = self.open.take().is_some();
+		let had_rows = !std::mem::take(&mut self.rows).is_empty();
+		self.detached = false;
+		if was_open || had_rows {
+			self.record_reset();
+		}
+		had_rows
 	}
 
 	pub fn apply(&mut self, state: &State, changes: &Changes) -> bool {
@@ -64,63 +246,92 @@ impl Timeline {
 		}
 		if !changes.messages.contains(open.channel_id)
 			&& !changes.members.contains(open.guild_id.unwrap_or_default())
+			&& !changes.current_user
 		{
 			return false;
 		}
-		let fresh = entries(state, open);
-		if fresh == self.messages {
+		self.detached = detached(state, open.channel_id);
+		let fresh = rows(state, open.channel_id);
+		if fresh == self.rows {
 			return false;
 		}
-		self.messages = fresh;
+		let delta = Delta::between(&self.rows, &fresh);
+		self.rows = fresh;
+		self.pending.merge(delta);
 		true
+	}
+
+	fn record_reset(&mut self) {
+		self.pending = Delta {
+			reset: true,
+			..Delta::default()
+		};
 	}
 }
 
-fn entries(state: &State, open: OpenChannel) -> Vec<MessageEntry> {
-	let Some(cache) = state.messages(open.channel_id) else {
-		return Vec::new();
-	};
-	let skip = cache.ordered.len().saturating_sub(WINDOW);
-	cache
-		.ordered
-		.iter()
-		.skip(skip)
-		.map(|message| entry(state, open.guild_id, message))
+fn detached(state: &State, channel_id: Snowflake) -> bool {
+	state
+		.messages(channel_id)
+		.is_some_and(|cache| cache.is_detached())
+}
+
+fn rows(state: &State, channel_id: Snowflake) -> Vec<TimelineRow> {
+	state
+		.channel_rows(channel_id)
+		.into_iter()
+		.map(|row| match row {
+			MessageRow::Loading => TimelineRow {
+				key: RowKey::Loading,
+				row: Row::Loading,
+			},
+			MessageRow::HistoryStart => TimelineRow {
+				key: RowKey::Start,
+				row: Row::Start,
+			},
+			MessageRow::DaySeparator(day) => TimelineRow {
+				key: RowKey::Day(day),
+				row: Row::Day(day),
+			},
+			MessageRow::UnreadMarker => TimelineRow {
+				key: RowKey::Unread,
+				row: Row::Unread,
+			},
+			MessageRow::Message(view) => {
+				let entry = entry(*view);
+				TimelineRow {
+					key: message_key(&entry),
+					row: Row::Message(Box::new(entry)),
+				}
+			}
+		})
 		.collect()
 }
 
-fn entry(state: &State, guild_id: Option<Snowflake>, message: &Message) -> MessageEntry {
-	MessageEntry {
-		id: message.id,
-		author: author_name(state, guild_id, message),
-		content: message.content.clone(),
-		timestamp: message
-			.timestamp
-			.map(|at| at.format("%Y-%m-%d %H:%M").to_string())
-			.unwrap_or_default(),
+fn message_key(entry: &MessageEntry) -> RowKey {
+	match (&entry.message.nonce, entry.pending) {
+		(Some(nonce), true) => RowKey::Pending(nonce.0.clone()),
+		_ => RowKey::Message(entry.id),
 	}
 }
 
-fn author_name(state: &State, guild_id: Option<Snowflake>, message: &Message) -> String {
-	let nick = message
-		.member
-		.as_ref()
-		.and_then(|member| member.nick.as_deref())
-		.filter(|nick| !nick.is_empty());
-	if let Some(nick) = nick {
-		return nick.to_owned();
+fn entry(view: MessageView) -> MessageEntry {
+	let message = view.message;
+	MessageEntry {
+		id: message.id,
+		author: view.author_display,
+		author_color: view.author_color,
+		content: message.content.clone(),
+		sent_at: message.timestamp.unwrap_or_else(|| message.id.timestamp()),
+		kind: message.kind,
+		grouped: view.grouped_with_previous,
+		edited: message.edited_timestamp.is_some(),
+		pending: view.pending,
+		failed: view.failure.is_some(),
+		deleted: view.deleted.is_some(),
+		bot: message.author.bot == Some(true),
+		rendered: view.rendered,
+		message,
 	}
-	let known = state.display_name(guild_id, message.author.id);
-	if known != message.author.id.to_string() {
-		return known;
-	}
-	message
-		.author
-		.global_name
-		.as_deref()
-		.filter(|name| !name.is_empty())
-		.unwrap_or(&message.author.username)
-		.to_owned()
 }
 
 pub fn busiest_channel(state: &State) -> Option<OpenChannel> {

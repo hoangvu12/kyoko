@@ -30,6 +30,7 @@ pub const COLORS: &[(&str, &str)] = &[
 	("modifier_hover", "rgba(79, 84, 92, 0.16)"),
 	("modifier_selected", "rgba(79, 84, 92, 0.24)"),
 	("modifier_active", "rgba(79, 84, 92, 0.48)"),
+	("message_hover", "rgba(0, 0, 0, 0.06)"),
 	("text_normal", "#dbdee1"),
 	("text_muted", "#949ba4"),
 	("header_primary", "#f2f3f5"),

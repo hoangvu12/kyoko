@@ -1,6 +1,5 @@
 export type Guild = { id: string, name: string, initials: string, unread: boolean, mentions: number }
 export type Channel = { id: string, name: string, kind: string, unread: boolean, muted: boolean, mentions: number }
-export type Message = { id: string, author: string, content: string, timestamp: string }
 
 local M = {}
 
@@ -22,7 +21,6 @@ M.timeline = {
 	channel_id = ui.shared("timeline.channel_id", ""),
 	channel_name = ui.shared("timeline.channel_name", ""),
 	channel_topic = ui.shared("timeline.channel_topic", ""),
-	messages = ui.shared("timeline.messages", {} :: { Message }),
 }
 
 M.user = {

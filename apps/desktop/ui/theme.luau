@@ -13,6 +13,7 @@ M.color = {
 	modifier_hover = token("modifier_hover"),
 	modifier_selected = token("modifier_selected"),
 	modifier_active = token("modifier_active"),
+	message_hover = token("message_hover"),
 	text_normal = token("text_normal"),
 	text_muted = token("text_muted"),
 	header_primary = token("header_primary"),

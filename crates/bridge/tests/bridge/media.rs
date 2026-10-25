@@ -106,7 +106,7 @@ async fn open_first_channel(running: &mut Running) -> Snowflake {
 	running.session().send(command);
 	running
 		.until("the channel history to load", |view| {
-			!view.timeline.messages().is_empty()
+			view.timeline.messages().next().is_some()
 		})
 		.await;
 	channel_id
