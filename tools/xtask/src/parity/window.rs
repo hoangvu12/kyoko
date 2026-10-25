@@ -12,8 +12,8 @@ use windows::Win32::UI::HiDpi::{
 	DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-	EnumWindows, GetClientRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW,
-	SW_RESTORE, SetForegroundWindow, ShowWindow, WM_CLOSE,
+	EnumWindows, GetClientRect, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+	PostMessageW, SW_RESTORE, SetForegroundWindow, ShowWindow, WM_CLOSE,
 };
 use windows::core::BOOL;
 
@@ -45,8 +45,9 @@ pub fn capture(pid: u32, app: App) -> Result<RgbaImage> {
 	if (width, height) != (WIDTH as i32, HEIGHT as i32) {
 		eprintln!("{app}: the client area is {width}x{height}, not {WIDTH}x{HEIGHT}");
 	}
-	let printed = print(window, width, height)?;
+	let mut printed = print(window, width, height)?;
 	if !is_blank(&printed) {
+		overlay_popups(pid, window, &mut printed);
 		return Ok(printed);
 	}
 	let _ = unsafe { SetForegroundWindow(window) };
@@ -192,6 +193,41 @@ fn print(window: HWND, width: i32, height: i32) -> Result<RgbaImage> {
 		bail!("PrintWindow failed");
 	}
 	canvas.pixels(width, height)
+}
+
+fn overlay_popups(pid: u32, main: HWND, image: &mut RgbaImage) {
+	let mut origin = POINT::default();
+	let _ = unsafe { ClientToScreen(main, &mut origin) };
+	let popups = windows_of(pid)
+		.into_iter()
+		.filter(|window| *window != main && unsafe { IsWindowVisible(*window) }.as_bool());
+	for popup in popups {
+		let mut rect = RECT::default();
+		if unsafe { GetWindowRect(popup, &mut rect) }.is_err() {
+			continue;
+		}
+		let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
+		if width <= 0 || height <= 0 {
+			continue;
+		}
+		let Ok(pixels) = print(popup, width, height) else {
+			continue;
+		};
+		if is_blank(&pixels) {
+			continue;
+		}
+		let (left, top) = (rect.left - origin.x, rect.top - origin.y);
+		for (x, y, pixel) in pixels.enumerate_pixels() {
+			let (target_x, target_y) = (left + x as i32, top + y as i32);
+			if target_x >= 0
+				&& target_y >= 0
+				&& (target_x as u32) < image.width()
+				&& (target_y as u32) < image.height()
+			{
+				image.put_pixel(target_x as u32, target_y as u32, *pixel);
+			}
+		}
+	}
 }
 
 fn copy_from_screen(window: HWND, width: i32, height: i32) -> Result<RgbaImage> {
