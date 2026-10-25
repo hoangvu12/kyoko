@@ -1,5 +1,5 @@
-mod home;
 mod composer;
+mod home;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -544,6 +544,7 @@ impl Link {
 			}
 			capture::Screen::Composer | capture::Screen::ComposerReply => {
 				self.drive_composer(&capture.screen);
+				let started = Instant::now();
 				while !self.composer_settled(&capture.screen) && started.elapsed() < capture::LIMIT {
 					zgx::timer::sleep(capture::POLL).await;
 				}

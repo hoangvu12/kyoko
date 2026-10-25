@@ -425,7 +425,7 @@ impl Link {
 		if !changes.channel_lists.is_empty() || changes.private_channels {
 			self.composer
 				.placeholder
-				.set(bridge::placeholder(state, channel_id).as_str().into());
+				.set(self.composer_placeholder(state).as_str().into());
 		}
 	}
 
@@ -677,13 +677,9 @@ impl Link {
 		let composer = self.composer.composer.borrow();
 		let channel_id = composer.channel();
 		self.composer.open.set(channel_id.is_some().into());
-		self.composer.placeholder.set(
-			channel_id
-				.map(|channel_id| bridge::placeholder(state, channel_id))
-				.unwrap_or_default()
-				.as_str()
-				.into(),
-		);
+		self.composer
+			.placeholder
+			.set(self.composer_placeholder(state).as_str().into());
 		self.composer.limit.set((state.message_limit() as f64).into());
 		self.composer.editing.set(composer.editing().is_some().into());
 		self.composer.reply.set(match composer.reply() {
@@ -724,6 +720,15 @@ impl Link {
 		self.publish_composer_suggestions(state);
 		self.publish_composer_typing(state);
 		self.publish_composer_notice_with(state);
+	}
+
+	fn composer_placeholder(&self, state: &State) -> String {
+		let open = self.timeline.borrow().open();
+		match open {
+			Some(open) if open.guild_id.is_none() => format!("Message @{}", self.channel_title(state, open)),
+			Some(open) => bridge::placeholder(state, open.channel_id),
+			None => String::new(),
+		}
 	}
 
 	fn publish_composer_typing(&self, state: &State) {
