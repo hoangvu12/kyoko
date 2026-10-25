@@ -140,6 +140,10 @@ pub enum LocalEvent {
 		versions: Vec<(Snowflake, Vec<MessageVersion>)>,
 	},
 	ShowDeletedMessages(bool),
+	MediaRefreshed {
+		channel_id: Snowflake,
+		message: Box<Message>,
+	},
 }
 
 #[derive(Debug)]

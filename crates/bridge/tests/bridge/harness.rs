@@ -6,7 +6,7 @@ use bridge::{Inbox, Sidebar, Timeline, changes_notifier};
 use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
 use session::{Command, Session, SessionConfig};
-use state::Changes;
+use state::{Changes, State};
 use store::{Paths, Settings, Store};
 use tokio::time::{Instant, timeout_at};
 use url::Url;
@@ -29,9 +29,12 @@ pub struct Running {
 
 impl Running {
 	pub async fn start(name: &str) -> Running {
-		let server = Server::start(MockConfig::default())
-			.await
-			.expect("mock server starts");
+		let server = Server::start(MockConfig {
+			record: true,
+			..MockConfig::default()
+		})
+		.await
+		.expect("mock server starts");
 		let scratch = std::env::temp_dir().join(format!("kyoko-bridge-{name}-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
 		let paths = Paths::at(&scratch).expect("scratch paths");
@@ -93,6 +96,11 @@ impl Running {
 			self.view.sidebar.apply(&state, &changes);
 			self.view.timeline.apply(&state, &changes);
 		}
+	}
+
+	pub async fn until_state(&mut self, what: &str, ready: impl Fn(&State) -> bool) {
+		let state = self.session().state().clone();
+		self.until(what, move |_| ready(&state.read())).await;
 	}
 
 	pub fn select_guild(&mut self, guild_id: Snowflake) -> Option<Command> {

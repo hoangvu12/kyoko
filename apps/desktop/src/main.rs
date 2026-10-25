@@ -10,17 +10,17 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, bail};
 use bridge::{Inbox, changes_notifier};
 use clap::Parser;
-use media::{Limits, MediaFetcher, MediaService};
+use media::{Gallery, Limits, MediaService, Playback};
 use mockcord::{MockConfig, Server};
 use protocol::Token;
 use session::{Session, SessionConfig};
 use state::Changes;
-use store::{Paths, Settings, Store};
+use store::{AnimationPlayback, MediaSettings, Paths, Settings, Store};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
 const TOKEN_VARIABLE: &str = "KYOKO_TOKEN";
-const MEDIA_DIR: &str = "media";
+const MIB: usize = 1024 * 1024;
 
 #[derive(Parser)]
 #[command(name = "kyoko", version, about = "A native Discord client")]
@@ -134,7 +134,7 @@ fn main() -> Result<()> {
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	let (store, media_dir, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
+	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
 	let server = if cli.mock {
 		Some(Arc::new(
 			runtime
@@ -161,10 +161,14 @@ fn main() -> Result<()> {
 	};
 	let inbox: Inbox<Changes> = Inbox::new();
 	let identity = session::client_identity(&store);
-	let media = {
-		let _entered = runtime.enter();
-		media_service(&identity, backend.loopback_port, media_dir)?
-	};
+	let gallery = gallery(
+		&identity,
+		backend.loopback_port,
+		cache_dir,
+		&store.settings.read().media,
+		runtime.handle(),
+	)?;
+	let reduced_motion = store.settings.read().accessibility.reduced_motion;
 	let retention = session::Retention::for_settings(&store.settings.read().storage);
 	let session = Session::start(SessionConfig {
 		identity,
@@ -194,10 +198,10 @@ fn main() -> Result<()> {
 	let outcome = ui::run(
 		session,
 		inbox,
-		ui::Avatars {
-			media,
+		ui::Images {
+			gallery,
 			cdn: backend.cdn,
-			runtime: runtime.handle().clone(),
+			reduced_motion,
 		},
 		cli.open_busiest,
 		{
@@ -251,17 +255,23 @@ fn discord_backend() -> Result<Backend> {
 	})
 }
 
-fn media_service(
+fn gallery(
 	identity: &rest::ClientIdentity,
 	loopback_port: Option<u16>,
-	dir: PathBuf,
-) -> Result<MediaService> {
-	let mut fetcher = MediaFetcher::builder().user_agent(identity.fingerprint().user_agent());
-	if let Some(port) = loopback_port {
-		fetcher = fetcher.allow_loopback_http(port);
-	}
-	let fetcher = fetcher.build().context("build the media fetcher")?;
-	Ok(MediaService::new(fetcher, dir, Limits::default()))
+	cache_dir: PathBuf,
+	settings: &MediaSettings,
+	runtime: &tokio::runtime::Handle,
+) -> Result<Gallery> {
+	let fetcher =
+		bridge::media_fetcher(&identity.fingerprint(), loopback_port).context("build the media fetcher")?;
+	let loader = MediaService::new(fetcher, cache_dir, Limits::default());
+	let gallery = Gallery::with_budget(loader, runtime.clone(), settings.memory_mb.max(1) as usize * MIB);
+	gallery.set_playback(match settings.animation {
+		AnimationPlayback::OnHover => Playback::OnHover,
+		AnimationPlayback::Never => Playback::Never,
+		AnimationPlayback::Always | AnimationPlayback::Unknown => Playback::Always,
+	});
+	Ok(gallery)
 }
 
 fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, Scratch)> {
@@ -280,9 +290,9 @@ fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, 
 			.save(&paths)
 			.context("keep the store's secrets out of Credential Manager")?;
 	}
-	let media_dir = paths.cache_dir().join(MEDIA_DIR);
+	let cache_dir = paths.cache_dir().to_path_buf();
 	let store = Store::open(paths).context("open store")?;
-	Ok((store, media_dir, scratch))
+	Ok((store, cache_dir, scratch))
 }
 
 fn init_tracing(filter: &str) {

@@ -6,31 +6,30 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, OpenChannel, Sidebar, Timeline};
-use media::MediaService;
+use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::{Command, Session};
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
 use zgx::image::ImageData;
 use zgx::reactive::Runtime;
-use zgx_desktop::{Application, TaskSpawner, WindowInfo, WindowOptions};
+use zgx_desktop::{Application, WindowInfo, WindowOptions};
 use zgx_script::{ScriptHost, Shared, Value};
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const INITIALS: usize = 3;
 const AVATAR_POINTS: f64 = 32.;
-const AVATAR_IMAGE: &str = "avatar";
 
-pub struct Avatars {
-	pub media: MediaService,
+pub struct Images {
+	pub gallery: Gallery,
 	pub cdn: String,
-	pub runtime: tokio::runtime::Handle,
+	pub reduced_motion: bool,
 }
 
 pub fn run(
 	session: Session,
 	inbox: Inbox<Changes>,
-	avatars: Avatars,
+	images: Images,
 	open_busiest: bool,
 	after_close: impl Fn() + 'static,
 ) -> Result<()> {
@@ -47,13 +46,14 @@ pub fn run(
 			let host = ScriptHost::new(&cx.ui.runtime, script);
 			let window = Window {
 				runtime: cx.ui.runtime.clone(),
-				tasks: cx.tasks.clone(),
 				info: cx.window_info.clone(),
 			};
-			let link = Link::install(&host, window, session, inbox.clone(), avatars);
+			let link = Link::install(&host, window, session, inbox.clone(), images);
 			link.open_busiest.set(open_busiest);
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
+			let pictures = link.clone();
+			cx.tasks.spawn(async move { pictures.show_images().await });
 			if let Err(error) = host.reload() {
 				tracing::warn!(%error, "the interface script did not load");
 			}
@@ -77,7 +77,6 @@ fn ui_dir() -> PathBuf {
 
 struct Window {
 	runtime: Runtime,
-	tasks: TaskSpawner,
 	info: WindowInfo,
 }
 
@@ -86,8 +85,10 @@ struct Link {
 	host: ScriptHost,
 	session: RefCell<Option<Session>>,
 	inbox: Inbox<Changes>,
-	avatars: Avatars,
-	avatar_requested: Cell<bool>,
+	images: Images,
+	image_wakes: Inbox<()>,
+	avatar: RefCell<Option<ImageName>>,
+	avatar_requested_at: Cell<Option<Instant>>,
 	open_busiest: Cell<bool>,
 	sidebar: RefCell<Sidebar>,
 	timeline: RefCell<Timeline>,
@@ -100,6 +101,7 @@ struct Link {
 	channel_name: Shared,
 	messages: Shared,
 	avatar_ready: Shared,
+	avatar_name: Shared,
 }
 
 impl Link {
@@ -108,15 +110,24 @@ impl Link {
 		window: Window,
 		session: Session,
 		inbox: Inbox<Changes>,
-		avatars: Avatars,
+		images: Images,
 	) -> Rc<Link> {
+		let image_wakes = Inbox::new();
+		let wakes = image_wakes.clone();
+		images.gallery.set_waker(move || wakes.push(()));
+		let commander = session.commander();
+		images
+			.gallery
+			.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
 			session: RefCell::new(Some(session)),
 			inbox,
-			avatars,
-			avatar_requested: Cell::new(false),
+			images,
+			image_wakes,
+			avatar: RefCell::new(None),
+			avatar_requested_at: Cell::new(None),
 			open_busiest: Cell::new(false),
 			sidebar: RefCell::new(Sidebar::default()),
 			timeline: RefCell::new(Timeline::default()),
@@ -129,6 +140,7 @@ impl Link {
 			channel_name: host.shared("channel_name", ""),
 			messages: host.shared("messages", Value::List(Rc::new([]))),
 			avatar_ready: host.shared("avatar_ready", false),
+			avatar_name: host.shared("avatar", ""),
 		});
 		let actions = Rc::downgrade(&link);
 		host.action("select_guild", move |argument| {
@@ -142,7 +154,58 @@ impl Link {
 				link.select_channel(channel_id);
 			}
 		});
+		let gallery = link.images.gallery.clone();
+		host.function("media_visible", move |names| {
+			gallery.set_visible(texts(&names));
+			Value::Nil
+		});
+		let gallery = link.images.gallery.clone();
+		host.function("media_hover", move |name| {
+			gallery.set_hovered(text(&name).filter(|name| !name.is_empty()));
+			Value::Nil
+		});
+		let gallery = link.images.gallery.clone();
+		let reduced_setting = link.images.reduced_motion;
+		host.function("media_reduced_motion", move |system| {
+			gallery.set_reduced_motion(reduced_setting || matches!(system, Value::Bool(true)));
+			Value::Nil
+		});
+		link.images.gallery.set_reduced_motion(reduced_setting);
 		link
+	}
+
+	async fn show_images(self: Rc<Self>) {
+		while self.image_wakes.next().await.is_some() {
+			for update in self.images.gallery.drain(Instant::now()) {
+				self.show_image(update);
+			}
+		}
+	}
+
+	fn show_image(&self, update: Update) {
+		match update {
+			Update::Show { name, pixels } => {
+				match ImageData::new(pixels.width, pixels.height, pixels.rgba) {
+					Ok(image) => self.host.image(&name, Some(Arc::new(image))),
+					Err(error) => tracing::warn!(error, "a decoded image was not usable"),
+				}
+				if self.avatar.borrow().as_ref() == Some(&name) {
+					self.avatar_shown();
+				}
+			}
+			Update::Clear { name } => self.host.image(&name, None),
+		}
+	}
+
+	fn avatar_shown(&self) {
+		let Some(requested) = self.avatar_requested_at.take() else {
+			return;
+		};
+		self.avatar_ready.set(true.into());
+		tracing::info!(
+			elapsed_ms = requested.elapsed().as_millis() as u64,
+			"avatar decoded and handed to the window"
+		);
 	}
 
 	async fn drain(self: Rc<Self>) {
@@ -268,50 +331,22 @@ impl Link {
 	}
 
 	fn request_avatar(&self, state: &State) {
-		if self.avatar_requested.get() {
+		if self.avatar.borrow().is_some() {
 			return;
 		}
 		let Some(user) = state.current_user() else {
 			return;
 		};
-		let pixels = bridge::device_pixels(AVATAR_POINTS, self.scale_factor());
-		let Some(url) = bridge::avatar_url(&self.avatars.cdn, user, pixels) else {
+		let scale = self.scale_factor();
+		let Some(request) = bridge::avatar_request(&self.images.cdn, user, AVATAR_POINTS, scale, true) else {
 			return;
 		};
-		self.avatar_requested.set(true);
-		let media = self.avatars.media.clone();
-		let started = Instant::now();
-		let load = self
-			.avatars
-			.runtime
-			.spawn(async move { bridge::load_avatar(&media, &url, pixels).await });
-		let host = self.host.clone();
-		let ready = self.avatar_ready.clone();
-		self.window.tasks.spawn(async move {
-			let decoded = match load.await {
-				Ok(Ok(decoded)) => decoded,
-				Ok(Err(error)) => {
-					tracing::warn!(%error, "the avatar did not load");
-					return;
-				}
-				Err(error) => {
-					tracing::warn!(%error, "the avatar task failed");
-					return;
-				}
-			};
-			match ImageData::new(decoded.width, decoded.height, decoded.rgba) {
-				Ok(image) => {
-					host.image(AVATAR_IMAGE, Some(Arc::new(image)));
-					ready.set(true.into());
-					tracing::info!(
-						pixels,
-						elapsed_ms = started.elapsed().as_millis() as u64,
-						"avatar decoded and handed to the window"
-					);
-				}
-				Err(error) => tracing::warn!(error, "the avatar was not a usable image"),
-			}
-		});
+		self.avatar_requested_at.set(Some(Instant::now()));
+		let name = self.images.gallery.request(request);
+		self.images.gallery.set_visible([name.as_str()]);
+		self.avatar_name.set(format!("host:{name}").as_str().into());
+		tracing::info!(scale, "avatar requested");
+		*self.avatar.borrow_mut() = Some(name);
 	}
 
 	fn scale_factor(&self) -> f64 {
@@ -388,6 +423,20 @@ fn readable(kind: ChannelKind) -> bool {
 		kind,
 		ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Thread
 	)
+}
+
+fn text(value: &Value) -> Option<&str> {
+	match value {
+		Value::Str(text) => Some(text),
+		_ => None,
+	}
+}
+
+fn texts(value: &Value) -> Vec<&str> {
+	match value {
+		Value::List(items) => items.iter().filter_map(text).collect(),
+		other => text(other).into_iter().collect(),
+	}
 }
 
 fn snowflake(value: &Value) -> Option<Snowflake> {

@@ -26,9 +26,9 @@ pub use paths::Paths;
 pub use retention::{Pruned, Retention};
 pub use secrets::{Keyring, MemoryKeyring, SecretHealth, SystemKeyring, TokenBackend};
 pub use settings::{
-	AccessibilitySettings, AppearanceSettings, ChatSettings, ClientSettings, DeveloperSettings,
-	KeybindSettings, NotificationSettings, PluginSettings, Settings, StartupSettings, StorageSettings,
-	StreamerModeSettings, VoiceSettings, WindowSettings,
+	AccessibilitySettings, AnimationPlayback, AppearanceSettings, ChatSettings, ClientSettings,
+	DeveloperSettings, KeybindSettings, MediaSettings, NotificationSettings, PluginSettings, Settings,
+	StartupSettings, StorageSettings, StreamerModeSettings, VoiceSettings, WindowSettings,
 };
 pub use token::TokenStore;
 

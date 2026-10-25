@@ -602,6 +602,9 @@ impl State {
 				versions,
 			} => self.restore_kept(*channel_id, deleted, versions, &mut changes),
 			LocalEvent::ShowDeletedMessages(show) => self.show_deleted_changed(*show, &mut changes),
+			LocalEvent::MediaRefreshed { channel_id, message } => {
+				self.media_refreshed(*channel_id, message, &mut changes)
+			}
 		}
 		changes
 	}

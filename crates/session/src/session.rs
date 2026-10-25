@@ -23,6 +23,19 @@ const RUNTIME_WORKERS: usize = 4;
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(5);
 const RUNTIME_GRACE: Duration = Duration::from_secs(2);
 
+#[derive(Clone)]
+pub struct Commander {
+	commands: mpsc::Sender<Command>,
+}
+
+impl Commander {
+	pub fn send(&self, command: Command) {
+		if let Err(error) = self.commands.try_send(command) {
+			tracing::warn!(%error, "session command was not queued");
+		}
+	}
+}
+
 pub struct Session {
 	state: SharedState,
 	commands: mpsc::Sender<Command>,
@@ -128,8 +141,12 @@ impl Session {
 	}
 
 	pub fn send(&self, command: Command) {
-		if let Err(error) = self.commands.try_send(command) {
-			tracing::warn!(%error, "session command was not queued");
+		self.commander().send(command);
+	}
+
+	pub fn commander(&self) -> Commander {
+		Commander {
+			commands: self.commands.clone(),
 		}
 	}
 

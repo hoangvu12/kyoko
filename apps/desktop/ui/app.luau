@@ -9,6 +9,11 @@ local open_channel = ui.shared("open_channel", "")
 local channel_name = ui.shared("channel_name", "")
 local messages = ui.shared("messages", {} :: { Message })
 local avatar_ready = ui.shared("avatar_ready", false)
+local avatar = ui.shared("avatar", "")
+
+ui.effect(function()
+	ui.call_sync("media_reduced_motion", ui.prefers.reduced_motion:get())
+end)
 
 local palette = {
 	rail = "#1e1f22",
@@ -170,7 +175,19 @@ return ui.row {
 			items = "center",
 			bg = "#232428",
 			gap = 8,
-			ui.show(avatar_ready, ui.image { src = "host:avatar", w = 32, h = 32, rounded = 16 }),
+			ui.show(
+				avatar_ready,
+				ui.image {
+					src = function()
+						return avatar:get()
+					end,
+					w = 32,
+					h = 32,
+					on_hover = function(inside: boolean)
+						ui.call_sync("media_hover", if inside then string.sub(avatar:get(), 6) else "")
+					end,
+				}
+			),
 			ui.text { "{status}", text_size = 13, color = palette.muted, min_w = 0, truncate = true },
 		},
 	},

@@ -7,6 +7,7 @@ use protocol::{
 };
 use serde_json::{Value, json};
 
+use crate::cdn::{self, Signature};
 use crate::error::ApiError;
 use crate::fixtures::CURRENT_USER_ID;
 use crate::forward::snapshot_of;
@@ -31,6 +32,7 @@ pub struct Draft {
 	pub sticker_ids: Vec<Snowflake>,
 	pub descriptors: Vec<AttachmentDescriptor>,
 	pub files: Vec<UploadedFile>,
+	pub hosted: Option<Signature>,
 }
 
 impl Draft {
@@ -53,6 +55,7 @@ impl Draft {
 			sticker_ids: create.sticker_ids,
 			descriptors: create.attachments,
 			files,
+			hosted: None,
 		}
 	}
 }
@@ -151,13 +154,12 @@ impl Shared {
 		let mut attachments = Vec::with_capacity(draft.files.len());
 		for (index, file) in draft.files.iter().enumerate() {
 			let attachment_id = store.next_snowflake();
-			attachments.push(uploaded_attachment(
-				channel_id,
-				attachment_id,
-				index,
-				file,
-				&draft.descriptors,
-			));
+			let mut attachment =
+				uploaded_attachment(channel_id, attachment_id, index, file, &draft.descriptors);
+			if let Some(signature) = draft.hosted {
+				host_attachment(&mut attachment, &self.urls.origin, channel_id, signature);
+			}
+			attachments.push(attachment);
 		}
 		let mut message = Message {
 			id: Snowflake(id),
@@ -475,6 +477,16 @@ fn uploaded_attachment(
 		flags: Some(0),
 		..Attachment::default()
 	}
+}
+
+fn host_attachment(attachment: &mut Attachment, origin: &str, channel_id: u64, signature: Signature) {
+	let path = cdn::attachment_path(channel_id, attachment.id.0, &attachment.filename);
+	let url = format!("{origin}{path}?{}", cdn::signed_query(&path, signature));
+	let (width, height) = cdn::attachment_size();
+	attachment.url = Some(url.clone());
+	attachment.proxy_url = Some(url);
+	attachment.width = Some(i64::from(width));
+	attachment.height = Some(i64::from(height));
 }
 
 fn batched_reaction(single: &Value) -> Value {

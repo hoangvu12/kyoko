@@ -18,6 +18,6 @@ pub use hooks::SessionHooks;
 pub use identity::{client_identity, discord_build_source};
 pub use rest::RestTuning;
 pub use search::SearchResults;
-pub use session::Session;
+pub use session::{Commander, Session};
 pub use state::{CacheLimits, RiskyLock, RiskyReason, RiskyTarget, Viewport};
 pub use store::Retention;

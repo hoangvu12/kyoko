@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum MediaError {
 	#[error("fetch failed: {0}")]
 	Fetch(String),
+	#[error("the server answered {0}")]
+	Status(u16),
 	#[error("decode failed: {0}")]
 	Decode(String),
 	#[error("limit exceeded: {0}")]
@@ -30,6 +32,12 @@ impl From<image::ImageError> for MediaError {
 			image::ImageError::Limits(error) => Self::Limit(error.to_string()),
 			other => Self::Decode(other.to_string()),
 		}
+	}
+}
+
+impl MediaError {
+	pub fn is_gone(&self) -> bool {
+		matches!(self, Self::Status(403 | 404 | 410))
 	}
 }
 

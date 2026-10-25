@@ -39,6 +39,35 @@ impl RestRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct MediaRequest {
+	pub path: String,
+	pub query: Option<String>,
+	pub headers: Headers,
+	pub status: u16,
+	pub at: Instant,
+}
+
+impl MediaRequest {
+	pub fn header(&self, name: &str) -> Option<&str> {
+		find_header(&self.headers, name)
+	}
+
+	pub fn url(&self) -> String {
+		match &self.query {
+			Some(query) => format!("{}?{query}", self.path),
+			None => self.path.clone(),
+		}
+	}
+
+	pub fn param(&self, name: &str) -> Option<&str> {
+		self.query.as_deref()?.split('&').find_map(|pair| {
+			let (key, value) = pair.split_once('=')?;
+			(key == name).then_some(value)
+		})
+	}
+}
+
+#[derive(Debug, Clone)]
 pub struct GatewayConnection {
 	pub id: u64,
 	pub query: Option<String>,
@@ -79,6 +108,7 @@ pub struct Recording {
 	pub connections: Vec<GatewayConnection>,
 	pub frames: Vec<GatewayFrame>,
 	pub closes: Vec<GatewayClose>,
+	pub media: Vec<MediaRequest>,
 }
 
 impl Recording {
@@ -90,6 +120,12 @@ impl Recording {
 		self.requests
 			.iter()
 			.filter(move |request| request.is(method, pattern))
+	}
+
+	pub fn media_to<'a>(&'a self, prefix: &'a str) -> impl Iterator<Item = &'a MediaRequest> {
+		self.media
+			.iter()
+			.filter(move |request| request.path.starts_with(prefix))
 	}
 
 	pub fn frames_with(&self, opcode: Opcode) -> impl Iterator<Item = &GatewayFrame> {
@@ -139,6 +175,10 @@ impl Recorder {
 
 	pub fn request(&self, request: RestRequest) {
 		self.append(|log| log.requests.push(request));
+	}
+
+	pub fn media(&self, request: MediaRequest) {
+		self.append(|log| log.media.push(request));
 	}
 
 	pub fn connection(&self, connection: GatewayConnection) {

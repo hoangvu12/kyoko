@@ -36,6 +36,13 @@ impl From<i64> for StickerFormat {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Quality {
+	#[default]
+	Fitted,
+	Original,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProxyFormat {
 	Webp,
@@ -57,36 +64,47 @@ pub fn clamp_size(size: u32) -> u32 {
 	size.clamp(MIN_SIZE, MAX_SIZE).next_power_of_two()
 }
 
-fn is_animated(hash: &str) -> bool {
-	hash.starts_with("a_")
-}
-
-fn extension(hash: &str) -> &'static str {
-	if is_animated(hash) { "gif" } else { "webp" }
-}
-
-pub fn avatar_url(
-	user_id: u64,
-	avatar_hash: Option<&str>,
-	legacy_discriminator: Option<&str>,
-	size: u32,
-) -> String {
-	match avatar_hash {
-		Some(hash) => format!(
-			"{CDN}/avatars/{user_id}/{hash}.{}?size={}",
-			extension(hash),
-			clamp_size(size)
-		),
-		None => default_avatar_url(user_id, legacy_discriminator),
+pub fn device_pixels(points: f64, scale: f64) -> u32 {
+	let scale = if scale.is_finite() && scale > 0. {
+		scale
+	} else {
+		1.
+	};
+	let pixels = (points.max(0.) * scale).ceil();
+	if pixels >= f64::from(u32::MAX) {
+		u32::MAX
+	} else {
+		pixels as u32
 	}
 }
 
-pub fn still_avatar_url(cdn: &str, user_id: u64, hash: &str, size: u32) -> String {
+pub fn bucket(points: f64, scale: f64) -> u32 {
+	clamp_size(device_pixels(points, scale))
+}
+
+pub fn is_animated(hash: &str) -> bool {
+	hash.starts_with("a_")
+}
+
+fn webp(hash: &str, size: u32, animate: bool) -> String {
+	let animated = if animate && is_animated(hash) {
+		"&animated=true"
+	} else {
+		""
+	};
+	format!("{hash}.webp?size={}{animated}", clamp_size(size))
+}
+
+pub fn avatar_url(cdn: &str, user_id: u64, hash: &str, size: u32, animate: bool) -> String {
 	format!(
-		"{}/avatars/{user_id}/{hash}.webp?size={}",
+		"{}/avatars/{user_id}/{}",
 		cdn.trim_end_matches('/'),
-		clamp_size(size)
+		webp(hash, size, animate)
 	)
+}
+
+pub fn still_avatar_url(cdn: &str, user_id: u64, hash: &str, size: u32) -> String {
+	avatar_url(cdn, user_id, hash, size, false)
 }
 
 pub fn default_avatar_url(user_id: u64, legacy_discriminator: Option<&str>) -> String {
@@ -97,18 +115,19 @@ pub fn default_avatar_url(user_id: u64, legacy_discriminator: Option<&str>) -> S
 	format!("{CDN}/embed/avatars/{index}.png")
 }
 
-pub fn guild_icon_url(guild_id: u64, hash: &str, size: u32) -> String {
+pub fn guild_icon_url(cdn: &str, guild_id: u64, hash: &str, size: u32, animate: bool) -> String {
 	format!(
-		"{CDN}/icons/{guild_id}/{hash}.{}?size={}",
-		extension(hash),
-		clamp_size(size)
+		"{}/icons/{guild_id}/{}",
+		cdn.trim_end_matches('/'),
+		webp(hash, size, animate)
 	)
 }
 
-pub fn emoji_url(id: u64, animated: bool, size: u32) -> String {
-	let extension = if animated { "gif" } else { "webp" };
+pub fn emoji_url(cdn: &str, id: u64, animated: bool, size: u32) -> String {
+	let animated = if animated { "&animated=true" } else { "" };
 	format!(
-		"{CDN}/emojis/{id}.{extension}?size={}&quality=lossless",
+		"{}/emojis/{id}.webp?size={}&quality=lossless{animated}",
+		cdn.trim_end_matches('/'),
 		clamp_size(size)
 	)
 }
@@ -123,12 +142,8 @@ pub fn sticker_url(id: u64, format: StickerFormat) -> Option<String> {
 	}
 }
 
-pub fn banner_url(owner_id: u64, hash: &str, size: u32) -> String {
-	format!(
-		"{CDN}/banners/{owner_id}/{hash}.{}?size={}",
-		extension(hash),
-		clamp_size(size)
-	)
+pub fn banner_url(owner_id: u64, hash: &str, size: u32, animate: bool) -> String {
+	format!("{CDN}/banners/{owner_id}/{}", webp(hash, size, animate))
 }
 
 pub fn role_icon_url(role_id: u64, hash: &str, size: u32) -> String {
@@ -147,45 +162,87 @@ pub fn avatar_decoration_url(asset: &str, size: u32) -> String {
 	)
 }
 
-pub fn attachment_proxy(url: &str, width: u32, height: u32, format: ProxyFormat) -> String {
+pub fn fit(width: u32, height: u32, max_width: u32, max_height: u32) -> (u32, u32) {
+	if width == 0 || height == 0 || max_width == 0 || max_height == 0 {
+		return (max_width, max_height);
+	}
+	if width <= max_width && height <= max_height {
+		return (width, height);
+	}
+	let scale = (f64::from(max_width) / f64::from(width)).min(f64::from(max_height) / f64::from(height));
+	(
+		((f64::from(width) * scale).round() as u32).clamp(1, max_width),
+		((f64::from(height) * scale).round() as u32).clamp(1, max_height),
+	)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProxySize {
+	pub width: u32,
+	pub height: u32,
+	pub format: Option<ProxyFormat>,
+	pub animated: bool,
+}
+
+pub fn proxy_sized(url: &str, sized: ProxySize) -> String {
 	let Ok(mut parsed) = Url::parse(url) else {
 		return url.to_owned();
 	};
-	let host = parsed.host_str().unwrap_or_default().to_owned();
-	let rewritable = if host == CDN_HOST {
-		parsed.path().starts_with("/attachments/") && parsed.set_host(Some("media.discordapp.net")).is_ok()
-	} else {
-		PROXY_HOSTS.contains(&host.as_str())
-	};
-	if !rewritable {
-		return url.to_owned();
+	if parsed.host_str() == Some(CDN_HOST) && parsed.path().starts_with("/attachments/") {
+		let _ = parsed.set_host(Some(PROXY_HOSTS[0]));
 	}
 	let kept: Vec<(String, String)> = parsed
 		.query_pairs()
-		.filter(|(key, _)| !matches!(key.as_ref(), "width" | "height" | "format"))
+		.filter(|(key, _)| {
+			!key.is_empty()
+				&& !matches!(
+					key.as_ref(),
+					"width" | "height" | "format" | "quality" | "animated"
+				)
+		})
 		.map(|(key, value)| (key.into_owned(), value.into_owned()))
 		.collect();
 	{
 		let mut query = parsed.query_pairs_mut();
-		query
-			.clear()
-			.extend_pairs(kept)
-			.append_pair("format", format.as_str());
-		if width > 0 {
-			query.append_pair("width", &width.to_string());
+		query.clear().extend_pairs(kept);
+		if let Some(format) = sized.format {
+			query.append_pair("format", format.as_str());
+			if format == ProxyFormat::Webp {
+				query.append_pair("quality", "lossless");
+			}
 		}
-		if height > 0 {
-			query.append_pair("height", &height.to_string());
+		if sized.animated {
+			query.append_pair("animated", "true");
+		}
+		if sized.width > 0 {
+			query.append_pair("width", &sized.width.to_string());
+		}
+		if sized.height > 0 {
+			query.append_pair("height", &sized.height.to_string());
 		}
 	}
 	parsed.into()
 }
 
-pub fn guild_member_avatar_url(guild_id: u64, user_id: u64, hash: &str, size: u32) -> String {
+pub fn is_media_proxy(url: &str) -> bool {
+	Url::parse(url)
+		.ok()
+		.and_then(|parsed| parsed.host_str().map(|host| PROXY_HOSTS.contains(&host)))
+		.unwrap_or(false)
+}
+
+pub fn guild_member_avatar_url(
+	cdn: &str,
+	guild_id: u64,
+	user_id: u64,
+	hash: &str,
+	size: u32,
+	animate: bool,
+) -> String {
 	format!(
-		"{CDN}/guilds/{guild_id}/users/{user_id}/avatars/{hash}.{}?size={}",
-		extension(hash),
-		clamp_size(size)
+		"{}/guilds/{guild_id}/users/{user_id}/avatars/{}",
+		cdn.trim_end_matches('/'),
+		webp(hash, size, animate)
 	)
 }
 

@@ -23,6 +23,10 @@ pub enum Command {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 	},
+	RefreshMedia {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+	},
 	SetViewport {
 		channel_id: Snowflake,
 		viewport: Viewport,

@@ -6,7 +6,9 @@ use bytes::{Bytes, BytesMut};
 use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
 use parking_lot::Mutex;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
+use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::error::{MediaError, Result, redact_url};
@@ -26,6 +28,7 @@ const DEFAULT_USER_AGENT: &str = "Mozilla/5.0";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_REDIRECTS: usize = 5;
 const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
+pub const DEFAULT_CONCURRENCY: usize = 6;
 const HTTPS_PORT: u16 = 443;
 const LOOPBACK_HOST: &str = "127.0.0.1";
 
@@ -36,6 +39,8 @@ pub struct MediaFetcherBuilder {
 	max_bytes: usize,
 	loopback_port: Option<u16>,
 	user_agent: String,
+	headers: Vec<(String, String)>,
+	concurrency: usize,
 }
 
 impl MediaFetcherBuilder {
@@ -56,6 +61,23 @@ impl MediaFetcherBuilder {
 
 	pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
 		self.user_agent = user_agent.into();
+		self
+	}
+
+	pub fn headers<N, V>(mut self, headers: impl IntoIterator<Item = (N, V)>) -> Self
+	where
+		N: Into<String>,
+		V: Into<String>,
+	{
+		self.headers = headers
+			.into_iter()
+			.map(|(name, value)| (name.into(), value.into()))
+			.collect();
+		self
+	}
+
+	pub fn concurrency(mut self, requests: usize) -> Self {
+		self.concurrency = requests.max(1);
 		self
 	}
 
@@ -81,6 +103,7 @@ impl MediaFetcherBuilder {
 			.redirect(policy)
 			.referer(false)
 			.user_agent(self.user_agent)
+			.default_headers(header_map(&self.headers))
 			.build()
 			.map_err(|error| MediaError::Fetch(error.without_url().to_string()))?;
 		Ok(MediaFetcher {
@@ -89,6 +112,7 @@ impl MediaFetcherBuilder {
 				hosts,
 				max_bytes: self.max_bytes,
 				inflight: Mutex::new(HashMap::new()),
+				permits: Semaphore::new(self.concurrency),
 			}),
 		})
 	}
@@ -104,6 +128,7 @@ struct FetcherInner {
 	hosts: Arc<Allowed>,
 	max_bytes: usize,
 	inflight: Mutex<HashMap<String, SharedFetch>>,
+	permits: Semaphore,
 }
 
 impl MediaFetcher {
@@ -116,6 +141,8 @@ impl MediaFetcher {
 			max_bytes: DEFAULT_MAX_BYTES,
 			loopback_port: None,
 			user_agent: DEFAULT_USER_AGENT.to_owned(),
+			headers: Vec::new(),
+			concurrency: DEFAULT_CONCURRENCY,
 		}
 	}
 
@@ -160,6 +187,11 @@ impl FetcherInner {
 	}
 
 	async fn download(&self, url: Url) -> Result<Bytes> {
+		let _permit = self
+			.permits
+			.acquire()
+			.await
+			.map_err(|_| MediaError::Fetch("the fetcher closed".to_owned()))?;
 		let shown = redact_url(url.as_str()).to_owned();
 		let mut response = self
 			.client
@@ -168,10 +200,7 @@ impl FetcherInner {
 			.await
 			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_url())))?;
 		if !response.status().is_success() {
-			return Err(MediaError::Fetch(format!(
-				"{shown}: status {}",
-				response.status()
-			)));
+			return Err(MediaError::Status(response.status().as_u16()));
 		}
 		let cap = self.max_bytes;
 		let declared = response
@@ -193,6 +222,18 @@ impl FetcherInner {
 		}
 		Ok(body.freeze())
 	}
+}
+
+fn header_map(headers: &[(String, String)]) -> HeaderMap {
+	headers
+		.iter()
+		.filter_map(|(name, value)| {
+			Some((
+				HeaderName::from_bytes(name.as_bytes()).ok()?,
+				HeaderValue::from_str(value).ok()?,
+			))
+		})
+		.collect()
 }
 
 struct Allowed {

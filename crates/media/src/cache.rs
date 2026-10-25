@@ -1,23 +1,15 @@
-use std::borrow::Cow;
-use std::collections::hash_map::DefaultHasher;
 use std::fs::{self, OpenOptions};
-use std::hash::{Hash, Hasher};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use bytes::Bytes;
-use lru::LruCache;
 use sha2::{Digest, Sha256};
 
 use crate::error::Result;
-use crate::types::Decoded;
+use crate::signed::unsigned;
 
-pub const DEFAULT_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
-
-const SIGNATURE_PARAMS: [&str; 3] = ["ex", "is", "hm"];
 const SHARD_LEN: usize = 2;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -45,85 +37,6 @@ impl SizeHint {
 	pub fn is_original(self) -> bool {
 		self.width == 0 || self.height == 0
 	}
-}
-
-struct MemoryEntry {
-	url: Box<str>,
-	hint: SizeHint,
-	value: Arc<Decoded>,
-	bytes: usize,
-}
-
-pub struct MemoryCache {
-	entries: LruCache<u64, MemoryEntry>,
-	bytes: usize,
-	limit: usize,
-}
-
-impl MemoryCache {
-	pub fn new(limit_bytes: usize) -> Self {
-		Self {
-			entries: LruCache::unbounded(),
-			bytes: 0,
-			limit: limit_bytes,
-		}
-	}
-
-	pub fn get(&mut self, url: &str, hint: SizeHint) -> Option<Arc<Decoded>> {
-		let entry = self.entries.get(&memory_key(url, hint))?;
-		(&*entry.url == url && entry.hint == hint).then(|| entry.value.clone())
-	}
-
-	pub fn insert(&mut self, url: &str, hint: SizeHint, value: Arc<Decoded>) {
-		let bytes = value.byte_len();
-		if bytes > self.limit {
-			return;
-		}
-		let entry = MemoryEntry {
-			url: url.into(),
-			hint,
-			value,
-			bytes,
-		};
-		if let Some(replaced) = self.entries.put(memory_key(url, hint), entry) {
-			self.bytes -= replaced.bytes;
-		}
-		self.bytes += bytes;
-		self.evict();
-	}
-
-	pub fn set_limit(&mut self, limit_bytes: usize) {
-		self.limit = limit_bytes;
-		self.evict();
-	}
-
-	pub fn len(&self) -> usize {
-		self.entries.len()
-	}
-
-	pub fn is_empty(&self) -> bool {
-		self.entries.is_empty()
-	}
-
-	pub fn bytes(&self) -> usize {
-		self.bytes
-	}
-
-	fn evict(&mut self) {
-		while self.bytes > self.limit {
-			let Some((_, evicted)) = self.entries.pop_lru() else {
-				break;
-			};
-			self.bytes -= evicted.bytes;
-		}
-	}
-}
-
-pub(crate) fn memory_key(url: &str, hint: SizeHint) -> u64 {
-	let mut hasher = DefaultHasher::new();
-	url.hash(&mut hasher);
-	hint.hash(&mut hasher);
-	hasher.finish()
 }
 
 pub struct DiskCache {
@@ -207,26 +120,7 @@ impl DiskCache {
 	}
 
 	fn path_for(&self, url: &str) -> PathBuf {
-		let digest = hex::encode(Sha256::digest(canonical_url(url).as_bytes()));
+		let digest = hex::encode(Sha256::digest(unsigned(url).as_bytes()));
 		self.root.join(&digest[..SHARD_LEN]).join(digest)
-	}
-}
-
-fn canonical_url(url: &str) -> Cow<'_, str> {
-	let Some((base, rest)) = url.split_once('?') else {
-		return Cow::Borrowed(url);
-	};
-	let query = rest.split('#').next().unwrap_or_default();
-	let kept: Vec<&str> = query
-		.split('&')
-		.filter(|pair| {
-			let name = pair.split('=').next().unwrap_or_default();
-			!SIGNATURE_PARAMS.contains(&name)
-		})
-		.collect();
-	if kept.is_empty() {
-		Cow::Borrowed(base)
-	} else {
-		Cow::Owned(format!("{base}?{}", kept.join("&")))
 	}
 }

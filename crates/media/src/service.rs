@@ -1,24 +1,38 @@
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use parking_lot::{Mutex, RwLock};
-use tokio::runtime::Handle;
+use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
-use crate::cache::{DEFAULT_MEMORY_LIMIT_BYTES, DiskCache, MemoryCache, SizeHint, memory_key};
+use crate::cache::{DiskCache, SizeHint};
 use crate::decode::{Limits, decode};
 use crate::error::{MediaError, Result, redact_url};
 use crate::fetch::MediaFetcher;
 use crate::resize::resize_decoded;
+use crate::shape::Shape;
 use crate::types::Decoded;
 
+pub const DEFAULT_DECODE_WORKERS: usize = 2;
 const SHRINK_THRESHOLD: u32 = 2;
-const FAILURE_RETRY_DELAY: Duration = Duration::from_secs(60);
 
-type ReadyCallback = Arc<dyn Fn() + Send + Sync>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Variant {
+	pub hint: SizeHint,
+	pub shape: Shape,
+}
+
+impl Variant {
+	pub const fn new(hint: SizeHint, shape: Shape) -> Self {
+		Self { hint, shape }
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+	Anywhere,
+	DiskOnly,
+}
 
 #[derive(Clone)]
 pub struct MediaService {
@@ -28,99 +42,81 @@ pub struct MediaService {
 struct ServiceInner {
 	fetcher: MediaFetcher,
 	disk: Arc<DiskCache>,
-	memory: Mutex<MemoryCache>,
 	limits: Limits,
-	pending: Mutex<HashSet<u64>>,
-	failed: Mutex<HashMap<u64, Instant>>,
-	on_ready: RwLock<Option<ReadyCallback>>,
-	runtime: Handle,
+	decoders: Semaphore,
 }
 
 impl MediaService {
 	pub fn new(fetcher: MediaFetcher, disk_dir: impl Into<PathBuf>, limits: Limits) -> Self {
+		Self::with_decoders(fetcher, disk_dir, limits, DEFAULT_DECODE_WORKERS)
+	}
+
+	pub fn with_decoders(
+		fetcher: MediaFetcher,
+		disk_dir: impl Into<PathBuf>,
+		limits: Limits,
+		workers: usize,
+	) -> Self {
 		Self {
 			inner: Arc::new(ServiceInner {
 				fetcher,
 				disk: Arc::new(DiskCache::new(disk_dir.into())),
-				memory: Mutex::new(MemoryCache::new(DEFAULT_MEMORY_LIMIT_BYTES)),
 				limits,
-				pending: Mutex::new(HashSet::new()),
-				failed: Mutex::new(HashMap::new()),
-				on_ready: RwLock::new(None),
-				runtime: Handle::current(),
+				decoders: Semaphore::new(workers.max(1)),
 			}),
 		}
-	}
-
-	pub fn set_memory_limit(&self, limit_bytes: usize) {
-		self.inner.memory.lock().set_limit(limit_bytes);
-	}
-
-	pub fn set_on_ready(&self, callback: impl Fn() + Send + Sync + 'static) {
-		*self.inner.on_ready.write() = Some(Arc::new(callback));
 	}
 
 	pub fn disk(&self) -> &DiskCache {
 		&self.inner.disk
 	}
 
-	pub fn peek(&self, url: &str, hint: SizeHint) -> Option<Arc<Decoded>> {
-		self.inner.memory.lock().get(url, hint)
+	pub async fn load(&self, url: &str, hint: SizeHint) -> Result<Decoded> {
+		self.load_variant(url, Variant::new(hint, Shape::Square), Source::Anywhere)
+			.await?
+			.ok_or_else(|| MediaError::Fetch(format!("{} was not loaded", redact_url(url))))
 	}
 
-	pub fn request(&self, url: &str, hint: SizeHint) {
-		if self.peek(url, hint).is_some() {
-			return;
-		}
-		let key = memory_key(url, hint);
-		if self.recently_failed(key) || !self.inner.pending.lock().insert(key) {
-			return;
-		}
-		let service = self.clone();
-		let url = url.to_owned();
-		self.inner.runtime.spawn(async move {
-			match service.load(&url, hint).await {
-				Ok(_) => service.notify_ready(),
-				Err(error) => {
-					tracing::debug!(url = redact_url(&url), %error, "media load failed");
-					service.inner.failed.lock().insert(key, Instant::now());
-				}
-			}
-			service.inner.pending.lock().remove(&key);
-		});
-	}
-
-	pub async fn load(&self, url: &str, hint: SizeHint) -> Result<Arc<Decoded>> {
-		if let Some(hit) = self.peek(url, hint) {
-			return Ok(hit);
-		}
-		let (bytes, from_disk) = self.raw_bytes(url).await?;
-		let limits = self.inner.limits.clone();
-		let source = bytes.clone();
-		let decoded =
-			spawn_blocking(move || decode(&source, &limits).map(|decoded| shrink_to_hint(decoded, hint)))
-				.await
-				.map_err(|error| MediaError::Decode(format!("decode task failed: {error}")))??;
+	pub async fn load_variant(&self, url: &str, variant: Variant, source: Source) -> Result<Option<Decoded>> {
+		let (bytes, from_disk) = match (self.cached_bytes(url).await, source) {
+			(Some(bytes), _) => (bytes, true),
+			(None, Source::DiskOnly) => return Ok(None),
+			(None, Source::Anywhere) => (self.inner.fetcher.fetch(url).await?, false),
+		};
+		let decoded = self.decode(bytes.clone(), variant).await?;
 		if !from_disk {
 			self.store_on_disk(url, bytes).await;
 		}
-		let decoded = Arc::new(decoded);
-		self.inner.memory.lock().insert(url, hint, decoded.clone());
-		Ok(decoded)
+		Ok(Some(decoded))
 	}
 
-	async fn raw_bytes(&self, url: &str) -> Result<(Bytes, bool)> {
+	async fn decode(&self, bytes: Bytes, variant: Variant) -> Result<Decoded> {
+		let _permit = self
+			.inner
+			.decoders
+			.acquire()
+			.await
+			.map_err(|_| MediaError::Decode("the decoders closed".to_owned()))?;
+		let limits = self.inner.limits.clone();
+		spawn_blocking(move || {
+			decode(&bytes, &limits).map(|decoded| {
+				let mut decoded = shrink_to_hint(decoded, variant.hint);
+				variant.shape.apply(&mut decoded);
+				decoded
+			})
+		})
+		.await
+		.map_err(|error| MediaError::Decode(format!("decode task failed: {error}")))?
+	}
+
+	async fn cached_bytes(&self, url: &str) -> Option<Bytes> {
 		let disk = self.inner.disk.clone();
 		let owned = url.to_owned();
-		let cached = spawn_blocking(move || disk.get(&owned))
+		spawn_blocking(move || disk.get(&owned))
 			.await
 			.ok()
 			.and_then(|result| result.ok())
-			.flatten();
-		match cached {
-			Some(bytes) => Ok((bytes, true)),
-			None => Ok((self.inner.fetcher.fetch(url).await?, false)),
-		}
+			.flatten()
 	}
 
 	async fn store_on_disk(&self, url: &str, bytes: Bytes) {
@@ -131,25 +127,6 @@ impl MediaService {
 			tracing::debug!(url = redact_url(url), %error, "media disk write failed");
 		}
 	}
-
-	fn recently_failed(&self, key: u64) -> bool {
-		let mut failed = self.inner.failed.lock();
-		match failed.get(&key) {
-			Some(at) if at.elapsed() < FAILURE_RETRY_DELAY => true,
-			Some(_) => {
-				failed.remove(&key);
-				false
-			}
-			None => false,
-		}
-	}
-
-	fn notify_ready(&self) {
-		let callback = self.inner.on_ready.read().clone();
-		if let Some(callback) = callback {
-			callback();
-		}
-	}
 }
 
 fn shrink_to_hint(decoded: Decoded, hint: SizeHint) -> Decoded {
@@ -157,7 +134,9 @@ fn shrink_to_hint(decoded: Decoded, hint: SizeHint) -> Decoded {
 		return decoded;
 	}
 	let (width, height) = decoded.dimensions();
-	if width > hint.width * SHRINK_THRESHOLD || height > hint.height * SHRINK_THRESHOLD {
+	if width > hint.width.saturating_mul(SHRINK_THRESHOLD)
+		|| height > hint.height.saturating_mul(SHRINK_THRESHOLD)
+	{
 		resize_decoded(decoded, hint.width, hint.height)
 	} else {
 		decoded

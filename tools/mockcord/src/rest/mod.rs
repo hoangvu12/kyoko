@@ -21,10 +21,11 @@ use chrono::Utc;
 use protocol::RateLimitBody;
 use rand::Rng;
 
+use crate::cdn;
 use crate::error::ApiError;
 use crate::gateway;
 use crate::media;
-use crate::record::{RestRequest, header_pairs};
+use crate::record::{MediaRequest, RestRequest, header_pairs};
 use crate::state::{RateLimitSnapshot, Shared};
 use crate::web;
 
@@ -165,7 +166,12 @@ pub fn router(shared: Arc<Shared>) -> Router {
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))
 		.route("/media/{name}", get(media::media))
-		.route("/cdn/avatars/{user_id}/{file}", get(media::avatar))
+		.route("/cdn/avatars/{user_id}/{file}", get(cdn::avatar))
+		.route("/cdn/emojis/{file}", get(cdn::emoji))
+		.route(
+			"/cdn/attachments/{channel_id}/{attachment_id}/{file}",
+			get(cdn::attachment),
+		)
 		.route("/app", get(web::app))
 		.route("/assets/{name}", get(web::asset))
 		.nest("/api/v9", api.clone())
@@ -188,7 +194,7 @@ fn api_path(path: &str) -> Option<(u32, &str)> {
 async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next) -> Response {
 	let at = Instant::now();
 	let Some((version, path)) = api_path(request.uri().path()) else {
-		return next.run(request).await;
+		return observe_media(&shared, request, next, at).await;
 	};
 	let path = path.to_owned();
 	let method = request.method().as_str().to_owned();
@@ -220,6 +226,24 @@ async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next
 		body: body.to_vec(),
 		status: response.status().as_u16(),
 		injected: was_injected,
+		at,
+	});
+	response
+}
+
+async fn observe_media(shared: &Shared, request: Request, next: Next, at: Instant) -> Response {
+	let path = request.uri().path().to_owned();
+	if !shared.recorder.enabled() || !path.starts_with("/cdn/") {
+		return next.run(request).await;
+	}
+	let query = request.uri().query().map(str::to_owned);
+	let headers = header_pairs(request.headers());
+	let response = next.run(request).await;
+	shared.recorder.media(MediaRequest {
+		path,
+		query,
+		headers,
+		status: response.status().as_u16(),
 		at,
 	});
 	response

@@ -18,6 +18,7 @@ const FAILURE_PAUSE: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Target {
 	Message(Snowflake),
+	Media(Snowflake),
 	User(Snowflake),
 }
 
@@ -65,7 +66,7 @@ fn classify(error: &RestError) -> Outcome {
 
 async fn fetch(rest: RestClient, job: Job) -> Outcome {
 	match job.target {
-		Target::Message(message_id) => {
+		Target::Message(message_id) | Target::Media(message_id) => {
 			let query = MessagesQuery {
 				around: Some(message_id),
 				limit: Some(1),
@@ -78,7 +79,7 @@ async fn fetch(rest: RestClient, job: Job) -> Outcome {
 					.find(|message| message.id == message_id)
 					.map_or(Outcome::Gone, |message| Outcome::Message(Box::new(message))),
 				Err(error) => {
-					tracing::debug!(%error, "referenced message was not fetched");
+					tracing::debug!(%error, "message was not fetched");
 					classify(&error)
 				}
 			}
@@ -104,6 +105,7 @@ fn still_needed(state: &State, job: &Job) -> bool {
 					.messages(job.channel_id)
 					.is_some_and(|cache| cache.by_id.contains_key(&message_id))
 		}
+		Target::Media(message_id) => state.holds_message(job.channel_id, message_id),
 		Target::User(user_id) => state.user(user_id).is_none(),
 	}
 }
@@ -329,6 +331,18 @@ impl Core {
 		self.run_backfill(now);
 	}
 
+	pub(super) fn refresh_media(&mut self, channel_id: Snowflake, message_id: Snowflake) {
+		let now = Instant::now();
+		self.backfill.want(
+			Job {
+				channel_id,
+				target: Target::Media(message_id),
+			},
+			now,
+		);
+		self.run_backfill(now);
+	}
+
 	pub(super) fn backfill_opened(&mut self, channel_id: Snowflake) {
 		self.backfill.keep_channel(channel_id);
 		self.backfill_channel(channel_id, None);
@@ -393,6 +407,9 @@ impl Core {
 					message_id,
 					message: None,
 				});
+			}
+			(Target::Media(_), Outcome::Message(message)) => {
+				self.apply_local(LocalEvent::MediaRefreshed { channel_id, message });
 			}
 			(Target::User(_), Outcome::User(user)) => {
 				self.apply_local(LocalEvent::UserFetched { channel_id, user });

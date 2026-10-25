@@ -11,6 +11,7 @@ use protocol::{ChannelType, EditMessage, Snowflake};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::cdn;
 use crate::error::{ApiError, ApiResult};
 use crate::fixtures::CURRENT_USER_ID;
 use crate::json::{message_id, parse_id, to_json};
@@ -97,11 +98,14 @@ pub async fn list_messages(
 ) -> ApiResult {
 	let store = shared.store.lock();
 	require_channel(&store, id)?;
-	let messages = store
+	let mut messages = store
 		.messages
 		.get(&id)
 		.map(|messages| page(messages, &params))
 		.unwrap_or_default();
+	for message in &mut messages {
+		cdn::resign(&shared.urls.origin, message);
+	}
 	Ok(Json(Value::Array(messages)))
 }
 

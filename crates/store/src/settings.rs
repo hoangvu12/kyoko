@@ -30,6 +30,7 @@ pub struct Settings {
 	pub streamer_mode: StreamerModeSettings,
 	pub accessibility: AccessibilitySettings,
 	pub chat: ChatSettings,
+	pub media: MediaSettings,
 	pub client: ClientSettings,
 	pub safety_locks: bool,
 }
@@ -74,6 +75,35 @@ pub struct ChatSettings {
 	pub show_reactions: bool,
 	pub time_24h: bool,
 	pub emoji_autocomplete: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnimationPlayback {
+	#[default]
+	Always,
+	OnHover,
+	Never,
+	#[serde(other)]
+	Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MediaSettings {
+	pub animation: AnimationPlayback,
+	pub original_resolution: bool,
+	pub memory_mb: u32,
+}
+
+impl Default for MediaSettings {
+	fn default() -> Self {
+		Self {
+			animation: AnimationPlayback::Always,
+			original_resolution: false,
+			memory_mb: 128,
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -186,6 +216,7 @@ impl Default for Settings {
 			streamer_mode: StreamerModeSettings::default(),
 			accessibility: AccessibilitySettings::default(),
 			chat: ChatSettings::default(),
+			media: MediaSettings::default(),
 			client: ClientSettings::default(),
 			safety_locks: true,
 		}

@@ -673,6 +673,10 @@ impl Core {
 			Command::SelectChannel { guild_id, channel_id } => self.select_channel(guild_id, channel_id),
 			Command::LoadOlder { channel_id } => self.load_older(channel_id),
 			Command::LoadNewer { channel_id } => self.load_newer(channel_id),
+			Command::RefreshMedia {
+				channel_id,
+				message_id,
+			} => self.refresh_media(channel_id, message_id),
 			Command::SetViewport { channel_id, viewport } => {
 				self.apply_local(LocalEvent::ViewportChanged { channel_id, viewport });
 				self.read_if_viewing(channel_id);

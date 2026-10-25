@@ -10,11 +10,12 @@ use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+use crate::cdn::Signature;
 use crate::config::MockConfig;
 use crate::control::Control;
 use crate::fixtures::Fixtures;
 use crate::json::parse_id;
-use crate::ops::Draft;
+use crate::ops::{Draft, UploadedFile};
 use crate::rest;
 use crate::state::{Shared, Urls};
 use crate::traffic;
@@ -123,6 +124,26 @@ impl Server {
 			.shared
 			.post_message(channel_id.0, &author, Draft::text(content))
 			.ok()?;
+		parse_id(&message["id"]).map(Snowflake)
+	}
+
+	pub fn post_image(
+		&self,
+		channel_id: Snowflake,
+		filename: &str,
+		signature: Signature,
+	) -> Option<Snowflake> {
+		let author = self.shared.fixtures.someone_in(channel_id.0)?.clone();
+		let draft = Draft {
+			files: vec![UploadedFile {
+				filename: filename.to_owned(),
+				content_type: None,
+				size: 0,
+			}],
+			hosted: Some(signature),
+			..Draft::default()
+		};
+		let message = self.shared.post_message(channel_id.0, &author, draft).ok()?;
 		parse_id(&message["id"]).map(Snowflake)
 	}
 

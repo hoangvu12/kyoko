@@ -230,6 +230,48 @@ impl State {
 		changes.messages.insert(channel_id);
 	}
 
+	pub(crate) fn media_refreshed(&mut self, channel_id: Snowflake, fresh: &Message, changes: &mut Changes) {
+		let refresh = |message: &mut Message| {
+			message.attachments = fresh.attachments.clone();
+			message.embeds = fresh.embeds.clone();
+		};
+		if let Some(cache) = self.messages.get_mut(&channel_id)
+			&& cache.modify(fresh.id, refresh)
+		{
+			changes.messages.insert(channel_id);
+		}
+		if let Some(StoredReference {
+			channel_id: stored_channel,
+			referenced: Referenced::Found(found),
+		}) = self.referenced.get(&fresh.id)
+		{
+			let stored_channel = *stored_channel;
+			let mut message = (**found).clone();
+			refresh(&mut message);
+			self.referenced.insert(
+				fresh.id,
+				StoredReference {
+					channel_id: stored_channel,
+					referenced: Referenced::Found(Arc::new(message)),
+				},
+			);
+			changes.messages.insert(stored_channel);
+		}
+	}
+
+	pub fn holds_message(&self, channel_id: Snowflake, message_id: Snowflake) -> bool {
+		self.messages
+			.get(&channel_id)
+			.is_some_and(|cache| cache.by_id.contains_key(&message_id))
+			|| matches!(
+				self.referenced.get(&message_id),
+				Some(StoredReference {
+					referenced: Referenced::Found(_),
+					..
+				})
+			)
+	}
+
 	pub(crate) fn forget_references(&mut self, channel_id: Snowflake) {
 		let stale: Vec<Snowflake> = self
 			.referenced
