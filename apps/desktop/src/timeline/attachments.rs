@@ -46,7 +46,7 @@ pub fn attachments(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.attachments
 		.iter()
 		.map(|attachment| {
-			if env.prefs.inline_media && bridge::is_image(attachment) {
+			if env.prefs.get().inline_media && bridge::is_image(attachment) {
 				image_attachment(entry, attachment, env)
 			} else {
 				file_card(attachment, env)
@@ -149,7 +149,7 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 		.iter()
 		.enumerate()
 		.filter(|(_, embed)| {
-			env.prefs.link_previews
+			env.prefs.get().link_previews
 				|| matches!(embed.kind, None | Some(EmbedKind::Rich | EmbedKind::PollResult))
 		})
 		.filter_map(|(index, embed)| embed_card(entry, index, embed, env, bump))

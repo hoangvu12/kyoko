@@ -8,6 +8,7 @@ mod members;
 mod message;
 mod rail;
 mod reorder;
+mod settings;
 mod sidebar;
 mod sign_in;
 mod timeline;

@@ -15,6 +15,9 @@ local CHIP_MAX = 240
 local ROW = 36
 local TYPING = 24
 local COUNTER_FROM = 200
+local DOT = 4
+local DOT_DIM = 0.35
+local DOT_STEP = 300
 
 local function by_key(item: { key: string })
 	return item.key
@@ -448,6 +451,42 @@ local function toolbar()
 	}
 end
 
+local typing_dots = ui.component(function()
+	local phase = ui.use_state(0)
+	local function animated(): boolean
+		local values = state.settings.values:get() or {}
+		return values["chat.typing_animation"] ~= false
+			and values["accessibility.reduced_motion"] ~= true
+			and not ui.prefers.reduced_motion:get()
+	end
+	ui.every(DOT_STEP, function()
+		if animated() then
+			phase:set((phase:get() + 1) % 3)
+		elseif phase:get() ~= 0 then
+			phase:set(0)
+		end
+	end)
+	local dots = {}
+	for index = 0, 2 do
+		table.insert(
+			dots,
+			ui.div {
+				w = DOT,
+				h = DOT,
+				rounded = DOT,
+				bg = theme.color.text_normal,
+				opacity = function()
+					if not animated() then
+						return 1
+					end
+					return if phase:get() == index then 1 else DOT_DIM
+				end,
+			}
+		)
+	end
+	return ui.row { shrink = 0, gap = 2, items = "center", pr = theme.size.space_4, table.unpack(dots) }
+end)
+
 local function footer(text: any)
 	local function remaining(): number
 		return state.composer.limit:get() - length(text:get())
@@ -457,6 +496,9 @@ local function footer(text: any)
 		h = TYPING,
 		px = theme.size.space_4,
 		items = "center",
+		ui.show(function()
+			return state.composer.typing:get() ~= ""
+		end, typing_dots()),
 		ui.text {
 			function()
 				return state.composer.typing:get()

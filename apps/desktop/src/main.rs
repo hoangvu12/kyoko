@@ -25,12 +25,12 @@ use bridge::{Flow, Gate, Inbox, Remember, StartSession, changes_notifier};
 use capture::{Capture, Opening, Screen};
 use clap::Parser;
 use integration::{APP_ID, Desktop, MOCK_APP_ID};
-use media::{Gallery, Limits, MediaService, Playback};
+use media::{Gallery, Limits, MediaService};
 use mockcord::{MockConfig, Server};
 use protocol::Token;
 use session::{Session, SessionConfig};
 use state::Changes;
-use store::{AnimationPlayback, MediaSettings, Paths, Settings, Store};
+use store::{Paths, Settings, Store};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
@@ -269,19 +269,11 @@ fn main() -> Result<ExitCode> {
 		&identity,
 		backend.loopback_port,
 		cache_dir,
-		&store.settings.read().media,
+		&store.settings.read(),
 		budget,
 		runtime.handle(),
 	)?;
-	let reduced_motion = store.settings.read().accessibility.reduced_motion;
-	let prefs = {
-		let chat = &store.settings.read().chat;
-		timeline::Prefs {
-			inline_media: chat.inline_media,
-			link_previews: chat.link_previews,
-			show_reactions: chat.show_reactions,
-		}
-	};
+	let prefs = timeline::Prefs::of(&store.settings.read());
 	let store = Arc::new(store);
 	let gate = Gate::new(store.clone(), identity.clone(), backend.rest_base.clone());
 	let mut flow = Flow::new(
@@ -313,7 +305,6 @@ fn main() -> Result<ExitCode> {
 			gallery,
 			cdn: backend.cdn,
 			mock_origin: backend.mock_origin,
-			reduced_motion,
 			budget,
 			prefs,
 		},
@@ -431,7 +422,7 @@ fn gallery(
 	identity: &rest::ClientIdentity,
 	loopback_port: Option<u16>,
 	cache_dir: PathBuf,
-	settings: &MediaSettings,
+	settings: &Settings,
 	budget: usize,
 	runtime: &tokio::runtime::Handle,
 ) -> Result<Gallery> {
@@ -439,11 +430,7 @@ fn gallery(
 		bridge::media_fetcher(&identity.fingerprint(), loopback_port).context("build the media fetcher")?;
 	let loader = MediaService::new(fetcher, cache_dir, Limits::default());
 	let gallery = Gallery::with_budget(loader, runtime.clone(), budget);
-	gallery.set_playback(match settings.animation {
-		AnimationPlayback::OnHover => Playback::OnHover,
-		AnimationPlayback::Never => Playback::Never,
-		AnimationPlayback::Always | AnimationPlayback::Unknown => Playback::Always,
-	});
+	gallery.set_playback(bridge::media_playback(settings));
 	Ok(gallery)
 }
 

@@ -2,6 +2,7 @@ mod composer;
 mod home;
 mod members;
 mod message_actions;
+mod settings;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -52,7 +53,6 @@ pub struct Images {
 	pub gallery: Gallery,
 	pub cdn: String,
 	pub mock_origin: Option<String>,
-	pub reduced_motion: bool,
 	pub budget: usize,
 	pub prefs: Prefs,
 }
@@ -121,7 +121,8 @@ pub fn run(
 				code_font: catalog.code_font(&theme),
 				store: capture.is_none().then(|| desktop.store.clone()),
 			};
-			let link = Link::install(&host, window, sign_in, inbox.clone(), images, messages);
+			let settings = settings::SettingsView::new(&host, desktop.store.clone(), catalog);
+			let link = Link::install(&host, window, sign_in, inbox.clone(), images, messages, settings);
 			link.opening.set(opening);
 			link.attach_ui(cx.ui.downgrade());
 			link.rail.restore(desktop.store.clone());
@@ -259,6 +260,7 @@ pub(crate) struct Link {
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
 	composer: composer::ComposerView,
+	settings: settings::SettingsView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -283,6 +285,7 @@ impl Link {
 		inbox: Inbox<Changes>,
 		images: Images,
 		messages: Messages,
+		settings: settings::SettingsView,
 	) -> Rc<Link> {
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
@@ -322,6 +325,7 @@ impl Link {
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
 			composer,
+			settings,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -345,6 +349,7 @@ impl Link {
 		Link::install_composer(host, &link);
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
+		Link::install_settings(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -376,13 +381,14 @@ impl Link {
 			gallery.set_hovered(text(&name).filter(|name| !name.is_empty()));
 			Value::Nil
 		});
-		let gallery = link.images.gallery.clone();
-		let reduced_setting = link.images.reduced_motion;
+		let actions = Rc::downgrade(&link);
 		host.function("media.reduced_motion", move |system| {
-			gallery.set_reduced_motion(reduced_setting || matches!(system, Value::Bool(true)));
+			if let Some(link) = actions.upgrade() {
+				link.system_reduced_motion(matches!(system, Value::Bool(true)));
+			}
 			Value::Nil
 		});
-		link.images.gallery.set_reduced_motion(reduced_setting);
+		link.system_reduced_motion(false);
 		link
 	}
 
@@ -577,6 +583,13 @@ impl Link {
 			}
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
+			capture::Screen::Settings(_) => {
+				self.drive_settings(capture.screen);
+				let started = Instant::now();
+				while !self.settings_settled() && started.elapsed() < capture::LIMIT {
+					zgx::timer::sleep(capture::POLL).await;
+				}
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -720,6 +733,7 @@ impl Link {
 			}
 			self.composer_apply(&state, changes);
 			self.publish_actions(&state, changes);
+			self.settings_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -883,6 +897,7 @@ impl Link {
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());
 		names.extend(self.dm_avatars.borrow().iter().cloned());
 		names.extend(self.member_avatars.borrow().iter().cloned());
+		names.extend(self.settings_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

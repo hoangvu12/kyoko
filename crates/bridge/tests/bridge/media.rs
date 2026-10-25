@@ -466,3 +466,42 @@ async fn animations_play_only_while_visible_and_allowed() {
 	);
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_original_resolution_setting_fetches_the_original_attachment() {
+	let mut running = Running::start("media-setting-quality").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let channel_id = open_first_channel(&mut running).await;
+	let (message_id, attachment) =
+		posted_attachment(&mut running, channel_id, "setting.png", Signature::Fresh).await;
+	let mut settings = store::Settings::default();
+	let request = |settings: &store::Settings| {
+		bridge::attachment_request(
+			&attachment,
+			channel_id,
+			message_id,
+			(400., 300.),
+			1.,
+			bridge::media_quality(settings),
+		)
+		.expect("a png is an image")
+	};
+	images.ready(request(&settings)).await;
+	let changed = bridge::change_setting(
+		&mut settings,
+		"media.original_resolution",
+		&serde_json::Value::Bool(true),
+	);
+	assert_eq!(changed, Some(bridge::SettingKey::OriginalResolution));
+	assert_eq!(
+		changed.map(bridge::SettingKey::applies),
+		Some(bridge::Applies::Now)
+	);
+	images.ready(request(&settings)).await;
+	let fetched = media_requests(&running, "/cdn/attachments/");
+	assert_eq!(fetched.len(), 2);
+	assert_eq!(fetched[0].param("width"), Some("400"));
+	assert_eq!(fetched[1].param("width"), None, "the original has no proxy size");
+	assert_eq!(fetched[1].param("format"), None);
+	running.stop().await;
+}

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -22,23 +22,33 @@ pub struct Links {
 	pending: Signal<Option<Pending>>,
 	open: Signal<bool>,
 	trusted: RefCell<Vec<String>>,
+	warn: Cell<bool>,
 	platform: RefCell<Option<Rc<PlatformService>>>,
 	store: Option<Arc<Store>>,
 }
 
 impl Links {
 	pub fn new(runtime: &Runtime, store: Option<Arc<Store>>) -> Self {
-		let trusted = store
+		let (trusted, warn) = store
 			.as_ref()
-			.map(|store| store.settings.read().trusted_link_hosts.clone())
-			.unwrap_or_default();
+			.map(|store| {
+				let settings = store.settings.read();
+				(settings.trusted_link_hosts.clone(), settings.chat.link_warning)
+			})
+			.unwrap_or((Vec::new(), true));
 		Self {
 			pending: runtime.signal(None),
 			open: runtime.signal(false),
 			trusted: RefCell::new(trusted),
+			warn: Cell::new(warn),
 			platform: RefCell::new(None),
 			store,
 		}
+	}
+
+	pub fn set_trusted(&self, hosts: &[String], warn: bool) {
+		*self.trusted.borrow_mut() = hosts.to_vec();
+		self.warn.set(warn);
 	}
 
 	pub fn attach(&self, platform: Option<Rc<PlatformService>>) {
@@ -50,6 +60,7 @@ impl Links {
 	pub fn open(&self, url: &str) {
 		match bridge::link_action(url, &self.trusted.borrow()) {
 			LinkAction::Open => self.launch(url),
+			LinkAction::Confirm { .. } if !self.warn.get() => self.launch(url),
 			LinkAction::Confirm { host } => {
 				self.pending.set(Some(Pending {
 					url: url.to_owned(),

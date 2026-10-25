@@ -10,6 +10,7 @@ mod inbox;
 mod member_list;
 mod message;
 mod rail;
+mod settings;
 mod sidebar;
 mod sign_in;
 mod timeline;
@@ -50,6 +51,10 @@ pub use message::{
 pub use rail::{
 	DEFAULT_FOLDER_COLOR, Drop, Rail, RailFolder, RailGuild, RailItem, acronym, new_folder_id, rearranged,
 	rearranged_folder, reorder_command, reorder_folder_command,
+};
+pub use settings::{
+	AccountCard, Applies, SettingKey, account_card, change_setting, mask_email, mask_phone, media_playback,
+	media_quality, setting_values,
 };
 pub use sidebar::{
 	CategoryEntry, ChannelEntry, ChannelKind, GuildEntry, GuildHeader, Refresh, Sidebar, SidebarRow,

@@ -176,4 +176,20 @@ function M.open_member_profile(id: string)
 	ui.invoke("members.open_profile", { id = id })
 end
 
+function M.open_settings(page: string?)
+	ui.invoke("settings.open", page or "")
+end
+
+function M.close_settings()
+	ui.invoke("settings.close")
+end
+
+function M.set_setting(key: string, value: any)
+	ui.invoke("settings.set", { key = key, value = value })
+end
+
+function M.settings_action(name: string)
+	ui.invoke("settings." .. name)
+end
+
 return M

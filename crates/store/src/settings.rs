@@ -76,6 +76,8 @@ pub struct ChatSettings {
 	pub show_reactions: bool,
 	pub time_24h: bool,
 	pub emoji_autocomplete: bool,
+	pub typing_animation: bool,
+	pub link_warning: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -317,6 +319,8 @@ impl Default for ChatSettings {
 			show_reactions: true,
 			time_24h: false,
 			emoji_autocomplete: true,
+			typing_animation: true,
+			link_warning: true,
 		}
 	}
 }

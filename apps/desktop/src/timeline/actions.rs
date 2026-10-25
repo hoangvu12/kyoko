@@ -81,7 +81,7 @@ pub struct MessageActions {
 	menus: Cell<u64>,
 	pub dialogs: Rc<Dialogs>,
 	pub picker: Rc<ReactionPicker>,
-	developer_mode: bool,
+	developer_mode: Cell<bool>,
 	links: Rc<Links>,
 	commands: Rc<Sender>,
 	compose: Hook<Compose>,
@@ -103,6 +103,10 @@ pub struct Wiring {
 }
 
 impl MessageActions {
+	pub fn set_developer_mode(&self, enabled: bool) {
+		self.developer_mode.set(enabled);
+	}
+
 	pub fn new(runtime: &Runtime, wiring: Wiring) -> Self {
 		Self {
 			runtime: runtime.clone(),
@@ -114,7 +118,7 @@ impl MessageActions {
 			menus: Cell::new(0),
 			dialogs: wiring.dialogs,
 			picker: wiring.picker,
-			developer_mode: wiring.developer_mode,
+			developer_mode: Cell::new(wiring.developer_mode),
 			links: wiring.links,
 			commands: wiring.commands,
 			compose: RefCell::new(None),
@@ -430,7 +434,7 @@ impl MessageActions {
 	fn menu_entries(&self, entry: &MessageEntry) -> Vec<MenuEntry> {
 		let access = self.access.with_untracked(|access| *access);
 		let context = MenuContext {
-			developer_mode: self.developer_mode,
+			developer_mode: self.developer_mode.get(),
 			selected: self
 				.selection
 				.with_untracked(|selection| selection.contains(&entry.id)),

@@ -210,21 +210,21 @@ The voice and video, plugins and updates pages are left out, as ticket 37 says.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `settings-my-account` | 37 | Default selection, then open settings on My Account. | no |
+| `settings-my-account` | 37 | Default selection, then open settings on My Account. | yes |
 | `settings-profiles` | 37 | As above, on Profiles. | no |
 | `settings-privacy` | 37 | As above, on Privacy and Safety. | no |
 | `settings-devices` | 37 | As above, on Devices. | no |
 | `settings-connections` | 37 | As above, on Connections. | no |
 | `settings-clips` | 37 | As above, on Clips. | no |
 | `settings-friend-requests` | 37 | As above, on Friend Requests. | no |
-| `settings-appearance` | 37 | As above, on Appearance. | no |
-| `settings-accessibility` | 37 | As above, on Accessibility. | no |
-| `settings-chat` | 37 | As above, on Chat. | no |
-| `settings-notifications` | 37 | As above, on Notifications. | no |
+| `settings-appearance` | 37 | As above, on Appearance. | yes |
+| `settings-accessibility` | 37 | As above, on Accessibility. | yes |
+| `settings-chat` | 37 | As above, on Chat. | yes |
+| `settings-notifications` | 37 | As above, on Notifications. | yes |
 | `settings-keybinds` | 37 | As above, on Keybinds. | no |
 | `settings-language` | 37 | As above, on Language. | no |
 | `settings-streamer-mode` | 37 | As above, on Streamer Mode. | no |
-| `settings-advanced` | 37 | As above, on Advanced. | no |
+| `settings-advanced` | 37 | As above, on Advanced. | yes |
 | `settings-themes` | 37 | As above, on Themes. | no |
 | `settings-developer` | 37 | As above, on Developer. | no |
 

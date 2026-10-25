@@ -14,7 +14,12 @@ return function()
 		items = "center",
 		bg = theme.color.user_panel_background,
 		context_menu = function()
-			return { ui.menu_item { "Log Out", on_click = actions.sign_out() } }
+			return {
+				ui.menu_item { "User Settings", on_click = function()
+					actions.open_settings("my-account")
+				end },
+				ui.menu_item { "Log Out", on_click = actions.sign_out() },
+			}
 		end,
 		ui.show(
 			state.user.avatar_ready,

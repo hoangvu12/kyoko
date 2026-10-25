@@ -2,6 +2,7 @@
 	"languageMode": "strict",
 	"aliases": {
 		"components": "./components",
-		"shell": "./shell"
+		"shell": "./shell",
+		"settings": "./settings"
 	}
 }

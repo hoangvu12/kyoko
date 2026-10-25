@@ -106,6 +106,7 @@ impl TimelineView {
 			setup.cdn,
 			setup.mock_origin,
 		));
+		pictures.set_quality(setup.prefs.quality);
 		let commands: Rc<Sender> = Rc::default();
 		let links = Rc::new(Links::new(runtime, setup.store));
 		let actions = Rc::new(MessageActions::new(
@@ -131,7 +132,7 @@ impl TimelineView {
 				links,
 				channel_name: runtime.signal(String::new()),
 				code_font: setup.code_font,
-				prefs: setup.prefs,
+				prefs: Cell::new(setup.prefs),
 				revealed: RefCell::default(),
 				picks: RefCell::default(),
 				commands: commands.clone(),
@@ -273,6 +274,31 @@ impl TimelineView {
 			}
 		});
 		*self.layout_watcher.borrow_mut() = Some(effect);
+	}
+
+	pub fn set_developer_mode(&self, enabled: bool) {
+		self.actions.set_developer_mode(enabled);
+	}
+
+	pub fn set_prefs(
+		self: &Rc<Self>,
+		prefs: Prefs,
+		trusted: &[String],
+		timeline: &Timeline,
+		channel_name: &str,
+	) {
+		self.env.links.set_trusted(trusted, prefs.link_warning);
+		if self.env.prefs.replace(prefs) == prefs {
+			return;
+		}
+		self.pictures.set_quality(prefs.quality);
+		let delta = Delta {
+			updated: timeline.rows().iter().map(|row| row.key.clone()).collect(),
+			..Delta::default()
+		};
+		self.apply(timeline, &delta, channel_name);
+		self.visible_images.borrow_mut().clear();
+		self.runtime.untracked(|| self.scrolled());
 	}
 
 	pub fn set_scale(&self, scale: f64) {
@@ -586,7 +612,7 @@ impl TimelineView {
 
 	fn images_in(&self, keys: &[RowKey]) -> Vec<ImageName> {
 		let store = self.rows.borrow();
-		let inline_media = self.env.prefs.inline_media;
+		let inline_media = self.env.prefs.get().inline_media;
 		let mut names: Vec<ImageName> = keys
 			.iter()
 			.filter_map(|key| store.get(key).map(|row| row.with_untracked(Rc::clone)))
