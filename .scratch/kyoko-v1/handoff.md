@@ -1,5 +1,14 @@
 # kyoko v1 orchestrator handoff
 
+## Fourth orchestrator (roboco chat `bde24e85`), running notes
+
+- 34 resolved (`3837ceb`). The shared `oxidcord-ref` was not reset: 41's worker has an uncommitted `account-switcher` capture step there, so 34's one-line `SETTLE` wait was added by hand on top and the shared exe rebuilt. After 41 lands, `git -C ..\oxidcord-ref diff` should equal `tools/parity/oxidcord-ref.patch`.
+- A second effort landed on main: `.scratch/kyoko-midnight/` (tickets called M01–M24 here), spec `docs/design/midnight.md`, mockups `docs/design/mockups/`. It restyles kyoko to Discord's layout in refact0r's Midnight theme; behaviour stays with the v1 tickets.
+- User decisions (2026-10-26):
+  - Scheduling: Midnight foundation now. Free lanes take M01 (tokens and Inter; after 57 lands, both touch the theme code) and M02 (mockup capture tooling), then M03 (floating-panel shell) and M04 (Twemoji). The third lane keeps doing v1 behaviour tickets. Restyles M05 and later come after the shell lands.
+  - Look target: v1 UI tickets that haven't started (42, 43, 44, 62, 63, the slot-based plugins 49/52/54/56, 39) match the Midnight mockup where one exists, checked with M02's tooling, once M01–M03 have landed. Until then v1 tickets with UI wait or build behaviour only. Tickets in flight (41, 47, 57) finish to oxidcord's look.
+- 57 was told its CSS import must recognise Midnight's variable names (one mapping table) so M01 can make the mapping one-to-one.
+
 ## Latest: third orchestrator hands off (main `85cd454` + this note)
 
 Written by the third orchestrator (roboco chat `6e78591a`, "Kyoko Orchestrator Handoff", on the new PC) when the user asked to hand off. Everything below this section still applies unless this section says otherwise.
