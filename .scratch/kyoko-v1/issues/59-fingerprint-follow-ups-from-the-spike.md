@@ -4,7 +4,7 @@
 
 **Blocked by:** 13 (Versioned read state, persisted client state and late DMs)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The compiled-in Chrome major matches current stable (156 at the time of the spike) and the `sec-ch-ua` brand string is recomputed for it, in the one fingerprint module
 - [ ] IDENTIFY follows the web client's key order and drops `large_threshold`; presence is sent as `"unknown"` with `since: 0`
