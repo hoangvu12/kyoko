@@ -231,10 +231,12 @@ impl Link {
 				let applied = self.settings.catalog.apply(&self.window.runtime, &settings.theme);
 				tracing::info!(theme = %applied, "theme switched");
 			}
-			SettingKey::ReducedMotion => self
-				.images
-				.gallery
-				.set_reduced_motion(self.settings.reduced_motion()),
+			SettingKey::ReducedMotion => {
+				self.images
+					.gallery
+					.set_reduced_motion(self.settings.reduced_motion());
+				self.motion.set_reduced(self.settings.reduced_motion());
+			}
 			SettingKey::Animation => self
 				.images
 				.gallery
@@ -291,6 +293,7 @@ impl Link {
 		self.images
 			.gallery
 			.set_reduced_motion(self.settings.reduced_motion());
+		self.motion.set_reduced(self.settings.reduced_motion());
 	}
 
 	pub(super) fn settings_images(&self) -> Option<String> {

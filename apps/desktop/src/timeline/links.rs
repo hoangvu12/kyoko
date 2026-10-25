@@ -9,6 +9,7 @@ use zgx::platform::PlatformService;
 use zgx::reactive::{Runtime, Signal};
 
 use super::rows::tok;
+use crate::motion;
 
 const DIALOG_WIDTH: f32 = 460.;
 
@@ -122,7 +123,7 @@ impl Links {
 		let pending = self.pending.clone();
 		let host = self.pending.clone();
 		let (cancel, trust, open) = (self.clone(), self.clone(), self.clone());
-		modal("Leave Kyoko?", self.open.clone())
+		motion::modal("Leave Kyoko?", self.open.clone())
 			.w(DIALOG_WIDTH)
 			.p(16.)
 			.gap(12.)

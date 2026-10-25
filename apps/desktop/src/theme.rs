@@ -80,6 +80,7 @@ pub const COLORS: &[(&str, &str)] = &[
 	("live_badge", "#f23f43"),
 	("brand_selected", "rgba(88, 101, 242, 0.16)"),
 	("gif_shade", "rgba(30, 31, 34, 0.55)"),
+	("banner_button", "rgba(78, 80, 88, 0.3)"),
 ];
 
 pub const SIZES: &[(&str, f32)] = &[

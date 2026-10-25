@@ -9,6 +9,7 @@ mod frame;
 mod integration;
 mod member_list;
 mod moderation;
+mod motion;
 mod notify;
 mod pickers;
 mod profile;
@@ -18,6 +19,7 @@ mod switcher;
 mod theme;
 mod threads;
 mod timeline;
+mod toasts;
 mod tray;
 mod ui;
 

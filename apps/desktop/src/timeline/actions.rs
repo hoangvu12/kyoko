@@ -19,6 +19,7 @@ use super::icons::{glyph, icon};
 use super::links::Links;
 use super::rows::{Sender, tok};
 use crate::pickers::{ExpressionPicker, Tab};
+use crate::toasts;
 
 const MENU_WIDTH: f32 = 190.;
 const MENU_ITEM: f32 = 28.;
@@ -233,12 +234,14 @@ impl MessageActions {
 		}
 	}
 
-	pub fn rejected(&self, reason: &str) {
-		let recent = self
-			.acted_at
+	pub fn acted_recently(&self) -> bool {
+		self.acted_at
 			.get()
-			.is_some_and(|at| at.elapsed() < REJECTION_WINDOW);
-		if recent {
+			.is_some_and(|at| at.elapsed() < REJECTION_WINDOW)
+	}
+
+	pub fn rejected(&self, reason: &str) {
+		if self.acted_recently() {
 			self.notice.set(Some(Notice::Failed(reason.to_owned())));
 		}
 	}
@@ -356,9 +359,12 @@ impl MessageActions {
 			MessageAction::React => self.open_picker(entry),
 			MessageAction::Reply => self.compose(Compose::Reply(message_id)),
 			MessageAction::Edit => self.compose(Compose::Edit(message_id)),
-			MessageAction::CopyText => copy(&entry.message.content),
-			MessageAction::CopyLink => copy(&bridge::message_link(access.guild_id, channel_id, message_id)),
-			MessageAction::CopyId => copy(&message_id.to_string()),
+			MessageAction::CopyText => toasts::copy(&entry.message.content, "Text copied"),
+			MessageAction::CopyLink => toasts::copy(
+				&bridge::message_link(access.guild_id, channel_id, message_id),
+				"Link copied",
+			),
+			MessageAction::CopyId => toasts::copy(&message_id.to_string(), "ID copied"),
 			MessageAction::Forward => {
 				if let Some(forward) = self.forward.borrow().as_ref() {
 					forward((channel_id, message_id));
@@ -735,12 +741,6 @@ fn needs_open_channel(action: MessageAction) -> bool {
 			| MessageAction::DeleteSelected
 			| MessageAction::CreateThread
 	)
-}
-
-fn copy(text: &str) {
-	if let Err(error) = platform::clipboard::write_text(text) {
-		tracing::warn!(%error, "the message text was not copied");
-	}
 }
 
 fn menu_panel(panel: View) -> View {

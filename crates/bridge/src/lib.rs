@@ -3,6 +3,7 @@ mod alerts;
 mod clock;
 mod community;
 mod composer;
+mod connection;
 mod deep_link;
 mod dm_list;
 mod emoji_picker;
@@ -23,6 +24,7 @@ mod sticker_picker;
 mod switcher;
 mod threads;
 mod timeline;
+mod toasts;
 
 pub use actions::{
 	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle, can_delete,
@@ -41,6 +43,7 @@ pub use composer::{
 	Attachment, Composer, Notice, Outcome, Query, Reply, Slash, Suggestion, Trigger, Visual,
 	apply_suggestion, failure_text, parse_slash, placeholder, query_at, suggestions, typing_line,
 };
+pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use emoji_picker::{
@@ -113,3 +116,4 @@ pub use timeline::{
 	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, detached_entry,
 	first_channel,
 };
+pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};

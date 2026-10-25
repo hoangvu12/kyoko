@@ -1,9 +1,11 @@
 mod community;
 mod composer;
+mod connection;
 mod expressions;
 mod home;
 mod members;
 mod message_actions;
+mod notices;
 mod plugins;
 mod profiles;
 #[cfg(test)]
@@ -24,7 +26,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{Flow, Inbox, OpenChannel, Timeline};
+use bridge::{ConnectionWatch, Flow, Inbox, OpenChannel, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
@@ -45,11 +47,13 @@ use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::member_list::{self, MemberListView};
 use crate::moderation::ModerationLayer;
+use crate::motion::Motion;
 use crate::profile::ProfileLayer;
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
 use crate::theme::Catalog;
 use crate::timeline::{Prefs, Setup, TimelineView};
+use crate::toasts::ToastLayer;
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
@@ -171,6 +175,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_plugins());
 			cx.tasks.spawn(link.clone().follow_gif_search());
 			cx.tasks.spawn(link.clone().follow_server_settings());
+			cx.tasks.spawn(link.clone().follow_connection());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -199,6 +204,8 @@ pub fn run(
 			let escaped = Rc::downgrade(&link);
 			let switcher = link.finder.view();
 			let community = link.community.view();
+			let toasts = link.toasts.view();
+			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
 			let keys = Rc::downgrade(&link);
@@ -211,7 +218,8 @@ pub fn run(
 				link.shutdown();
 				after_close();
 			});
-			cx.render(
+			cx.render(provide(
+				motion,
 				layered(
 					host.view(),
 					[
@@ -224,6 +232,7 @@ pub fn run(
 						expressions,
 						lightbox,
 						moderation,
+						toasts,
 					],
 				)
 				.on_event(move |event| {
@@ -270,7 +279,7 @@ pub fn run(
 						link.files_dropped(paths);
 					}
 				}),
-			);
+			));
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
 }
@@ -365,6 +374,13 @@ pub(crate) struct Link {
 	timeline_view: Rc<TimelineView>,
 	profile: Rc<ProfileLayer>,
 	community: Rc<CommunityLayer>,
+	toasts: Rc<ToastLayer>,
+	toast_window: RefCell<Option<Effect>>,
+	motion: Motion,
+	connection: RefCell<ConnectionWatch>,
+	connection_pinned: Cell<bool>,
+	connection_banner: Shared,
+	connection_wakes: Inbox<()>,
 	joins: community::Joins,
 	profile_effect: RefCell<Option<Effect>>,
 	panel: Shared,
@@ -444,6 +460,8 @@ impl Link {
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
 		let moderation = ModerationLayer::new(&window.runtime);
+		let toasts = ToastLayer::new(&window.runtime);
+		let motion = Motion::new(window.runtime.signal(false));
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -467,6 +485,13 @@ impl Link {
 			timeline_view,
 			profile,
 			community,
+			toasts,
+			toast_window: RefCell::new(None),
+			motion,
+			connection: RefCell::new(ConnectionWatch::default()),
+			connection_pinned: Cell::new(false),
+			connection_banner: host.shared("session.connection", connection::empty_banner()),
+			connection_wakes: Inbox::new(),
 			joins: community::Joins::default(),
 			profile_effect: RefCell::new(None),
 			panel: host.shared("user.panel", profiles::empty_panel()),
@@ -513,6 +538,8 @@ impl Link {
 		Link::install_search(host, &link);
 		Link::install_threads(host, &link);
 		Link::install_community(host, &link);
+		Link::install_connection(host, &link);
+		link.install_toasts();
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -805,6 +832,11 @@ impl Link {
 					self.open_moderation_dialog(author, kind);
 				}
 			}
+			capture::Screen::Toast => {
+				self.drive_toast();
+				self.until_capture(|link| link.toast_settled()).await;
+			}
+			capture::Screen::Disconnected => self.drive_disconnected(),
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -976,6 +1008,8 @@ impl Link {
 			self.search_apply(&state, changes);
 			self.threads_apply(&state, changes);
 			self.server_settings_apply(&state, changes);
+			self.connection_apply(&state, changes);
+			self.toasts_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -1165,6 +1199,7 @@ impl Link {
 	fn shutdown(&self) {
 		tracing::debug!("window closed, stopping the session");
 		self.inbox.close();
+		self.connection_wakes.close();
 		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();

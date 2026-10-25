@@ -68,6 +68,7 @@ export type DmRow = {
 	unread: boolean,
 	mentions: number,
 }
+export type ConnectionBanner = { shown: boolean, state: string, text: string, tone: string, retry: boolean }
 export type ComposerReplace = { serial: number, text: string, caret: number }
 export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
 export type ComposerFile = { id: string, name: string, size: string, image: string }
@@ -219,6 +220,10 @@ local M = {}
 M.session = {
 	status = ui.shared("session.status", "Connecting"),
 	storage_warning = ui.shared("session.storage_warning", ""),
+	connection = ui.shared(
+		"session.connection",
+		{ shown = false, state = "connecting", text = "", tone = "warning", retry = false } :: ConnectionBanner
+	),
 }
 
 M.login = {

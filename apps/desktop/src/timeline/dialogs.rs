@@ -6,6 +6,7 @@ use zgx::compose::prelude::*;
 use zgx::reactive::{Runtime, Signal};
 
 use super::rows::{Sender, tok};
+use crate::motion;
 
 const DIALOG_WIDTH: f32 = 440.;
 
@@ -135,7 +136,7 @@ impl Dialogs {
 			self.pending.clone(),
 		);
 		let (cancel, confirm) = (self.clone(), self.clone());
-		modal("Confirm", self.open.clone())
+		motion::modal("Confirm", self.open.clone())
 			.w(DIALOG_WIDTH)
 			.p(16.)
 			.gap(12.)

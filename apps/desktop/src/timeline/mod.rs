@@ -267,6 +267,10 @@ impl TimelineView {
 		self.actions.confirm_unpin(channel_id, message_id);
 	}
 
+	pub fn acted_recently(&self) -> bool {
+		self.actions.acted_recently()
+	}
+
 	pub fn rejected(&self, reason: &str) {
 		self.actions.rejected(reason);
 	}

@@ -63,6 +63,7 @@ M.color = {
 	live_badge = token("live_badge"),
 	brand_selected = token("brand_selected"),
 	gif_shade = token("gif_shade"),
+	banner_button = token("banner_button"),
 }
 
 M.size = {

@@ -78,6 +78,10 @@ icon_files!(
 	"chevron_right",
 	"friend_requests",
 	"phone_off",
+	"circle_x",
+	"circle_check",
+	"info",
+	"warning",
 );
 
 thread_local! {

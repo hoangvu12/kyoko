@@ -9,6 +9,7 @@ use zgx::input::{InputEvent, Key};
 use zgx::reactive::{Effect, Runtime, Signal};
 use zgx::style::ObjectFit;
 
+use crate::motion;
 use crate::timeline::{Pictures, TypeSize, icon, tok};
 
 const WIDTH: f32 = 560.;
@@ -233,7 +234,7 @@ impl SwitcherView {
 		)
 		.w_full();
 		div().child(
-			modal("Quick switcher", self.open.clone())
+			motion::modal("Quick switcher", self.open.clone())
 				.modal_placement(ModalPlacement {
 					x: PlacementEdge::Center,
 					y: PlacementEdge::Start,

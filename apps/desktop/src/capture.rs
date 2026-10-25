@@ -17,6 +17,7 @@ pub const SEARCH_QUERY: &str = "the";
 pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
 pub const TOP_BAR_THREADS: (f32, f32) = (871., 46.);
 pub const TOP_BAR_PINS: (f32, f32) = (958., 46.);
+pub const TOAST: &str = "You are sending messages too quickly.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -61,6 +62,8 @@ pub enum Screen {
 	Community(Community),
 	ServerSettings(&'static str),
 	Moderation(&'static str),
+	Toast,
+	Disconnected,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +111,8 @@ impl Screen {
 			"add-server" => Some(Screen::Community(Community::AddServer)),
 			"forward" => Some(Screen::Community(Community::Forward)),
 			"guild-notifications" => Some(Screen::Community(Community::GuildNotifications)),
+			"toast" => Some(Screen::Toast),
+			"connection-offline" => Some(Screen::Disconnected),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -150,7 +155,9 @@ impl Screen {
 			| Screen::ForumPostCreate
 			| Screen::Community(_)
 			| Screen::ServerSettings(_)
-			| Screen::Moderation(_) => Some(Opening::First),
+			| Screen::Moderation(_)
+			| Screen::Toast
+			| Screen::Disconnected => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

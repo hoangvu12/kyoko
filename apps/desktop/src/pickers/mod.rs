@@ -16,6 +16,7 @@ use zgx::reactive::{Effect, Runtime, Signal};
 use self::emoji::EmojiState;
 use self::gif::GifState;
 use self::sticker::StickerState;
+use crate::motion;
 use crate::timeline::{Pictures, tok};
 
 const WIDTH: f32 = 456.;
@@ -306,7 +307,7 @@ impl ExpressionPicker {
 		};
 		let this = self.clone();
 		let tab = self.tab.clone();
-		popover(label, self.open.clone(), spot)
+		motion::popover(label, self.open.clone(), spot)
 			.placement(placement)
 			.w(WIDTH)
 			.h(HEIGHT)

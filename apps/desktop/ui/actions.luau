@@ -1,5 +1,9 @@
 local M = {}
 
+function M.reconnect()
+	return ui.action("session.reconnect")
+end
+
 function M.select_guild(id: string)
 	return ui.action("rail.select_guild", id)
 end

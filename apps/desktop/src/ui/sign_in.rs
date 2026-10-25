@@ -212,6 +212,7 @@ impl Link {
 			}
 			self.avatar_ready.set(false.into());
 			self.status.set("Connecting".into());
+			self.reset_connection();
 			if let Some(shared) = self.state() {
 				self.publish_timeline(&shared.read());
 			}

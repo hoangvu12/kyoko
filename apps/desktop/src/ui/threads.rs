@@ -144,6 +144,10 @@ fn point(argument: &Value) -> (f32, f32) {
 }
 
 impl Link {
+	pub(super) fn threads_acted_recently(&self) -> bool {
+		self.thread_open().is_some() && self.threads.view.acted_recently()
+	}
+
 	pub(super) fn thread_composer(&self) -> &ComposerView {
 		&self.threads.composer
 	}

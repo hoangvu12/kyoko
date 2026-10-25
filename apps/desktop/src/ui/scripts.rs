@@ -148,6 +148,24 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"the reconnecting banner",
+		"Reconnecting in 4s...",
+		&[(
+			"session.connection",
+			json!({ "shown": true, "state": "reconnecting", "text": "Reconnecting in 4s...", "tone": "warning", "retry": true }),
+		)],
+	);
+	shows(
+		&mut app,
+		"the offline banner",
+		"You're offline. Retrying in 30s...",
+		&[(
+			"session.connection",
+			json!({ "shown": true, "state": "offline", "text": "You're offline. Retrying in 30s...", "tone": "danger", "retry": true }),
+		)],
+	);
+	shows(
+		&mut app,
 		"a plugin notice",
 		"ClearURLs was stopped because it ran past its time limit.",
 		&[(

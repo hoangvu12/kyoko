@@ -240,7 +240,7 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `toast` | 38 | Default selection, then show an error toast with a rate-limit message. | no |
-| `connection-offline` | 38 | Default selection, then mark the timeline disconnected. | no |
+| `toast` | 38 | Default selection, then show an error toast with a rate-limit message. Kyoko pushes it through the toast layer, as a refused command would. | yes |
+| `connection-offline` | 38 | Default selection, then mark the timeline disconnected. Oxidcord sets its timeline disconnected; kyoko pins the connection banner to its reconnecting state (`Link::drive_disconnected`). The real path, a drop, an offline period and the reconnect against mockcord, is covered by `crates/bridge/tests/bridge/connection.rs`. | yes |
 
 Tickets 39 (translations) and 40 (tray and desktop integration) have no screens of their own. Translations are checked by running any row with another locale once ticket 39 adds a locale option to capture mode.

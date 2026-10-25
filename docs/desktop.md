@@ -27,6 +27,8 @@ Settings: `notifications.enabled`, `notifications.show_content` (off: "Mentioned
 
 Toasts are posted under the AppUserModelID `io.github.hoangvu12.Kyoko`, also in `--mock` runs. At startup the desktop writes `HKCU\Software\Classes\AppUserModelId\io.github.hoangvu12.Kyoko` (`DisplayName` Kyoko, `IconUri` a copy of the icon in the cache directory), which an unpackaged app needs for toasts to show. Clicking a toast while kyoko runs shows the window and opens the channel. Windows' global notification switch (`PushNotifications\ToastEnabled`) and Focus Assist still apply.
 
+These Windows toasts are separate from the in-window toasts of ticket 38 (`docs/ui.md`, "Toasts, transitions and connection status"), which never reach the notification center.
+
 ## Window, tray and hotkey
 
 - The tray icon is created on zgx's UI thread inside the run closure. Its menu is Show Kyoko, Hide Kyoko and Quit Kyoko. A left click toggles: hide when kyoko is in front, otherwise show and focus.

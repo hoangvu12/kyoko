@@ -154,9 +154,7 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 fn copy_link(guild_id: Option<Snowflake>, channel_id: Snowflake) {
 	let scope = guild_id.map_or_else(|| "@me".to_owned(), |id| id.to_string());
 	let link = format!("https://discord.com/channels/{scope}/{channel_id}");
-	if let Err(error) = platform::clipboard::write_text(&link) {
-		tracing::warn!(%error, "the channel link was not copied");
-	}
+	crate::toasts::copy(&link, "Link copied");
 }
 
 fn snowflake(value: &Value) -> Option<Snowflake> {

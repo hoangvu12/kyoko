@@ -1,4 +1,5 @@
 local theme = require("../theme")
+local motion = require("./motion")
 
 export type Props = {
 	height: any,
@@ -14,7 +15,7 @@ return function(props: Props)
 		items = "center",
 		ui.div {
 			w = 4,
-			h = ui.tween(props.height, { duration = 160, ease = "outQuint" }),
+			h = ui.tween(props.height, { duration = motion.duration(160), ease = "outQuint" }),
 			rounded_tr = 4,
 			rounded_br = 4,
 			bg = theme.color.unread_pill,

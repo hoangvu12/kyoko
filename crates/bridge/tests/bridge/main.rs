@@ -1,5 +1,6 @@
 mod actions;
 mod composer;
+mod connection;
 mod deep_links;
 mod dms;
 mod expressions;
@@ -18,3 +19,4 @@ mod sign_in;
 mod switcher;
 mod threads;
 mod timeline;
+mod toasts;

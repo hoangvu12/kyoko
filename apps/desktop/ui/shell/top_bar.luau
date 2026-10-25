@@ -1,4 +1,5 @@
 local theme = require("../theme")
+local motion = require("@components/motion")
 local state = require("../state")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
@@ -76,7 +77,7 @@ end
 
 local function search()
 	return ui.row {
-		w = ui.tween(searching, { from = SEARCH_WIDTH, to = SEARCH_FOCUSED_WIDTH, duration = SEARCH_SLIDE, ease = "outQuint" }),
+		w = ui.tween(searching, { from = SEARCH_WIDTH, to = SEARCH_FOCUSED_WIDTH, duration = motion.duration(SEARCH_SLIDE), ease = "outQuint" }),
 		h = SEARCH_HEIGHT,
 		shrink = 0,
 		items = "center",

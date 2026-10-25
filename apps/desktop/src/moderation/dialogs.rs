@@ -10,6 +10,7 @@ use zgx::reactive::Signal;
 
 use super::kit::{self, button, chips, field, footer, hint, input, label};
 use super::{Dialog, ModerationLayer, Request};
+use crate::motion;
 use crate::timeline::{TypeSize, tok};
 
 const WIDTH: f32 = 440.;
@@ -213,7 +214,7 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 	};
 	let top = layer.window.with_untracked(|(_, height)| height * TOP_SHARE);
 	let close = act.clone();
-	modal(title.clone(), open)
+	motion::modal(title.clone(), open)
 		.modal_placement(ModalPlacement {
 			x: PlacementEdge::Center,
 			y: PlacementEdge::Start,

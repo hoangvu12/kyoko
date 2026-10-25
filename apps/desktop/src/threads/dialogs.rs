@@ -7,6 +7,7 @@ use zgx::reactive::Signal;
 
 use super::popouts::{Fill, clear, close_button, wide_button};
 use super::{CreateShown, FileChip, PostShown, ThreadsLayer};
+use crate::motion;
 use crate::timeline::{TypeSize, icon, tok};
 
 const TOP: f32 = 80.;
@@ -67,7 +68,7 @@ fn dialog(
 	content: View,
 	on_close: impl FnMut() + 'static,
 ) -> View {
-	modal(label.to_owned(), open)
+	motion::modal(label.to_owned(), open)
 		.modal_placement(ModalPlacement {
 			x: PlacementEdge::Center,
 			y: PlacementEdge::Start,

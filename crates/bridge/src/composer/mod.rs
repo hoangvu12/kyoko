@@ -3,7 +3,7 @@ mod suggest;
 
 use std::time::Instant;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use protocol::{Gif, Nonce, Snowflake};
 use rest::UploadFile;
 use session::Command;
@@ -19,6 +19,7 @@ pub use suggest::{
 
 const MIB: f64 = 1024.0 * 1024.0;
 const MEMBER_QUERY: usize = 2;
+const REJECTION_WINDOW: TimeDelta = TimeDelta::seconds(15);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
@@ -77,6 +78,7 @@ pub struct Composer {
 	held: Option<Command>,
 	refusal: Option<String>,
 	seen_rejection: u64,
+	acted_at: Option<DateTime<Utc>>,
 	member_query: Option<String>,
 	dirty: bool,
 }
@@ -368,12 +370,19 @@ impl Composer {
 		state.channel_lock(self.channel_id?, now)
 	}
 
+	pub fn acted_recently(&self, now: DateTime<Utc>) -> bool {
+		self.acted_at
+			.is_some_and(|at| now.signed_duration_since(at) < REJECTION_WINDOW)
+	}
+
 	pub fn notice(&mut self, state: &State, now: DateTime<Utc>) -> Option<Notice> {
 		if let Some(rejection) = state.last_rejection()
 			&& rejection.id > self.seen_rejection
 		{
 			self.seen_rejection = rejection.id;
-			self.refusal = Some(rejection.reason.clone());
+			if self.acted_recently(now) {
+				self.refusal = Some(rejection.reason.clone());
+			}
 		}
 		if let Some(lock) = self.lock(state, now) {
 			return Some(Notice::Lock {
@@ -403,6 +412,7 @@ impl Composer {
 		let Some(lock) = self.lock(state, now) else {
 			return Outcome::default();
 		};
+		self.acted_at = Some(now);
 		let mut commands = vec![Command::ConfirmRisky {
 			target: lock.target,
 			reason: lock.reason,
@@ -447,6 +457,7 @@ impl Composer {
 			return Outcome::default();
 		};
 		self.refusal = None;
+		self.acted_at = Some(now);
 		let content = text.trim();
 		if let Some(message_id) = self.editing {
 			if content.is_empty() {
@@ -566,6 +577,7 @@ impl Composer {
 
 	fn expression(&mut self, state: &State, command: Command, now: DateTime<Utc>) -> Outcome {
 		self.refusal = None;
+		self.acted_at = Some(now);
 		if self.lock(state, now).is_some() {
 			self.held = Some(command);
 			return Outcome::default();

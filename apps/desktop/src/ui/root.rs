@@ -19,8 +19,9 @@ use crate::theme::Catalog;
 use crate::threads::ThreadsLayer;
 use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
+use crate::toasts::ToastLayer;
 
-const LAYERS: [&str; 9] = [
+const LAYERS: [&str; 10] = [
 	"timeline slot",
 	"thread slot",
 	"profiles",
@@ -30,6 +31,7 @@ const LAYERS: [&str; 9] = [
 	"expression picker",
 	"lightbox",
 	"moderation dialogs and member menu",
+	"toasts",
 ];
 
 const LUAU_BUTTONS: [(&str, &str); 2] = [
@@ -166,6 +168,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		"expression picker" => Expressions::new(runtime, pictures).view(),
 		"lightbox" => timeline().lightbox_view(),
 		"moderation dialogs and member menu" => ModerationLayer::new(runtime).view(),
+		"toasts" => ToastLayer::new(runtime).view(),
 		_ => unreachable!("no layer named {name}"),
 	}
 }

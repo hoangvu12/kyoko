@@ -17,6 +17,7 @@ local server_settings = require("./server_settings")
 local search_panel = require("./search_panel")
 local forum = require("./forum")
 local thread_panel = require("./thread_panel")
+local connection_banner = require("./connection_banner")
 
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
@@ -73,6 +74,7 @@ return function()
 						grow = 1,
 						min_w = 0,
 						h_full = true,
+						connection_banner(),
 						timeline(),
 						composer(),
 					}),

@@ -131,8 +131,6 @@ pub fn actions(layer: &Rc<ProfileLayer>, card: &Rc<ProfileCard>) -> View {
 		}
 	}
 	actions.child(parts::small_button("Copy ID", Look::Ghost, move || {
-		if let Err(error) = platform::clipboard::write_text(&id.to_string()) {
-			tracing::warn!(%error, "the user id was not copied");
-		}
+		crate::toasts::copy(&id.to_string(), "ID copied");
 	}))
 }

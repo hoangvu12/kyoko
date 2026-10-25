@@ -1,4 +1,5 @@
 local theme = require("../theme")
+local motion = require("./motion")
 local unread_pill = require("./unread_pill")
 local mention_badge = require("./mention_badge")
 
@@ -111,7 +112,7 @@ return ui.component(function(props: Props)
 				justify = "center",
 				items = "center",
 				overflow = "hidden",
-				rounded = ui.tween(round, { from = 24, to = 16, duration = 140, ease = "outQuint" }),
+				rounded = ui.tween(round, { from = 24, to = 16, duration = motion.duration(140), ease = "outQuint" }),
 				bg = function()
 					return if active() then props.style.active_bg else props.style.rest_bg
 				end,

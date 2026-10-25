@@ -17,6 +17,7 @@ use zgx::compose::prelude::*;
 use zgx::compose::{ModalPlacement, PlacementEdge};
 use zgx::reactive::{Effect, Runtime, Signal};
 
+use crate::motion;
 use crate::timeline::Pictures;
 
 const TOP: f32 = 80.;
@@ -232,7 +233,7 @@ impl CommunityLayer {
 		let sized = self.dialog.clone();
 		let shown = open.clone();
 		let this = self.clone();
-		modal("Community dialog", open)
+		motion::modal("Community dialog", open)
 			.modal_placement(ModalPlacement {
 				x: PlacementEdge::Center,
 				y: PlacementEdge::Start,

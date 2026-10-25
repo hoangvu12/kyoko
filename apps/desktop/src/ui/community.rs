@@ -69,11 +69,7 @@ impl Link {
 			if let Some(link) = hooks.upgrade() {
 				match request {
 					Request::Command(command) => link.send(command),
-					Request::Copy(text) => {
-						if let Err(error) = platform::clipboard::write_text(&text) {
-							tracing::warn!(%error, "the invite link was not copied");
-						}
-					}
+					Request::Copy(text) => crate::toasts::copy(&text, "Invite link copied"),
 				}
 			}
 		});

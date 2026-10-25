@@ -312,6 +312,13 @@ impl ComposerView {
 }
 
 impl Link {
+	pub(super) fn composer_acted_recently(&self) -> bool {
+		let now = Utc::now();
+		[Pane::Main, Pane::Thread]
+			.into_iter()
+			.any(|pane| self.pane_composer(pane).composer.borrow().acted_recently(now))
+	}
+
 	pub(super) fn pane_composer(&self, pane: Pane) -> &ComposerView {
 		match pane {
 			Pane::Main => &self.composer,
