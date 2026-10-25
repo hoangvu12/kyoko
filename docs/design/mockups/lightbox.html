@@ -222,6 +222,7 @@
   --poll-fill: color-mix(in hsl, var(--accent-2), transparent 90%); --poll-fill-winner: color-mix(in hsl, var(--green-2), transparent 90%);
   --voice-message-width: 300px; --voice-message-height: 48px; --waveform-bar-width: 2px; --waveform-bar-max-height: 20px;
   --audio-card-width: 400px; --embed-image-height: 200px;
+  --command-result-height: 120px; /* /gif and /sticker result strip */
   --qr-size: 176px;
   --disabled-opacity: 0.3;
   --offline-opacity: 0.3;
@@ -442,7 +443,7 @@ a:hover { text-decoration: underline; }
             <div data-part="status" data-status="invisible" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div>
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
-            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)">refact0r</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)">hoangvu12</span>
             <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">Invisible</span>
           </div>
           <div data-part="mic" data-state="muted" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--accent-new)">
@@ -519,7 +520,7 @@ a:hover { text-decoration: underline; }
             <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
               <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2"></path></svg></div>
               <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
-                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">refact0r</span>
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">hoangvu12</span>
                 <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center"><img data-emoji="🐣" alt="🐣" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f423.svg" style="display:block;width:100%;height:100%"></span>
                 <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
               </div>
@@ -534,7 +535,7 @@ a:hover { text-decoration: underline; }
                 <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span><img data-emoji="🐰" alt="🐰" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f430.svg" style="display:inline-block;width:var(--emoji-size-solo);height:var(--emoji-size-solo);vertical-align:var(--emoji-vertical-align-solo)"></span>COZY</span>
                 <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
               </div>
-              <div><span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@refact0r</span> <span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@refact0r</span></div>
+              <div><span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@hoangvu12</span> <span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@hoangvu12</span></div>
             </div>
 
             <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
@@ -557,7 +558,7 @@ a:hover { text-decoration: underline; }
             <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
               <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2"></path></svg></div>
               <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
-                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">refact0r</span>
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">hoangvu12</span>
                 <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center"><img data-emoji="🐣" alt="🐣" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f423.svg" style="display:block;width:100%;height:100%"></span>
                 <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
               </div>
@@ -745,7 +746,7 @@ a:hover { text-decoration: underline; }
 <div data-part="scrim" style="position:absolute;z-index:5;inset:0;background:var(--background-scrim-lightbox)"></div>
 <div data-region="lightbox" style="position:absolute;z-index:6;inset:0;display:flex;flex-direction:column">
   <div data-part="toolbar" style="flex:none;height:calc(var(--space-56) + var(--space-8));display:flex;align-items:center;gap:var(--space-8);padding:var(--space-12) var(--space-16) 0">
-    <div style="flex:1;min-width:0"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-1)">midnight-preview.png</div><div style="font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-3)">1920 × 1080 · 412 KB · refact0r, Today at 4:21 PM</div></div>
+    <div style="flex:1;min-width:0"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-1)">midnight-preview.png</div><div style="font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-3)">1920 × 1080 · 412 KB · hoangvu12, Today at 4:21 PM</div></div>
     <div style="width:var(--button-height-md);height:var(--button-height-md);border-radius:var(--radius-sm);background:var(--overlay-button-background);color:var(--text-1);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></div><div style="width:var(--button-height-md);height:var(--button-height-md);border-radius:var(--radius-sm);background:var(--overlay-button-background);color:var(--text-1);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"></path></svg></div><div style="width:var(--button-height-md);height:var(--button-height-md);border-radius:var(--radius-sm);background:var(--overlay-button-background);color:var(--text-1);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></div><div style="width:var(--button-height-md);height:var(--button-height-md);border-radius:var(--radius-sm);background:var(--overlay-button-background);color:var(--text-1);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M6 6l12 12M18 6 6 18"></path></svg></div>
   </div>
   <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:var(--space-24) var(--space-56) var(--space-56)">

@@ -32,7 +32,9 @@ Done on `design`: 37 more pages (97 in all), all checked at 1280 by 800, and the
 - Decided by the user: Unicode emoji are Twemoji (`jdecked/twemoji`, CC-BY 4.0) everywhere, bundled; every mockup uses them. The gift button is left out (Discord shows no send button either).
 - Captures from this chat (ignored, never commit): `live-gif-picker`, `live-gif-results-hover`, `live-sticker-picker`, `live-emoji-picker*`, `live-command-picker`, `live-command-options`, `live-apps-launcher`, `live-message-menu-hover`.
 - Not captured (running a command or sending would act on the account): command replies, ephemeral messages, components; those follow Discord from memory.
-- To raise with the orchestrator: Discord's GIF provider is now Klipy ("Search Klipy"), but `crates/rest/src/api/expressions.rs` sends `provider=tenor`. Built-in commands (`/shrug`, `/tableflip`, `/me`, `/spoiler`) show in the picker mockups but kyoko does not implement them yet; recommended: add the text-only ones.
+- To raise with the orchestrator: Discord's GIF provider is now Klipy ("Search Klipy"), but `crates/rest/src/api/expressions.rs` sends `provider=tenor`. The user decided kyoko supports all of Discord's built-in commands (list in `midnight.md`, captured live); kyoko implements none yet, and `/schedule` needs research into Discord's scheduled messages first.
+- The signed-in user in every mockup is "hoangvu12" (the user's choice).
+- `docs/design/mockups/index.html` is a browsable index of every page (thumbnails grouped by area), regenerated after each download.
 - Download helper: the project's `ListFiles` endpoint (POST `/design/anthropic.omelette.api.v1alpha.OmeletteService/ListFiles` with `{projectId, path: "export"}` from the design tab) lists every exported page.
 
 ## Open items
