@@ -12,7 +12,7 @@
 
 **Blocked by:** 04 (Spike B: live messages, WebP avatar and findings)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The tray shows unread state, and offers show, hide and quit
 - [ ] OS notifications fire for mentions and DMs, following per-server and per-channel settings, under kyoko's app user model id
