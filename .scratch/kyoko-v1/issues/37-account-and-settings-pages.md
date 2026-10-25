@@ -11,7 +11,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Settings and account pages match oxidcord in the parity captures
 - [ ] Each built-in toggle takes effect
