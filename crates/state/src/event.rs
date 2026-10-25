@@ -150,6 +150,7 @@ pub enum LocalEvent {
 		scope: Snowflake,
 		index: Arc<ApplicationCommandIndex>,
 	},
+	StatusSettings(protocol::ProtoStatusSettings),
 }
 
 #[derive(Debug)]

@@ -103,7 +103,11 @@ impl State {
 			.and_then(|settings| settings.get("type"))
 			.and_then(Value::as_i64);
 		match proto {
-			Some(encoded) if kind.is_none_or(|kind| kind == 1) => self.apply_settings_proto(encoded),
+			Some(encoded) if kind.is_none_or(|kind| kind == 1) => {
+				let mut changes = self.apply_settings_proto(encoded);
+				changes.merge(self.apply_status_proto(encoded));
+				changes
+			}
 			_ => Changes::default(),
 		}
 	}
@@ -137,6 +141,7 @@ impl State {
 		if changes.guild_list {
 			self.reorder_guilds();
 		}
+		changes.merge(self.apply_legacy_status(settings));
 		changes
 	}
 

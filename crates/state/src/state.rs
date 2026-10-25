@@ -99,6 +99,7 @@ pub struct State {
 	pub(crate) guild_folders: Vec<GuildFolder>,
 	pub(crate) guild_positions: Vec<Snowflake>,
 	pub(crate) user_settings: Value,
+	pub(crate) status_settings: protocol::ProtoStatusSettings,
 	pub(crate) collapsed_categories: HashSet<Snowflake>,
 	pub(crate) drafts: HashMap<Snowflake, String>,
 	pub(crate) selected: Option<Selection>,
@@ -612,6 +613,7 @@ impl State {
 			LocalEvent::CommandIndexLoaded { scope, index } => {
 				self.command_index_loaded(*scope, index, &mut changes)
 			}
+			LocalEvent::StatusSettings(settings) => changes.merge(self.set_status_settings(settings.clone())),
 		}
 		changes
 	}

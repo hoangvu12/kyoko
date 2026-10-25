@@ -48,6 +48,9 @@ impl State {
 		if !legacy_folders && let Some(proto) = &ready.user_settings_proto {
 			self.apply_settings_proto(proto);
 		}
+		if let Some(proto) = &ready.user_settings_proto {
+			self.apply_status_proto(proto);
+		}
 		self.reorder_guilds();
 		Changes::everything()
 	}

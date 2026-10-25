@@ -4,6 +4,15 @@ use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 
 use crate::snowflake::Snowflake;
 
+const PRELOADED_STATUS: u32 = 11;
+const STATUS_VALUE: u32 = 1;
+const STATUS_CUSTOM: u32 = 2;
+const STATUS_EXPIRES_AT: u32 = 4;
+const CUSTOM_TEXT: u32 = 1;
+const CUSTOM_EMOJI_ID: u32 = 2;
+const CUSTOM_EMOJI_NAME: u32 = 3;
+const CUSTOM_EXPIRES_AT: u32 = 4;
+const CUSTOM_CREATED_AT: u32 = 5;
 const PRELOADED_GUILD_FOLDERS: u32 = 14;
 const FOLDERS: u32 = 1;
 const POSITIONS: u32 = 2;
@@ -30,6 +39,23 @@ pub struct ProtoGuildFolder {
 pub struct ProtoGuildFolders {
 	pub folders: Vec<ProtoGuildFolder>,
 	pub positions: Vec<Snowflake>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProtoCustomStatus {
+	pub text: String,
+	pub emoji_id: Option<Snowflake>,
+	pub emoji_name: Option<String>,
+	pub expires_at_ms: Option<u64>,
+	pub created_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProtoStatusSettings {
+	pub status: Option<String>,
+	pub custom_status: Option<ProtoCustomStatus>,
+	pub status_expires_at_ms: Option<u64>,
+	pub other: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -160,6 +186,104 @@ pub fn decode_guild_folders(encoded: &str) -> Option<ProtoGuildFolders> {
 	})
 }
 
+fn fixed(wire: Wire) -> Option<u64> {
+	match wire {
+		Wire::Fixed64(value) if value != 0 => Some(value),
+		_ => None,
+	}
+}
+
+fn text(bytes: &[u8]) -> String {
+	String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn decode_custom_status(bytes: &[u8]) -> ProtoCustomStatus {
+	let mut custom = ProtoCustomStatus::default();
+	for (number, wire) in Fields::new(bytes) {
+		match (number, wire) {
+			(CUSTOM_TEXT, Wire::Bytes(value)) => custom.text = text(value),
+			(CUSTOM_EMOJI_ID, wire) => custom.emoji_id = fixed(wire).map(Snowflake),
+			(CUSTOM_EMOJI_NAME, Wire::Bytes(value)) if !value.is_empty() => {
+				custom.emoji_name = Some(text(value));
+			}
+			(CUSTOM_EXPIRES_AT, wire) => custom.expires_at_ms = fixed(wire),
+			(CUSTOM_CREATED_AT, wire) => custom.created_at_ms = fixed(wire),
+			_ => {}
+		}
+	}
+	custom
+}
+
+fn decode_status(bytes: &[u8]) -> ProtoStatusSettings {
+	let mut settings = ProtoStatusSettings::default();
+	let mut fields = Fields::new(bytes);
+	loop {
+		let before = fields.bytes;
+		let Some((number, wire)) = fields.next() else {
+			break;
+		};
+		let raw = &before[..before.len() - fields.bytes.len()];
+		match (number, wire) {
+			(STATUS_VALUE, Wire::Bytes(inner)) => {
+				if let Some(Wire::Bytes(value)) = wrapped(inner) {
+					settings.status = Some(text(value)).filter(|status| !status.is_empty());
+				}
+			}
+			(STATUS_CUSTOM, Wire::Bytes(inner)) => {
+				settings.custom_status = Some(decode_custom_status(inner));
+			}
+			(STATUS_EXPIRES_AT, wire) => settings.status_expires_at_ms = fixed(wire),
+			_ => settings.other.extend_from_slice(raw),
+		}
+	}
+	settings
+}
+
+pub fn decode_status_settings(encoded: &str) -> Option<ProtoStatusSettings> {
+	let bytes = LENIENT.decode(encoded.trim()).ok()?;
+	Fields::new(&bytes).find_map(|(number, wire)| match (number, wire) {
+		(PRELOADED_STATUS, Wire::Bytes(inner)) => Some(decode_status(inner)),
+		_ => None,
+	})
+}
+
+fn encode_custom_status(custom: &ProtoCustomStatus) -> Vec<u8> {
+	let mut writer = Writer::new();
+	if !custom.text.is_empty() {
+		writer.bytes_field(CUSTOM_TEXT, custom.text.as_bytes());
+	}
+	if let Some(id) = custom.emoji_id {
+		writer.fixed_field(CUSTOM_EMOJI_ID, id.0);
+	}
+	if let Some(name) = custom.emoji_name.as_deref().filter(|name| !name.is_empty()) {
+		writer.bytes_field(CUSTOM_EMOJI_NAME, name.as_bytes());
+	}
+	if let Some(expires) = custom.expires_at_ms {
+		writer.fixed_field(CUSTOM_EXPIRES_AT, expires);
+	}
+	if let Some(created) = custom.created_at_ms {
+		writer.fixed_field(CUSTOM_CREATED_AT, created);
+	}
+	writer.bytes
+}
+
+pub fn encode_status_settings(settings: &ProtoStatusSettings) -> String {
+	let mut inner = Writer::new();
+	if let Some(status) = &settings.status {
+		inner.wrapped_text(STATUS_VALUE, status);
+	}
+	if let Some(custom) = &settings.custom_status {
+		inner.bytes_field(STATUS_CUSTOM, &encode_custom_status(custom));
+	}
+	if let Some(expires) = settings.status_expires_at_ms {
+		inner.fixed_field(STATUS_EXPIRES_AT, expires);
+	}
+	inner.bytes.extend_from_slice(&settings.other);
+	let mut preloaded = Writer::new();
+	preloaded.bytes_field(PRELOADED_STATUS, &inner.bytes);
+	base64::engine::general_purpose::STANDARD.encode(preloaded.bytes)
+}
+
 struct Writer {
 	bytes: Vec<u8>,
 }
@@ -184,6 +308,11 @@ impl Writer {
 	fn varint_field(&mut self, number: u32, value: u64) {
 		self.key(number, 0);
 		self.varint(value);
+	}
+
+	fn fixed_field(&mut self, number: u32, value: u64) {
+		self.key(number, 1);
+		self.bytes.extend_from_slice(&value.to_le_bytes());
 	}
 
 	fn bytes_field(&mut self, number: u32, bytes: &[u8]) {

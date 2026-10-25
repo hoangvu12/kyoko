@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use protocol::fingerprint::channel_referer;
 use protocol::{
 	Channel, ChannelType, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited, Message,
-	MessageAck, MessagesQuery, Nonce, Opcode, Snowflake, StatusKind, Token, User,
+	MessageAck, MessagesQuery, Nonce, Opcode, Snowflake, Token, User,
 };
 use rest::api::SearchQuery;
 use rest::{RestClient, RestTuning};
@@ -49,8 +49,10 @@ mod layout;
 mod locks;
 mod member_requests;
 mod outbox;
+mod profiles;
 mod reactions;
 mod reads;
+mod status;
 mod storage;
 mod subscriptions;
 mod themes;
@@ -122,6 +124,12 @@ pub(crate) enum Internal {
 	},
 	LayoutSaved(bool),
 	CollapseSaved(bool),
+	StatusSaved(Option<String>),
+	Profile {
+		user_id: Snowflake,
+		guild_id: Option<Snowflake>,
+		outcome: profiles::ProfileOutcome,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -169,9 +177,9 @@ pub(crate) struct Core {
 	loading: HashSet<(Snowflake, Page)>,
 	typing_expiry: Option<Instant>,
 	nonce_sequence: u64,
-	status: StatusKind,
+	status: status::StatusWriter,
+	profiles: profiles::Profiles,
 	afk: bool,
-	custom_status: Option<CustomStatus>,
 	hooks: Hooks,
 	themes: Arc<ThemeCatalogs>,
 	locale: String,
@@ -224,11 +232,6 @@ fn ack_day() -> i64 {
 	(Utc::now().timestamp_millis() - DISCORD_EPOCH_MS) / DAY_MILLIS
 }
 
-struct CustomStatus {
-	text: String,
-	emoji: Option<String>,
-}
-
 impl Core {
 	pub(crate) fn new(parts: CoreParts) -> Self {
 		let persist = Persistor::spawn(parts.store.clone(), &parts.runtime);
@@ -250,9 +253,9 @@ impl Core {
 			loading: HashSet::new(),
 			typing_expiry: None,
 			nonce_sequence: 0,
-			status: StatusKind::Online,
+			status: status::StatusWriter::new(&parts.tuning),
+			profiles: profiles::Profiles::default(),
 			afk: false,
-			custom_status: None,
 			hooks: parts.hooks,
 			themes: parts.themes,
 			locale: parts.locale,
@@ -535,6 +538,7 @@ impl Core {
 				let settings = self.state.read().guild_settings_cache();
 				self.persist.submit(Job::GuildSettings(settings));
 			}
+			DispatchEvent::UserSettingsProtoUpdate(_) => self.keep_intended_status(),
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
 			DispatchEvent::GuildMembersChunk(chunk) => {
@@ -641,6 +645,12 @@ impl Core {
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
 			Internal::LayoutSaved(saved) => self.on_layout_saved(saved),
 			Internal::CollapseSaved(saved) => self.on_collapse_saved(saved),
+			Internal::StatusSaved(failure) => self.on_status_saved(failure),
+			Internal::Profile {
+				user_id,
+				guild_id,
+				outcome,
+			} => self.on_profile(user_id, guild_id, outcome),
 			Internal::Kept { channel_id, kept } => self.apply_local(LocalEvent::KeptRestored {
 				channel_id,
 				deleted: kept.deleted,
@@ -1114,6 +1124,8 @@ impl Core {
 			self.backfill.deadline(),
 			self.layout.deadline(),
 			self.collapse.deadline(),
+			self.status.deadline(),
+			self.status_deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1132,6 +1144,10 @@ impl Core {
 		if self.collapse.deadline().is_some_and(|due| due <= now) {
 			self.flush_collapse();
 		}
+		if self.status.deadline().is_some_and(|due| due <= now) {
+			self.flush_status();
+		}
+		self.expire_custom_status();
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {
 				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use protocol::{Message, StatusKind};
+use protocol::Message;
 use state::Changes;
 
 use super::{Core, Internal};
@@ -10,7 +10,7 @@ use crate::hooks::guarded_blocking;
 
 impl Core {
 	pub(super) fn consider_alert(&mut self, message: &Message) {
-		if self.status == StatusKind::Dnd {
+		if self.is_dnd() {
 			return;
 		}
 		let alert = {

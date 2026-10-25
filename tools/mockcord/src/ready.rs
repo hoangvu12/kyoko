@@ -278,7 +278,7 @@ pub fn build(
 		"analytics_token": "x",
 		"api_code_version": API_CODE_VERSION,
 		"apex_experiments": { "installation": installation_id(shared.config.seed) },
-		"user_settings_proto": null,
+		"user_settings_proto": store.status_settings.as_ref().map(protocol::encode_status_settings),
 		"user_settings": { "guild_folders": guild_folders },
 	});
 	if dedupe {
