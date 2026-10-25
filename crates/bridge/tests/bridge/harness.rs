@@ -29,12 +29,9 @@ pub struct Running {
 
 impl Running {
 	pub async fn start(name: &str) -> Running {
-		let server = Server::start(MockConfig {
-			record: true,
-			..MockConfig::default()
-		})
-		.await
-		.expect("mock server starts");
+		let server = Server::start(MockConfig::default())
+			.await
+			.expect("mock server starts");
 		let scratch = std::env::temp_dir().join(format!("kyoko-bridge-{name}-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
 		let paths = Paths::at(&scratch).expect("scratch paths");

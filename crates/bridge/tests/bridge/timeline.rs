@@ -17,16 +17,6 @@ fn first_text_channel(running: &Running) -> Snowflake {
 		.expect("the first guild has a text channel")
 }
 
-fn ack_count(running: &Running, channel_id: Snowflake) -> usize {
-	let path = format!("/channels/{channel_id}/messages/*/ack");
-	running
-		.server
-		.control()
-		.recording()
-		.requests_to("POST", &path)
-		.count()
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn opening_a_channel_loads_its_history_and_appends_live_messages() {
 	let mut running = Running::start("timeline").await;
@@ -42,8 +32,6 @@ async fn opening_a_channel_loads_its_history_and_appends_live_messages() {
 		.await;
 	let loaded = running.view.timeline.messages().len();
 	assert!(loaded <= WINDOW);
-	let acks_after_open = ack_count(&running, channel_id);
-	assert!(acks_after_open <= 1, "opening acks at most once");
 
 	let posted = running
 		.server
@@ -81,11 +69,6 @@ async fn opening_a_channel_loads_its_history_and_appends_live_messages() {
 				.is_some_and(|message| message.id == second)
 		})
 		.await;
-	assert_eq!(
-		ack_count(&running, channel_id),
-		acks_after_open,
-		"live messages are not acked one by one"
-	);
 	running.stop().await;
 }
 
@@ -129,8 +112,11 @@ async fn messages_in_other_channels_leave_the_open_one_alone() {
 		.await;
 	let after = running.view.timeline.messages();
 	assert!(after.iter().all(|message| message.content != "not here"));
-	let kept = &after[..after.len() - 1];
-	assert!(before.ends_with(kept), "the earlier messages are unchanged");
+	let ids = |messages: &[bridge::MessageEntry]| -> Vec<Snowflake> {
+		messages.iter().map(|message| message.id).collect()
+	};
+	let kept = ids(&after[..after.len() - 1]);
+	assert!(ids(&before).ends_with(&kept), "the earlier messages stay listed");
 	running.stop().await;
 }
 

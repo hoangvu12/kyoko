@@ -25,7 +25,7 @@ Tickets 03 and 04 put a zgx window with a Luau interface on the core. The window
 
 `zgx-script` rebuilt whenever the build had last run from the other shell. Keep cargo in one shell, as 03 found.
 
-The debug `kyoko.exe` is 57.7 MB (54 MB in 03). No release build was made: free disk was 45 GB, under the 50 GB needed for one.
+The debug `kyoko.exe` is 57.7 MB (54 MB in 03). The release `kyoko.exe` is 51.2 MB, with debug info stripped but symbols kept. One release build of the app took 7 min 28 s with a partly warm sccache.
 
 ## Memory and CPU (debug build)
 
@@ -36,8 +36,10 @@ The debug `kyoko.exe` is 57.7 MB (54 MB in 03). No release build was made: free 
 | Mockcord, channel open, one message every 2 s | 195.5 MB | 195.6 MB | 0.68 % |
 | Real Discord, run 1, 8 guilds, channel open, idle | 147.0 MB | 143.4 MB | 0.16 % |
 | Real Discord, run 2, same account, channel open, idle | 167.6 MB | 161.1 MB | 0.08 % |
+| Release, mockcord, idle, no channel open | 197.7 MB | 191.6 MB | 0.05 % |
+| Release, mockcord, channel open, one message every 2 s | 188.9 MB | 192.4 MB | 0.21 % |
 
-Mockcord runs in-process under `--mock`, so the mock figures include it. The real runs stayed flat for the 3.5 minutes they were watched.
+Mockcord runs in-process under `--mock`, so the mock figures include it. The real runs stayed flat for the 3.5 minutes they were watched. Release uses about as much memory as debug, so the figure is set by the window, the GPU surfaces and fonts rather than by the code; release mainly saves CPU.
 
 ## Bridge behaviour
 
@@ -45,7 +47,7 @@ Mockcord runs in-process under `--mock`, so the mock figures include it. The rea
 - **Latency.** With `--chatter 2` on mockcord, 36 posted messages produced 36 timeline publishes, each with exactly one appended message. Time from mockcord's post to the timeline publish on the UI thread had a median of 1.4 ms, a minimum of 0.9 ms and a maximum of 4.0 ms. This includes the gateway round trip over loopback, the state reducer and the projection. It excludes the paint, which follows on the next frame.
 - **Drops and duplicates.** None. Bridge tests check that ids stay unique and in order across history plus live messages, and that a message in another channel leaves the open one untouched.
 - **Avatar.** From the request to the image being handed to the window took 72 to 125 ms on mockcord and 207 and 306 ms against the real CDN, for a 32 px WebP. The display scale read from `WindowInfo` was 1.0 on this machine, so HiDPI sizing is untested.
-- **Read acks.** Opening a channel sends one `POST /channels/{id}/messages/{last}/ack`. This is `select_channel` in the session, as before this ticket. Incoming messages are never acked. The timeline bridge test asserts that the ack count does not grow as live messages arrive. Both real runs sent exactly one ack.
+- **Read acks.** During the real runs, before ticket 10 merged, opening a channel sent one immediate `POST /channels/{id}/messages/{last}/ack` and incoming messages were never acked. Both runs sent exactly one ack. Ticket 10 now owns acks: the session debounces them, including for new messages in the viewed channel (see `docs/rest.md`). The spike window does not yet report `SetViewing`, because zgx gives the host no window focus or minimise signal, so the session treats the window as always viewing.
 - **Projection cost.** `Timeline::apply` rebuilds the 50 entries and compares them with the previous ones. Each publish replaces the whole Luau list. That is fine at spike scale; ticket 25 replaces it.
 
 ## zgx issues met
@@ -111,7 +113,7 @@ The docs do not describe the web client's exact current traffic. Their IDENTIFY 
 
 - **06 / 19, fingerprint.** Bump Chrome to 156/157 together with the GREASE brand. Reorder the IDENTIFY keys and drop `large_threshold`. Add `launch_signature`. Rotate `client_heartbeat_session_id` every 30 minutes. Recheck the fallback build each release; 649389 was current on 2026-10-25.
 - **08.** No `auth_token` came in two real READYs with bit 8 advertised, so the refresh path is still unverified against real traffic.
-- **10, read acks.** The session acks once when a channel opens and never per message. Paced acks start from there.
+- **10, read acks.** Done on main. The window still has to report `SetViewing(false)` when it loses focus or is minimised, and `SetViewport` from the message list. zgx exposes neither focus nor minimise to the host yet, so this lands with 25, or with 20 if the app frame gets a focus signal first.
 - **13, client_state.** Add `api_code_version` and echo READY's value. Send presence `"unknown"` with `since: 0`. Put `installation_id` in IDENTIFY. `user_settings_proto` already arrives without bit 9.
 - **14, member lists.** One open guild produced 60 to 76 GUILD_MEMBER_LIST_UPDATE in about four minutes while idle. Coalesce them and keep them off the timeline path. `Timeline::apply` currently re-projects on any member change in the open guild.
 - **16 / 13, capabilities.** Bits 13 and 14 stay off until their parsers exist.
