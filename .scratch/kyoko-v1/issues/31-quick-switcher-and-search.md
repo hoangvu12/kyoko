@@ -10,3 +10,7 @@
 - [ ] Jumping to any server, channel or DM by name works
 - [ ] Search with filters works, and results open in context
 - [ ] Search results use the timeline's full context menu
+
+## Comments
+
+From the timeline (25): the Rust timeline view is drawn above the whole Luau tree, so any Luau menu, popover, modal or lightbox that overlaps the message area renders underneath it. Either draw that overlay in Rust above the timeline slot, or hide the slot while the overlay is open (see `docs/ui.md`).

@@ -4,7 +4,7 @@
 
 **Blocked by:** 25 (Timeline view), 18 (Media pipeline), 17 (Fetch missing replies and users)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Discord markdown renders in full: styles, headings, subtext, lists, quotes, code with highlighting, spoilers, masked links, mentions, custom emoji and timestamps
 - [ ] Embeds, attachments, stickers, polls, reactions, system messages, reply previews, edited markers and the unread divider all render
