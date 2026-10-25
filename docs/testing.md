@@ -8,7 +8,7 @@ Kyoko's behaviour tests drive a real `Session` against an in-process mockcord. T
 cargo xtask test
 ```
 
-This runs `cargo test -p kyoko-session -p kyoko-gateway -p mockcord`. CI runs the same tests on Windows as part of `cargo test --workspace --locked`. To run a single test: `cargo test -p kyoko-session --test session <name>`.
+This runs `cargo test -p kyoko-session -p kyoko-gateway -p mockcord -p kyoko-plugins` and the Luau load check. CI runs the same tests on Windows as part of `cargo test --workspace --locked`. To run a single test: `cargo test -p kyoko-session --test session <name>`.
 
 ## Layout
 
@@ -17,6 +17,8 @@ All session tests live in a single test binary, `crates/session/tests/session/`:
 - `main.rs` lists the modules.
 - `harness.rs` holds `Running` and `Options`.
 - Each other file holds one behaviour area: `hooks.rs`, `wire.rs`, and so on. Add a file per ticket area and list it in `main.rs`.
+
+Plugin tests are a second binary, `crates/plugins/tests/plugins/`, that includes this harness by path (`docs/plugins.md`).
 
 Keeping everything in one binary means one link step and a shared harness without dead-code warnings. Every harness helper must be used by at least one test. Add helpers when a test needs them, not before.
 

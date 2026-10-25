@@ -206,7 +206,7 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 ### 37 Account and settings pages
 
-The voice and video, plugins and updates pages are left out, as ticket 37 says. Kyoko has no Themes page until ticket 57 adds one through the settings page registry, and no Developer page: its developer mode switch is on Advanced.
+The voice and video and updates pages are left out, as ticket 37 says; ticket 45 adds the Plugins page. Kyoko has no Themes page until ticket 57 adds one through the settings page registry, and no Developer page: its developer mode switch is on Advanced.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
@@ -227,6 +227,12 @@ The voice and video, plugins and updates pages are left out, as ticket 37 says. 
 | `settings-advanced` | 37 | As above, on Advanced. | yes |
 | `settings-themes` | 37 | As above, on Themes. | no |
 | `settings-developer` | 37 | As above, on Developer. | no |
+
+### 45 Plugin runtime
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `settings-plugins` | 45 | Default selection, then open settings on Plugins. Oxidcord lists no plugins on a fresh data directory; kyoko lists its bundled ClearURLs, disabled. | yes |
 
 ### 38 Toasts, transitions and connection status
 

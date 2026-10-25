@@ -92,3 +92,8 @@ Kyoko bundles no fonts. Like oxidcord, it asks for the first installed family of
 ## Oxidcord theme and layout
 
 The theme tokens in `apps/desktop/src/theme.rs` (colours, sizes, fonts, the light and AMOLED overrides) and the shell layout in `apps/desktop/ui/shell/` are ported from oxidcord's `crates/ui/src/theme.rs` and `crates/ui/src/shell/`, under oxidcord's MIT OR Apache-2.0 licence (see `NOTICE`).
+
+## ClearURLs rules (not bundled)
+
+The bundled ClearURLs plugin (`plugins/clear-urls/`) does not include the ClearURLs project's rule list ([ClearURLs/Rules](https://github.com/ClearURLs/Rules)), which is distributed under the GNU Lesser General Public License v3.0. Its rule set, `plugins/clear-urls/rules.luau`, is kyoko's own, written from the publicly documented names of tracking parameters (for example Google Analytics' `utm_*` campaign parameters and click identifiers such as `gclid` and `fbclid`), and is distributed under kyoko's licence. No rules are downloaded at run time.
+

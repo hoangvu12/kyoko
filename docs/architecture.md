@@ -14,20 +14,21 @@ crates/media        image fetching, decoding and the budgeted gallery of host im
 crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes
 crates/bridge       core to UI bridge without a UI dependency: the Changes inbox and the projections the UI publishes
 crates/login        token, QR and web login
+crates/plugins      the Luau plugin runtime: sandboxed VMs on worker threads behind SessionHooks (docs/plugins.md)
 crates/platform     Windows tray, notifications, hotkeys, clipboard, autostart, URL scheme (docs/desktop.md)
 tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
 tools/xtask         test, headless-run, theme catalog tooling, release notes
 ```
 
-Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state` and `media`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
+Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state` and `media`. `plugins` depends on `session`, `state`, `store`, `protocol` and mlua. `apps/desktop` depends on `bridge`, `plugins`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session`, `bridge` or `plugins` has a UI dependency.
 
 Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`. Cache limits, warm channels and the message window are in `docs/caches.md`. Risky-action locks and the safety setting are in `docs/locks.md`. Findings from the zgx spike (build times, memory, bridge latency, the real-traffic comparison) are in `docs/spike.md`. The interface (Luau layout, theme, fonts, icons, naming) is described in `docs/ui.md`.
 
 ## Session hooks
 
-The session has no plugin runtime. `SessionConfig::hooks` takes an optional `Arc<dyn SessionHooks>`; every method has a no-op default:
+The session has no plugin runtime; `plugins::PluginHost` implements this interface (`docs/plugins.md`). `SessionConfig::hooks` takes an optional `Arc<dyn SessionHooks>`; every method has a no-op default:
 
-- `before_send(channel_id, content)` and `before_edit(channel_id, message_id, content)` may return replacement text. A rewritten send is shown as altered by `name()`.
+- `before_send(channel_id, content)` may return a `Rewrite` (the replacement text and, optionally, who rewrote it) and `before_edit(channel_id, message_id, content)` replacement text. A rewritten send is shown as altered by the rewrite's `by`, or `name()` without one.
 - `allow_typing(channel_id)` can veto the typing indicator.
 - `allow_notification(message)` filters the session's notification alerts (`docs/desktop.md`). It is also exposed as `Session::should_notify`.
 - `on_dispatch(event)` observes every gateway dispatch after it is applied to state. It runs on the session task, so implementations must return quickly and queue any real work.
