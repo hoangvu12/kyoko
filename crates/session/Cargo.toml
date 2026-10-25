@@ -34,5 +34,6 @@ rand.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
+bytes.workspace = true
 mockcord.workspace = true
 media.workspace = true

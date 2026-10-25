@@ -3,6 +3,7 @@ mod backfill;
 mod caches;
 mod capabilities;
 mod collapse;
+mod composer;
 mod deletes;
 mod dms;
 mod fingerprint;

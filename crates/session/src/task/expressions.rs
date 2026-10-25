@@ -106,7 +106,13 @@ impl Core {
 			Command::SendGif { channel_id, gif } => {
 				let url = gif.url.clone();
 				self.remember_gif(gif);
-				self.send_message(channel_id, url, None, Vec::new());
+				self.send_message(super::outbox::Outgoing {
+					channel_id,
+					content: url,
+					reply_to: None,
+					ping_reply: true,
+					files: Vec::new(),
+				});
 			}
 			Command::SendSticker {
 				channel_id,

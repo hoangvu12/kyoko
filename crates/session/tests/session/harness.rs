@@ -332,6 +332,7 @@ impl Running {
 			channel_id,
 			content: sent.to_owned(),
 			reply_to: None,
+			ping_reply: true,
 			files: Vec::new(),
 		});
 		self.until("the sent message to arrive", |state| {

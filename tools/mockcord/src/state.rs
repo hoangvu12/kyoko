@@ -13,6 +13,7 @@ use crate::config::MockConfig;
 use crate::fixtures::Fixtures;
 use crate::hub::Hub;
 use crate::ids::snowflake_at;
+use crate::ops::UploadedFile;
 use crate::record::Recorder;
 use crate::scenario::Scenario;
 
@@ -47,6 +48,7 @@ pub struct Store {
 	pub read_state_version: Versions,
 	pub settings_version: Versions,
 	pub guild_folders: Option<Vec<Value>>,
+	pub uploads: HashMap<String, UploadedFile>,
 	last_id: u64,
 }
 
@@ -148,6 +150,7 @@ impl Store {
 			read_state_version: Versions::default(),
 			settings_version: Versions::default(),
 			guild_folders: None,
+			uploads: HashMap::new(),
 			last_id,
 		}
 	}

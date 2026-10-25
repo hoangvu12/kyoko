@@ -26,6 +26,7 @@ impl Core {
 			| Command::CreateThread { channel_id, .. }
 			| Command::AddReaction { channel_id, .. }
 			| Command::Typing { channel_id }
+			| Command::RunApplicationCommand { channel_id, .. }
 			| Command::ForwardMessage {
 				to_channel_id: channel_id,
 				..

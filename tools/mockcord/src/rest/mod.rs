@@ -2,7 +2,10 @@ mod admin;
 mod channels;
 mod expressions;
 mod guilds;
+mod interactions;
 mod users;
+
+pub use interactions::MOCKBOT_ID;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -157,6 +160,20 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/channels/{id}/polls/{mid}/answers/@me", put(admin::vote))
 		.route("/channels/{id}/polls/{mid}/expire", post(admin::expire_poll))
 		.route("/channels/{id}/typing", post(channels::typing))
+		.route("/channels/{id}/attachments", post(interactions::attachment_slots))
+		.route(
+			"/channels/{id}/application-command-index",
+			get(interactions::channel_index),
+		)
+		.route(
+			"/guilds/{id}/application-command-index",
+			get(interactions::guild_index),
+		)
+		.route(
+			"/users/@me/application-command-index",
+			get(interactions::user_index),
+		)
+		.route("/interactions", post(interactions::create_interaction))
 		.route("/channels/{id}/call/ring", post(channels::call_signal))
 		.route("/channels/{id}/call/stop-ringing", post(channels::call_signal))
 		.route("/channels/{id}/threads", post(channels::create_thread))
@@ -178,6 +195,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			"/cdn/attachments/{channel_id}/{attachment_id}/{file}",
 			get(cdn::attachment),
 		)
+		.route("/upload/{*key}", put(interactions::upload))
 		.route("/app", get(web::app))
 		.route("/assets/{name}", get(web::asset))
 		.nest("/api/v9", api.clone())
@@ -199,7 +217,10 @@ fn api_path(path: &str) -> Option<(u32, &str)> {
 
 async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next) -> Response {
 	let at = Instant::now();
-	let Some((version, path)) = api_path(request.uri().path()) else {
+	let full = request.uri().path().to_owned();
+	let Some((version, path)) =
+		api_path(&full).or_else(|| full.starts_with("/upload/").then_some((0, full.as_str())))
+	else {
 		return observe_media(&shared, request, next, at).await;
 	};
 	let path = path.to_owned();

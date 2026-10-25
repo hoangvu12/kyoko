@@ -1,3 +1,4 @@
+mod composer;
 mod deep_links;
 mod dms;
 mod harness;

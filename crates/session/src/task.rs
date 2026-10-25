@@ -11,11 +11,11 @@ use gateway::{
 use parking_lot::Mutex;
 use protocol::fingerprint::channel_referer;
 use protocol::{
-	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited,
-	Message, MessageAck, MessageReference, MessagesQuery, Nonce, Opcode, Snowflake, StatusKind, Token, User,
+	Channel, ChannelType, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited, Message,
+	MessageAck, MessagesQuery, Nonce, Opcode, Snowflake, StatusKind, Token, User,
 };
 use rest::api::SearchQuery;
-use rest::{RestClient, RestTuning, UploadFile};
+use rest::{RestClient, RestTuning};
 use state::{
 	Changes, ConnectionStatus, DeleteStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent,
 	RenderedMessage, SendFailure, SharedState, TYPING_TIMEOUT,
@@ -44,9 +44,11 @@ mod commands;
 mod deletes;
 mod expressions;
 mod failures;
+mod interactions;
 mod layout;
 mod locks;
 mod member_requests;
+mod outbox;
 mod reads;
 mod storage;
 mod subscriptions;
@@ -81,7 +83,7 @@ pub(crate) enum Internal {
 		cache: bool,
 	},
 	LoadFinished(Snowflake, Page),
-	SendFailed(Nonce, SendFailure),
+	SendFailed(Nonce, SendFailure, Box<outbox::Outgoing>),
 	Search(SearchResults),
 	DmOpened(Box<Channel>),
 	ThreadOpened(Box<Channel>),
@@ -93,11 +95,12 @@ pub(crate) enum Internal {
 	},
 	BeforeSend {
 		nonce: Nonce,
-		channel_id: Snowflake,
-		content: String,
-		reply_to: Option<Snowflake>,
-		files: Vec<UploadFile>,
+		outgoing: Box<outbox::Outgoing>,
 		rewritten: Option<String>,
+	},
+	CommandIndex {
+		scope: Snowflake,
+		index: Option<Box<protocol::ApplicationCommandIndex>>,
 	},
 	ThemeCatalogChanged,
 	Alert(Alert),
@@ -189,6 +192,8 @@ pub(crate) struct Core {
 	subscriptions: subscriptions::Subscriptions,
 	member_requests: member_requests::MemberRequests,
 	backfill: backfill::Backfill,
+	outbox: outbox::Outbox,
+	interactions: interactions::Interactions,
 }
 
 fn page_query(
@@ -268,6 +273,8 @@ impl Core {
 			subscriptions: subscriptions::Subscriptions::default(),
 			member_requests: member_requests::MemberRequests::default(),
 			backfill: backfill::Backfill::new(&parts.tuning),
+			outbox: outbox::Outbox::default(),
+			interactions: interactions::Interactions::default(),
 		}
 	}
 
@@ -534,6 +541,8 @@ impl Core {
 				self.backfill_members_answered(&chunk);
 			}
 			DispatchEvent::RateLimited(limited) => self.on_rate_limited(&limited),
+			DispatchEvent::InteractionSuccess(value) => self.interaction_settled(&value, false),
+			DispatchEvent::InteractionFailure(value) => self.interaction_settled(&value, true),
 			_ => {}
 		}
 	}
@@ -585,9 +594,8 @@ impl Core {
 			Internal::LoadFinished(channel_id, page) => {
 				self.loading.remove(&(channel_id, page));
 			}
-			Internal::SendFailed(nonce, reason) => {
-				self.apply_local(LocalEvent::PendingFailed { nonce, reason })
-			}
+			Internal::SendFailed(nonce, reason, outgoing) => self.send_failed(nonce, reason, *outgoing),
+			Internal::CommandIndex { scope, index } => self.command_index_arrived(scope, index),
 			Internal::Search(results) => {
 				*self.search.lock() = Some(Arc::new(results));
 				self.notifier.push(Changes {
@@ -610,12 +618,9 @@ impl Core {
 			}
 			Internal::BeforeSend {
 				nonce,
-				channel_id,
-				content,
-				reply_to,
-				files,
+				outgoing,
 				rewritten,
-			} => self.on_before_send(nonce, channel_id, content, reply_to, files, rewritten),
+			} => self.on_before_send(nonce, *outgoing, rewritten),
 			Internal::Alert(alert) => self.raise_alert(alert),
 			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
 				theme_catalog: true,
@@ -715,8 +720,23 @@ impl Core {
 				channel_id,
 				content,
 				reply_to,
+				ping_reply,
 				files,
-			} => self.send_message(channel_id, content, reply_to, files),
+			} => self.send_message(outbox::Outgoing {
+				channel_id,
+				content,
+				reply_to,
+				ping_reply,
+				files,
+			}),
+			Command::RetryMessage { channel_id, nonce } => self.retry_message(channel_id, nonce),
+			Command::DiscardMessage { channel_id, nonce } => self.discard_message(channel_id, nonce),
+			Command::LoadApplicationCommands { channel_id } => self.load_commands(channel_id),
+			Command::RunApplicationCommand {
+				channel_id,
+				command_id,
+				options,
+			} => self.run_command(channel_id, command_id, options),
 			Command::EditMessage {
 				channel_id,
 				message_id,
@@ -993,90 +1013,10 @@ impl Core {
 		self.state.read().current_user().cloned()
 	}
 
-	fn send_message(
-		&mut self,
-		channel_id: Snowflake,
-		content: String,
-		reply_to: Option<Snowflake>,
-		files: Vec<UploadFile>,
-	) {
-		let Some(author) = self.current_user() else {
-			tracing::warn!("message not sent, no signed in user");
-			return;
-		};
-		self.remember_message_emoji(&content);
-		let nonce = self.next_nonce();
-		self.apply_local(LocalEvent::PendingMessage {
-			channel_id,
-			nonce: nonce.clone(),
-			content: content.clone(),
-			author: Box::new(author),
-			by_plugin: None,
-		});
-		if self.hooks.is_some() && !content.is_empty() {
-			self.hook_before_send(nonce, channel_id, content, reply_to, files);
-		} else {
-			self.dispatch_send(nonce, channel_id, content, reply_to, files);
-		}
-	}
-
-	fn hook_before_send(
-		&self,
-		nonce: Nonce,
-		channel_id: Snowflake,
-		content: String,
-		reply_to: Option<Snowflake>,
-		files: Vec<UploadFile>,
-	) {
-		let hooks = self.hooks.clone();
-		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
-			let original = content.clone();
-			let rewritten = guarded_blocking(&hooks, "before_send", move |hooks| {
-				hooks.before_send(channel_id, &original)
-			})
-			.await
-			.flatten()
-			.filter(|rewritten| *rewritten != content);
-			let _ = internal.send(Internal::BeforeSend {
-				nonce,
-				channel_id,
-				content,
-				reply_to,
-				files,
-				rewritten,
-			});
-		});
-	}
-
-	fn on_before_send(
-		&mut self,
-		nonce: Nonce,
-		channel_id: Snowflake,
-		content: String,
-		reply_to: Option<Snowflake>,
-		files: Vec<UploadFile>,
-		rewritten: Option<String>,
-	) {
-		let Some(rewritten) = rewritten else {
-			self.dispatch_send(nonce, channel_id, content, reply_to, files);
-			return;
-		};
-		let by = self
-			.hooks
-			.as_deref()
-			.map_or_else(String::new, |hooks| hooks.name().to_owned());
-		self.apply_local(LocalEvent::PendingAltered {
-			nonce: nonce.clone(),
-			content: rewritten.clone(),
-			by,
-		});
-		self.dispatch_send(nonce, channel_id, rewritten, reply_to, files);
-	}
-
 	fn edit_message(&self, channel_id: Snowflake, message_id: Snowflake, content: String) {
 		let hooks = self.hooks.clone();
 		let rest = self.rest.clone();
+		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
 			let original = content.clone();
 			let content = guarded_blocking(&hooks, "before_edit", move |hooks| {
@@ -1091,6 +1031,7 @@ impl Core {
 			};
 			if let Err(error) = rest.edit_message(channel_id, message_id, body).await {
 				tracing::warn!(%error, what = "edit message", "rest call failed");
+				let _ = internal.send(Internal::Rejected(actions::failure_reason("Edit", &error)));
 			}
 		});
 	}
@@ -1106,40 +1047,6 @@ impl Core {
 				rendered,
 			}));
 		}
-	}
-
-	fn dispatch_send(
-		&mut self,
-		nonce: Nonce,
-		channel_id: Snowflake,
-		content: String,
-		reply_to: Option<Snowflake>,
-		files: Vec<UploadFile>,
-	) {
-		let body = CreateMessage {
-			content: (!content.is_empty()).then_some(content),
-			nonce: Some(nonce.0.clone()),
-			message_reference: reply_to.map(|message_id| MessageReference {
-				message_id: Some(message_id),
-				channel_id: Some(channel_id),
-				fail_if_not_exists: Some(false),
-				..MessageReference::default()
-			}),
-			..CreateMessage::default()
-		};
-		let rest = self.rest.clone();
-		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
-			let sent = if files.is_empty() {
-				rest.create_message(channel_id, body).await
-			} else {
-				rest.create_message_with_files(channel_id, body, files).await
-			};
-			if let Err(error) = sent {
-				tracing::warn!(%error, "message was not sent");
-				let _ = internal.send(Internal::SendFailed(nonce, failures::send_failure(&error)));
-			}
-		});
 	}
 
 	fn typing(&mut self, channel_id: Snowflake) {

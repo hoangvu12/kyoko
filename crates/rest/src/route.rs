@@ -28,6 +28,10 @@ impl RouteKey {
 				== Some(self.major.as_str())
 	}
 
+	pub fn is_interaction(&self) -> bool {
+		self.key == "POST /interactions"
+	}
+
 	pub fn is_message_delete(&self) -> bool {
 		self.major.starts_with("channels/")
 			&& self

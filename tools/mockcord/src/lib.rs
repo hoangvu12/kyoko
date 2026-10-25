@@ -31,6 +31,7 @@ pub use ready::API_CODE_VERSION;
 pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,
 };
+pub use rest::MOCKBOT_ID;
 pub use scenario::{HeartbeatAcks, Reply};
 pub use server::Server;
 pub use web::{DEVICE_COOKIE, device_cookie_value, installation_id};

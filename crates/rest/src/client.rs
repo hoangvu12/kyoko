@@ -28,6 +28,7 @@ use reqwest::redirect::Policy;
 use reqwest::{Body as HttpBody, Method, Response, StatusCode};
 
 const FALLBACK_RETRY_AFTER: Duration = Duration::from_secs(1);
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const X_DISCORD_LOCALE: HeaderName = HeaderName::from_static("x-discord-locale");
 const X_DISCORD_TIMEZONE: HeaderName = HeaderName::from_static("x-discord-timezone");
 const X_SUPER_PROPERTIES: HeaderName = HeaderName::from_static("x-super-properties");
@@ -47,6 +48,7 @@ pub struct RestClient {
 
 struct Inner {
 	http: reqwest::Client,
+	uploads: reqwest::Client,
 	base_url: Url,
 	max_body: usize,
 	token: Arc<RwLock<Option<Token>>>,
@@ -76,6 +78,20 @@ fn default_headers(fingerprint: &Fingerprint) -> HeaderMap {
 	headers.insert(SEC_FETCH_MODE, HeaderValue::from_static("cors"));
 	headers.insert(SEC_FETCH_SITE, HeaderValue::from_static("same-origin"));
 	headers.insert(PRIORITY, HeaderValue::from_static("u=1, i"));
+	headers
+}
+
+fn upload_headers() -> HeaderMap {
+	let mut headers = HeaderMap::new();
+	headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
+	insert_text(&mut headers, SEC_CH_UA, &sec_ch_ua());
+	headers.insert(SEC_CH_UA_MOBILE, HeaderValue::from_static("?0"));
+	headers.insert(SEC_CH_UA_PLATFORM, HeaderValue::from_static(sec_ch_ua_platform()));
+	headers.insert(ORIGIN, HeaderValue::from_static(WEB_ORIGIN));
+	headers.insert(REFERER, HeaderValue::from_static(HOME_REFERER));
+	headers.insert(SEC_FETCH_DEST, HeaderValue::from_static("empty"));
+	headers.insert(SEC_FETCH_MODE, HeaderValue::from_static("cors"));
+	headers.insert(SEC_FETCH_SITE, HeaderValue::from_static("cross-site"));
 	headers
 }
 
@@ -170,9 +186,17 @@ impl RestClient {
 			.cookie_provider(config.identity.cookies().clone())
 			.build()
 			.expect("http client initializes");
+		let uploads = reqwest::Client::builder()
+			.redirect(Policy::none())
+			.timeout(UPLOAD_TIMEOUT)
+			.user_agent(fingerprint.user_agent())
+			.default_headers(upload_headers())
+			.build()
+			.expect("upload client initializes");
 		Self {
 			inner: Arc::new(Inner {
 				http,
+				uploads,
 				base_url: config.base_url,
 				max_body: config.max_body,
 				token: Arc::default(),
@@ -227,6 +251,38 @@ impl RestClient {
 
 	pub async fn send_bytes(&self, request: Request) -> Result<Bytes> {
 		self.execute(request).await
+	}
+
+	pub async fn upload(&self, upload_url: &str, file: &UploadFile) -> Result<()> {
+		let url = Url::parse(upload_url).map_err(|_| RestError::InvalidRequest)?;
+		if !secure_scheme(&url) {
+			return Err(RestError::InvalidRequest);
+		}
+		self.inner.safety.stop.ensure_running()?;
+		let request = self
+			.inner
+			.uploads
+			.put(url)
+			.header(CONTENT_TYPE, file.content_type.as_str())
+			.body(file.bytes.clone());
+		let response = self
+			.inner
+			.safety
+			.stop
+			.unless_stopped(request.send())
+			.await?
+			.map_err(network_error)?;
+		let status = response.status();
+		tracing::debug!(
+			status = status.as_u16(),
+			bytes = file.bytes.len(),
+			"upload response"
+		);
+		if status.is_success() {
+			Ok(())
+		} else {
+			Err(RestError::Http(status, None))
+		}
 	}
 
 	fn build_url(&self, request: &Request) -> Result<Url> {

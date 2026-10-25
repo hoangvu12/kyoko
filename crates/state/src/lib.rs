@@ -1,5 +1,6 @@
 mod caps;
 mod changes;
+mod composer;
 mod deletions;
 mod dispatch;
 mod event;
@@ -26,6 +27,7 @@ mod voice;
 
 pub use caps::{CacheLimits, Recent};
 pub use changes::{Changes, IdSet};
+pub use composer::MAX_ATTACHMENTS;
 pub use deletions::{DeleteBatch, DeleteStatus};
 pub use event::{Event, LoadDirection, LocalEvent};
 pub use expressions::{

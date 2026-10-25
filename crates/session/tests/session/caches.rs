@@ -296,6 +296,7 @@ async fn the_visible_range_is_never_evicted() {
 		channel_id,
 		content: "one too many".to_owned(),
 		reply_to: None,
+		ping_reply: true,
 		files: Vec::new(),
 	});
 	running

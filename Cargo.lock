@@ -3482,6 +3482,7 @@ version = "0.2.0-beta.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
+ "bytes",
  "chrono",
  "ed25519-dalek",
  "hex",

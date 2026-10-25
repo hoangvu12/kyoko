@@ -22,6 +22,8 @@ impl Pace {
 	pub fn of(method: &Method, route: &RouteKey) -> Self {
 		if route.is_message_send() {
 			Self::Send(route.major().to_owned())
+		} else if route.is_interaction() {
+			Self::Send(route.as_str().to_owned())
 		} else if route.is_message_delete() {
 			Self::Delete
 		} else if route.is_bulk_ack() {

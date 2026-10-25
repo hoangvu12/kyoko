@@ -23,6 +23,7 @@ media.workspace = true
 markdown.workspace = true
 chrono.workspace = true
 parking_lot.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 mockcord.workspace = true

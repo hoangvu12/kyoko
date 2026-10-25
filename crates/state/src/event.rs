@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
+use protocol::{
+	ApplicationCommandIndex, DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User,
+};
 
 use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::kept::MessageVersion;
@@ -143,6 +145,10 @@ pub enum LocalEvent {
 	MediaRefreshed {
 		channel_id: Snowflake,
 		message: Box<Message>,
+	},
+	CommandIndexLoaded {
+		scope: Snowflake,
+		index: Arc<ApplicationCommandIndex>,
 	},
 }
 

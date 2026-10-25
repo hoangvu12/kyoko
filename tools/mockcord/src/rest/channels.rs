@@ -155,7 +155,7 @@ async fn read_multipart_parts(request: Request) -> Result<(Value, Vec<UploadedFi
 	Ok((payload, files))
 }
 
-async fn read_body(request: Request) -> Result<(Value, Vec<UploadedFile>), ApiError> {
+pub(super) async fn read_body(request: Request) -> Result<(Value, Vec<UploadedFile>), ApiError> {
 	let multipart = request
 		.headers()
 		.get(CONTENT_TYPE)
@@ -180,7 +180,8 @@ pub async fn create_message(
 	Path(id): Path<u64>,
 	request: Request,
 ) -> ApiResult {
-	let draft = read_draft(request).await?;
+	let mut draft = read_draft(request).await?;
+	super::interactions::claim_uploads(&shared, &mut draft)?;
 	shared
 		.post_message(id, &shared.fixtures.current_user, draft)
 		.map(Json)

@@ -433,6 +433,7 @@ async fn a_rejected_token_is_forgotten_but_the_cache_stays() {
 		channel_id,
 		content: "rejected".to_owned(),
 		reply_to: None,
+		ping_reply: true,
 		files: Vec::new(),
 	});
 	running

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use protocol::{
-	Channel, ChannelType, DefaultMessageNotifications, Emoji, Guild, Member, Role, Snowflake,
+	Channel, ChannelType, DefaultMessageNotifications, Emoji, Guild, Member, PremiumTier, Role, Snowflake,
 	VerificationLevel, VoiceState,
 };
 
@@ -19,6 +19,7 @@ pub struct GuildState {
 	pub owner_id: Option<Snowflake>,
 	pub features: Vec<String>,
 	pub verification_level: Option<VerificationLevel>,
+	pub premium_tier: Option<PremiumTier>,
 	pub default_notifications: Option<DefaultMessageNotifications>,
 	pub member_count: Option<i64>,
 	pub description: Option<String>,
@@ -85,6 +86,7 @@ impl GuildState {
 		self.description.clone_from(&guild.description);
 		self.owner_id = guild.owner_id.or(self.owner_id);
 		self.verification_level = guild.verification_level.or(self.verification_level);
+		self.premium_tier = guild.premium_tier.or(self.premium_tier);
 		self.default_notifications = guild.default_message_notifications.or(self.default_notifications);
 		self.member_count = guild.member_count.or(self.member_count);
 		self.joined_at = guild.joined_at.or(self.joined_at);

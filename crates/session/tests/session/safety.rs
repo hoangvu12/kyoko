@@ -26,6 +26,7 @@ fn send(running: &Running, channel_id: Snowflake, content: &str) {
 		channel_id,
 		content: content.to_owned(),
 		reply_to: None,
+		ping_reply: true,
 		files: Vec::new(),
 	});
 }

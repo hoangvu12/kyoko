@@ -5,7 +5,10 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
-use protocol::{Channel, Message, Presence, ReadState, Relationship, Snowflake, User, UserGuildSettings};
+use protocol::{
+	ApplicationCommandIndex, Channel, Message, Presence, ReadState, Relationship, Snowflake, User,
+	UserGuildSettings,
+};
 use serde_json::Value;
 use smallvec::SmallVec;
 
@@ -120,6 +123,7 @@ pub struct State {
 	pub(crate) referenced: Recent<Snowflake, StoredReference>,
 	pub(crate) show_deleted: bool,
 	pub(crate) kept_writes: Vec<KeptWrite>,
+	pub(crate) commands: HashMap<Snowflake, Arc<ApplicationCommandIndex>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -604,6 +608,9 @@ impl State {
 			LocalEvent::ShowDeletedMessages(show) => self.show_deleted_changed(*show, &mut changes),
 			LocalEvent::MediaRefreshed { channel_id, message } => {
 				self.media_refreshed(*channel_id, message, &mut changes)
+			}
+			LocalEvent::CommandIndexLoaded { scope, index } => {
+				self.command_index_loaded(*scope, index, &mut changes)
 			}
 		}
 		changes

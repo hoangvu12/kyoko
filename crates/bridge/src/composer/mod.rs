@@ -1,0 +1,523 @@
+mod slash;
+mod suggest;
+
+use std::time::Instant;
+
+use chrono::{DateTime, Utc};
+use protocol::{Nonce, Snowflake};
+use rest::UploadFile;
+use session::Command;
+use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
+
+pub use slash::{Slash, parse_slash};
+pub use suggest::{
+	Query, Suggestion, Trigger, Visual, apply_suggestion, lock_text, placeholder, query_at, suggestions,
+	typing_line,
+};
+
+const MIB: f64 = 1024.0 * 1024.0;
+const MEMBER_QUERY: usize = 2;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+	pub message_id: Snowflake,
+	pub name: String,
+	pub ping: bool,
+	pub own: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Attachment {
+	pub id: u64,
+	pub file: UploadFile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Notice {
+	Lock { text: String, confirmable: bool },
+	Failed { nonce: Nonce, text: String },
+	Refused(String),
+}
+
+#[derive(Debug, Default)]
+pub struct Outcome {
+	pub commands: Vec<Command>,
+	pub replace: Option<(String, usize)>,
+}
+
+impl Outcome {
+	fn command(command: Command) -> Outcome {
+		Outcome {
+			commands: vec![command],
+			replace: None,
+		}
+	}
+
+	fn cleared(commands: Vec<Command>) -> Outcome {
+		Outcome {
+			commands,
+			replace: Some((String::new(), 0)),
+		}
+	}
+}
+
+#[derive(Default)]
+pub struct Composer {
+	guild_id: Option<Snowflake>,
+	channel_id: Option<Snowflake>,
+	reply: Option<Reply>,
+	editing: Option<Snowflake>,
+	files: Vec<Attachment>,
+	next_file: u64,
+	query: Option<Query>,
+	suggestions: Vec<Suggestion>,
+	selected: usize,
+	held: Option<Command>,
+	refusal: Option<String>,
+	seen_rejection: u64,
+	member_query: Option<String>,
+	dirty: bool,
+}
+
+pub fn failure_text(failure: &SendFailure) -> String {
+	match failure {
+		SendFailure::RateLimited { retry_after } => format!(
+			"You are sending messages too quickly. Wait {} seconds before retrying.",
+			retry_after.as_secs().max(1)
+		),
+		SendFailure::Forbidden => "Discord refused this message.".to_owned(),
+		SendFailure::MissingPermissions => "You do not have permission to send this here.".to_owned(),
+		SendFailure::Captcha { .. } => {
+			"Discord asked for a captcha. Complete this in the official client.".to_owned()
+		}
+		SendFailure::Unauthorized => "You are signed out.".to_owned(),
+		SendFailure::Network => "Could not reach Discord.".to_owned(),
+		SendFailure::Other(Some(status)) => format!("The message could not be sent (error {status})."),
+		SendFailure::Other(None) => "The message could not be sent.".to_owned(),
+	}
+}
+
+pub fn file_size(bytes: u64) -> String {
+	let bytes = bytes as f64;
+	if bytes >= MIB {
+		format!("{:.2} MB", bytes / MIB)
+	} else if bytes >= 1024.0 {
+		format!("{:.2} KB", bytes / 1024.0)
+	} else {
+		format!("{bytes} bytes")
+	}
+}
+
+impl Composer {
+	pub fn channel(&self) -> Option<Snowflake> {
+		self.channel_id
+	}
+
+	pub fn guild(&self) -> Option<Snowflake> {
+		self.guild_id
+	}
+
+	pub fn reply(&self) -> Option<&Reply> {
+		self.reply.as_ref()
+	}
+
+	pub fn editing(&self) -> Option<Snowflake> {
+		self.editing
+	}
+
+	pub fn files(&self) -> &[Attachment] {
+		&self.files
+	}
+
+	pub fn suggestions(&self) -> &[Suggestion] {
+		&self.suggestions
+	}
+
+	pub fn selected(&self) -> usize {
+		self.selected
+	}
+
+	pub fn is_dirty(&self) -> bool {
+		self.dirty
+	}
+
+	pub fn open(
+		&mut self,
+		state: &State,
+		guild_id: Option<Snowflake>,
+		channel_id: Option<Snowflake>,
+	) -> Outcome {
+		if self.channel_id == channel_id {
+			return Outcome::default();
+		}
+		*self = Composer {
+			next_file: self.next_file,
+			seen_rejection: state.last_rejection().map_or(0, |rejection| rejection.id),
+			guild_id,
+			channel_id,
+			..Composer::default()
+		};
+		let draft = channel_id
+			.and_then(|channel_id| state.draft(channel_id))
+			.unwrap_or_default()
+			.to_owned();
+		let caret = draft.len();
+		Outcome {
+			commands: Vec::new(),
+			replace: Some((draft, caret)),
+		}
+	}
+
+	pub fn draft_arrived(&mut self, state: &State) -> Option<(String, usize)> {
+		if self.dirty || self.editing.is_some() {
+			return None;
+		}
+		let draft = state.draft(self.channel_id?)?.to_owned();
+		let caret = draft.len();
+		Some((draft, caret))
+	}
+
+	pub fn changed(&mut self, state: &State, text: &str, caret: usize) -> Vec<Command> {
+		self.dirty = true;
+		let Some(channel_id) = self.channel_id else {
+			return Vec::new();
+		};
+		let mut commands = Vec::new();
+		if !text.is_empty() && self.editing.is_none() {
+			commands.push(Command::Typing { channel_id });
+		}
+		self.query = query_at(text, caret);
+		self.selected = 0;
+		self.suggestions = match &self.query {
+			Some(query) => suggestions(state, self.guild_id, channel_id, query),
+			None => Vec::new(),
+		};
+		match &self.query {
+			Some(query) if query.trigger == Trigger::Command && state.command_index(channel_id).is_none() => {
+				commands.push(Command::LoadApplicationCommands { channel_id });
+			}
+			Some(query)
+				if query.trigger == Trigger::Mention
+					&& query.text.chars().count() >= MEMBER_QUERY
+					&& self.member_query.as_deref() != Some(query.text.as_str()) =>
+			{
+				if let Some(guild_id) = self.guild_id {
+					self.member_query = Some(query.text.clone());
+					commands.push(Command::SearchMembers {
+						guild_id,
+						query: query.text.clone(),
+					});
+				}
+			}
+			_ => {}
+		}
+		commands
+	}
+
+	pub fn refresh_suggestions(&mut self, state: &State) -> bool {
+		let (Some(channel_id), Some(query)) = (self.channel_id, &self.query) else {
+			return false;
+		};
+		let fresh = suggestions(state, self.guild_id, channel_id, query);
+		if fresh == self.suggestions {
+			return false;
+		}
+		self.suggestions = fresh;
+		self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
+		true
+	}
+
+	pub fn move_selection(&mut self, delta: i32) {
+		let count = self.suggestions.len();
+		if count == 0 {
+			return;
+		}
+		let step = delta.unsigned_abs() as usize % count;
+		self.selected = if delta < 0 {
+			(self.selected + count - step) % count
+		} else {
+			(self.selected + step) % count
+		};
+	}
+
+	pub fn choose(&mut self, text: &str, index: Option<usize>) -> Option<(String, usize)> {
+		let query = self.query.take()?;
+		let suggestion = self.suggestions.get(index.unwrap_or(self.selected))?.clone();
+		self.suggestions.clear();
+		self.selected = 0;
+		Some(apply_suggestion(text, &query, &suggestion))
+	}
+
+	pub fn dismiss(&mut self) -> bool {
+		if !self.suggestions.is_empty() {
+			self.suggestions.clear();
+			self.query = None;
+			return true;
+		}
+		if self.refusal.take().is_some() {
+			return true;
+		}
+		if self.reply.take().is_some() {
+			return true;
+		}
+		false
+	}
+
+	pub fn start_reply(&mut self, state: &State, message_id: Snowflake) -> bool {
+		let Some(channel_id) = self.channel_id else {
+			return false;
+		};
+		let Some(message) = state
+			.messages(channel_id)
+			.and_then(|cache| cache.by_id.get(&message_id))
+		else {
+			return false;
+		};
+		let own = state.current_user_id() == Some(message.author.id);
+		self.editing = None;
+		self.reply = Some(Reply {
+			message_id,
+			name: state.display_name(self.guild_id, message.author.id),
+			ping: !own,
+			own,
+		});
+		true
+	}
+
+	pub fn cancel_reply(&mut self) {
+		self.reply = None;
+	}
+
+	pub fn toggle_ping(&mut self) {
+		if let Some(reply) = &mut self.reply
+			&& !reply.own
+		{
+			reply.ping = !reply.ping;
+		}
+	}
+
+	pub fn start_edit(&mut self, state: &State, message_id: Snowflake) -> Option<(String, usize)> {
+		let channel_id = self.channel_id?;
+		let message = state.messages(channel_id)?.by_id.get(&message_id)?;
+		if state.current_user_id() != Some(message.author.id) {
+			return None;
+		}
+		self.editing = Some(message_id);
+		self.reply = None;
+		self.suggestions.clear();
+		self.query = None;
+		let content = message.content.clone();
+		let caret = content.len();
+		Some((content, caret))
+	}
+
+	pub fn edit_last(&mut self, state: &State) -> Option<(String, usize)> {
+		let channel_id = self.channel_id?;
+		let me = state.current_user_id()?;
+		let message_id = state
+			.messages(channel_id)?
+			.ordered
+			.iter()
+			.rev()
+			.find(|message| message.author.id == me)
+			.map(|message| message.id)?;
+		self.start_edit(state, message_id)
+	}
+
+	pub fn cancel_edit(&mut self, state: &State) -> Option<(String, usize)> {
+		self.editing.take()?;
+		let draft = self
+			.channel_id
+			.and_then(|channel_id| state.draft(channel_id))
+			.unwrap_or_default()
+			.to_owned();
+		let caret = draft.len();
+		Some((draft, caret))
+	}
+
+	pub fn attach(&mut self, state: &State, file: UploadFile) -> Result<u64, String> {
+		let channel_id = self.channel_id.ok_or_else(|| "Open a channel first".to_owned())?;
+		if self.files.len() >= MAX_ATTACHMENTS {
+			return Err(format!("You can attach up to {MAX_ATTACHMENTS} files"));
+		}
+		let limit = state.upload_limit(channel_id);
+		if file.bytes.len() as u64 > limit {
+			return Err(format!(
+				"{} is too large. The limit here is {} MB.",
+				file.name,
+				(limit as f64 / MIB).round()
+			));
+		}
+		self.next_file += 1;
+		let id = self.next_file;
+		self.files.push(Attachment { id, file });
+		Ok(id)
+	}
+
+	pub fn refuse(&mut self, reason: String) {
+		self.refusal = Some(reason);
+	}
+
+	pub fn remove_file(&mut self, id: u64) -> bool {
+		let before = self.files.len();
+		self.files.retain(|attachment| attachment.id != id);
+		self.files.len() != before
+	}
+
+	pub fn lock(&self, state: &State, now: DateTime<Utc>) -> Option<RiskyLock> {
+		state.channel_lock(self.channel_id?, now)
+	}
+
+	pub fn notice(&mut self, state: &State, now: DateTime<Utc>) -> Option<Notice> {
+		if let Some(rejection) = state.last_rejection()
+			&& rejection.id > self.seen_rejection
+		{
+			self.seen_rejection = rejection.id;
+			self.refusal = Some(rejection.reason.clone());
+		}
+		if let Some(lock) = self.lock(state, now) {
+			return Some(Notice::Lock {
+				text: lock_text(&lock),
+				confirmable: !lock.reason.is_gate(),
+			});
+		}
+		if let Some(refusal) = &self.refusal {
+			return Some(Notice::Refused(refusal.clone()));
+		}
+		let channel_id = self.channel_id?;
+		state
+			.messages(channel_id)?
+			.pending
+			.iter()
+			.rev()
+			.find_map(|pending| {
+				let failure = pending.failure.as_ref()?;
+				Some(Notice::Failed {
+					nonce: pending.message.nonce.clone()?,
+					text: failure_text(failure),
+				})
+			})
+	}
+
+	pub fn confirm_lock(&mut self, state: &State, now: DateTime<Utc>) -> Outcome {
+		let Some(lock) = self.lock(state, now) else {
+			return Outcome::default();
+		};
+		let mut commands = vec![Command::ConfirmRisky {
+			target: lock.target,
+			reason: lock.reason,
+		}];
+		match self.held.take() {
+			Some(held) => {
+				commands.push(held);
+				self.reply = None;
+				self.files.clear();
+				Outcome::cleared(commands)
+			}
+			None => Outcome {
+				commands,
+				replace: None,
+			},
+		}
+	}
+
+	pub fn retry(&self, nonce: Nonce) -> Option<Command> {
+		Some(Command::RetryMessage {
+			channel_id: self.channel_id?,
+			nonce,
+		})
+	}
+
+	pub fn discard(&self, nonce: Nonce) -> Option<Command> {
+		Some(Command::DiscardMessage {
+			channel_id: self.channel_id?,
+			nonce,
+		})
+	}
+
+	pub fn submit(&mut self, state: &State, text: &str, now: DateTime<Utc>) -> Outcome {
+		let Some(channel_id) = self.channel_id else {
+			return Outcome::default();
+		};
+		self.refusal = None;
+		let content = text.trim();
+		if let Some(message_id) = self.editing {
+			if content.is_empty() {
+				return Outcome::default();
+			}
+			self.editing = None;
+			self.dirty = false;
+			let mut outcome = Outcome::command(Command::EditMessage {
+				channel_id,
+				message_id,
+				content: content.to_owned(),
+			});
+			let draft = state.draft(channel_id).unwrap_or_default().to_owned();
+			let caret = draft.len();
+			outcome.replace = Some((draft, caret));
+			return outcome;
+		}
+		if content.is_empty() && self.files.is_empty() {
+			return Outcome::default();
+		}
+		let limit = state.message_limit();
+		let length = content.chars().count();
+		if length > limit {
+			self.refusal = Some(format!(
+				"Your message is too long ({length} of {limit} characters)."
+			));
+			return Outcome::default();
+		}
+		let command = match self.files.is_empty() {
+			true => match parse_slash(state.command_index(channel_id).map(AsRef::as_ref), content) {
+				Slash::Run { command_id, options } => Command::RunApplicationCommand {
+					channel_id,
+					command_id,
+					options,
+				},
+				Slash::Invalid(reason) => {
+					self.refusal = Some(reason);
+					return Outcome::default();
+				}
+				Slash::Text => self.message(channel_id, content),
+			},
+			false => self.message(channel_id, content),
+		};
+		if self.lock(state, now).is_some() {
+			self.held = Some(command);
+			return Outcome::default();
+		}
+		self.reply = None;
+		self.files.clear();
+		self.suggestions.clear();
+		self.query = None;
+		self.dirty = false;
+		Outcome::cleared(vec![
+			command,
+			Command::SetDraft {
+				channel_id,
+				content: String::new(),
+			},
+		])
+	}
+
+	fn message(&self, channel_id: Snowflake, content: &str) -> Command {
+		Command::SendMessage {
+			channel_id,
+			content: content.to_owned(),
+			reply_to: self.reply.as_ref().map(|reply| reply.message_id),
+			ping_reply: self.reply.as_ref().is_none_or(|reply| reply.ping),
+			files: self
+				.files
+				.iter()
+				.map(|attachment| attachment.file.clone())
+				.collect(),
+		}
+	}
+
+	pub fn typing(&self, state: &State, now: Instant) -> String {
+		self.channel_id
+			.map(|channel_id| typing_line(state, self.guild_id, channel_id, now))
+			.unwrap_or_default()
+	}
+}

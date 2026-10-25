@@ -25,7 +25,7 @@ pub(super) fn timestamp(time: DateTime<Utc>) -> String {
 	time.to_rfc3339()
 }
 
-fn failure_reason(what: &str, error: &RestError) -> String {
+pub(super) fn failure_reason(what: &str, error: &RestError) -> String {
 	match error {
 		RestError::Forbidden | RestError::MissingPermissions => format!("{what}: missing permissions"),
 		RestError::Suspended { .. } => format!("{what}: not allowed, paused after repeated refusals"),

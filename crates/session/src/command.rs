@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use protocol::{
-	ChannelType, Gif, NotificationLevel, PermissionOverwriteKind, Permissions, Snowflake, StatusKind,
+	ChannelType, Gif, InteractionOption, Nonce, NotificationLevel, PermissionOverwriteKind, Permissions,
+	Snowflake, StatusKind,
 };
 use rest::UploadFile;
 use rest::api::SearchQuery;
@@ -35,7 +36,24 @@ pub enum Command {
 		channel_id: Snowflake,
 		content: String,
 		reply_to: Option<Snowflake>,
+		ping_reply: bool,
 		files: Vec<UploadFile>,
+	},
+	RetryMessage {
+		channel_id: Snowflake,
+		nonce: Nonce,
+	},
+	DiscardMessage {
+		channel_id: Snowflake,
+		nonce: Nonce,
+	},
+	LoadApplicationCommands {
+		channel_id: Snowflake,
+	},
+	RunApplicationCommand {
+		channel_id: Snowflake,
+		command_id: Snowflake,
+		options: Vec<InteractionOption>,
 	},
 	EditMessage {
 		channel_id: Snowflake,
