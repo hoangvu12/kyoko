@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use protocol::{
-	Channel, ChannelType, Message, MuteConfig, Permissions, ReadState, Snowflake, UserGuildSettings,
+	Channel, ChannelType, DefaultMessageNotifications, Message, MuteConfig, NotificationLevel, Permissions,
+	ReadState, RelationshipKind, Snowflake, UserGuildSettings,
 };
 
 use crate::guild::GuildState;
@@ -54,6 +55,49 @@ pub(crate) fn channel_muted(
 		})
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlertKind {
+	DirectMessage,
+	Mention,
+	Message,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Attention {
+	pub unread: bool,
+	pub mentions: u32,
+}
+
+fn explicit(level: Option<NotificationLevel>) -> Option<NotificationLevel> {
+	level.filter(|level| {
+		matches!(
+			level,
+			NotificationLevel::AllMessages | NotificationLevel::OnlyMentions | NotificationLevel::NoMessages
+		)
+	})
+}
+
+fn guild_default(guild: Option<&GuildState>) -> NotificationLevel {
+	match guild.and_then(|guild| guild.default_notifications) {
+		Some(DefaultMessageNotifications::AllMessages) => NotificationLevel::AllMessages,
+		_ => NotificationLevel::OnlyMentions,
+	}
+}
+
+fn override_level(
+	settings: Option<&UserGuildSettings>,
+	ids: [Option<Snowflake>; 2],
+) -> Option<NotificationLevel> {
+	let settings = settings?;
+	ids.into_iter().flatten().find_map(|id| {
+		settings
+			.channel_overrides
+			.iter()
+			.find(|over| over.channel_id == id)
+			.and_then(|over| explicit(over.message_notifications))
+	})
+}
+
 fn mention_count(read_state: Option<&ReadState>) -> u32 {
 	read_state
 		.and_then(|state| state.mention_count)
@@ -61,6 +105,70 @@ fn mention_count(read_state: Option<&ReadState>) -> u32 {
 }
 
 impl State {
+	pub fn alert_for(&self, message: &Message) -> Option<AlertKind> {
+		self.alert_at(message, Utc::now())
+	}
+
+	fn alert_at(&self, message: &Message, now: DateTime<Utc>) -> Option<AlertKind> {
+		let me = self.current_user_id()?;
+		if message.author.id == me || self.is_blocked(message.author.id) {
+			return None;
+		}
+		let channel = self.channel(message.channel_id);
+		let guild_id = message
+			.guild_id
+			.or_else(|| self.channel_guild(message.channel_id));
+		let settings = self.guild_settings(guild_id);
+		let muted = match channel {
+			Some(channel) => channel_muted(settings, channel, now),
+			None => guild_muted(settings, now),
+		};
+		if muted {
+			return None;
+		}
+		let ids = [
+			Some(message.channel_id),
+			channel.and_then(|channel| channel.parent_id),
+		];
+		let Some(guild_id) = guild_id else {
+			return (override_level(settings, ids) != Some(NotificationLevel::NoMessages))
+				.then_some(AlertKind::DirectMessage);
+		};
+		let guild = self.guild(guild_id);
+		let level = override_level(settings, ids)
+			.or_else(|| explicit(settings.and_then(|settings| settings.message_notifications)))
+			.unwrap_or_else(|| guild_default(guild));
+		let mentioned = self.mentions_me(message, Some(guild_id));
+		match level {
+			NotificationLevel::NoMessages => None,
+			NotificationLevel::AllMessages if !mentioned => Some(AlertKind::Message),
+			_ => mentioned.then_some(AlertKind::Mention),
+		}
+	}
+
+	fn is_blocked(&self, user_id: Snowflake) -> bool {
+		self.relationships
+			.get(&user_id)
+			.is_some_and(|relationship| relationship.kind == RelationshipKind::Blocked)
+	}
+
+	pub fn attention(&self) -> Attention {
+		let now = Utc::now();
+		let mut attention = Attention::default();
+		for guild in self.guilds.values() {
+			let status = self.guild_status(guild, now);
+			attention.unread |= status.unread && !status.muted;
+			attention.mentions += status.mentions;
+		}
+		let settings = self.global_settings.as_ref();
+		for channel in self.private_channels.values() {
+			let status = self.channel_status(channel, settings, true, now);
+			attention.unread |= status.unread;
+			attention.mentions += status.mentions;
+		}
+		attention
+	}
+
 	pub(crate) fn channel_status(
 		&self,
 		channel: &Channel,

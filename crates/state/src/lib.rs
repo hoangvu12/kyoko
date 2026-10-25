@@ -40,6 +40,7 @@ pub use loaded::{
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
 pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply_update};
+pub use notifications::{AlertKind, Attention};
 pub use permissions::DM_PERMISSIONS;
 pub use references::{BackfillNeeds, Referenced, ReplyTarget, reply_reference};
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};

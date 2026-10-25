@@ -10,6 +10,7 @@ use state::{SharedState, State};
 use tokio::runtime::{Builder, Handle, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
+use crate::alerts::{Alert, AlertQueue};
 use crate::catalog::{ThemeCatalog, ThemeCatalogs};
 use crate::command::Command;
 use crate::config::SessionConfig;
@@ -41,6 +42,7 @@ pub struct Session {
 	commands: mpsc::Sender<Command>,
 	gateway: GatewayHandle,
 	search: SharedSearch,
+	alerts: AlertQueue,
 	stats: Arc<Stats>,
 	themes: Arc<ThemeCatalogs>,
 	hooks: Hooks,
@@ -93,6 +95,7 @@ impl Session {
 			.write()
 			.set_safety_locks(config.store.settings.read().safety_locks);
 		let search = SharedSearch::default();
+		let alerts = AlertQueue::default();
 		let stats = Arc::new(Stats::default());
 		let themes = Arc::new(ThemeCatalogs::default());
 		let (commands, command_receiver) = mpsc::channel(COMMAND_CAPACITY);
@@ -109,6 +112,8 @@ impl Session {
 			notifier: Notifier::new(config.notify),
 			runtime: handle.clone(),
 			search: search.clone(),
+			alerts: alerts.clone(),
+			pacing: config.alerts,
 			stats: stats.clone(),
 			token,
 			remember_account: config.remember_account,
@@ -131,6 +136,7 @@ impl Session {
 			commands,
 			gateway,
 			search,
+			alerts,
 			stats,
 			themes,
 			hooks: config.hooks,
@@ -158,6 +164,10 @@ impl Session {
 			hooks.allow_notification(message)
 		})
 		.unwrap_or(true)
+	}
+
+	pub fn take_alerts(&self) -> Vec<Alert> {
+		self.alerts.take()
 	}
 
 	pub fn theme_catalog(&self) -> Option<Arc<ThemeCatalog>> {

@@ -8,7 +8,8 @@ use protocol::Opcode;
 use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
 use session::{
-	CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig, SessionHooks,
+	AlertPacing, CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig,
+	SessionHooks,
 };
 use state::State;
 use store::{MemoryKeyring, Paths, Settings, Store};
@@ -31,6 +32,7 @@ pub struct Options {
 	gateway: GatewayTuning,
 	rest: RestTuning,
 	caches: CacheLimits,
+	alerts: AlertPacing,
 	prepare: Option<Prepare>,
 	seed: Option<Seed>,
 	remember_account: bool,
@@ -53,6 +55,7 @@ impl Options {
 			gateway: GatewayTuning::default(),
 			rest: RestTuning::default(),
 			caches: CacheLimits::default(),
+			alerts: AlertPacing::default(),
 			prepare: None,
 			seed: None,
 			remember_account: true,
@@ -129,6 +132,11 @@ impl Options {
 		self
 	}
 
+	pub fn alerts(mut self, pacing: AlertPacing) -> Self {
+		self.alerts = pacing;
+		self
+	}
+
 	pub fn prepare(mut self, prepare: impl FnOnce(&Control) + 'static) -> Self {
 		self.prepare = Some(Box::new(prepare));
 		self
@@ -168,6 +176,7 @@ impl Running {
 			gateway: options.gateway,
 			rest: options.rest,
 			caches: options.caches,
+			alerts: options.alerts,
 			remember_account: options.remember_account,
 			plaintext_secrets: options.plaintext_secrets,
 			retention: options.retention,
@@ -353,6 +362,7 @@ struct Launch {
 	gateway: GatewayTuning,
 	rest: RestTuning,
 	caches: CacheLimits,
+	alerts: AlertPacing,
 	remember_account: bool,
 	plaintext_secrets: bool,
 	retention: Retention,
@@ -387,6 +397,7 @@ fn open_session(
 		gateway: launch.gateway,
 		rest: launch.rest,
 		caches: launch.caches,
+		alerts: launch.alerts,
 		retention: launch.retention,
 		remember_account: launch.remember_account,
 	})

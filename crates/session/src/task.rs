@@ -26,6 +26,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, sleep_until};
 use url::Url;
 
+use crate::alerts::{Alert, AlertPacing, AlertQueue, Pacing};
 use crate::catalog::ThemeCatalogs;
 use crate::command::Command;
 use crate::hooks::{Hooks, guarded, guarded_blocking};
@@ -36,6 +37,7 @@ use crate::search::SearchResults;
 
 mod accounts;
 mod actions;
+mod alerts;
 mod backfill;
 mod commands;
 mod deletes;
@@ -96,6 +98,7 @@ pub(crate) enum Internal {
 		rewritten: Option<String>,
 	},
 	ThemeCatalogChanged,
+	Alert(Alert),
 	AccountSwitch(Snowflake),
 	SecretHealth(store::SecretHealth),
 	DeleteProgressed {
@@ -121,6 +124,8 @@ pub(crate) struct CoreParts {
 	pub(crate) notifier: Notifier,
 	pub(crate) runtime: Handle,
 	pub(crate) search: SharedSearch,
+	pub(crate) alerts: AlertQueue,
+	pub(crate) pacing: AlertPacing,
 	pub(crate) stats: Arc<Stats>,
 	pub(crate) internal: mpsc::UnboundedSender<Internal>,
 	pub(crate) hooks: Hooks,
@@ -148,6 +153,8 @@ pub(crate) struct Core {
 	notifier: Notifier,
 	runtime: Handle,
 	search: SharedSearch,
+	alerts: AlertQueue,
+	pacing: Pacing,
 	stats: Arc<Stats>,
 	internal: mpsc::UnboundedSender<Internal>,
 	typing_sent: HashMap<Snowflake, StdInstant>,
@@ -223,6 +230,8 @@ impl Core {
 			notifier: parts.notifier,
 			runtime: parts.runtime,
 			search: parts.search,
+			alerts: parts.alerts,
+			pacing: Pacing::new(parts.pacing),
 			stats: parts.stats,
 			internal: parts.internal,
 			typing_sent: HashMap::new(),
@@ -471,6 +480,7 @@ impl Core {
 		guarded(&self.hooks, "on_dispatch", |hooks| hooks.on_dispatch(&event));
 		match event {
 			DispatchEvent::MessageCreate(message) => {
+				self.consider_alert(&message);
 				let channel_id = message.channel_id;
 				let message_id = message.id;
 				self.persist.submit(Job::Messages {
@@ -597,6 +607,7 @@ impl Core {
 				files,
 				rewritten,
 			} => self.on_before_send(nonce, channel_id, content, reply_to, files, rewritten),
+			Internal::Alert(alert) => self.raise_alert(alert),
 			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
 				theme_catalog: true,
 				..Changes::default()

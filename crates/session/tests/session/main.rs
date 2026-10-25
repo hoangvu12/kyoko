@@ -1,3 +1,4 @@
+mod alerts;
 mod backfill;
 mod caches;
 mod capabilities;

@@ -1,3 +1,4 @@
+mod alerts;
 mod catalog;
 mod command;
 mod config;
@@ -10,6 +11,7 @@ mod search;
 mod session;
 mod task;
 
+pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use catalog::{ThemeCatalog, ThemeEntry};
 pub use command::Command;
 pub use config::{NotifyFn, SessionConfig};
