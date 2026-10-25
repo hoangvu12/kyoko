@@ -10,7 +10,7 @@ use zgx::reactive::Signal;
 use super::attachments::picture;
 use super::icons::icon;
 use super::pictures::REACTION_EMOJI;
-use super::rows::{RowEnv, tok};
+use super::rows::{RowEnv, TypeSize, tok};
 
 const POLL_WIDTH: f32 = 432.;
 const POLL_ROW: f32 = 40.;
@@ -62,7 +62,7 @@ fn chip(reaction: &Reaction, env: &Rc<RowEnv>) -> View {
 		.border(1.)
 		.border_color(tok(border))
 		.bg(tok(background))
-		.text_size(tok("font_sm"))
+		.type_size("font_sm")
 		.font_weight(600)
 		.text_color(tok(color))
 		.cursor(Cursor::Pointer)
@@ -102,20 +102,20 @@ pub fn thread_chip(entry: &MessageEntry) -> Option<View> {
 				text(thread.name.clone().unwrap_or_default())
 					.truncate()
 					.min_w(0.)
-					.text_size(tok("font_sm"))
+					.type_size("font_sm")
 					.font_weight(600)
 					.text_color(tok("header_primary")),
 			)
 			.child(
 				text(label)
 					.shrink_0()
-					.text_size(tok("font_tiny"))
+					.type_size("font_tiny")
 					.text_color(tok("text_muted")),
 			)
 			.child(
 				text(bridge::message_time(activity, bridge::today()))
 					.shrink_0()
-					.text_size(tok("font_tiny"))
+					.type_size("font_tiny")
 					.text_color(tok("text_muted")),
 			),
 	)
@@ -195,21 +195,21 @@ pub fn poll(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Optio
 					.grow()
 					.min_w(0.)
 					.truncate()
-					.text_size(tok("font_sm"))
+					.type_size("font_sm")
 					.font_weight(500)
 					.text_color(tok("header_primary")),
 			)
 			.child(
 				text(format!("{}%", bridge::percent(choice.share)))
 					.shrink_0()
-					.text_size(tok("font_sm"))
+					.type_size("font_sm")
 					.text_color(tok("header_secondary")),
 			)
 	});
 	let mut footer = row().items_center().gap(8.).child(
 		text(summary.votes_label())
 			.grow()
-			.text_size(tok("font_tiny"))
+			.type_size("font_tiny")
 			.text_color(tok("text_muted")),
 	);
 	if summary.multi && !summary.finished && dirty {
@@ -250,13 +250,13 @@ pub fn poll(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Optio
 			.bg(tok("background_secondary"))
 			.child(
 				text(summary.question.as_str())
-					.text_size(tok("font_md"))
+					.type_size("font_md")
 					.font_weight(700)
 					.text_color(tok("header_primary")),
 			)
 			.child(
 				text(summary.hint())
-					.text_size(tok("font_tiny"))
+					.type_size("font_tiny")
 					.text_color(tok("text_muted")),
 			)
 			.children(rows)
@@ -272,7 +272,7 @@ fn poll_button(label: &str, background: &str, color: &str, action: impl FnMut() 
 		.border(1.)
 		.border_color(tok("interactive_muted"))
 		.bg(tok(background))
-		.text_size(tok("font_sm"))
+		.type_size("font_sm")
 		.text_color(tok(color))
 		.cursor(Cursor::Pointer)
 		.child(text(label.to_owned()))

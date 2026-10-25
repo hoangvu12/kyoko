@@ -37,6 +37,26 @@ const POLL_ROW: f32 = 48.;
 const REACTIONS: f32 = 28.;
 const FILE_CARD: f32 = 70.;
 
+const DEFAULT_LINE: f32 = 1.618;
+
+pub trait TypeSize {
+	fn type_size(self, name: &str) -> Self;
+}
+
+impl TypeSize for View {
+	fn type_size(self, name: &str) -> Self {
+		let points = match name {
+			"font_tiny" => 12.,
+			"font_xs" => 13.,
+			"font_sm" => 14.,
+			"font_lg" => 20.,
+			"font_xl" => 24.,
+			_ => 16.,
+		};
+		self.text_size(tok(name)).line_height(points * DEFAULT_LINE)
+	}
+}
+
 pub fn tok(name: &str) -> TokenId {
 	zgx::theme::token(&crate::theme::token(name))
 }

@@ -11,7 +11,7 @@ use zgx::reactive::Signal;
 use super::body::{self, Look};
 use super::icons::icon;
 use super::pictures::{EMBED_ICON, Pictures, bare_media, large_media, side_thumbnail};
-use super::rows::{RowEnv, tok};
+use super::rows::{RowEnv, TypeSize, tok};
 
 const EMBED_WIDTH: f32 = 520.;
 const FIELD_WIDTH: f32 = 242.;
@@ -104,17 +104,13 @@ fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
 				.child(
 					text(attachment.filename.as_str())
 						.truncate()
-						.text_size(tok("font_md"))
+						.type_size("font_md")
 						.text_color(tok("link"))
 						.cursor(Cursor::Pointer)
 						.on_click(move || name_links.download(&name_url)),
 				)
 				.when_some(size, |column, size| {
-					column.child(
-						text(size)
-							.text_size(tok("font_tiny"))
-							.text_color(tok("text_muted")),
-					)
+					column.child(text(size).type_size("font_tiny").text_color(tok("text_muted")))
 				}),
 		)
 		.child(
@@ -177,7 +173,7 @@ fn bare(media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
 }
 
 fn link_label(label: String, url: Option<String>, env: &Rc<RowEnv>) -> View {
-	let label = text(label).text_size(tok("font_md")).font_weight(600);
+	let label = text(label).type_size("font_md").font_weight(600);
 	match url {
 		Some(url) => {
 			let links = env.links.clone();
@@ -211,7 +207,7 @@ fn embed_card(
 	if let Some(provider) = embed.provider.as_ref().and_then(|provider| provider.name.clone()) {
 		column = column.child(
 			text(provider)
-				.text_size(tok("font_tiny"))
+				.type_size("font_tiny")
 				.text_color(tok("text_muted")),
 		);
 	}
@@ -274,11 +270,7 @@ fn embed_card(
 			.flatten()
 			.collect::<Vec<_>>()
 			.join(" \u{2022} ");
-		column = column.child(
-			text(line)
-				.text_size(tok("font_tiny"))
-				.text_color(tok("text_muted")),
-		);
+		column = column.child(text(line).type_size("font_tiny").text_color(tok("text_muted")));
 	}
 	let thumbnail = side_thumbnail(embed).map(|media| {
 		let name = env
@@ -359,7 +351,7 @@ fn fields(
 			};
 			cell.child(
 				text(field.name.as_str())
-					.text_size(tok("font_sm"))
+					.type_size("font_sm")
 					.font_weight(600)
 					.text_color(tok("header_primary")),
 			)
