@@ -3,11 +3,11 @@ mod attachments;
 mod body;
 mod dialogs;
 mod extras;
-mod icons;
+pub(crate) mod icons;
 mod inline;
 mod links;
-mod picker;
-mod pictures;
+pub(crate) mod picker;
+pub(crate) mod pictures;
 mod rows;
 mod scroll;
 
@@ -36,6 +36,7 @@ use self::links::Links;
 use self::picker::ReactionPicker;
 use self::pictures::Pictures;
 pub use self::rows::Prefs;
+pub(crate) use self::rows::tok;
 use self::rows::{RowEnv, Sender};
 use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter, Resize};
 
@@ -273,6 +274,10 @@ impl TimelineView {
 			}
 		});
 		*self.layout_watcher.borrow_mut() = Some(effect);
+	}
+
+	pub fn pictures(&self) -> Rc<Pictures> {
+		self.pictures.clone()
 	}
 
 	pub fn set_scale(&self, scale: f64) {
