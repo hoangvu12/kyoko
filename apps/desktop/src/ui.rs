@@ -788,6 +788,7 @@ impl Link {
 				}
 			}
 			capture::Screen::SilentTyping => self.drive_silent_typing().await,
+			capture::Screen::TextReplaceSettings => self.drive_text_replace().await,
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
 			capture::Screen::Settings(_) => {

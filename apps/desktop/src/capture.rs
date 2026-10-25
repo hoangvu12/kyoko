@@ -15,6 +15,7 @@ pub const SCROLL_PASSES: usize = 10;
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (897., 754.);
+pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
 pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
@@ -35,6 +36,7 @@ pub enum Screen {
 	Composer,
 	ComposerReply,
 	SilentTyping,
+	TextReplaceSettings,
 	LoginTos,
 	LoginToken,
 	SidebarCollapsed,
@@ -87,6 +89,7 @@ impl Screen {
 			"composer" => Some(Screen::Composer),
 			"composer-reply" => Some(Screen::ComposerReply),
 			"composer-silent-typing" => Some(Screen::SilentTyping),
+			"settings-text-replace" => Some(Screen::TextReplaceSettings),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
@@ -146,6 +149,7 @@ impl Screen {
 			| Screen::Composer
 			| Screen::ComposerReply
 			| Screen::SilentTyping
+			| Screen::TextReplaceSettings
 			| Screen::MessageHover
 			| Screen::MessageMenu
 			| Screen::MemberList

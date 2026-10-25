@@ -13,6 +13,7 @@ use crate::theme::Catalog;
 mod plugins;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
+const TALL: f32 = 1400.;
 
 #[test]
 fn every_script_compiles() {
@@ -469,6 +470,97 @@ fn the_plugins_page_asks_before_a_plugin_is_enabled() {
 	app.click("plugin_settings_clear-urls");
 	shows(&mut app, "the plugin's settings", "Remove referral tags", &[]);
 	assert!(app.texts().iter().any(|text| text == "hook:send"));
+}
+
+#[test]
+fn the_generated_plugin_settings_build_every_field_type() {
+	let calls = Calls::default();
+	let mut app = recording_app(&calls, "");
+	app.ui.scene.borrow_mut().resize(WIDE.0, TALL);
+	shows(
+		&mut app,
+		"the plugins page",
+		"Every setting type",
+		&[
+			("login.screen", json!("main")),
+			("settings.values", setting_values(true)),
+			("settings.page", json!("plugins")),
+			("plugins.list", every_field_plugin()),
+		],
+	);
+	app.click("plugin_settings_fields");
+	shows(&mut app, "a plugin with every field type", "Rule 1", &[]);
+	let texts = app.texts();
+	for marker in [
+		"A switch",
+		"A stepper",
+		"A text",
+		"Second",
+		"Run it",
+		"Rules",
+		"Rule 2",
+		"Find",
+		"Luau pattern",
+		"Add Rule",
+	] {
+		assert!(
+			texts.iter().any(|text| text == marker),
+			"the settings page does not show \"{marker}\": {texts:?}"
+		);
+	}
+	app.click("plugin_list_rules_add");
+	shows(&mut app, "a list after adding a row", "Rule 3", &[]);
+	assert_eq!(
+		last_call(&calls, "plugins.set"),
+		Some(json!({
+			"id": "fields",
+			"key": "rules",
+			"value": [
+				{ "find": "teh", "pattern": false },
+				{ "find": "(%d+)km", "pattern": true },
+				{ "find": "", "pattern": false },
+			],
+		}))
+	);
+}
+
+fn every_field_plugin() -> serde_json::Value {
+	let setting = |key: &str, kind: &str, label: &str, value: serde_json::Value| {
+		json!({
+			"key": key, "type": kind, "label": label, "description": "", "value": value,
+			"min": 0, "max": 10, "step": 1, "multiline": false, "options": [],
+			"fields": [], "item": "", "rows": 0,
+		})
+	};
+	let mut select = setting("choice", "select", "A choice", json!("b"));
+	select["options"] = json!([{ "value": "a", "label": "First" }, { "value": "b", "label": "Second" }]);
+	let mut list = setting(
+		"rules",
+		"list",
+		"Rules",
+		json!([{ "find": "teh", "pattern": false }, { "find": "(%d+)km", "pattern": true }]),
+	);
+	list["item"] = json!("Rule");
+	list["rows"] = json!(5);
+	list["fields"] = json!([
+		setting("find", "string", "Find", json!("")),
+		setting("pattern", "boolean", "Luau pattern", json!(false)),
+	]);
+	json!([{
+		"id": "fields", "name": "Fields", "version": "1.0.0",
+		"description": "Every setting type", "authors": "Kyoko",
+		"origin": "development", "origin_label": "Development", "status": "running", "status_label": "Enabled",
+		"enabled": true, "needs_approval": false, "notice": "", "error": "",
+		"settings": [
+			setting("flag", "boolean", "A switch", json!(true)),
+			setting("count", "number", "A stepper", json!(3)),
+			setting("words", "string", "A text", json!("hello")),
+			select,
+			setting("run", "action", "Run it", serde_json::Value::Null),
+			list,
+		],
+		"permissions": [],
+	}])
 }
 
 type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;

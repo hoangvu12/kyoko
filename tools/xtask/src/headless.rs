@@ -41,6 +41,12 @@ const CLEAR_URLS: &str = "clear-urls";
 const CLEAR_URLS_NAME: &str = "ClearURLs";
 const BROKEN_PLUGIN: &str = "headless-broken";
 const SILENT_TYPING: &str = "silent-typing";
+const TEXT_REPLACE: &str = "text-replace";
+const TEXT_REPLACE_NAME: &str = "TextReplace";
+const TYPO_SENT: &str = "headless typo: teh cat";
+const TYPO_FIXED: &str = "headless typo: the cat";
+const TYPO_EDITED: &str = "headless typo: teh dog";
+const TYPO_EDIT_FIXED: &str = "headless typo: the dog";
 const TYPING_QUIET: Duration = Duration::from_millis(500);
 const BROKEN_HOOK_TEXT: &str = "headless hook fails";
 const BROKEN_MANIFEST: &str = "id = \"headless-broken\"
@@ -160,7 +166,13 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 	config.user_dir = None;
 	config.development_dirs = vec![development];
 	let host = PluginHost::new(config);
-	for id in [CLEAR_URLS, SILENT_TYPING, BROKEN_PLUGIN] {
+	host.set_setting(
+		TEXT_REPLACE,
+		"rules",
+		&json!([{ "find": "teh", "replace": "the", "only_if": "headless typo" }]),
+	)
+	.map_err(|error| anyhow::anyhow!("the TextReplace rules were refused: {error}"))?;
+	for id in [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE, BROKEN_PLUGIN] {
 		let declared = host
 			.snapshot()
 			.into_iter()
@@ -404,6 +416,24 @@ async fn scenario(
 		harness.state.read().altered_by(cleaned_id) == Some(CLEAR_URLS_NAME),
 		"the cleaned message is not marked as altered by ClearURLs"
 	);
+	let typo_id = harness.round_trip_as(channel_id, TYPO_SENT, TYPO_FIXED).await?;
+	ensure!(
+		harness.state.read().altered_by(typo_id) == Some(TEXT_REPLACE_NAME),
+		"the replaced message is not marked as altered by TextReplace"
+	);
+	harness.session.send(Command::EditMessage {
+		channel_id,
+		message_id: typo_id,
+		content: TYPO_EDITED.to_owned(),
+	});
+	harness
+		.until("the edited typo to be replaced", |state| {
+			state
+				.messages(channel_id)
+				.and_then(|cache| cache.by_id.get(&typo_id))
+				.is_some_and(|message| message.content == TYPO_EDIT_FIXED)
+		})
+		.await?;
 	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
 	harness.session.send(Command::Typing { channel_id });
 	tokio::time::sleep(TYPING_QUIET).await;

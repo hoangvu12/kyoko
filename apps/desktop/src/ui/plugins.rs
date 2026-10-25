@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use bridge::Inbox;
-use plugins::{Origin, Permission, PluginHost, PluginInfo, SettingKind, Status};
+use plugins::{Origin, Permission, PluginHost, PluginInfo, SettingKind, SettingSpec, Status};
 use serde_json::{Value as Json, json};
 use zgx_script::{ScriptHost, Shared, Value};
 
@@ -15,6 +15,7 @@ const ACTIVATION: Duration = Duration::from_secs(1);
 const GESTURE_SOURCE: &str = "settings";
 const SLOT_SOURCE: &str = "slot";
 const SILENT_TYPING: &str = "silent-typing";
+const TEXT_REPLACE: &str = "text-replace";
 
 type Activation = Rc<Cell<Option<Instant>>>;
 
@@ -253,6 +254,37 @@ impl Link {
 		}
 	}
 
+	pub(super) async fn drive_text_replace(&self) {
+		let shown = self
+			.plugin(TEXT_REPLACE)
+			.map(|plugin| plugin.permissions)
+			.unwrap_or_default();
+		self.plugins.run(move |host| {
+			let rules = json!([
+				{ "find": "teh", "replace": "the", "only_if": "", "pattern": false },
+				{ "find": "(%d+)km", "replace": "%1 kilometres", "only_if": "", "pattern": true },
+				{ "find": "brb", "replace": "be right back", "only_if": "!", "pattern": false },
+			]);
+			if let Err(error) = host.set_setting(TEXT_REPLACE, "rules", &rules) {
+				tracing::warn!(%error, "the capture could not set the TextReplace rules");
+			}
+			if let Err(error) = host.approve(TEXT_REPLACE, &shown) {
+				tracing::warn!(%error, "the capture could not turn TextReplace on");
+			}
+		});
+		self.until_capture(|link| {
+			link.plugin(TEXT_REPLACE)
+				.is_some_and(|plugin| plugin.status == Status::Running)
+		})
+		.await;
+		self.plugins.publish();
+		self.open_settings("plugins");
+		self.until_capture(|link| link.settings_settled()).await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		let (x, y) = capture::TEXT_REPLACE_SETTINGS;
+		self.press_at(x, y).await;
+	}
+
 	fn plugin(&self, id: &str) -> Option<PluginInfo> {
 		self.plugins
 			.host
@@ -318,35 +350,53 @@ fn status_label(status: &Status) -> &'static str {
 	}
 }
 
+fn setting_json(spec: &SettingSpec, value: Json) -> Json {
+	let (min, max, step) = match spec.kind {
+		SettingKind::Number { min, max, step, .. } => (min, max, step),
+		_ => (0., 0., 0.),
+	};
+	let options: Vec<Json> = match &spec.kind {
+		SettingKind::Select { options, .. } => options
+			.iter()
+			.map(|option| json!({ "value": option.value, "label": option.label }))
+			.collect(),
+		_ => Vec::new(),
+	};
+	let (fields, item, rows): (Vec<Json>, &str, usize) = match &spec.kind {
+		SettingKind::List {
+			fields, item, max, ..
+		} => (
+			fields
+				.iter()
+				.map(|field| setting_json(field, field.default_value()))
+				.collect(),
+			item,
+			*max,
+		),
+		_ => (Vec::new(), "", 0),
+	};
+	json!({
+		"key": spec.key,
+		"type": spec.type_name(),
+		"label": spec.label,
+		"description": spec.description,
+		"value": value,
+		"min": min,
+		"max": max,
+		"step": step,
+		"multiline": matches!(spec.kind, SettingKind::Text { multiline: true, .. }),
+		"options": options,
+		"fields": fields,
+		"item": item,
+		"rows": rows,
+	})
+}
+
 fn plugin_json(info: &PluginInfo) -> Json {
 	let settings: Vec<Json> = info
 		.settings
 		.iter()
-		.map(|spec| {
-			let (min, max, step) = match spec.kind {
-				SettingKind::Number { min, max, step, .. } => (min, max, step),
-				_ => (0., 0., 0.),
-			};
-			let options: Vec<Json> = match &spec.kind {
-				SettingKind::Select { options, .. } => options
-					.iter()
-					.map(|option| json!({ "value": option.value, "label": option.label }))
-					.collect(),
-				_ => Vec::new(),
-			};
-			json!({
-				"key": spec.key,
-				"type": spec.type_name(),
-				"label": spec.label,
-				"description": spec.description,
-				"value": info.values.get(&spec.key).cloned().unwrap_or(Json::Null),
-				"min": min,
-				"max": max,
-				"step": step,
-				"multiline": matches!(spec.kind, SettingKind::Text { multiline: true, .. }),
-				"options": options,
-			})
-		})
+		.map(|spec| setting_json(spec, info.values.get(&spec.key).cloned().unwrap_or(Json::Null)))
 		.collect();
 	let permissions: Vec<Json> = info
 		.permissions

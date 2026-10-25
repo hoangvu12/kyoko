@@ -205,6 +205,102 @@ fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
 	}
 }
 
+fn rules_of(lab: &Rc<RefCell<Lab>>) -> serde_json::Value {
+	lab.borrow().setting("text-replace", "rules")
+}
+
+#[test]
+fn the_rules_editor_adds_edits_and_removes_rows() {
+	let plugins_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+	let lab = Lab::new("text-replace", &[plugins_dir]);
+	lab.host.scan();
+	let shown = lab
+		.host
+		.snapshot()
+		.into_iter()
+		.find(|plugin| plugin.id == "text-replace")
+		.expect("TextReplace loads")
+		.permissions;
+	lab.host.approve("text-replace", &shown).expect("approved");
+	let runtime = tokio::runtime::Builder::new_multi_thread()
+		.worker_threads(1)
+		.enable_all()
+		.build()
+		.expect("a runtime");
+	let handle = runtime.handle().clone();
+	let (mut app, lab) = app_with(lab, move |lab, host| {
+		lab.view = Some(PluginsView::new(host, lab.host.clone(), handle));
+		let plugins = lab.host.clone();
+		host.action("plugins.set", move |argument| {
+			let argument: serde_json::Value = serde_json::from_str(&argument.to_json()).unwrap_or_default();
+			let (Some(id), Some(key)) = (argument["id"].as_str(), argument["key"].as_str()) else {
+				return;
+			};
+			if let Err(error) = plugins.set_setting(id, key, &argument["value"]) {
+				panic!("the editor sent a setting the host refused: {error}");
+			}
+		});
+	});
+	shows(
+		&mut app,
+		"the plugins page",
+		"TextReplace",
+		&[
+			("login.screen", json!("main")),
+			("settings.values", super::setting_values(true)),
+			("settings.page", json!("plugins")),
+		],
+	);
+	app.click("plugin_settings_text-replace");
+	shows(&mut app, "TextReplace's settings", "Nothing added yet.", &[]);
+	assert_eq!(rules_of(&lab), json!([]));
+
+	app.click("plugin_list_rules_add");
+	shows(&mut app, "the first rule", "Rule 1", &[]);
+	assert_eq!(
+		rules_of(&lab),
+		json!([{ "find": "", "replace": "", "only_if": "", "pattern": false }])
+	);
+	app.type_text("plugin_list_rules_1_find", "teh");
+	app.type_text("plugin_list_rules_1_replace", "the");
+	wait_for("the typed rule to be saved", || {
+		app.frames(1);
+		rules_of(&lab)[0]["replace"] == json!("the")
+	});
+	app.click("plugin_list_rules_1_pattern");
+
+	app.click("plugin_list_rules_add");
+	shows(&mut app, "the second rule", "Rule 2", &[]);
+	app.type_text("plugin_list_rules_2_find", "cya");
+	app.click("plugin_list_rules_2_up");
+	app.frames(2);
+	assert_eq!(
+		rules_of(&lab),
+		json!([
+			{ "find": "cya", "replace": "", "only_if": "", "pattern": false },
+			{ "find": "teh", "replace": "the", "only_if": "", "pattern": true },
+		]),
+		"moving a row up saves the new order, with what was typed into it"
+	);
+
+	app.click("plugin_list_rules_1_remove");
+	app.frames(2);
+	assert_eq!(
+		rules_of(&lab),
+		json!([{ "find": "teh", "replace": "the", "only_if": "", "pattern": true }])
+	);
+	assert!(
+		app.find("plugin_list_rules_2_remove").is_none(),
+		"the removed row is gone"
+	);
+	assert!(
+		!app.texts().iter().any(|text| text == "Rule 2"),
+		"one rule is left"
+	);
+	drop(app);
+	drop(runtime);
+}
+
 #[test]
 fn a_plugin_shows_only_in_the_slots_it_was_granted() {
 	let requests: Rc<RefCell<Vec<Request>>> = Rc::default();

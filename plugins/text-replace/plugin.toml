@@ -1,0 +1,35 @@
+id = "text-replace"
+name = "TextReplace"
+version = "1.0.0"
+api = 1
+description = "Rewrites the messages you send and edit with your own find and replace rules."
+authors = ["Kyoko"]
+permissions = ["hook:send", "hook:edit"]
+
+[[settings]]
+key = "rules"
+type = "list"
+label = "Rules"
+description = "Applied from top to bottom, each to the text the rules above it left. A Luau pattern rule uses Luau's string patterns, not regular expressions; %1 in its replacement is the first capture."
+item = "Rule"
+max = 50
+
+[[settings.fields]]
+key = "find"
+type = "string"
+label = "Find"
+
+[[settings.fields]]
+key = "replace"
+type = "string"
+label = "Replace with"
+
+[[settings.fields]]
+key = "only_if"
+type = "string"
+label = "Only if the message includes"
+
+[[settings.fields]]
+key = "pattern"
+type = "boolean"
+label = "Luau pattern"

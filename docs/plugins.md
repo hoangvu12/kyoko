@@ -30,7 +30,7 @@ version = "1.0.0"
 api = 1
 description = "Strips tracking parameters from the links you send and edit."
 authors = ["Kyoko"]
-permissions = ["hook:send"]
+permissions = ["hook:send", "hook:edit"]
 logic = "logic.luau"
 ui = "ui.luau"
 
@@ -66,8 +66,32 @@ Each `[[settings]]` entry has `key` (lowercase letters, digits, `_`), `type`, `l
 | `string` | `default`, `multiline` | text up to 2000 characters | a text field, saved 500 ms after typing stops |
 | `select` | `options` (strings, or `{ value, label }`), `default` | one of the option values | radio buttons |
 | `action` | | none | a button that runs `on_action(key)` inside a user gesture |
+| `list` | `fields` (a `[[settings.fields]]` table per column), `item` ("Item"), `max` (25, at most 100), `default` (a list of rows) | a list of rows, each a table with one value per field | a card per row with its fields, Move Up, Move Down and Remove, and an "Add <item>" button |
 
-The host validates every value (`SettingSpec::accept`); an invalid value changes nothing. Values live in `<data dir>/plugins.json` with the plugin's enabled flag and approved permissions. A list type for TextReplace's rules is not in v1: ticket 46 adds it (a `pairs` type: a list of `{ from, to }`), with its editor.
+The host validates every value (`SettingSpec::accept`); an invalid value changes nothing. Values live in `<data dir>/plugins.json` with the plugin's enabled flag and approved permissions.
+
+A `list` is generic: any plugin with rows of settings can use it. Each field is a setting of its own (`key`, `type`, `label`, its extra fields and `default`) of type `boolean`, `number`, `string` or `select`; at most 8 fields, and a field of another type is left out. Validation is lenient: a row that is not a table is dropped, a missing or invalid cell takes the field's default, extra keys are dropped and rows past `max` are cut, so one bad row never loses the others. A plugin reads the list with `kyoko.settings.get(key)` as an array of tables, in the order the user set.
+
+```toml
+[[settings]]
+key = "rules"
+type = "list"
+label = "Rules"
+item = "Rule"
+max = 50
+
+[[settings.fields]]
+key = "find"
+type = "string"
+label = "Find"
+
+[[settings.fields]]
+key = "pattern"
+type = "boolean"
+label = "Luau pattern"
+```
+
+The editor keeps its own copy of the rows while the page is open: adding, moving or removing a row and flipping a switch save the whole list at once; typing saves it 500 ms after typing stops. A new row starts with every field's default.
 
 ## Permissions
 
@@ -81,7 +105,8 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `read:users` | `kyoko.state.current_user`, `user`; `typing_start`, `presence_update` events | yes |
 | `read:guilds` | `kyoko.state.guilds`, `channel`; `guild_create`, `guild_delete` events | yes |
 | `read:read_state` | `kyoko.state.read_state`; `message_ack` events | yes |
-| `hook:send` | `before_send` and `before_edit`: read and rewrite your own outgoing text, DMs included | yes |
+| `hook:send` | `before_send`: read and rewrite the text you send, DMs included | yes |
+| `hook:edit` | `before_edit`: read and rewrite the text of your edits, DMs included | yes |
 | `hook:typing` | `allow_typing`: veto your typing indicator | yes |
 | `hook:notify` | `allow_notification`: read messages that would notify you, and silence them | yes |
 | `hook:display_name` | display-name formatting | reserved for 48 |
@@ -95,7 +120,7 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `ui:settings`, `ui:user.decoration`, `ui:member.decoration`, `ui:message.accessory`, `ui:message.menu` | contribute to that UI slot | reserved (see UI slots) |
 | `network:<host>` | contact that host | reserved; v1 has no network API at all |
 
-Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:notify`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
+Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:edit`, `hook:notify`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
 
 Enforcement is in the host, never in the plugin: a hook is called only when its `hook:` permission is granted; every `kyoko.*` call checks its permission and raises a Luau error (`kyoko: kyoko.storage needs the storage permission`) when it is missing; events are filtered by their read scope before they reach the VM.
 
@@ -124,14 +149,14 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | Hook | Permission | Called | Gets | May return | Deadline |
 |---|---|---|---|---|---|
 | `before_send(message)` | `hook:send` | before a typed message is sent, once per send | `{ channel_id, guild_id?, content }` | a string to replace the text, or `nil` | 250 ms |
-| `before_edit(message)` | `hook:send` | before an edit is sent | `{ channel_id, guild_id?, message_id, content }` | as `before_send` | 250 ms |
+| `before_edit(message)` | `hook:edit` | before an edit is sent | `{ channel_id, guild_id?, message_id, content }` | as `before_send` | 250 ms |
 | `allow_typing(channel)` | `hook:typing` | before each typing indicator (at most one per 9 s per channel) | `{ channel_id, guild_id? }` | `false` vetoes; anything else allows | 100 ms |
 | `allow_notification(message)` | `hook:notify` | after kyoko's own notification rules, before the burst limit | `{ id, channel_id, guild_id?, author_id, author_name, content }` | `false` silences; anything else allows | 100 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting or one of its slot buttons | the key, and `{ source = "settings" }` or `{ source = "slot", slot = "composer.buttons" }` | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
 
-- Text hooks chain in plugin id order: each sees the previous plugin's output. A replacement that is empty, longer than 4000 characters or equal to the input counts as no change. A rewritten send is recorded as altered by the last plugin that changed it (`State::altered_by`). There is no "cancel" in v1: the spec asks for rewriting only.
+- Text hooks chain in plugin id order: each sees the previous plugin's output. A replacement that is empty, longer than 4000 characters or equal to the input counts as no change. A rewritten send or edit is recorded as altered by the last plugin that changed it (`State::altered_by`); an edit no plugin changed clears the mark. There is no "cancel" in v1: the spec asks for rewriting only.
 - Vetoes stop at the first plugin that returns `false`.
 - A failing or overrunning hook counts as a strike (below) and the session goes on with the unmodified value; a veto hook that fails allows.
 
@@ -268,7 +293,19 @@ A slot inside the timeline cannot be a zgx contribution, because the Rust timeli
 
 ## ClearURLs
 
-`plugins/clear-urls/`: `before_send` and `before_edit` clean every `http(s)` link outside code spans and code blocks, keeping the rest of the text, the link's order of parameters and its fragment. `rules.luau` has three lists: parameters removed everywhere (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`, …), per-site parameters (YouTube's and Spotify's `si`, X's `s` and `t`, Amazon's `ref` and `/ref=` path segments, …) and referral tags removed only while "Remove referral tags" is on (Amazon's `tag`, …). Nothing is fetched. The rule set is kyoko's own, written from the parameters' public documentation; the ClearURLs project's rules are LGPL-3.0 and are not used (`THIRD_PARTY_NOTICES.md`).
+`plugins/clear-urls/` (`hook:send`, `hook:edit`): `before_send` and `before_edit` clean every `http(s)` link outside code spans and code blocks, keeping the rest of the text, the link's order of parameters and its fragment. `rules.luau` has three lists: parameters removed everywhere (`utm_*`, `fbclid`, `gclid`, `msclkid`, `mc_eid`, …), per-site parameters (YouTube's and Spotify's `si`, X's `s` and `t`, Amazon's `ref` and `/ref=` path segments, …) and referral tags removed only while "Remove referral tags" is on (Amazon's `tag`, …). Nothing is fetched. The rule set is kyoko's own, written from the parameters' public documentation; the ClearURLs project's rules are LGPL-3.0 and are not used (`THIRD_PARTY_NOTICES.md`).
+
+## TextReplace
+
+`plugins/text-replace/` (`hook:send`, `hook:edit`, ships disabled). The user's rules, a `list` setting (`rules`, at most 50), rewrite every message they send and every edit. Each rule has Find, Replace with, Only if the message includes, and Luau pattern.
+
+- Rules run from top to bottom, once each, every rule on the text the rules above it left; Move Up and Move Down change the order. A rule replaces every occurrence of Find.
+- A plain rule (Luau pattern off) matches Find literally and inserts Replace with as it is.
+- A pattern rule uses Luau's string patterns through `string.gsub`, not regular expressions: `%d` a digit, `%a` a letter, `.` any character, `*`, `+`, `-` and `?` repeat, `^` and `$` anchor, `(...)` captures; in Replace with, `%1` to `%9` are captures, `%0` the whole match and `%%` a percent sign. Plugins get no regex engine, and patterns keep it that way.
+- "Only if the message includes" is plain text, checked against the text as the rules above left it; empty means always.
+- An empty Find does nothing. A rule that raises (a malformed pattern such as `[a`, a `%` the replacement cannot use) is skipped and the rest still run; it is not a strike, because each rule runs in its own `pcall`. A pattern that runs away (`a*a*a*a*b` on a long line) is stopped by the plugin deadline: Luau's matcher checks the interrupt at every step, the overrun survives `pcall`, the hook counts a strike and the message goes out exactly as typed. Sending is never held longer than the caller's limit.
+- Code spans and code blocks are not skipped: the rules are the user's own, so whether one touches code is theirs to decide by what it matches. Vencord's TextReplace, the behaviour reference, also applies to the whole message.
+- A rewrite that leaves the message empty or longer than 4000 characters counts as no change, as for every text hook.
 
 ## SilentTyping
 
@@ -287,6 +324,6 @@ While writing it, run `cargo run -p kyoko -- --mock --plugins-dir plugins` and e
 
 Behaviour tests drive a session against an in-process mockcord with the plugin host as its hooks: `crates/plugins/tests/plugins/` (it reuses the session harness, `crates/session/tests/session/harness.rs`). `support::write_plugin` writes a test plugin into a scratch development folder, `support::start` starts the host and a session, `support::approve` approves what the manifest asks for. Observe behaviour through the session seam: the echoed message text, `State`, and mockcord's recorded traffic (`recording().requests_to(...)`). A handy trick for observing a plugin's internals is a `before_send` that appends what it saw to the message.
 
-What is covered: ClearURLs on send and edit, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` in the Luau load check, and `cargo xtask headless-run --mock` runs ClearURLs, SilentTyping (no typing request reaches the mock) and a failing plugin against the mock.
+What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock) and a failing plugin against the mock.
 
 UI halves are covered headless in `apps/desktop/src/ui/scripts/plugins.rs`, part of the load check: `the_interface_loads_and_builds_every_screen` mounts a probe plugin in every placed slot; `a_plugin_shows_only_in_the_slots_it_was_granted` (its settings value, its action naming only a granted slot); `a_broken_or_overreaching_plugin_interface_leaves_the_shell_building` (a syntax error, an error while loading, an error while building, and reaching for an app value, another plugin's value, the network and an app action, beside a working plugin); `the_silent_typing_button_switches_its_setting_and_unmounts_with_the_plugin` (the real `PluginsView` and host: a click without a gesture does nothing, a click with one switches `silent`, the button follows `button`, disabling unmounts it and enabling mounts it again). The `composer-silent-typing` capture clicks the real button in a window.

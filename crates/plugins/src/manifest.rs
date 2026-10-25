@@ -16,6 +16,9 @@ const KEY_LIMIT: usize = 48;
 const SETTING_LIMIT: usize = 64;
 const PERMISSION_LIMIT: usize = 32;
 const OPTION_LIMIT: usize = 32;
+const FIELD_LIMIT: usize = 8;
+const ROWS_DEFAULT: usize = 25;
+const ROW_LIMIT: usize = 100;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Manifest {
@@ -59,6 +62,12 @@ pub enum SettingKind {
 		options: Vec<Choice>,
 	},
 	Action,
+	List {
+		fields: Vec<SettingSpec>,
+		item: String,
+		max: usize,
+		default: Vec<Json>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -191,6 +200,45 @@ impl SettingSpec {
 				SettingKind::Select { default, options }
 			}
 			"action" => SettingKind::Action,
+			"list" => {
+				let mut fields: Vec<SettingSpec> = Vec::new();
+				for entry in table
+					.get("fields")
+					.and_then(Toml::as_array)
+					.into_iter()
+					.flatten()
+					.take(FIELD_LIMIT)
+				{
+					match SettingSpec::parse(entry) {
+						Some(field)
+							if field.fits_a_row() && fields.iter().all(|known| known.key != field.key) =>
+						{
+							fields.push(field)
+						}
+						_ => tracing::warn!(setting = %key, "a list field was left out"),
+					}
+				}
+				if fields.is_empty() {
+					return None;
+				}
+				let max = table
+					.get("max")
+					.and_then(Toml::as_integer)
+					.filter(|max| *max > 0)
+					.map_or(ROWS_DEFAULT, |max| {
+						usize::try_from(max).unwrap_or(ROW_LIMIT).min(ROW_LIMIT)
+					});
+				let default = default
+					.and_then(|value| serde_json::to_value(value).ok())
+					.and_then(|value| rows(&fields, max, &value))
+					.unwrap_or_default();
+				SettingKind::List {
+					item: text_field(table, "item", SHORT_TEXT).unwrap_or_else(|| "Item".to_owned()),
+					fields,
+					max,
+					default,
+				}
+			}
 			_ => return None,
 		};
 		Some(SettingSpec {
@@ -208,6 +256,7 @@ impl SettingSpec {
 			SettingKind::Text { default, .. } => Json::String(default.clone()),
 			SettingKind::Select { default, .. } => Json::String(default.clone()),
 			SettingKind::Action => Json::Null,
+			SettingKind::List { default, .. } => Json::Array(default.clone()),
 		}
 	}
 
@@ -233,6 +282,7 @@ impl SettingSpec {
 				.filter(|value| options.iter().any(|option| option.value == *value))
 				.map(|value| Json::String(value.to_owned())),
 			SettingKind::Action => None,
+			SettingKind::List { fields, max, .. } => rows(fields, *max, value).map(Json::Array),
 		}
 	}
 
@@ -243,8 +293,38 @@ impl SettingSpec {
 			SettingKind::Text { .. } => "string",
 			SettingKind::Select { .. } => "select",
 			SettingKind::Action => "action",
+			SettingKind::List { .. } => "list",
 		}
 	}
+
+	fn fits_a_row(&self) -> bool {
+		!matches!(self.kind, SettingKind::Action | SettingKind::List { .. })
+	}
+}
+
+fn rows(fields: &[SettingSpec], max: usize, value: &Json) -> Option<Vec<Json>> {
+	let items = match value {
+		Json::Array(items) => items.as_slice(),
+		Json::Object(map) if map.is_empty() => &[],
+		_ => return None,
+	};
+	Some(
+		items
+			.iter()
+			.filter_map(Json::as_object)
+			.take(max)
+			.map(|row| {
+				let cells = fields.iter().map(|field| {
+					let cell = row
+						.get(&field.key)
+						.and_then(|value| field.accept(value))
+						.unwrap_or_else(|| field.default_value());
+					(field.key.clone(), cell)
+				});
+				Json::Object(cells.collect())
+			})
+			.collect(),
+	)
 }
 
 impl Choice {

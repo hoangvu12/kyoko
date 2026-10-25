@@ -332,6 +332,12 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 |---|---|---|---|
 | `settings-plugins` | 45 | Default selection, then open settings on Plugins. Oxidcord lists no plugins on a fresh data directory; kyoko lists its bundled ClearURLs, disabled. | yes |
 
+### 46 TextReplace
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `settings-text-replace` | 46 | Default selection. Kyoko sets three TextReplace rules (a plain rule, a Luau pattern rule and a rule with an "only if" condition) and turns TextReplace on through `PluginHost`, opens settings on Plugins, then presses TextReplace's Settings button through the window (`capture::TEXT_REPLACE_SETTINGS`). Oxidcord has no plugins and no such screen, so capture it with `--apps kyoko` and check it by eye. | yes |
+
 ### 47 SilentTyping
 
 | Screen | Ticket | Steps | Kyoko |

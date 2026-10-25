@@ -35,7 +35,18 @@ const SILENT_TYPING: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 2] = [CLEAR_URLS, SILENT_TYPING];
+const TEXT_REPLACE: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/text-replace/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/text-replace/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 3] = [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE];
 
 pub fn packages() -> Vec<Package> {
 	PACKAGES

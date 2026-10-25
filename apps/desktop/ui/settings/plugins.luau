@@ -13,6 +13,7 @@ local TILE_GLYPH = 24
 local TAB = 32
 local FIELD = 32
 local FIELD_WIDTH = 320
+local CELL_WIDTH = 200
 local PROMPT_WIDTH = 520
 local SAVE_DELAY = 500
 
@@ -365,6 +366,309 @@ local text_field = ui.component(function(props: { id: string, setting: state.Plu
 	}
 end)
 
+type Row = { [string]: any }
+
+local function copy_rows(value: any): { Row }
+	local rows = {}
+	if type(value) ~= "table" then
+		return rows
+	end
+	for _, row in value do
+		local copied = {}
+		if type(row) == "table" then
+			for key, cell in row do
+				copied[key] = cell
+			end
+		end
+		table.insert(rows, copied)
+	end
+	return rows
+end
+
+local cell_text = ui.component(function(props: { id: string, initial: string, multiline: boolean, on_change: (string) -> () })
+	local text = ui.use_state(props.initial)
+	local last = props.initial
+	ui.effect(function()
+		local typed = text:get()
+		if typed ~= last then
+			last = typed
+			props.on_change(typed)
+		end
+	end)
+	local field = if props.multiline then ui.textarea else ui.input
+	return field {
+		id = props.id,
+		w = CELL_WIDTH,
+		h = if props.multiline then nil else FIELD,
+		min_h = FIELD,
+		px = theme.size.space_8,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.input_background,
+		border = 0,
+		focus = { border = 0 },
+		text_size = theme.size.font_sm,
+		color = theme.color.text_normal,
+		value = text,
+	}
+end)
+
+local cell_switch = ui.component(function(props: { id: string, label: string, initial: boolean, on_change: (boolean) -> () })
+	local on = ui.use_state(props.initial)
+	return widgets.switch {
+		id = props.id,
+		label = props.label,
+		checked = function(): boolean
+			return on:get()
+		end,
+		on_change = function(value: boolean)
+			on:set(value)
+			props.on_change(value)
+		end,
+	}
+end)
+
+local cell_number = ui.component(function(props: { field: state.PluginSetting, initial: number, on_change: (number) -> () })
+	local value = ui.use_state(props.initial)
+	local function nudge(direction: number)
+		local field = props.field
+		local next_value = math.clamp(value:get() + direction * field.step, field.min, field.max)
+		value:set(next_value)
+		props.on_change(next_value)
+	end
+	return ui.row {
+		items = "center",
+		gap = theme.size.space_8,
+		widgets.button {
+			text = "-",
+			small = true,
+			on_click = function()
+				nudge(-1)
+			end,
+		},
+		widgets.label(function(): string
+			return tostring(value:get())
+		end, theme.size.font_md, theme.color.text_normal, { literal = true, min_w = 32 }),
+		widgets.button {
+			text = "+",
+			small = true,
+			on_click = function()
+				nudge(1)
+			end,
+		},
+	}
+end)
+
+local cell_choice = ui.component(function(props: { field: state.PluginSetting, initial: any, on_change: (any) -> () })
+	local chosen = ui.use_state(props.initial)
+	return widgets.radios(props.field.options, function(): any
+		return chosen:get()
+	end, function(value: any)
+		chosen:set(value)
+		props.on_change(value)
+	end)
+end)
+
+local function list_cell(prefix: string, row: Row, field: state.PluginSetting, edited: (boolean) -> ())
+	local function store(value: any, now: boolean)
+		row[field.key] = value
+		edited(now)
+	end
+	local initial = row[field.key]
+	if initial == nil then
+		initial = field.value
+	end
+	if field.type == "boolean" then
+		return ui.row {
+			items = "center",
+			gap = theme.size.space_8,
+			h = FIELD,
+			shrink = 0,
+			cell_switch {
+				id = prefix .. field.key,
+				label = field.label,
+				initial = initial == true,
+				on_change = function(on: boolean)
+					store(on, true)
+				end,
+			},
+			widgets.label(field.label, theme.size.font_sm, theme.color.text_normal, { literal = true }),
+		}
+	end
+	local input: any = nil
+	if field.type == "number" then
+		input = cell_number {
+			field = field,
+			initial = if type(initial) == "number" then initial else field.min,
+			on_change = function(value: number)
+				store(value, true)
+			end,
+		}
+	elseif field.type == "select" then
+		input = cell_choice {
+			field = field,
+			initial = initial,
+			on_change = function(value: any)
+				store(value, true)
+			end,
+		}
+	else
+		input = cell_text {
+			id = prefix .. field.key,
+			initial = tostring(initial or ""),
+			multiline = field.multiline,
+			on_change = function(typed: string)
+				store(typed, false)
+			end,
+		}
+	end
+	return ui.column {
+		gap = theme.size.space_4,
+		shrink = 0,
+		widgets.label(field.label, theme.size.font_tiny, theme.color.text_muted, {
+			literal = true,
+			weight = theme.weight.semibold,
+		}),
+		input,
+	}
+end
+
+local list_editor = ui.component(function(props: { id: string, setting: state.PluginSetting })
+	local setting = props.setting
+	local base = "plugin_list_" .. setting.key .. "_"
+	local rows = copy_rows(setting.value)
+	local revision = ui.use_state(0)
+	local pending: (() -> ())? = nil
+	local function send()
+		actions.plugin_action("set", { id = props.id, key = setting.key, value = rows })
+	end
+	local function save(now: boolean)
+		if pending then
+			pending()
+			pending = nil
+		end
+		if now then
+			send()
+			return
+		end
+		pending = ui.after(SAVE_DELAY, function()
+			pending = nil
+			send()
+		end)
+	end
+	local function restructure(change: () -> ())
+		change()
+		save(true)
+		revision:set(revision:get() + 1)
+	end
+	local function blank(): Row
+		local row = {}
+		for _, field in setting.fields do
+			row[field.key] = field.value
+		end
+		return row
+	end
+	local function move_button(prefix: string, text: string, from: number, to: number)
+		return widgets.button {
+			id = prefix,
+			text = text,
+			small = true,
+			on_click = function()
+				restructure(function()
+					rows[from], rows[to] = rows[to], rows[from]
+				end)
+			end,
+		}
+	end
+	local function row_view(index: number, row: Row)
+		local prefix = base .. index .. "_"
+		local cells = {}
+		for _, field in setting.fields do
+			table.insert(cells, list_cell(prefix, row, field, save))
+		end
+		local buttons = {}
+		if index > 1 then
+			table.insert(buttons, move_button(prefix .. "up", "Move Up", index, index - 1))
+		end
+		if index < #rows then
+			table.insert(buttons, move_button(prefix .. "down", "Move Down", index, index + 1))
+		end
+		table.insert(
+			buttons,
+			widgets.button {
+				id = prefix .. "remove",
+				text = "Remove",
+				tone = "danger",
+				small = true,
+				on_click = function()
+					restructure(function()
+						table.remove(rows, index)
+					end)
+				end,
+			}
+		)
+		return ui.column {
+			w_full = true,
+			gap = theme.size.space_12,
+			p = theme.size.space_12,
+			rounded = theme.size.radius_md,
+			bg = theme.color.background_secondary,
+			ui.row {
+				w_full = true,
+				items = "center",
+				justify = "between",
+				gap = theme.size.space_8,
+				widgets.label(setting.item .. " " .. index, theme.size.font_sm, theme.color.header_primary, {
+					literal = true,
+					weight = theme.weight.semibold,
+				}),
+				ui.row { items = "center", gap = theme.size.space_4, table.unpack(buttons) },
+			},
+			ui.row { w_full = true, items = "end", gap = theme.size.space_12, flex_wrap = true, table.unpack(cells) },
+		}
+	end
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_8,
+		py = theme.size.space_12,
+		border_sides = { 0, 0, 1, 0 },
+		border_color = theme.color.divider,
+		widgets.label(setting.label, theme.size.font_md, theme.color.header_primary, {
+			literal = true,
+			weight = theme.weight.medium,
+		}),
+		if setting.description ~= "" then widgets.hint(setting.description) else nil,
+		ui.presence(function(): number
+			return revision:get()
+		end, function()
+			if #rows == 0 then
+				return widgets.hint("Nothing added yet.")
+			end
+			local views = {}
+			for index, row in rows do
+				table.insert(views, row_view(index, row))
+			end
+			return ui.column { w_full = true, gap = theme.size.space_8, table.unpack(views) }
+		end),
+		ui.show(
+			function(): boolean
+				return revision:get() >= 0 and #rows < setting.rows
+			end,
+			ui.row {
+				widgets.button {
+					id = base .. "add",
+					text = "Add " .. setting.item,
+					small = true,
+					on_click = function()
+						restructure(function()
+							table.insert(rows, blank())
+						end)
+					end,
+				},
+			}
+		),
+	}
+end)
+
 local function control(id: string, setting: state.PluginSetting): any
 	if setting.type == "boolean" then
 		return widgets.switch {
@@ -393,6 +697,9 @@ local function control(id: string, setting: state.PluginSetting): any
 end
 
 local function field_row(id: string, setting: state.PluginSetting)
+	if setting.type == "list" then
+		return list_editor { id = id, setting = setting }
+	end
 	if setting.type == "select" then
 		return ui.column {
 			w_full = true,

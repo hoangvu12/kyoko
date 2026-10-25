@@ -109,6 +109,9 @@ export type PluginSetting = {
 	step: number,
 	multiline: boolean,
 	options: { PluginChoice },
+	fields: { PluginSetting },
+	item: string,
+	rows: number,
 }
 export type PluginPermission = { name: string, text: string, sensitive: boolean, reserved: boolean }
 export type Plugin = {

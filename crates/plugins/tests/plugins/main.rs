@@ -10,3 +10,4 @@ mod permissions;
 mod silent_typing;
 mod storage;
 mod support;
+mod text_replace;
