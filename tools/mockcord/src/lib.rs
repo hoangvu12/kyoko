@@ -1,5 +1,6 @@
 mod admin;
 mod cdn;
+mod community;
 mod config;
 mod control;
 mod error;
@@ -24,6 +25,7 @@ mod voice;
 mod web;
 
 pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, Signature};
+pub use community::{COMMUNITY_INVITE, COMMUNITY_NAME, CommunityGuild};
 pub use config::MockConfig;
 pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};

@@ -29,6 +29,7 @@ pub struct Request {
 	pub(crate) query: Vec<(String, String)>,
 	pub(crate) audit_reason: Option<String>,
 	pub(crate) idempotent: bool,
+	pub(crate) context_properties: Option<String>,
 	pub(crate) body: Body,
 }
 
@@ -40,6 +41,7 @@ impl Request {
 			query: Vec::new(),
 			audit_reason: None,
 			idempotent: false,
+			context_properties: None,
 			body: Body::Empty,
 		}
 	}
@@ -100,6 +102,11 @@ impl Request {
 
 	pub fn audit_reason(mut self, reason: &str) -> Self {
 		self.audit_reason = Some(reason.to_owned());
+		self
+	}
+
+	pub fn context_properties(mut self, context: &protocol::fingerprint::ContextProperties) -> Self {
+		self.context_properties = Some(context.header_value());
 		self
 	}
 

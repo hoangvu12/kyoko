@@ -937,6 +937,9 @@ impl Shared {
 	}
 
 	pub fn leave_guild(&self, guild_id: u64) -> Result<(), ApiError> {
+		if self.leave_community(guild_id) {
+			return Ok(());
+		}
 		let mut store = self.store.lock();
 		self.live_guild(&store, guild_id)?;
 		store.left_guilds.insert(guild_id);

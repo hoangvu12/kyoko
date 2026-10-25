@@ -1,5 +1,6 @@
 mod caps;
 mod changes;
+mod community;
 mod composer;
 mod deletions;
 mod dispatch;
@@ -28,6 +29,10 @@ mod voice;
 
 pub use caps::{CacheLimits, Recent};
 pub use changes::{Changes, IdSet};
+pub use community::{
+	FieldKind, Join, MemberVerification, Onboarding, OnboardingOption, OnboardingPrompt, PromptKind,
+	VerificationField,
+};
 pub use composer::MAX_ATTACHMENTS;
 pub use deletions::{DeleteBatch, DeleteStatus};
 pub use event::{Event, LoadDirection, LocalEvent};

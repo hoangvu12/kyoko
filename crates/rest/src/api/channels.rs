@@ -1,3 +1,4 @@
+use protocol::fingerprint::ContextProperties;
 use protocol::rest::{AttachmentDescriptor, CreateMessage, EditMessage, MessagesQuery};
 use protocol::{Channel, DecodeError, LenientVec, Message, Snowflake, ThreadMember, User};
 use reqwest::StatusCode;
@@ -362,13 +363,24 @@ impl RestClient {
 	}
 
 	pub async fn invite(&self, code: &str) -> Result<Value> {
-		let request =
-			Request::get(format!("/invites/{}", encode_component(code))).query(&[("with_counts", "true")]);
+		let request = Request::get(format!("/invites/{}", encode_component(code)))
+			.query(&[("with_counts", "true"), ("with_expiration", "true")]);
 		self.send(request).await
 	}
 
-	pub async fn accept_invite(&self, code: &str) -> Result<Value> {
-		let request = Request::post(format!("/invites/{}", encode_component(code))).json(&json!({}));
+	pub async fn accept_invite(
+		&self,
+		code: &str,
+		session_id: Option<&str>,
+		context: &ContextProperties,
+	) -> Result<Value> {
+		let body = match session_id {
+			Some(session_id) => json!({ "session_id": session_id }),
+			None => json!({}),
+		};
+		let request = Request::post(format!("/invites/{}", encode_component(code)))
+			.context_properties(context)
+			.json(&body);
 		self.send(request).await
 	}
 

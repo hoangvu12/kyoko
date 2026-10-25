@@ -58,10 +58,10 @@ impl RiskyReason {
 				"This channel has no messages yet. Being the first to post can trip Discord's spam checks."
 			}
 			Self::Screening => {
-				"This server asks new members to accept its rules first. Complete membership screening in the official client."
+				"This server asks new members to accept its rules first. Open the server to read and accept them, or do it in the official client."
 			}
 			Self::Onboarding => {
-				"This server's onboarding isn't finished. Complete it in the official client."
+				"This server's onboarding isn't finished. Open the server to finish it, or do it in the official client."
 			}
 			Self::Verification => {
 				"This server's verification level doesn't allow you to talk here yet. Meet it in the official client or wait until it lifts."

@@ -157,10 +157,33 @@ pub async fn ack_bulk(State(shared): Mock, Json(body): Json<Value>) -> NoContent
 }
 
 pub async fn accept_invite(State(shared): Mock, Path(code): Path<String>) -> ApiResult {
+	if code == crate::community::COMMUNITY_INVITE {
+		return Ok(Json(shared.accept_community_invite()));
+	}
 	shared
 		.invite_json(&code)
 		.map(Json)
 		.ok_or_else(ApiError::unknown_invite)
+}
+
+pub async fn onboarding(State(shared): Mock, Path(id): Path<u64>) -> ApiResult {
+	shared.community_onboarding(id).map(Json)
+}
+
+pub async fn onboarding_responses(
+	State(shared): Mock,
+	Path(id): Path<u64>,
+	Json(body): Json<Value>,
+) -> ApiResult {
+	shared.community_onboarding_responses(id, &body).map(Json)
+}
+
+pub async fn member_verification(State(shared): Mock, Path(id): Path<u64>) -> ApiResult {
+	shared.community_verification(id).map(Json)
+}
+
+pub async fn join_request(State(shared): Mock, Path(id): Path<u64>, Json(body): Json<Value>) -> ApiResult {
+	shared.community_join_request(id, &body).map(Json)
 }
 
 pub async fn create_guild(State(shared): Mock, Json(body): Json<Value>) -> ApiResult {

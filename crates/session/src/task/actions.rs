@@ -46,7 +46,11 @@ impl Core {
 	}
 
 	pub(super) fn on_loaded(&mut self, loaded: Loaded) {
+		let joined = matches!(loaded, Loaded::InviteAccepted { .. });
 		self.apply_local(LocalEvent::Loaded(Box::new(loaded)));
+		if joined {
+			self.after_join();
+		}
 	}
 
 	pub(super) fn guild_allows(&mut self, guild_id: Snowflake, needed: Permissions, what: &str) -> bool {

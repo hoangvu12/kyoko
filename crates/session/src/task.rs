@@ -40,6 +40,7 @@ mod alerts;
 mod backfill;
 mod collapse;
 mod commands;
+mod community;
 mod deletes;
 mod expressions;
 mod failures;

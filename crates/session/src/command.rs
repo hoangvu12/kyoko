@@ -8,6 +8,15 @@ use rest::api::SearchQuery;
 use serde_json::Value;
 use state::{RiskyReason, RiskyTarget, Viewport};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InviteSource {
+	AddServer,
+	Message {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+	},
+}
+
 #[derive(Debug)]
 pub enum Command {
 	SelectChannel {
@@ -201,6 +210,23 @@ pub enum Command {
 	},
 	AcceptInvite {
 		code: String,
+		from: InviteSource,
+	},
+	LoadOnboarding {
+		guild_id: Snowflake,
+	},
+	SubmitOnboarding {
+		guild_id: Snowflake,
+		chosen: Vec<Snowflake>,
+		prompts_seen: Vec<(Snowflake, i64)>,
+		options_seen: Vec<(Snowflake, i64)>,
+	},
+	LoadMemberVerification {
+		guild_id: Snowflake,
+		invite_code: Option<String>,
+	},
+	AcceptMemberVerification {
+		guild_id: Snowflake,
 	},
 	LeaveGuild {
 		guild_id: Snowflake,

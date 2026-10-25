@@ -278,6 +278,57 @@ pub fn channel_referer(guild_id: Option<Snowflake>, channel_id: Snowflake) -> St
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinLocation {
+	JoinGuild,
+	InviteButtonEmbed,
+}
+
+impl JoinLocation {
+	pub fn label(self) -> &'static str {
+		match self {
+			Self::JoinGuild => "Join Guild",
+			Self::InviteButtonEmbed => "Invite Button Embed",
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ContextProperties {
+	pub location: &'static str,
+	pub location_guild_id: Option<Snowflake>,
+	pub location_channel_id: Option<Snowflake>,
+	pub location_channel_type: Option<i64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub location_message_id: Option<Snowflake>,
+}
+
+impl ContextProperties {
+	pub fn join(
+		location: JoinLocation,
+		guild_id: Option<Snowflake>,
+		channel_id: Option<Snowflake>,
+		channel_type: Option<i64>,
+	) -> Self {
+		Self {
+			location: location.label(),
+			location_guild_id: guild_id,
+			location_channel_id: channel_id,
+			location_channel_type: channel_type,
+			location_message_id: None,
+		}
+	}
+
+	pub fn with_message(mut self, message_id: Snowflake) -> Self {
+		self.location_message_id = Some(message_id);
+		self
+	}
+
+	pub fn header_value(&self) -> String {
+		STANDARD.encode(serde_json::to_vec(self).unwrap_or_default())
+	}
+}
+
 pub fn plausible_installation_id(id: &str) -> bool {
 	!id.is_empty() && id.len() <= MAX_INSTALLATION_ID_LEN && plausible_header(id)
 }

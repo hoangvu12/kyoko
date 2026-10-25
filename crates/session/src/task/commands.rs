@@ -1,4 +1,4 @@
-use protocol::{CreateMessage, MessageReference, MessageReferenceKind, Permissions, Snowflake, StatusKind};
+use protocol::{Permissions, Snowflake, StatusKind};
 use std::time::Duration;
 
 use rest::RestClient;
@@ -63,13 +63,17 @@ impl Core {
 			| Command::PinMessage { .. }
 			| Command::UnpinMessage { .. }
 			| Command::LoadProfile { .. }
-			| Command::CreateInvite { .. }
-			| Command::ResolveInvite { .. }
-			| Command::AcceptInvite { .. }
 			| Command::LoadReactionUsers { .. }
-			| Command::ForwardMessage { .. }
 			| Command::VotePoll { .. }
 			| Command::EndPoll { .. }) => self.on_text_command(command),
+			command @ (Command::CreateInvite { .. }
+			| Command::ResolveInvite { .. }
+			| Command::AcceptInvite { .. }
+			| Command::LoadOnboarding { .. }
+			| Command::SubmitOnboarding { .. }
+			| Command::LoadMemberVerification { .. }
+			| Command::AcceptMemberVerification { .. }
+			| Command::ForwardMessage { .. }) => self.on_community_command(command),
 			command @ (Command::SendSticker { .. }
 			| Command::LoadGifTrending
 			| Command::SearchGifs { .. }
@@ -246,32 +250,6 @@ impl Core {
 				}
 			}
 			Command::LoadProfile { user_id, guild_id } => self.load_profile(user_id, guild_id),
-			Command::CreateInvite {
-				channel_id,
-				max_age,
-				max_uses,
-				temporary,
-			} => {
-				if self.channel_allows(channel_id, Permissions::CREATE_INSTANT_INVITE, "Create Invite") {
-					self.spawn_load("create invite", move |rest| async move {
-						let options = json!({
-							"max_age": max_age,
-							"max_uses": max_uses,
-							"temporary": temporary,
-							"unique": true,
-						});
-						let raw = rest.create_invite(channel_id, options).await?;
-						Ok(Loaded::InviteCreated { channel_id, raw })
-					});
-				}
-			}
-			Command::ResolveInvite { code } => self.spawn_load("invite", move |rest| async move {
-				let raw = rest.invite(&code).await?;
-				Ok(Loaded::InvitePreview { code, raw })
-			}),
-			Command::AcceptInvite { code } => self.spawn_action("accept invite", move |rest| async move {
-				rest.accept_invite(&code).await.map(drop)
-			}),
 			Command::LoadReactionUsers {
 				channel_id,
 				message_id,
@@ -286,26 +264,6 @@ impl Core {
 					users: users.into_vec(),
 				})
 			}),
-			Command::ForwardMessage {
-				channel_id,
-				message_id,
-				to_channel_id,
-			} => {
-				let guild_id = self.state.read().channel_guild(channel_id);
-				let body = CreateMessage {
-					message_reference: Some(MessageReference {
-						kind: Some(MessageReferenceKind::Forward),
-						message_id: Some(message_id),
-						channel_id: Some(channel_id),
-						guild_id,
-						fail_if_not_exists: None,
-					}),
-					..CreateMessage::default()
-				};
-				self.spawn_action("forward message", move |rest| async move {
-					rest.create_message(to_channel_id, body).await.map(drop)
-				});
-			}
 			Command::VotePoll {
 				channel_id,
 				message_id,

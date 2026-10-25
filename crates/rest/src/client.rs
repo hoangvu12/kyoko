@@ -32,6 +32,7 @@ const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const X_DISCORD_LOCALE: HeaderName = HeaderName::from_static("x-discord-locale");
 const X_DISCORD_TIMEZONE: HeaderName = HeaderName::from_static("x-discord-timezone");
 const X_SUPER_PROPERTIES: HeaderName = HeaderName::from_static("x-super-properties");
+const X_CONTEXT_PROPERTIES: HeaderName = HeaderName::from_static("x-context-properties");
 const X_INSTALLATION_ID: HeaderName = HeaderName::from_static("x-installation-id");
 const SEC_CH_UA: HeaderName = HeaderName::from_static("sec-ch-ua");
 const SEC_CH_UA_MOBILE: HeaderName = HeaderName::from_static("sec-ch-ua-mobile");
@@ -323,6 +324,11 @@ impl RestClient {
 			builder = builder.header("x-audit-log-reason", encode_component(reason));
 		}
 		builder = builder.header(X_SUPER_PROPERTIES, self.super_properties());
+		if let Some(context) = &request.context_properties
+			&& let Ok(value) = HeaderValue::from_str(context)
+		{
+			builder = builder.header(X_CONTEXT_PROPERTIES, value);
+		}
 		if let Some(installation_id) = self.inner.identity.installation_id()
 			&& let Ok(value) = HeaderValue::from_str(&installation_id)
 		{

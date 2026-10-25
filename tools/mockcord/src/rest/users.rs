@@ -169,6 +169,9 @@ pub async fn invite(State(shared): State<Arc<Shared>>, Path(code): Path<String>)
 	if let Some(created) = shared.invite_json(&code) {
 		return Ok(Json(created));
 	}
+	if let Some(community) = shared.community_invite_json(&code) {
+		return Ok(Json(community));
+	}
 	let index = match code.strip_prefix("mock") {
 		Some("") => 0,
 		Some(digits) => digits.parse::<usize>().map_err(|_| ApiError::unknown_invite())?,

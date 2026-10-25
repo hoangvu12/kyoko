@@ -109,6 +109,16 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/guilds/{id}/bans", get(admin::bans))
 		.route("/guilds/{id}/bans/{uid}", put(admin::ban).delete(admin::unban))
 		.route("/guilds/{id}/invites", get(admin::guild_invites))
+		.route("/guilds/{id}/onboarding", get(admin::onboarding))
+		.route(
+			"/guilds/{id}/onboarding-responses",
+			put(admin::onboarding_responses),
+		)
+		.route(
+			"/guilds/{id}/member-verification",
+			get(admin::member_verification),
+		)
+		.route("/guilds/{id}/requests/@me", put(admin::join_request))
 		.route("/guilds/{id}/audit-logs", get(admin::audit_log))
 		.route("/guilds/{id}/threads/active", get(admin::active_threads))
 		.route("/guilds/{id}/messages/search", get(guilds::search_messages))

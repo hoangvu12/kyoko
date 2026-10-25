@@ -493,6 +493,7 @@ async fn scenario(
 			"threads_created": text.threads_created,
 			"moderation_ok": text.moderation_ok,
 			"expressions_ok": text.expressions_ok,
+			"community_ok": text.community_ok,
 			"plugins": plugins
 				.snapshot()
 				.iter()

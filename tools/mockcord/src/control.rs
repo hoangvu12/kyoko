@@ -28,6 +28,10 @@ impl Control {
 		self.shared.recorder.clear();
 	}
 
+	pub fn community(&self) -> Option<crate::community::CommunityGuild> {
+		self.shared.community_state()
+	}
+
 	pub fn recording(&self) -> Recording {
 		self.shared.recorder.snapshot()
 	}

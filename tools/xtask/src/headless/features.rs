@@ -1,7 +1,8 @@
 use anyhow::{Context, Result, ensure};
-use mockcord::Fixtures;
+use chrono::Utc;
+use mockcord::{COMMUNITY_INVITE, Fixtures};
 use protocol::{ChannelType, Message, Snowflake};
-use session::Command;
+use session::{Command, InviteSource, RiskyReason};
 use state::{MemberListRow, State};
 
 use super::Harness;
@@ -24,6 +25,7 @@ pub(super) struct TextOutcome {
 	pub(super) groups_created: usize,
 	pub(super) moderation_ok: bool,
 	pub(super) expressions_ok: bool,
+	pub(super) community_ok: bool,
 }
 
 impl Harness {
@@ -41,11 +43,13 @@ impl Harness {
 		let moderation_ok = self.kick_and_audit(guild_id).await?;
 		let groups_created = self.group_dm(fixtures).await?;
 		let expressions_ok = self.expression_features(guild_id, channel_id).await?;
+		let community_ok = self.community_cycle().await?;
 		Ok(TextOutcome {
 			threads_created: 1,
 			groups_created,
 			moderation_ok,
 			expressions_ok,
+			community_ok,
 		})
 	}
 
@@ -136,6 +140,74 @@ impl Harness {
 				&& state.pending_incoming().iter().all(|row| row.user_id != incoming)
 		})
 		.await
+	}
+
+	async fn community_cycle(&self) -> Result<bool> {
+		self.session.send(Command::ResolveInvite {
+			code: COMMUNITY_INVITE.to_owned(),
+		});
+		self.until("the community invite preview", |state| {
+			state.invite_preview(COMMUNITY_INVITE).is_some()
+		})
+		.await?;
+		let guild_id = self
+			.state
+			.read()
+			.invite_preview(COMMUNITY_INVITE)
+			.and_then(|preview| preview.guild_id)
+			.context("the community invite names no server")?;
+		self.session.send(Command::AcceptInvite {
+			code: COMMUNITY_INVITE.to_owned(),
+			from: InviteSource::AddServer,
+		});
+		self.until("the onboarding and the rules of the joined server", |state| {
+			state.guild(guild_id).is_some()
+				&& state.onboarding(guild_id).is_some()
+				&& state.member_verification(guild_id).is_some()
+		})
+		.await?;
+		let gated = |state: &State| {
+			let channel_id = state.guild(guild_id)?.channels.keys().next().copied()?;
+			state
+				.channel_lock(channel_id, Utc::now())
+				.map(|lock| lock.reason)
+				.filter(|reason| reason.is_gate())
+		};
+		ensure!(
+			gated(&self.state.read()) == Some(RiskyReason::Screening),
+			"the joined server is not gated by its rules"
+		);
+		self.session.send(Command::AcceptMemberVerification { guild_id });
+		self.until("the rules to be accepted", |state| {
+			gated(state) == Some(RiskyReason::Onboarding)
+		})
+		.await?;
+		let chosen: Vec<Snowflake> = self
+			.state
+			.read()
+			.onboarding(guild_id)
+			.map(|onboarding| {
+				onboarding
+					.prompts
+					.iter()
+					.filter_map(|prompt| prompt.options.first().map(|option| option.id))
+					.collect()
+			})
+			.unwrap_or_default();
+		self.session.send(Command::SubmitOnboarding {
+			guild_id,
+			chosen,
+			prompts_seen: Vec::new(),
+			options_seen: Vec::new(),
+		});
+		self.until("the onboarding to be finished", |state| gated(state).is_none())
+			.await?;
+		self.session.send(Command::LeaveGuild { guild_id });
+		self.until("the joined server to be left", |state| {
+			state.guild(guild_id).is_none()
+		})
+		.await?;
+		Ok(true)
 	}
 
 	async fn mute_cycle(&self, guild_id: Snowflake, selected: Snowflake) -> Result<()> {

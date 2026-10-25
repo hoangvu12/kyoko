@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 
 use protocol::rest::{AllowedMentions, AttachmentDescriptor};
-use protocol::{Channel, CreateMessage, Message, MessageReference, Nonce, Snowflake, StickerItem};
+use protocol::{
+	Channel, CreateMessage, Message, MessageReference, MessageReferenceKind, Nonce, Snowflake, StickerItem,
+};
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
 use serde_json::{Value, json};
@@ -285,6 +287,38 @@ impl Core {
 					tracing::warn!(%error, "forum post was not created");
 					let _ = internal.send(Internal::Rejected(failure_reason("Create post", &error)));
 				}
+			}
+		});
+	}
+
+	pub(super) fn dispatch_forward(
+		&mut self,
+		nonce: Nonce,
+		guild_id: Option<Snowflake>,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		to_channel_id: Snowflake,
+	) {
+		let body = CreateMessage {
+			nonce: Some(nonce.0),
+			message_reference: Some(MessageReference {
+				kind: Some(MessageReferenceKind::Forward),
+				message_id: Some(message_id),
+				channel_id: Some(channel_id),
+				guild_id,
+				fail_if_not_exists: None,
+			}),
+			..CreateMessage::default()
+		};
+		self.typing_sent.remove(&to_channel_id);
+		let rest = self.rest.clone();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			if let Err(error) = rest.create_message(to_channel_id, body).await {
+				tracing::warn!(%error, "message was not forwarded");
+				let _ = internal.send(Internal::Rejected(super::actions::failure_reason(
+					"Forward", &error,
+				)));
 			}
 		});
 	}

@@ -48,6 +48,27 @@ pub enum Loaded {
 		code: String,
 		raw: Value,
 	},
+	InviteUnknown {
+		code: String,
+	},
+	InviteAccepted {
+		code: String,
+		raw: Value,
+	},
+	Onboarding {
+		guild_id: Snowflake,
+		raw: Value,
+	},
+	OnboardingSubmitted {
+		guild_id: Snowflake,
+	},
+	MemberVerification {
+		guild_id: Snowflake,
+		raw: Value,
+	},
+	MemberVerificationSubmitted {
+		guild_id: Snowflake,
+	},
 	GuildInvites {
 		guild_id: Snowflake,
 		raw: Value,
@@ -141,6 +162,7 @@ pub struct InvitePreview {
 	pub online_count: i64,
 	pub channel_id: Option<Snowflake>,
 	pub channel_name: Option<String>,
+	pub channel_type: Option<i64>,
 	pub inviter_id: Option<Snowflake>,
 }
 
@@ -209,6 +231,7 @@ pub(crate) struct Lazy {
 	pub(crate) audit_logs: HashMap<Snowflake, AuditLog>,
 	pub(crate) bans: HashMap<Snowflake, Vec<BanEntry>>,
 	pub(crate) auth_sessions: Option<Vec<AuthSession>>,
+	pub(crate) community: crate::community::Community,
 	pub(crate) reaction_users: HashMap<(Snowflake, String), Vec<User>>,
 	pub(crate) expressions: Expressions,
 }
@@ -264,6 +287,8 @@ struct RawProfile {
 #[serde(default)]
 struct RawNamed {
 	id: Option<Snowflake>,
+	#[serde(rename = "type")]
+	kind: Option<i64>,
 	name: Option<String>,
 	icon: Option<String>,
 	description: Option<String>,
@@ -490,12 +515,20 @@ impl State {
 							online_count: invite.approximate_presence_count,
 							channel_id: channel.id,
 							channel_name: channel.name,
+							channel_type: channel.kind,
 							inviter_id: invite.inviter.map(|user| user.id),
 						},
 					);
+					self.invite_resolved(code);
 					changes.loaded.insert(guild_id.unwrap_or_default());
 				}
 			}
+			Loaded::InviteUnknown { code } => return self.invite_unknown(code),
+			Loaded::InviteAccepted { code, raw } => return self.invite_accepted(code, raw),
+			Loaded::Onboarding { guild_id, raw } => return self.onboarding_loaded(*guild_id, raw),
+			Loaded::OnboardingSubmitted { guild_id } => return self.onboarding_finished(*guild_id),
+			Loaded::MemberVerification { guild_id, raw } => return self.verification_loaded(*guild_id, raw),
+			Loaded::MemberVerificationSubmitted { guild_id } => return self.verification_finished(*guild_id),
 			Loaded::UserSettings(settings) => return self.apply_user_settings(settings),
 			Loaded::AuthSessions(raw) => {
 				let parsed = RawAuthSessions::deserialize(raw).unwrap_or_default();
