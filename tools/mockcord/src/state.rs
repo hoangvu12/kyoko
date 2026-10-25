@@ -48,6 +48,7 @@ pub struct Store {
 	pub read_state_version: Versions,
 	pub settings_version: Versions,
 	pub guild_folders: Option<Vec<Value>>,
+	pub status_settings: Option<protocol::ProtoStatusSettings>,
 	pub uploads: HashMap<String, UploadedFile>,
 	last_id: u64,
 }
@@ -150,6 +151,7 @@ impl Store {
 			read_state_version: Versions::default(),
 			settings_version: Versions::default(),
 			guild_folders: None,
+			status_settings: None,
 			uploads: HashMap::new(),
 			last_id,
 		}

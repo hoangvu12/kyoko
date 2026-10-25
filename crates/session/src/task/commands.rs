@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use state::Loaded;
 
 use super::actions::{mute_config, object, some, timestamp};
-use super::{Command, Core, CustomStatus};
+use super::{Command, Core};
 
 const PNG: &str = "image/png";
 const DEFAULT_ARCHIVE_MINUTES: u32 = 1440;
@@ -212,12 +212,7 @@ impl Core {
 					});
 				}
 			}
-			Command::LoadProfile { user_id, guild_id } => {
-				self.spawn_load("profile", move |rest| async move {
-					let raw = rest.user_profile(user_id, guild_id).await?;
-					Ok(Loaded::Profile { user_id, raw })
-				});
-			}
+			Command::LoadProfile { user_id, guild_id } => self.load_profile(user_id, guild_id),
 			Command::CreateInvite {
 				channel_id,
 				max_age,
@@ -436,33 +431,8 @@ impl Core {
 					rest.patch_guild_settings(guild_id, changes).await.map(drop)
 				});
 			}
-			Command::SetCustomStatus { text, emoji, expires } => {
-				let setting = (text.is_some() || emoji.is_some()).then(|| {
-					json!({
-						"text": text,
-						"emoji_name": emoji,
-						"expires_at": expires.map(timestamp),
-					})
-				});
-				self.custom_status = text
-					.clone()
-					.or_else(|| emoji.clone())
-					.map(|label| CustomStatus { text: label, emoji });
-				self.publish_presence();
-				self.spawn_action("custom status", move |rest| async move {
-					rest.patch_user_settings(json!({ "custom_status": setting }))
-						.await
-						.map(drop)
-				});
-			}
-			Command::SetStatus(status) => {
-				let body = json!({ "status": status.as_str() });
-				self.status = status;
-				self.publish_presence();
-				self.spawn_action("status", move |rest| async move {
-					rest.patch_user_settings(body).await.map(drop)
-				});
-			}
+			Command::SetCustomStatus { text, emoji, expires } => self.set_custom_status(text, emoji, expires),
+			Command::SetStatus(status) => self.set_status(status),
 			Command::EditProfile {
 				global_name,
 				bio,
@@ -865,29 +835,6 @@ impl Core {
 		});
 	}
 
-	pub(super) fn publish_presence(&self) {
-		let activities = self
-			.custom_status
-			.iter()
-			.map(|custom| {
-				let mut activity = json!({ "type": 4, "name": "Custom Status", "state": custom.text });
-				if let Some(emoji) = &custom.emoji {
-					activity["emoji"] = json!({ "name": emoji });
-				}
-				activity
-			})
-			.collect();
-		let idle = self.afk && self.status == StatusKind::Online;
-		let status = if idle {
-			StatusKind::Idle
-		} else {
-			self.status.clone()
-		};
-		if let Err(error) = self.gateway.send_presence(status.as_str(), activities, self.afk) {
-			tracing::warn!(%error, "presence was not sent");
-		}
-	}
-
 	pub(super) fn set_afk(&mut self, afk: bool) {
 		if self.afk == afk {
 			return;
@@ -897,8 +844,7 @@ impl Core {
 	}
 
 	pub(super) fn set_presence_command(&mut self, status: StatusKind, custom_status: Option<String>) {
-		self.status = status;
-		self.custom_status = custom_status.map(|text| CustomStatus { text, emoji: None });
-		self.publish_presence();
+		self.set_status(status);
+		self.set_custom_status(custom_status, None, None);
 	}
 }

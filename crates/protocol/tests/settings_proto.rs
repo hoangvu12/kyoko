@@ -1,4 +1,7 @@
-use protocol::{ProtoGuildFolder, ProtoGuildFolders, Snowflake, decode_guild_folders, encode_guild_folders};
+use protocol::{
+	ProtoCustomStatus, ProtoGuildFolder, ProtoGuildFolders, ProtoStatusSettings, Snowflake,
+	decode_guild_folders, decode_status_settings, encode_guild_folders, encode_status_settings,
+};
 
 fn sample() -> ProtoGuildFolders {
 	ProtoGuildFolders {
@@ -64,6 +67,35 @@ fn an_empty_layout_still_names_the_guild_folders_field() {
 	let encoded = encode_guild_folders(&ProtoGuildFolders::default());
 	assert_eq!(encoded, "cgA=");
 	assert_eq!(decode_guild_folders(&encoded), Some(ProtoGuildFolders::default()));
+}
+
+#[test]
+fn status_settings_survive_an_encode_and_decode_keeping_unknown_fields() {
+	let settings = ProtoStatusSettings {
+		status: Some("dnd".to_owned()),
+		custom_status: Some(ProtoCustomStatus {
+			text: "brb coffee".to_owned(),
+			emoji_id: None,
+			emoji_name: Some("\u{2615}".to_owned()),
+			expires_at_ms: Some(1_790_000_000_000),
+			created_at_ms: Some(1_780_000_000_000),
+		}),
+		status_expires_at_ms: None,
+		other: vec![0x1a, 2, 0x08, 1],
+	};
+	let encoded = encode_status_settings(&settings);
+	assert_eq!(decode_status_settings(&encoded), Some(settings));
+	assert_eq!(decode_guild_folders(&encoded), None);
+}
+
+#[test]
+fn status_settings_are_field_eleven_with_a_wrapped_status() {
+	let settings = ProtoStatusSettings {
+		status: Some("idle".to_owned()),
+		..ProtoStatusSettings::default()
+	};
+	let expected = base64_standard(&[0x5a, 8, 0x0a, 6, 0x0a, 4, b'i', b'd', b'l', b'e']);
+	assert_eq!(encode_status_settings(&settings), expected);
 }
 
 fn base64_standard(bytes: &[u8]) -> String {

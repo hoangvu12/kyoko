@@ -5,7 +5,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
-use protocol::{decode_guild_folders, encode_guild_folders};
+use protocol::{decode_guild_folders, decode_status_settings, encode_guild_folders, encode_status_settings};
 use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult};
@@ -97,29 +97,40 @@ pub async fn patch_settings_proto(
 	let encoded = body["settings"]
 		.as_str()
 		.ok_or(ApiError::invalid_body("settings is required"))?;
-	let folders =
-		decode_guild_folders(encoded).ok_or(ApiError::invalid_body("Only guild folders are kept"))?;
-	let legacy: Vec<Value> = folders
-		.folders
-		.iter()
-		.map(|folder| {
-			json!({
-				"id": folder.id,
-				"name": folder.name,
-				"color": folder.color,
-				"guild_ids": folder.guild_ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+	let folders = decode_guild_folders(encoded);
+	let status = decode_status_settings(encoded);
+	if folders.is_none() && status.is_none() {
+		return Err(ApiError::invalid_body("Only guild folders and status are kept"));
+	}
+	let mut stored = Vec::new();
+	if let Some(folders) = folders {
+		let legacy: Vec<Value> = folders
+			.folders
+			.iter()
+			.map(|folder| {
+				json!({
+					"id": folder.id,
+					"name": folder.name,
+					"color": folder.color,
+					"guild_ids": folder.guild_ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+				})
 			})
-		})
-		.collect();
-	shared.store.lock().guild_folders = Some(legacy);
-	let settings = encode_guild_folders(&folders);
-	shared.hub.broadcast(
-		"USER_SETTINGS_PROTO_UPDATE",
-		&json!({ "settings": { "type": PRELOADED_SETTINGS, "proto": settings }, "partial": false }),
-	);
-	Ok(Json(json!({ "settings": settings })))
+			.collect();
+		shared.store.lock().guild_folders = Some(legacy);
+		stored.push(encode_guild_folders(&folders));
+	}
+	if let Some(status) = status {
+		stored.push(encode_status_settings(&status));
+		shared.store.lock().status_settings = Some(status);
+	}
+	for settings in &stored {
+		shared.hub.broadcast(
+			"USER_SETTINGS_PROTO_UPDATE",
+			&json!({ "settings": { "type": PRELOADED_SETTINGS, "proto": settings }, "partial": true }),
+		);
+	}
+	Ok(Json(json!({ "settings": encoded })))
 }
-
 pub async fn patch_guild_settings(
 	State(shared): Mock,
 	Path(scope): Path<String>,
