@@ -4,7 +4,7 @@ mod churn;
 mod ui;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
@@ -85,13 +85,44 @@ struct Backend {
 	loopback_port: Option<u16>,
 }
 
-struct Scratch(Option<PathBuf>);
+#[derive(Clone, Default)]
+struct Scratch(Arc<ScratchDir>);
 
-impl Drop for Scratch {
-	fn drop(&mut self) {
-		if let Some(path) = self.0.take() {
-			let _ = std::fs::remove_dir_all(path);
+#[derive(Default)]
+struct ScratchDir(Mutex<Option<PathBuf>>);
+
+impl Scratch {
+	fn at(path: PathBuf) -> Self {
+		Self(Arc::new(ScratchDir(Mutex::new(Some(path)))))
+	}
+
+	fn is_set(&self) -> bool {
+		self.0.0.lock().is_ok_and(|path| path.is_some())
+	}
+
+	fn remove(&self) {
+		self.0.remove();
+	}
+}
+
+impl ScratchDir {
+	fn remove(&self) {
+		let Ok(mut slot) = self.0.lock() else {
+			return;
+		};
+		let gone = slot
+			.as_ref()
+			.is_some_and(|path| std::fs::remove_dir_all(path).is_ok() || !path.exists());
+		if gone {
+			*slot = None;
+			tracing::debug!("scratch data removed");
 		}
+	}
+}
+
+impl Drop for ScratchDir {
+	fn drop(&mut self) {
+		self.remove();
 	}
 }
 
@@ -167,7 +198,12 @@ fn main() -> Result<()> {
 			runtime: runtime.handle().clone(),
 		},
 		cli.open_busiest,
+		{
+			let scratch = scratch.clone();
+			move || scratch.remove()
+		},
 	);
+	tracing::debug!("window loop ended");
 	for task in [churn, chatter].into_iter().flatten() {
 		task.abort();
 	}
@@ -178,7 +214,7 @@ fn main() -> Result<()> {
 			}
 		});
 	}
-	drop(scratch);
+	scratch.remove();
 	outcome
 }
 
@@ -228,14 +264,14 @@ fn media_service(
 
 fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, Scratch)> {
 	let (root, scratch) = match data_dir {
-		Some(path) => (path, Scratch(None)),
+		Some(path) => (path, Scratch::default()),
 		None => {
 			let path = std::env::temp_dir().join(format!("kyoko-scratch-{}", std::process::id()));
-			(path.clone(), Scratch(Some(path)))
+			(path.clone(), Scratch::at(path))
 		}
 	};
 	let paths = Paths::at(&root).context("prepare data directories")?;
-	if mock || scratch.0.is_some() {
+	if mock || scratch.is_set() {
 		let mut settings = Settings::load(&paths);
 		settings.storage.plaintext_token = true;
 		settings

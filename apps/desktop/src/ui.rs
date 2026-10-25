@@ -27,7 +27,13 @@ pub struct Avatars {
 	pub runtime: tokio::runtime::Handle,
 }
 
-pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars, open_busiest: bool) -> Result<()> {
+pub fn run(
+	session: Session,
+	inbox: Inbox<Changes>,
+	avatars: Avatars,
+	open_busiest: bool,
+	after_close: impl Fn() + 'static,
+) -> Result<()> {
 	let script = ui_dir().join("app.luau");
 	Application::new()
 		.window(WindowOptions {
@@ -54,7 +60,10 @@ pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars, open_busie
 			if cfg!(debug_assertions) {
 				cx.tasks.spawn(host.watch(RELOAD_EVERY));
 			}
-			cx.on_closed(move || link.shutdown());
+			cx.on_closed(move || {
+				link.shutdown();
+				after_close();
+			});
 			cx.render(host.view());
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
@@ -364,10 +373,13 @@ impl Link {
 	}
 
 	fn shutdown(&self) {
+		tracing::debug!("window closed, stopping the session");
 		self.inbox.close();
-		if let Some(session) = self.session.borrow_mut().take() {
+		let session = self.session.borrow_mut().take();
+		if let Some(session) = session {
 			session.shutdown();
 		}
+		tracing::debug!("session stopped");
 	}
 }
 
