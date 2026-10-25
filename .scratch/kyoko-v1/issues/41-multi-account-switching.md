@@ -4,7 +4,7 @@
 
 **Blocked by:** 21 (Token login, ToS notice and sign-out)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The account switcher matches oxidcord in the parity captures
 - [ ] Each account's token lives in Credential Manager
