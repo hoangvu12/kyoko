@@ -24,6 +24,8 @@ apps/desktop/ui/
 
 A screen or component is one module that returns a function building its node. Use `ui.component` only when the piece needs per-instance state (`ui.use_state`), as `components/icon_button.luau` does for hover. Modules require what they use: `require("../theme")`, `require("../state")`, `require("../actions")`, `require("@components/icon")`. In debug builds the host reloads the scripts when a file changes, so Luau work needs no rebuild. Rebuild Rust only for host changes.
 
+`cargo xtask test` and `cargo test --workspace` check the scripts headless (`src/ui/scripts.rs`): every `.luau` under `ui/` must compile (errors as file:line), and `app.luau` must load in zgx's `TestApp` with the real theme and a stub for every `"area.name"` the Rust host registers, then build the login screens, the DMs, a server with channels and members, and a home page from sample shared values. A failed `require`, an unregistered host action or a runtime error fails it with the script's traceback. A new screen adds its sample values there.
+
 ## Shell regions
 
 `shell/frame.luau` lays the window out exactly as oxidcord's `Shell::render` does. Sizes come from the theme (`theme.size.*`), which holds oxidcord's values.
