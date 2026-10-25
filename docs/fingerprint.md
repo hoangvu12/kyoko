@@ -11,6 +11,7 @@ Kyoko presents itself as the Discord web client in Chrome, on both the gateway a
 - **REST headers**: `X-Discord-Locale`, `X-Discord-Timezone` (the system IANA zone), `Accept-Language`, Chrome client hints, `Sec-Fetch-*`, `Priority`, `Origin` on non-GET requests, and a `Referer` that follows the open channel (`/channels/<guild>/<channel>`, `/channels/@me/<channel>`, or `/channels/@me` before a channel is opened).
 - **Installation id**: taken from READY's `apex_experiments.installation` the first time it appears. It is stored and sent as `X-Installation-ID` from then on.
 - **Cookies**: one jar, filled only from Discord's responses.
+- **Images**: CDN and media-proxy fetches send Chrome's `<img>` headers from `Fingerprint::image_headers`: the same user agent and client hints, an image `Accept`, `Referer: https://discord.com/`, `Sec-Fetch-Dest: image`, `Sec-Fetch-Mode: no-cors`, `Sec-Fetch-Site: cross-site` and `Priority: i`. They carry no cookies, because discord.com cookies are never sent to Discord's CDN hosts. See `docs/media.md`.
 
 ## Sharing and persistence
 

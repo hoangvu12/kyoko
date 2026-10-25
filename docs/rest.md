@@ -67,6 +67,8 @@ What is fetched:
 - A user mentioned as `<@id>` in the content but absent from the message's `mentions` and from the user cache. Inside a guild the lookup is an op 8 request through the member request scheduler (`docs/gateway.md`); it batches, dedupes and backs off on its own. If op 8 reports the id in `not_found`, or the channel is a DM, kyoko asks `GET /users/<id>` through the queue.
 - The author of a guild message that arrived without a `member` (history pages) and has no member entry: an op 8 request, so names and role colours resolve. Ids op 8 reported as not found are not asked again for the cool-down.
 
+- A message whose signed attachment URL expired or was refused by the CDN, on `Command::RefreshMedia` from the media gallery (`docs/media.md`). The same `around` request fetches it again, and its attachments and embeds are replaced with the freshly signed ones. The job is dropped if the message has left both the channel window and the fetched originals.
+
 Only the open channel is scanned: when it is selected, when a page loads and when a message arrives or is edited. Originals are only fetched where the user has View Channel and Read Message History. Selecting another channel drops the queued work of every other channel. A request already sent finishes.
 
 The queue sends one request at a time:

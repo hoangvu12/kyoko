@@ -10,7 +10,7 @@ crates/rest         HTTP client: rate-limit buckets, pacing, 401 stop, 403 break
 crates/state        normalized store, permission math, read state, message cache
 crates/store        sqlite cache and settings, token in the OS keyring
 crates/markdown     Discord markdown parser to AST
-crates/media        image and animation decoding, texture cache
+crates/media        image fetching, decoding and the budgeted gallery of host images (docs/media.md)
 crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes
 crates/bridge       core to UI bridge without a UI dependency: the Changes inbox and the projections the UI publishes
 crates/login        token, QR and web login
