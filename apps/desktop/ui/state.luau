@@ -360,6 +360,7 @@ M.plugins = {
 	list = ui.shared("plugins.list", {} :: { Plugin }),
 	notice = ui.shared("plugins.notice", nil :: PluginNotice?),
 	folder = ui.shared("plugins.folder", ""),
+	slots = ui.shared("plugins.slots", {} :: { [string]: { string } }),
 }
 
 M.timeline.channel_icon = ui.shared("timeline.channel_icon", "hash")

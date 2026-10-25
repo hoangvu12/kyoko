@@ -7,18 +7,26 @@ use plugins::{Origin, Permission, PluginHost, PluginInfo, SettingKind, Status};
 use serde_json::{Value as Json, json};
 use zgx_script::{ScriptHost, Shared, Value};
 
+use super::plugin_slots::{PluginSlots, Request};
 use super::{Link, field, text};
+use crate::capture;
 
 const ACTIVATION: Duration = Duration::from_secs(1);
 const GESTURE_SOURCE: &str = "settings";
+const SLOT_SOURCE: &str = "slot";
+const SILENT_TYPING: &str = "silent-typing";
+
+type Activation = Rc<Cell<Option<Instant>>>;
 
 pub struct PluginsView {
 	host: PluginHost,
 	runtime: tokio::runtime::Handle,
+	script: ScriptHost,
 	list: Shared,
 	notice: Shared,
+	slots: PluginSlots,
 	wakes: Inbox<()>,
-	activation: Cell<Option<Instant>>,
+	activation: Activation,
 }
 
 impl PluginsView {
@@ -30,13 +38,20 @@ impl PluginsView {
 			.user_dir()
 			.map(|dir| dir.display().to_string())
 			.unwrap_or_default();
+		let activation = Activation::default();
+		let slots = PluginSlots::new(
+			script,
+			slot_requests(host.clone(), runtime.clone(), activation.clone()),
+		);
 		let view = Self {
 			list: script.shared("plugins.list", Value::List(Rc::from([]))),
 			notice: script.shared("plugins.notice", Value::Nil),
+			script: script.clone(),
+			slots,
 			host,
 			runtime,
 			wakes,
-			activation: Cell::new(None),
+			activation,
 		};
 		script.shared("plugins.folder", folder.as_str());
 		view.publish();
@@ -52,13 +67,12 @@ impl PluginsView {
 	}
 
 	fn take_activation(&self) -> bool {
-		self.activation
-			.take()
-			.is_some_and(|at| at.elapsed() <= ACTIVATION)
+		take_activation(&self.activation)
 	}
 
-	fn publish(&self) {
-		let list: Vec<Json> = self.host.snapshot().iter().map(plugin_json).collect();
+	pub(super) fn publish(&self) -> bool {
+		let snapshot = self.host.snapshot();
+		let list: Vec<Json> = snapshot.iter().map(plugin_json).collect();
 		if let Some(value) = Value::from_json(&Json::Array(list).to_string()) {
 			self.list.set(value);
 		}
@@ -67,6 +81,13 @@ impl PluginsView {
 			if let Some(value) = Value::from_json(&json.to_string()) {
 				self.notice.set(value);
 			}
+		}
+		self.slots.publish(&self.script, &snapshot)
+	}
+
+	pub(super) fn remount(&self) {
+		if let Err(error) = self.script.reload() {
+			tracing::warn!(%error, "the interface did not load after the plugins changed");
 		}
 	}
 
@@ -192,12 +213,84 @@ impl Link {
 
 	pub(super) async fn follow_plugins(self: Rc<Self>) {
 		while self.plugins.wakes.next().await.is_some() {
-			self.plugins.publish();
+			if self.plugins.publish() {
+				self.plugins.remount();
+			}
 		}
 	}
 
 	pub(super) fn plugin_input(&self) {
 		self.plugins.activated();
+	}
+
+	pub(super) async fn drive_silent_typing(&self) {
+		let shown = self
+			.plugin(SILENT_TYPING)
+			.map(|plugin| plugin.permissions)
+			.unwrap_or_default();
+		self.plugins.run(move |host| {
+			if let Err(error) = host.approve(SILENT_TYPING, &shown) {
+				tracing::warn!(%error, "the capture could not turn SilentTyping on");
+			}
+		});
+		self.until_capture(|link| link.plugins.slots.is_mounted(SILENT_TYPING))
+			.await;
+		self.drive_composer(&capture::Screen::Composer);
+		self.until_capture(|link| link.composer_settled(&capture::Screen::Composer))
+			.await;
+		for silent in [false, true] {
+			let (x, y) = capture::SILENT_TYPING_BUTTON;
+			self.press_at(x, y).await;
+			self.until_capture(|link| {
+				link.plugin(SILENT_TYPING)
+					.is_some_and(|plugin| plugin.values.get("silent") == Some(&Json::Bool(silent)))
+			})
+			.await;
+			let now = self
+				.plugin(SILENT_TYPING)
+				.and_then(|plugin| plugin.values.get("silent").cloned());
+			tracing::info!(wanted = silent, ?now, "the SilentTyping button was clicked");
+		}
+	}
+
+	fn plugin(&self, id: &str) -> Option<PluginInfo> {
+		self.plugins
+			.host
+			.snapshot()
+			.into_iter()
+			.find(|plugin| plugin.id == id)
+	}
+}
+
+fn take_activation(activation: &Activation) -> bool {
+	activation.take().is_some_and(|at| at.elapsed() <= ACTIVATION)
+}
+
+fn slot_requests(
+	host: PluginHost,
+	runtime: tokio::runtime::Handle,
+	activation: Activation,
+) -> impl Fn(Request) + 'static {
+	move |request| {
+		if !take_activation(&activation) {
+			tracing::warn!("a plugin button without a click or key press was refused");
+			return;
+		}
+		let host = host.clone();
+		runtime.spawn_blocking(move || match request {
+			Request::Set { id, key, value } => {
+				if let Err(error) = host.set_setting(&id, &key, &value) {
+					tracing::info!(plugin = %id, %error, "plugin setting refused");
+				}
+			}
+			Request::Action { id, key, slot } => {
+				let mut context = vec![("source".to_owned(), SLOT_SOURCE.to_owned())];
+				context.extend(slot.map(|slot| ("slot".to_owned(), slot.to_owned())));
+				if let Err(error) = host.gesture(&id, &key, &context) {
+					tracing::info!(plugin = %id, %error, "plugin action failed");
+				}
+			}
+		});
 	}
 }
 

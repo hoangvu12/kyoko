@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
+local plugin_slot = require("@components/plugin_slot")
 
 local FIELD = 44
 local LEADING = 56
@@ -508,6 +509,7 @@ return function(scope: Scope?)
 			on_resize = function(_, element)
 				bar = element
 			end,
+			plugin_slot { name = "composer.buttons", context = { area = area }, gap = 2 },
 			icon_button { name = "gif", icon_size = 24, hit_size = 32, tooltip = "Open GIF picker", on_click = opens("gif") },
 			icon_button {
 				name = "sticker",

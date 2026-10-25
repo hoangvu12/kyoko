@@ -40,6 +40,8 @@ const CLEAN_LINK: &str = "https://example.com/x?b=1";
 const CLEAR_URLS: &str = "clear-urls";
 const CLEAR_URLS_NAME: &str = "ClearURLs";
 const BROKEN_PLUGIN: &str = "headless-broken";
+const SILENT_TYPING: &str = "silent-typing";
+const TYPING_QUIET: Duration = Duration::from_millis(500);
 const BROKEN_HOOK_TEXT: &str = "headless hook fails";
 const BROKEN_MANIFEST: &str = "id = \"headless-broken\"
 name = \"Headless Broken\"
@@ -158,7 +160,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 	config.user_dir = None;
 	config.development_dirs = vec![development];
 	let host = PluginHost::new(config);
-	for id in [CLEAR_URLS, BROKEN_PLUGIN] {
+	for id in [CLEAR_URLS, SILENT_TYPING, BROKEN_PLUGIN] {
 		let declared = host
 			.snapshot()
 			.into_iter()
@@ -403,6 +405,16 @@ async fn scenario(
 		"the cleaned message is not marked as altered by ClearURLs"
 	);
 	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
+	harness.session.send(Command::Typing { channel_id });
+	tokio::time::sleep(TYPING_QUIET).await;
+	ensure!(
+		server
+			.control()
+			.recording()
+			.requests_to("POST", "/channels/*/typing")
+			.count() == 0,
+		"a typing request reached the wire while SilentTyping was on"
+	);
 
 	let sent_id = harness
 		.round_trip(

@@ -10,6 +10,8 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
+mod plugins;
+
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
 
 #[test]
@@ -30,16 +32,9 @@ fn every_script_compiles() {
 
 #[test]
 fn the_interface_loads_and_builds_every_screen() {
-	let mut app = TestApp::new(|runtime| {
-		Catalog::load(&[themes_dir()]).install(runtime, "dark");
-		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
-		for name in host_names() {
-			host.action(name.clone(), |_| {});
-			host.function(name, |_| Value::Nil);
-		}
-		host
-	});
-	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let probe = plugins::Lab::probe("load-check", &plugins::ALL_SLOTS);
+	probe.approve_all();
+	let (mut app, _probe) = plugins::app_with(probe, |lab, host| lab.mount(host, |_| {}));
 	shows(
 		&mut app,
 		"the terms notice",
@@ -78,6 +73,9 @@ fn the_interface_loads_and_builds_every_screen() {
 			("members.window", member_window()),
 		],
 	);
+	for marker in plugins::PROBE_MARKERS {
+		shows(&mut app, "a plugin in every placed slot", marker, &[]);
+	}
 	shows(
 		&mut app,
 		"the settings view",

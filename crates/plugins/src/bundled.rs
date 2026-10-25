@@ -15,7 +15,27 @@ const CLEAR_URLS: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 1] = [CLEAR_URLS];
+const SILENT_TYPING: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/silent-typing/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/silent-typing/logic.luau"),
+	),
+	("ui.luau", include_str!("../../../plugins/silent-typing/ui.luau")),
+	(
+		"keyboard.svg",
+		include_str!("../../../plugins/silent-typing/keyboard.svg"),
+	),
+	(
+		"keyboard_off.svg",
+		include_str!("../../../plugins/silent-typing/keyboard_off.svg"),
+	),
+];
+
+const PACKAGES: [Embedded; 2] = [CLEAR_URLS, SILENT_TYPING];
 
 pub fn packages() -> Vec<Package> {
 	PACKAGES

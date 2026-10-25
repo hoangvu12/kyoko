@@ -378,7 +378,7 @@ index 0000000..a4e8211
 +			hover(cx, at(LAST_MESSAGE))?;
 +			click(cx, at(LAST_MESSAGE), MouseButton::Right)?;
 +		}
-+		"composer" => act(&shell, cx, |shell, window, cx| {
++		"composer" | "composer-silent-typing" => act(&shell, cx, |shell, window, cx| {
 +			shell
 +				.composer
 +				.update(cx, |composer, cx| composer.insert(DRAFT, window, cx));

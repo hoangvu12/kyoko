@@ -7,6 +7,7 @@ mod home;
 mod members;
 mod message_actions;
 mod notices;
+mod plugin_slots;
 mod plugins;
 mod profiles;
 #[cfg(test)]
@@ -786,6 +787,7 @@ impl Link {
 					zgx::timer::sleep(capture::POLL).await;
 				}
 			}
+			capture::Screen::SilentTyping => self.drive_silent_typing().await,
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
 			capture::Screen::Settings(_) => {
@@ -857,7 +859,7 @@ impl Link {
 		}
 	}
 
-	async fn until_capture(&self, ready: impl Fn(&Self) -> bool) {
+	pub(super) async fn until_capture(&self, ready: impl Fn(&Self) -> bool) {
 		let started = Instant::now();
 		while !ready(self) && started.elapsed() < capture::LIMIT {
 			zgx::timer::sleep(capture::POLL).await;

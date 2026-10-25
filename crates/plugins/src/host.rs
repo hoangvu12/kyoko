@@ -21,6 +21,7 @@ use crate::worker::{Setup, Worker};
 const STATE_FILE: &str = "plugins.json";
 const DATA_DIR: &str = "plugin-data";
 const STORAGE_FILE: &str = "storage.json";
+const UI_DIR: &str = "plugin-ui";
 const USER_DIR: &str = "plugins";
 const ACTION_KEY_LIMIT: usize = 48;
 const CONTEXT_LIMIT: usize = 16;
@@ -88,6 +89,7 @@ pub struct PluginInfo {
 	pub notice: Option<String>,
 	pub ui_entry: Option<PathBuf>,
 	pub grants: Vec<Permission>,
+	pub generation: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -138,6 +140,8 @@ struct Entry {
 	suspensions: u32,
 	notice: Option<String>,
 	worker: Option<Arc<Worker>>,
+	ui: Option<PathBuf>,
+	generation: u64,
 }
 
 impl Entry {
@@ -284,8 +288,9 @@ impl PluginHost {
 					settings: manifest.settings.clone(),
 					values: entry.settings.read().clone(),
 					notice: entry.notice.clone(),
-					ui_entry: entry.package.ui_entry(),
+					ui_entry: entry.ui.clone().or_else(|| entry.package.ui_entry()),
 					grants: entry.grants().into_iter().collect(),
+					generation: entry.generation,
 				}
 			})
 			.collect()
@@ -631,7 +636,7 @@ impl Inner {
 			return;
 		}
 		if entry.package.logic_source().is_none() {
-			entry.run = Run::Running;
+			self.running(entry);
 			return;
 		}
 		let id = entry.package.id().to_owned();
@@ -659,7 +664,7 @@ impl Inner {
 			Ok(worker) => {
 				tracing::info!(plugin = %id, "plugin started");
 				entry.worker = Some(Arc::new(worker));
-				entry.run = Run::Running;
+				self.running(entry);
 			}
 			Err(error) => {
 				tracing::warn!(plugin = %id, "plugin did not start");
@@ -669,6 +674,21 @@ impl Inner {
 				entry.run = Run::Failed(error);
 			}
 		}
+	}
+
+	fn running(&self, entry: &mut Entry) {
+		entry.run = Run::Running;
+		entry.generation += 1;
+		entry.ui = self
+			.config
+			.data_dir
+			.as_ref()
+			.and_then(|dir| {
+				entry
+					.package
+					.unpack_ui(&dir.join(UI_DIR).join(entry.package.id()))
+			})
+			.or_else(|| entry.package.ui_entry());
 	}
 
 	fn strike(self: &Arc<Self>, id: &str, fault: Fault) {
@@ -861,6 +881,8 @@ impl Inner {
 						suspensions: 0,
 						notice: None,
 						worker: None,
+						ui: None,
+						generation: 0,
 					};
 					self.start(&mut entry);
 					registry.entries.insert(id, entry);

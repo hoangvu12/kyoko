@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local avatar = require("@components/avatar")
 local icon_button = require("@components/icon_button")
+local plugin_slot = require("@components/plugin_slot")
 
 local AVATAR = 32
 local AREA_HEIGHT = 40
@@ -119,6 +120,7 @@ return function()
 		items = "center",
 		bg = theme.color.user_panel_background,
 		user_area(),
+		plugin_slot { name = "panel.buttons", context = { area = "panel" }, gap = theme.size.space_4 },
 		icon_button {
 			name = function()
 				return if muted:get() or deafened:get() then "mic_off" else "mic"

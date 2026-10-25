@@ -239,6 +239,12 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 |---|---|---|---|
 | `settings-plugins` | 45 | Default selection, then open settings on Plugins. Oxidcord lists no plugins on a fresh data directory; kyoko lists its bundled ClearURLs, disabled. | yes |
 
+### 47 SilentTyping
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `composer-silent-typing` | 47 | Default selection, then type a one-line draft into the composer, as `composer`. Kyoko first turns SilentTyping on (the Allow button's `PluginHost::approve`), waits for its button to mount in the composer, and clicks it twice through the window (off, then on again). Oxidcord has no SilentTyping and takes `composer`'s steps, so the share is the button. | yes |
+
 ### 38 Toasts, transitions and connection status
 
 | Screen | Ticket | Steps | Kyoko |

@@ -261,7 +261,7 @@ impl Link {
 			.find(|author| Some(*author) != me)
 	}
 
-	async fn press_at(&self, x: f32, y: f32) {
+	pub(super) async fn press_at(&self, x: f32, y: f32) {
 		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
 			tracing::warn!("the window is gone");
 			return;

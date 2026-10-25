@@ -1,0 +1,21 @@
+id = "silent-typing"
+name = "SilentTyping"
+version = "1.0.0"
+api = 1
+description = "Hides that you are typing. A keyboard button in the composer switches it on and off."
+authors = ["Kyoko"]
+permissions = ["hook:typing", "ui:composer.buttons"]
+
+[[settings]]
+key = "silent"
+type = "boolean"
+label = "Hide that I'm typing"
+description = "Send no typing indicator while you write. The keyboard button in the composer switches this."
+default = true
+
+[[settings]]
+key = "button"
+type = "boolean"
+label = "Show the composer button"
+description = "Show the keyboard button beside the GIF, sticker and emoji buttons."
+default = true

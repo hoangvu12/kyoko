@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local rail_tile = require("@components/rail_tile")
 local rail_gap = require("@components/rail_gap")
+local plugin_slot = require("@components/plugin_slot")
 
 local SIZE = 48
 local RAIL = 72
@@ -301,6 +302,12 @@ return function()
 			gap = theme.number(theme.size.space_8),
 			py = theme.size.space_12,
 			home,
+			plugin_slot {
+				name = "rail.buttons",
+				context = { area = "rail" },
+				direction = "column",
+				gap = theme.number(theme.size.space_8),
+			},
 			divider(),
 			ui.each(state.rail.items, entry, {
 				key = by_key,

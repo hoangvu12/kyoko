@@ -14,6 +14,7 @@ pub const LIMIT: Duration = Duration::from_secs(30);
 pub const SCROLL_PASSES: usize = 10;
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
+pub const SILENT_TYPING_BUTTON: (f32, f32) = (897., 754.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
 pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
@@ -33,6 +34,7 @@ pub enum Screen {
 	RailFolders,
 	Composer,
 	ComposerReply,
+	SilentTyping,
 	LoginTos,
 	LoginToken,
 	SidebarCollapsed,
@@ -84,6 +86,7 @@ impl Screen {
 			"server-rail-folder" => Some(Screen::RailFolders),
 			"composer" => Some(Screen::Composer),
 			"composer-reply" => Some(Screen::ComposerReply),
+			"composer-silent-typing" => Some(Screen::SilentTyping),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
@@ -142,6 +145,7 @@ impl Screen {
 			| Screen::DmGroup
 			| Screen::Composer
 			| Screen::ComposerReply
+			| Screen::SilentTyping
 			| Screen::MessageHover
 			| Screen::MessageMenu
 			| Screen::MemberList

@@ -7,5 +7,6 @@ mod deadlines;
 mod events;
 mod gestures;
 mod permissions;
+mod silent_typing;
 mod storage;
 mod support;

@@ -90,19 +90,54 @@ impl Package {
 	}
 
 	pub fn logic_source(&self) -> Option<(String, String)> {
-		let name = self
-			.manifest
-			.logic
-			.clone()
-			.unwrap_or_else(|| crate::manifest::LOGIC_FILE.to_owned());
+		let name = self.logic_file().to_owned();
 		self.read(&name).map(|source| (name, source))
+	}
+
+	fn ui_file(&self) -> &str {
+		self.manifest.ui.as_deref().unwrap_or(crate::manifest::UI_FILE)
+	}
+
+	fn logic_file(&self) -> &str {
+		self.manifest
+			.logic
+			.as_deref()
+			.unwrap_or(crate::manifest::LOGIC_FILE)
 	}
 
 	pub fn ui_entry(&self) -> Option<PathBuf> {
 		let dir = self.dir()?;
-		let name = self.manifest.ui.as_deref().unwrap_or(crate::manifest::UI_FILE);
-		let path = dir.join(name);
+		let path = dir.join(self.ui_file());
 		path.is_file().then_some(path)
+	}
+
+	pub fn unpack_ui(&self, into: &Path) -> Option<PathBuf> {
+		let Files::Embedded(files) = &self.files else {
+			return self.ui_entry();
+		};
+		let entry = self.ui_file();
+		if !files.iter().any(|(name, _)| *name == entry) {
+			return None;
+		}
+		if let Err(error) = fs::create_dir_all(into) {
+			tracing::warn!(plugin = %self.id(), %error, "the plugin's interface could not be unpacked");
+			return None;
+		}
+		let unpacked = files
+			.iter()
+			.filter(|(name, _)| *name != MANIFEST_FILE && *name != self.logic_file() && is_plain_name(name))
+			.all(|(name, text)| {
+				let path = into.join(name);
+				if fs::read_to_string(&path).ok().as_deref() == Some(*text) {
+					return true;
+				}
+				fs::write(&path, text)
+					.inspect_err(
+						|error| tracing::warn!(plugin = %self.id(), %error, "the plugin's interface could not be unpacked"),
+					)
+					.is_ok()
+			});
+		unpacked.then(|| into.join(entry))
 	}
 
 	pub fn stamp(&self) -> Stamp {
@@ -147,8 +182,11 @@ pub fn package_dirs(root: &Path) -> Vec<PathBuf> {
 }
 
 pub fn is_module_file(name: &str) -> bool {
+	(name.ends_with(".luau") || name == MANIFEST_FILE) && is_plain_name(name)
+}
+
+fn is_plain_name(name: &str) -> bool {
 	!name.is_empty()
-		&& (name.ends_with(".luau") || name == MANIFEST_FILE)
 		&& !name.starts_with('.')
 		&& name
 			.bytes()

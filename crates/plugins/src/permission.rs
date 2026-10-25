@@ -137,7 +137,10 @@ impl Slot {
 	}
 
 	pub fn available(self) -> bool {
-		false
+		matches!(
+			self,
+			Slot::ComposerButtons | Slot::PanelButtons | Slot::RailButtons
+		)
 	}
 }
 
