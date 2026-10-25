@@ -120,6 +120,8 @@ Discord's current settings are not a full screen: a rounded dialog over the dimm
 
 `docs/design/mockups/` holds the target as plain HTML and CSS at 1280 by 800, one page per screen, every value a Midnight variable from one `:root` block: the main screen, settings (My Account, Notifications, Appearance, Plugins, Themes), the profile popout and full profile, the status menu, the message menu and hover bar, the emoji picker, Home with Friends and Active Now, the quick switcher, search results, server Roles, the delete dialog, and the login screen in its two states. They were drafted in Claude Design from this spec, the Midnight CSS, the reference screenshot and captures of the live client, then checked against them. Measured from the reference: server icons 40, channel sidebar 280, member list 264, rounded-square server icons. Icons, avatars, banners and nameplates are stand-ins; text is filler except on the login pages, which follow `docs/sign-in.md`. Open one in a browser at 1280 by 800 to compare with a kyoko capture.
 
+Measured on the live Windows client at 100%, the shell matches: 12-point gaps, rail 66, header 50, composer 47, channel rows 36 high and 38 apart, member rows 44 apart whether or not they have an activity line. Pages beyond the main screen and the settings pages follow Discord's current client from memory, not captures, so their exact spacing is approximate. On the toast page the typing line is left out to keep the toast clear of messages; in the app a toast is an overlay and never moves the timeline.
+
 ## Other surfaces
 
 - Context menus, popouts, the emoji and GIF pickers, autocomplete, tooltips and the inbox use the floating background `--bg-3`; menus have 8-point corners. Elevation shadows are off (`--elevation-*: none`).
