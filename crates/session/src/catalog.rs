@@ -124,7 +124,7 @@ fn client() -> Result<Client> {
 		.https_only(true)
 		.redirect(redirect::Policy::limited(MAX_REDIRECTS))
 		.timeout(REQUEST_TIMEOUT)
-		.user_agent(protocol::gateway::web_user_agent())
+		.user_agent(protocol::fingerprint::user_agent())
 		.build()
 		.context("could not build the http client")
 }

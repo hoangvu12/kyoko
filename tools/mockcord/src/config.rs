@@ -14,6 +14,7 @@ pub struct MockConfig {
 	pub live_traffic: bool,
 	pub record: bool,
 	pub anchor: Option<DateTime<Utc>>,
+	pub build_number: u64,
 }
 
 impl Default for MockConfig {
@@ -31,6 +32,7 @@ impl Default for MockConfig {
 			live_traffic: false,
 			record: false,
 			anchor: None,
+			build_number: 424_242,
 		}
 	}
 }

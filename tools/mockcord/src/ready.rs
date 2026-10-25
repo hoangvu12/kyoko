@@ -11,8 +11,9 @@ use serde_json::{Value, json};
 use crate::fixtures::{Fixtures, GuildFixture};
 use crate::json::to_json;
 use crate::state::{Shared, Store};
+use crate::web::installation_id;
 
-const API_VERSION: i64 = 10;
+pub const DEFAULT_API_VERSION: i64 = 9;
 const CONTAINER_VERSION: i64 = 1;
 const MOCK_FOLDER_ID: i64 = 1_001;
 const MOCK_FOLDER_COLOR: i64 = 0x6666ff;
@@ -189,7 +190,7 @@ fn relationships(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Vec<Value>
 		.collect()
 }
 
-pub fn build(shared: &Shared, session_id: &str, capabilities: u64) -> (Value, Value) {
+pub fn build(shared: &Shared, session_id: &str, capabilities: u64, version: i64) -> (Value, Value) {
 	let dedupe = has(capabilities, DEDUPE_USER_OBJECTS);
 	let prioritized = has(capabilities, PRIORITIZED_READY_PAYLOAD);
 
@@ -209,7 +210,7 @@ pub fn build(shared: &Shared, session_id: &str, capabilities: u64) -> (Value, Va
 		.map(|guild| guild.id.to_string())
 		.collect();
 	let mut ready = json!({
-		"v": API_VERSION,
+		"v": version,
 		"user": store.current_user,
 		"guilds": guilds,
 		"private_channels": private_channels(fixtures, &store, dedupe),
@@ -230,6 +231,7 @@ pub fn build(shared: &Shared, session_id: &str, capabilities: u64) -> (Value, Va
 		}],
 		"merged_members": merged_members(fixtures, &store),
 		"analytics_token": "x",
+		"apex_experiments": { "installation": installation_id(shared.config.seed) },
 		"user_settings_proto": null,
 		"user_settings": {
 			"guild_folders": [{

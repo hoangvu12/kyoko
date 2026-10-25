@@ -1,59 +1,57 @@
 use futures_util::StreamExt;
-use protocol::gateway::{CHROME_VERSION, IdentifyProperties};
 use reqwest::Client;
-use serde_json::Value;
-use url::Url;
+use reqwest::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
+use reqwest::redirect::Policy;
+use url::{Host, Url};
 
 use crate::error::{RestError, Result, network_error};
+use crate::identity::ClientIdentity;
 
-const APP_URL: &str = "https://discord.com/app";
-const CHROME_VERSION_URL: &str = "https://chromiumdash.appspot.com/version.json";
-const MAX_VERSION_BYTES: usize = 16 * 1024;
 const MAX_SCRIPTS: usize = 6;
 const MAX_TOTAL_BYTES: usize = 30 * 1024 * 1024;
 const MAX_PAGE_BYTES: usize = 2 * 1024 * 1024;
-const KEYS: [&[u8]; 2] = [b"build_number:\"", b"buildNumber:\""];
+const KEYS: [&[u8]; 3] = [b"build_number:\"", b"buildNumber:\"", b"buildNumber\",\""];
+const SENTRY_MARKER: &str = "sentry";
+const PLAUSIBLE_BUILDS: std::ops::Range<u64> = 1..100_000_000;
 
-pub fn discovery_client() -> Result<Client> {
-	let identify = IdentifyProperties::web_client("en-US", 0, CHROME_VERSION);
+pub fn discovery_client(identity: &ClientIdentity) -> Result<Client> {
+	let fingerprint = identity.fingerprint();
+	let mut headers = HeaderMap::new();
+	if let Ok(language) = HeaderValue::from_str(&fingerprint.accept_language()) {
+		headers.insert(ACCEPT_LANGUAGE, language);
+	}
 	Client::builder()
-		.user_agent(identify.user_agent())
+		.redirect(Policy::none())
+		.user_agent(fingerprint.user_agent())
+		.default_headers(headers)
+		.cookie_provider(identity.cookies().clone())
 		.build()
 		.map_err(network_error)
 }
 
-pub async fn discover_chrome_version(client: &Client) -> Result<String> {
-	let base = Url::parse(CHROME_VERSION_URL).map_err(|_| RestError::InvalidRequest)?;
-	let (body, _) = fetch_capped(client, &base, MAX_VERSION_BYTES).await?;
-	let parsed: Value = serde_json::from_slice(&body).map_err(|_| RestError::NotFound)?;
-	let version = parsed
-		.get("latest_version")
-		.and_then(|channel| channel.get("stable"))
-		.and_then(Value::as_str)
-		.ok_or(RestError::NotFound)?
-		.to_owned();
-	if !plausible_version(&version) {
-		return Err(RestError::NotFound);
+pub fn allowed_source(url: &Url) -> bool {
+	match (url.scheme(), url.host()) {
+		("https", Some(Host::Domain(domain))) => domain == "discord.com",
+		("http", Some(Host::Ipv4(address))) => address.is_loopback(),
+		("http", Some(Host::Ipv6(address))) => address.is_loopback(),
+		("http", Some(Host::Domain(domain))) => domain.eq_ignore_ascii_case("localhost"),
+		_ => false,
 	}
-	Ok(version)
 }
 
-fn plausible_version(version: &str) -> bool {
-	version.split('.').count() == 4
-		&& version
-			.split('.')
-			.all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
-pub async fn discover_build_number(client: &Client) -> Result<u64> {
-	let base = Url::parse(APP_URL).map_err(|_| RestError::InvalidRequest)?;
-	let (page, _) = fetch_capped(client, &base, MAX_PAGE_BYTES).await?;
-	let scripts = script_urls(&base, &String::from_utf8_lossy(&page));
+pub async fn discover_build_number(client: &Client, app_url: &Url) -> Result<u64> {
+	if !allowed_source(app_url) {
+		return Err(RestError::InvalidRequest);
+	}
+	let (page, _) = fetch_capped(client, app_url, MAX_PAGE_BYTES).await?;
+	let mut scripts = script_urls(app_url, &String::from_utf8_lossy(&page));
+	scripts.reverse();
+	scripts.sort_by_key(|url| !url.path().contains(SENTRY_MARKER));
 	let mut remaining = MAX_TOTAL_BYTES;
-	for url in scripts.iter().rev().take(MAX_SCRIPTS) {
+	for url in scripts.iter().take(MAX_SCRIPTS) {
 		let (body, complete) = fetch_capped(client, url, remaining).await?;
 		remaining -= body.len();
-		if let Some(number) = find_build_number(&body) {
+		if let Some(number) = find_build_number(&body).filter(|number| PLAUSIBLE_BUILDS.contains(number)) {
 			return Ok(number);
 		}
 		if !complete || remaining == 0 {

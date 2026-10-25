@@ -7,18 +7,20 @@ use parking_lot::RwLock;
 use protocol::rest::{ApiError, RateLimitBody};
 use protocol::{DecodeError, Token};
 use reqwest::header::{
-	ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, ORIGIN,
-	REFERER,
+	ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName,
+	HeaderValue, IntoHeaderName, ORIGIN, REFERER,
 };
 use serde::de::DeserializeOwned;
 use url::{Host, Url};
 
 use crate::config::RestConfig;
 use crate::error::{RestError, Result, network_error};
+use crate::identity::ClientIdentity;
 use crate::limiter::{RateLimiter, header_global, header_retry_after, header_u32};
 use crate::request::{Body, Request, UploadFile, encode_component};
 use crate::route::{RouteKey, route_key};
-use protocol::gateway::{accept_language, sec_ch_ua_platform};
+use protocol::Fingerprint;
+use protocol::fingerprint::{HOME_REFERER, WEB_ORIGIN, sec_ch_ua, sec_ch_ua_platform};
 use reqwest::multipart::{Form, Part};
 use reqwest::redirect::Policy;
 use reqwest::{Body as HttpBody, Method, Response, StatusCode};
@@ -27,8 +29,17 @@ const MAX_RETRIES: u32 = 3;
 const MAX_AUTO_WAIT: Duration = Duration::from_secs(60);
 const RETRY_JITTER: Duration = Duration::from_millis(50);
 const FALLBACK_RETRY_AFTER: Duration = Duration::from_secs(1);
-const WEB_ORIGIN: &str = "https://discord.com";
-const WEB_REFERER: &str = "https://discord.com/channels/@me";
+const X_DISCORD_LOCALE: HeaderName = HeaderName::from_static("x-discord-locale");
+const X_DISCORD_TIMEZONE: HeaderName = HeaderName::from_static("x-discord-timezone");
+const X_SUPER_PROPERTIES: HeaderName = HeaderName::from_static("x-super-properties");
+const X_INSTALLATION_ID: HeaderName = HeaderName::from_static("x-installation-id");
+const SEC_CH_UA: HeaderName = HeaderName::from_static("sec-ch-ua");
+const SEC_CH_UA_MOBILE: HeaderName = HeaderName::from_static("sec-ch-ua-mobile");
+const SEC_CH_UA_PLATFORM: HeaderName = HeaderName::from_static("sec-ch-ua-platform");
+const SEC_FETCH_DEST: HeaderName = HeaderName::from_static("sec-fetch-dest");
+const SEC_FETCH_MODE: HeaderName = HeaderName::from_static("sec-fetch-mode");
+const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
+const PRIORITY: HeaderName = HeaderName::from_static("priority");
 
 #[derive(Clone)]
 pub struct RestClient {
@@ -41,50 +52,36 @@ struct Inner {
 	max_body: usize,
 	token: Arc<RwLock<Option<Token>>>,
 	limiter: RateLimiter,
+	identity: ClientIdentity,
+	referer: RwLock<HeaderValue>,
 }
 
-fn default_headers(config: &RestConfig) -> HeaderMap {
+fn default_headers(fingerprint: &Fingerprint) -> HeaderMap {
 	let mut headers = HeaderMap::new();
 	headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
 	headers.insert(
 		ACCEPT_ENCODING,
 		HeaderValue::from_static("gzip, deflate, br, zstd"),
 	);
-	if let Ok(language) = HeaderValue::from_str(&accept_language(&config.locale)) {
-		headers.insert(ACCEPT_LANGUAGE, language);
+	insert_text(&mut headers, ACCEPT_LANGUAGE, &fingerprint.accept_language());
+	insert_text(&mut headers, X_DISCORD_LOCALE, fingerprint.locale());
+	if let Some(timezone) = fingerprint.timezone() {
+		insert_text(&mut headers, X_DISCORD_TIMEZONE, timezone);
 	}
-	if let Ok(locale) = HeaderValue::from_str(&config.locale) {
-		headers.insert("x-discord-locale", locale);
-	}
-	if let Some(properties) = &config.super_properties
-		&& let Ok(properties) = HeaderValue::from_str(properties)
-	{
-		headers.insert("x-super-properties", properties);
-	}
-	if let Some(sec_ch_ua) = &config.sec_ch_ua
-		&& let Ok(value) = HeaderValue::from_str(sec_ch_ua)
-	{
-		headers.insert("sec-ch-ua", value);
-	}
-	headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
-	headers.insert(
-		"sec-ch-ua-platform",
-		HeaderValue::from_static(sec_ch_ua_platform()),
-	);
-	headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
-	headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
-	headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
-	if discord_host(&config.base_url) {
-		headers.insert(REFERER, HeaderValue::from_static(WEB_REFERER));
-	}
+	insert_text(&mut headers, SEC_CH_UA, &sec_ch_ua());
+	headers.insert(SEC_CH_UA_MOBILE, HeaderValue::from_static("?0"));
+	headers.insert(SEC_CH_UA_PLATFORM, HeaderValue::from_static(sec_ch_ua_platform()));
+	headers.insert(SEC_FETCH_DEST, HeaderValue::from_static("empty"));
+	headers.insert(SEC_FETCH_MODE, HeaderValue::from_static("cors"));
+	headers.insert(SEC_FETCH_SITE, HeaderValue::from_static("same-origin"));
+	headers.insert(PRIORITY, HeaderValue::from_static("u=1, i"));
 	headers
 }
 
-fn discord_host(url: &Url) -> bool {
-	url.scheme() == "https"
-		&& url
-			.host_str()
-			.is_some_and(|host| host == "discord.com" || host.ends_with(".discord.com"))
+fn insert_text(headers: &mut HeaderMap, name: impl IntoHeaderName, value: &str) {
+	if let Ok(value) = HeaderValue::from_str(value) {
+		headers.insert(name, value);
+	}
 }
 
 fn secure_scheme(url: &Url) -> bool {
@@ -160,11 +157,13 @@ fn classify(status: StatusCode, body: &[u8]) -> RestError {
 
 impl RestClient {
 	pub fn new(config: RestConfig) -> Self {
+		let fingerprint = config.identity.fingerprint();
 		let http = reqwest::Client::builder()
 			.redirect(Policy::none())
 			.timeout(config.timeout)
-			.user_agent(config.user_agent.as_str())
-			.default_headers(default_headers(&config))
+			.user_agent(fingerprint.user_agent())
+			.default_headers(default_headers(&fingerprint))
+			.cookie_provider(config.identity.cookies().clone())
 			.build()
 			.expect("http client initializes");
 		Self {
@@ -174,7 +173,19 @@ impl RestClient {
 				max_body: config.max_body,
 				token: Arc::default(),
 				limiter: RateLimiter::default(),
+				identity: config.identity,
+				referer: RwLock::new(HeaderValue::from_static(HOME_REFERER)),
 			}),
+		}
+	}
+
+	pub fn identity(&self) -> &ClientIdentity {
+		&self.inner.identity
+	}
+
+	pub fn set_referer(&self, referer: &str) {
+		if let Ok(value) = HeaderValue::from_str(referer) {
+			*self.inner.referer.write() = value;
 		}
 	}
 
@@ -224,6 +235,11 @@ impl RestClient {
 		Some(value)
 	}
 
+	fn super_properties(&self) -> HeaderValue {
+		HeaderValue::from_str(&self.inner.identity.super_properties())
+			.unwrap_or_else(|_| HeaderValue::from_static(""))
+	}
+
 	async fn dispatch(&self, request: &Request, url: &Url) -> Result<Response> {
 		let mut builder = self.inner.http.request(request.method.clone(), url.clone());
 		if let Some(authorization) = self.authorization(url) {
@@ -232,7 +248,14 @@ impl RestClient {
 		if let Some(reason) = &request.audit_reason {
 			builder = builder.header("x-audit-log-reason", encode_component(reason));
 		}
-		if request.method != Method::GET && discord_host(url) {
+		builder = builder.header(X_SUPER_PROPERTIES, self.super_properties());
+		if let Some(installation_id) = self.inner.identity.installation_id()
+			&& let Ok(value) = HeaderValue::from_str(&installation_id)
+		{
+			builder = builder.header(X_INSTALLATION_ID, value);
+		}
+		builder = builder.header(REFERER, self.inner.referer.read().clone());
+		if request.method != Method::GET && request.method != Method::HEAD {
 			builder = builder.header(ORIGIN, HeaderValue::from_static(WEB_ORIGIN));
 		}
 		builder = match &request.body {

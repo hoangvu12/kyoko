@@ -8,12 +8,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
 use mockcord::{FixtureSummary, MockConfig, Server};
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER};
-use protocol::{Channel, ChannelType, IdentifyProperties, Snowflake, Token};
+use protocol::{Channel, ChannelType, Snowflake, Token};
 use serde_json::json;
 use session::{Command, Session, SessionConfig, SessionHooks};
 use state::{SharedState, State};
-use store::{Paths, Store};
+use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
 use tokio::time::{Instant, sleep_until, timeout_at};
 use tracing::field::{Field, Visit};
@@ -176,12 +175,12 @@ impl Harness {
 		let wake = Arc::new(Notify::new());
 		let notifier = wake.clone();
 		let session = Session::start(SessionConfig {
+			identity: session::client_identity(&store),
+			build_source: None,
 			store,
 			rest_base: Url::parse(rest_base).context("rest url is invalid")?,
 			gateway_url: gateway_url.to_owned(),
 			token: Token::new(MOCK_TOKEN),
-			identify: IdentifyProperties::web_client("en-US", FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-			locale: "en-US".to_owned(),
 			runtime: None,
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks,
@@ -314,10 +313,11 @@ async fn scenario(
 	retries: &AtomicU64,
 ) -> Result<()> {
 	let expected = server.fixtures().summary();
-	let store = Arc::new(Store::open(Paths::at(root)?)?);
-	store.update_settings(|settings| {
-		settings.storage.plaintext_token = true;
-	})?;
+	let paths = Paths::at(root)?;
+	let mut settings = Settings::load(&paths);
+	settings.storage.plaintext_token = true;
+	settings.save(&paths)?;
+	let store = Arc::new(Store::open(paths)?);
 	let link_hook = Arc::new(LinkHook {
 		rewrites: AtomicU64::new(0),
 	});

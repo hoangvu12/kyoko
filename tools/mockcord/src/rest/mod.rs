@@ -26,6 +26,7 @@ use crate::gateway;
 use crate::media;
 use crate::record::{RestRequest, header_pairs};
 use crate::state::{RateLimitSnapshot, Shared};
+use crate::web;
 
 const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 const BUCKET_LIMIT: u32 = 5;
@@ -160,10 +161,13 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			get(admin::archived_threads),
 		)
 		.merge(expressions::routes())
-		.route_layer(middleware::from_fn_with_state(shared.clone(), guard));
+		.route_layer(middleware::from_fn_with_state(shared.clone(), guard))
+		.layer(middleware::from_fn_with_state(shared.clone(), web::device_cookie));
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))
 		.route("/media/{name}", get(media::media))
+		.route("/app", get(web::app))
+		.route("/assets/{name}", get(web::asset))
 		.nest("/api/v9", api.clone())
 		.nest("/api/v10", api)
 		.fallback(not_found)

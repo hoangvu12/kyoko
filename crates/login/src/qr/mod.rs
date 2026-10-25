@@ -3,6 +3,7 @@ mod crypto;
 mod flow;
 mod messages;
 
+use rest::ClientIdentity;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::JoinHandle;
 use url::Url;
@@ -19,6 +20,7 @@ pub struct QrConfig {
 	pub gateway_url: Url,
 	pub origin: String,
 	pub rest_base: Url,
+	pub identity: ClientIdentity,
 }
 
 impl Default for QrConfig {
@@ -27,6 +29,7 @@ impl Default for QrConfig {
 			gateway_url: Url::parse(GATEWAY_URL).expect("default gateway url is valid"),
 			origin: ORIGIN.to_owned(),
 			rest_base: Url::parse(REST_BASE).expect("default rest base is valid"),
+			identity: ClientIdentity::default(),
 		}
 	}
 }

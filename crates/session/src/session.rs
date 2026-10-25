@@ -8,7 +8,7 @@ use protocol::{Message, Token};
 use rest::{RestClient, RestConfig};
 use state::{SharedState, State};
 use tokio::runtime::{Builder, Handle, Runtime};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::catalog::{ThemeCatalog, ThemeCatalogs};
 use crate::command::Command;
@@ -16,7 +16,7 @@ use crate::config::SessionConfig;
 use crate::hooks::{Hooks, guarded};
 use crate::notifier::Notifier;
 use crate::search::SearchResults;
-use crate::task::{Core, CoreParts, SharedSearch, Stats};
+use crate::task::{Core, CoreParts, SharedSearch, Startup, Stats};
 
 const COMMAND_CAPACITY: usize = 256;
 const RUNTIME_WORKERS: usize = 4;
@@ -58,21 +58,17 @@ impl Session {
 	pub fn start(config: SessionConfig) -> io::Result<Session> {
 		install_crypto_provider();
 		let (runtime, handle) = runtime_for(config.runtime)?;
-		let locale = config.locale.clone();
-		let rest = RestClient::new(
-			RestConfig {
-				base_url: config.rest_base,
-				locale: config.locale,
-				..RestConfig::default()
-			}
-			.with_identity(&config.identify),
-		);
+		let locale = config.identity.fingerprint().locale().to_owned();
+		let rest = RestClient::new(RestConfig::new(config.rest_base, config.identity.clone()));
 		rest.set_token(Token::new(config.token.as_str()));
 		let token = Arc::new(Token::new(config.token.as_str()));
-		let mut gateway_config = GatewayConfig::new(config.token, config.identify);
+		let mut gateway_config =
+			GatewayConfig::new(config.token, config.identity.fingerprint().properties().clone());
 		gateway_config.gateway_url = config.gateway_url;
 		gateway_config.tuning = config.gateway;
-		let (gateway, gateway_events) = Gateway::spawn(gateway_config, handle.clone());
+		let (gateway_start, gateway_started) = oneshot::channel();
+		let (gateway, gateway_events) =
+			Gateway::spawn_when(async move { gateway_started.await.ok() }, handle.clone());
 		let state = State::shared();
 		let search = SharedSearch::default();
 		let stats = Arc::new(Stats::default());
@@ -94,6 +90,11 @@ impl Session {
 			stats: stats.clone(),
 			token,
 			remember_account: config.remember_account,
+			startup: Startup {
+				gateway: gateway_start,
+				gateway_config,
+				build_source: config.build_source,
+			},
 		});
 		let (done, finished) = std::sync::mpsc::channel();
 		handle.spawn(async move {

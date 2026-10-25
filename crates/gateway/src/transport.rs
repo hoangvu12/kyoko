@@ -2,7 +2,8 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use flate2::{Decompress, FlushDecompress};
-use protocol::gateway::{IdentifyProperties, accept_language};
+use protocol::IdentifyProperties;
+use protocol::fingerprint::{API_VERSION, WEB_ORIGIN, accept_language};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::ClientRequestBuilder;
@@ -16,8 +17,6 @@ use url::{Host, Url};
 use crate::error::GatewayError;
 
 pub(crate) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
-const WEB_ORIGIN: &str = "https://discord.com";
 
 const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
@@ -39,7 +38,7 @@ pub(crate) fn endpoint(base: &str) -> Result<Url, GatewayError> {
 	}
 	url.query_pairs_mut()
 		.clear()
-		.append_pair("v", "10")
+		.append_pair("v", &API_VERSION.to_string())
 		.append_pair("encoding", "json")
 		.append_pair("compress", "zlib-stream");
 	Ok(url)
@@ -59,11 +58,10 @@ pub(crate) async fn connect(url: &Url, identify: &IdentifyProperties) -> Result<
 		.max_frame_size(Some(MAX_FRAME_BYTES))
 		.max_message_size(Some(MAX_FRAME_BYTES));
 	let uri = url.as_str().parse().map_err(|_| GatewayError::InvalidUrl)?;
-	let locale = identify.system_locale.as_deref().unwrap_or("en-US");
 	let request = ClientRequestBuilder::new(uri)
 		.with_header("User-Agent", identify.user_agent())
 		.with_header("Origin", WEB_ORIGIN)
-		.with_header("Accept-Language", accept_language(locale));
+		.with_header("Accept-Language", accept_language(&identify.system_locale));
 	let attempt = timeout(
 		CONNECT_TIMEOUT,
 		connect_async_with_config(request, Some(config), true),

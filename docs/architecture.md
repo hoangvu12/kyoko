@@ -21,7 +21,7 @@ tools/xtask         test, headless-run, theme catalog tooling, release notes
 
 Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session` and `state`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgui. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
 
-Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`.
+Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`.
 
 ## Session hooks
 

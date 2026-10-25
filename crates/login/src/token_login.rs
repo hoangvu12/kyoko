@@ -1,5 +1,5 @@
 use protocol::{Token, User};
-use rest::{RestClient, RestConfig};
+use rest::{ClientIdentity, RestClient, RestConfig};
 use url::Url;
 use zeroize::Zeroizing;
 
@@ -19,16 +19,13 @@ pub(crate) fn plausible(token: &str) -> bool {
 }
 
 impl TokenLogin {
-	pub async fn validate(rest_base: Url, token: String) -> Result<(Token, User)> {
+	pub async fn validate(rest_base: Url, identity: &ClientIdentity, token: String) -> Result<(Token, User)> {
 		let pasted = Zeroizing::new(token);
 		let cleaned = clean_token(&pasted);
 		if !plausible(cleaned) {
 			return Err(LoginError::InvalidToken);
 		}
-		let client = RestClient::new(RestConfig {
-			base_url: rest_base,
-			..RestConfig::default()
-		});
+		let client = RestClient::new(RestConfig::new(rest_base, identity.clone()));
 		client.set_token(Token::new(cleaned));
 		let user = client.current_user().await;
 		client.clear_token();

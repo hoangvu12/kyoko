@@ -29,7 +29,10 @@ zgui-script = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b409
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream", "multipart", "gzip", "brotli", "zstd", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream", "multipart", "gzip", "brotli", "zstd", "http2", "cookies"] }
+cookie_store = { version = "0.22", default-features = false, features = ["serde_json"] }
+uuid = { version = "1.28", features = ["v4"] }
+iana-time-zone = "0.1"
 futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }

@@ -2,6 +2,7 @@ mod accounts;
 mod atomic;
 mod database;
 mod error;
+mod identity;
 pub mod migrations;
 mod paths;
 mod seal;

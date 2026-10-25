@@ -37,6 +37,7 @@ const HEARTBEAT_ACK: &str = r#"{"op":11}"#;
 #[derive(Deserialize)]
 pub struct GatewayQuery {
 	compress: Option<String>,
+	v: Option<i64>,
 }
 
 pub async fn upgrade(
@@ -47,6 +48,7 @@ pub async fn upgrade(
 	socket: WebSocketUpgrade,
 ) -> Response {
 	let compress = query.compress.as_deref() == Some("zlib-stream");
+	let version = query.v.unwrap_or(ready::DEFAULT_API_VERSION);
 	let link_id = shared.hub.next_link_id();
 	shared.recorder.connection(GatewayConnection {
 		id: link_id,
@@ -54,7 +56,7 @@ pub async fn upgrade(
 		headers: header_pairs(&headers),
 		at: Instant::now(),
 	});
-	socket.on_upgrade(move |socket| Connection::new(shared, socket, link_id, compress).run())
+	socket.on_upgrade(move |socket| Connection::new(shared, socket, link_id, compress, version).run())
 }
 
 struct Connection {
@@ -65,10 +67,11 @@ struct Connection {
 	tx: UnboundedSender<Outgoing>,
 	rx: UnboundedReceiver<Outgoing>,
 	session: Option<String>,
+	version: i64,
 }
 
 impl Connection {
-	fn new(shared: Arc<Shared>, socket: WebSocket, link_id: u64, compress: bool) -> Self {
+	fn new(shared: Arc<Shared>, socket: WebSocket, link_id: u64, compress: bool, version: i64) -> Self {
 		let (tx, rx) = unbounded_channel();
 		Self {
 			shared,
@@ -78,6 +81,7 @@ impl Connection {
 			tx,
 			rx,
 			session: None,
+			version,
 		}
 	}
 
@@ -260,7 +264,7 @@ impl Connection {
 			},
 			capabilities,
 		);
-		let (mut ready, supplemental) = ready::build(&self.shared, &session_id, capabilities);
+		let (mut ready, supplemental) = ready::build(&self.shared, &session_id, capabilities, self.version);
 		if let Some(transform) = self.shared.scenario.ready() {
 			transform(data, &mut ready);
 		}

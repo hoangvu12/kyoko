@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gateway::GatewayTuning;
 use protocol::Token;
-use protocol::gateway::IdentifyProperties;
+use rest::ClientIdentity;
 use state::Changes;
 use tokio::runtime::Handle;
 use url::Url;
@@ -16,8 +16,8 @@ pub struct SessionConfig {
 	pub rest_base: Url,
 	pub gateway_url: String,
 	pub token: Token,
-	pub identify: IdentifyProperties,
-	pub locale: String,
+	pub identity: ClientIdentity,
+	pub build_source: Option<Url>,
 	pub runtime: Option<Handle>,
 	pub notify: NotifyFn,
 	pub hooks: Option<Arc<dyn SessionHooks>>,

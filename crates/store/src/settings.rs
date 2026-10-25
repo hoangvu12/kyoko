@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::ErrorKind;
 
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER};
+use protocol::fingerprint::FALLBACK_BUILD_NUMBER;
 use serde::{Deserialize, Serialize};
 
 use crate::atomic::write_atomic;
@@ -147,8 +147,6 @@ pub struct UpdateSettings {
 #[serde(default)]
 pub struct ClientSettings {
 	pub build_number: u64,
-	pub build_checked_at: i64,
-	pub chrome_version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -196,8 +194,6 @@ impl Default for ClientSettings {
 	fn default() -> Self {
 		Self {
 			build_number: FALLBACK_BUILD_NUMBER,
-			build_checked_at: 0,
-			chrome_version: CHROME_VERSION.to_owned(),
 		}
 	}
 }

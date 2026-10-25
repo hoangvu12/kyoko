@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use bridge::{ChannelKind, Inbox, Sidebar, changes_notifier};
 use mockcord::{MockConfig, Server};
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
 use protocol::{Snowflake, Token};
 use session::{Command, Session, SessionConfig};
 use state::Changes;
@@ -36,12 +35,12 @@ impl Running {
 			.expect("settings save");
 		let inbox = Inbox::new();
 		let session = Session::start(SessionConfig {
+			identity: session::client_identity(&store),
+			build_source: None,
 			store: Arc::new(store),
 			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
 			gateway_url: server.gateway_url().to_owned(),
 			token: Token::new(server.token()),
-			identify: IdentifyProperties::web_client("en-US", FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-			locale: "en-US".to_owned(),
 			runtime: None,
 			notify: changes_notifier(inbox.clone()),
 			hooks: None,

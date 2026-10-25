@@ -43,7 +43,7 @@ impl Server {
 		let voice = voice::spawn(stopped.clone()).await?;
 		let urls = Urls {
 			origin: format!("http://{address}"),
-			rest: format!("http://{address}/api/v10"),
+			rest: format!("http://{address}/api/v9"),
 			gateway: format!("ws://{address}/gateway"),
 			voice: voice.url,
 		};
@@ -73,6 +73,10 @@ impl Server {
 
 	pub fn rest_base_url_for(&self, version: u32) -> String {
 		format!("{}/api/v{version}", self.shared.urls.origin)
+	}
+
+	pub fn app_url(&self) -> String {
+		format!("{}/app", self.shared.urls.origin)
 	}
 
 	pub fn control(&self) -> Control {

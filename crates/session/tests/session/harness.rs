@@ -1,15 +1,14 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
 use protocol::Opcode;
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
 use protocol::{ChannelType, Snowflake, Token};
 use session::{Command, GatewayTuning, Session, SessionConfig, SessionHooks};
 use state::State;
-use store::{Paths, Store};
+use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
 use tokio::time::{Instant, timeout_at};
 use url::Url;
@@ -77,6 +76,7 @@ pub struct Running {
 	mock: Control,
 	session: Option<Session>,
 	store: Arc<Store>,
+	launch: Launch,
 	wake: Arc<Notify>,
 	scratch: PathBuf,
 }
@@ -95,34 +95,36 @@ impl Running {
 		let scratch =
 			std::env::temp_dir().join(format!("kyoko-session-{}-{}", options.name, std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
-		let store = Store::open(Paths::at(&scratch).expect("scratch paths")).expect("store opens");
-		store
-			.update_settings(|settings| settings.storage.plaintext_token = true)
-			.expect("settings save");
-		let store = Arc::new(store);
 		let wake = Arc::new(Notify::new());
-		let notifier = wake.clone();
-		let session = Session::start(SessionConfig {
-			store: store.clone(),
-			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
-			gateway_url: server.gateway_url().to_owned(),
-			token: Token::new(server.token()),
-			identify: IdentifyProperties::web_client(LOCALE, FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-			locale: LOCALE.to_owned(),
-			runtime: None,
-			notify: Arc::new(move |_| notifier.notify_one()),
+		let launch = Launch {
 			hooks: options.hooks,
 			gateway: options.gateway,
 			remember_account: options.remember_account,
-		})
-		.expect("session starts");
+		};
+		let (session, store) = open_session(&server, &scratch, &wake, &launch);
 		Running {
 			server,
 			mock,
 			session: Some(session),
 			store,
+			launch,
 			wake,
 			scratch,
+		}
+	}
+
+	pub async fn restart(&mut self) {
+		self.shutdown_session().await;
+		let (session, store) = open_session(&self.server, &self.scratch, &self.wake, &self.launch);
+		self.session = Some(session);
+		self.store = store;
+	}
+
+	async fn shutdown_session(&mut self) {
+		if let Some(session) = self.session.take() {
+			tokio::task::spawn_blocking(move || session.shutdown())
+				.await
+				.expect("session shuts down");
 		}
 	}
 
@@ -249,12 +251,43 @@ impl Running {
 	}
 
 	pub async fn stop(mut self) {
-		if let Some(session) = self.session.take() {
-			tokio::task::spawn_blocking(move || session.shutdown())
-				.await
-				.expect("session shuts down");
-		}
+		self.shutdown_session().await;
 		self.server.shutdown().await;
 		let _ = std::fs::remove_dir_all(&self.scratch);
 	}
+}
+
+struct Launch {
+	hooks: Option<Arc<dyn SessionHooks>>,
+	gateway: GatewayTuning,
+	remember_account: bool,
+}
+
+fn open_session(
+	server: &Server,
+	scratch: &Path,
+	wake: &Arc<Notify>,
+	launch: &Launch,
+) -> (Session, Arc<Store>) {
+	let paths = Paths::at(scratch).expect("scratch paths");
+	let mut settings = Settings::load(&paths);
+	settings.storage.plaintext_token = true;
+	settings.save(&paths).expect("settings save");
+	let store = Arc::new(Store::open(paths).expect("store opens"));
+	let notifier = wake.clone();
+	let session = Session::start(SessionConfig {
+		identity: session::client_identity(&store),
+		build_source: Some(Url::parse(&server.app_url()).expect("app url")),
+		store: store.clone(),
+		rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
+		gateway_url: server.gateway_url().to_owned(),
+		token: Token::new(server.token()),
+		runtime: None,
+		notify: Arc::new(move |_| notifier.notify_one()),
+		hooks: launch.hooks.clone(),
+		gateway: launch.gateway,
+		remember_account: launch.remember_account,
+	})
+	.expect("session starts");
+	(session, store)
 }

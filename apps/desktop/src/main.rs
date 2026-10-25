@@ -12,14 +12,12 @@ use bridge::{Inbox, changes_notifier};
 use clap::Parser;
 use mockcord::{MockConfig, Server};
 use protocol::Token;
-use protocol::gateway::{CHROME_VERSION, FALLBACK_BUILD_NUMBER, IdentifyProperties};
 use session::{Session, SessionConfig};
 use state::Changes;
 use store::{Paths, Settings, Store};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
-const MOCK_LOCALE: &str = "en-US";
 const TOKEN_VARIABLE: &str = "KYOKO_TOKEN";
 
 #[derive(Parser)]
@@ -68,8 +66,7 @@ struct Backend {
 	rest_base: Url,
 	gateway_url: String,
 	token: Token,
-	identify: IdentifyProperties,
-	locale: String,
+	build_source: Option<Url>,
 	remember_account: bool,
 }
 
@@ -108,7 +105,7 @@ fn main() -> Result<()> {
 	};
 	let backend = match &server {
 		Some(server) => mock_backend(server)?,
-		None => discord_backend(&store)?,
+		None => discord_backend()?,
 	};
 	let churn = match (&server, cli.churn) {
 		(Some(server), Some(seconds)) => {
@@ -118,12 +115,12 @@ fn main() -> Result<()> {
 	};
 	let inbox: Inbox<Changes> = Inbox::new();
 	let session = Session::start(SessionConfig {
+		identity: session::client_identity(&store),
+		build_source: backend.build_source,
 		store: Arc::new(store),
 		rest_base: backend.rest_base,
 		gateway_url: backend.gateway_url,
 		token: backend.token,
-		identify: backend.identify,
-		locale: backend.locale,
 		runtime: Some(runtime.handle().clone()),
 		notify: changes_notifier(inbox.clone()),
 		hooks: None,
@@ -151,13 +148,12 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		rest_base: Url::parse(server.rest_base_url()).context("mock rest url")?,
 		gateway_url: server.gateway_url().to_owned(),
 		token: Token::new(server.token()),
-		identify: IdentifyProperties::web_client(MOCK_LOCALE, FALLBACK_BUILD_NUMBER, CHROME_VERSION),
-		locale: MOCK_LOCALE.to_owned(),
+		build_source: None,
 		remember_account: true,
 	})
 }
 
-fn discord_backend(store: &Store) -> Result<Backend> {
+fn discord_backend() -> Result<Backend> {
 	let token = std::env::var(TOKEN_VARIABLE)
 		.ok()
 		.map(|token| token.trim().to_owned())
@@ -165,17 +161,11 @@ fn discord_backend(store: &Store) -> Result<Backend> {
 	let Some(token) = token else {
 		bail!("set {TOKEN_VARIABLE} to sign in, or run with --mock");
 	};
-	let settings = store.settings.read();
 	Ok(Backend {
-		rest_base: rest::RestConfig::default().base_url,
+		rest_base: rest::RestConfig::default_base_url(),
 		gateway_url: gateway::GatewayConfig::DEFAULT_GATEWAY_URL.to_owned(),
 		token: Token::new(token),
-		identify: IdentifyProperties::web_client(
-			&settings.locale,
-			settings.client.build_number,
-			&settings.client.chrome_version,
-		),
-		locale: settings.locale.clone(),
+		build_source: Some(session::discord_build_source()),
 		remember_account: false,
 	})
 }

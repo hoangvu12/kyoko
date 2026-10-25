@@ -5,8 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant as StdInstant};
 
 use chrono::Utc;
-use gateway::{GatewayError, GatewayEvent, GatewayHandle};
+use gateway::{GatewayConfig, GatewayError, GatewayEvent, GatewayHandle};
 use parking_lot::Mutex;
+use protocol::fingerprint::channel_referer;
 use protocol::{
 	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, Message, MessageAck,
 	MessageReference, MessagesQuery, Nonce, Snowflake, StatusKind, Token, User,
@@ -20,12 +21,14 @@ use state::{
 };
 use store::Store;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, sleep_until};
+use url::Url;
 
 use crate::catalog::ThemeCatalogs;
 use crate::command::Command;
 use crate::hooks::{Hooks, guarded, guarded_blocking};
+use crate::identity;
 use crate::notifier::Notifier;
 use crate::persist::{self, Job, Persistor};
 use crate::search::SearchResults;
@@ -104,6 +107,13 @@ pub(crate) struct CoreParts {
 	pub(crate) locale: String,
 	pub(crate) token: Arc<Token>,
 	pub(crate) remember_account: bool,
+	pub(crate) startup: Startup,
+}
+
+pub(crate) struct Startup {
+	pub(crate) gateway: oneshot::Sender<GatewayConfig>,
+	pub(crate) gateway_config: GatewayConfig,
+	pub(crate) build_source: Option<Url>,
 }
 
 pub(crate) struct Core {
@@ -133,6 +143,7 @@ pub(crate) struct Core {
 	signed_in: Arc<Mutex<bool>>,
 	account_saved: bool,
 	select_created_guild: bool,
+	startup: Option<Startup>,
 }
 
 fn page_query(
@@ -197,6 +208,7 @@ impl Core {
 			signed_in: Arc::new(Mutex::new(true)),
 			account_saved: !parts.remember_account,
 			select_created_guild: false,
+			startup: Some(parts.startup),
 		}
 	}
 
@@ -206,6 +218,11 @@ impl Core {
 		mut commands: mpsc::Receiver<Command>,
 		mut internal: mpsc::UnboundedReceiver<Internal>,
 	) {
+		self.start_gateway().await;
+		let cookie_saver = self.runtime.spawn(identity::keep_cookies_saved(
+			self.rest.identity().clone(),
+			self.store.clone(),
+		));
 		self.restore().await;
 		self.restore_recents().await;
 		let mut gateway_open = true;
@@ -236,7 +253,23 @@ impl Core {
 		}
 		self.notifier.flush();
 		self.gateway.shutdown();
+		cookie_saver.abort();
+		let identity = self.rest.identity().clone();
+		let store = self.store.clone();
+		let _ = tokio::task::spawn_blocking(move || identity::save_cookies(&identity, &store)).await;
 		self.persist.close().await;
+	}
+
+	async fn start_gateway(&mut self) {
+		let Some(mut startup) = self.startup.take() else {
+			return;
+		};
+		let identity = self.rest.identity().clone();
+		if let Some(source) = &startup.build_source {
+			identity::discover_build_number(&identity, &self.store, source).await;
+		}
+		startup.gateway_config.identify = identity.fingerprint().properties().clone();
+		let _ = startup.gateway.send(startup.gateway_config);
 	}
 
 	async fn restore(&mut self) {
@@ -307,6 +340,9 @@ impl Core {
 			GatewayEvent::Hello { .. } => {}
 			GatewayEvent::TokenRefreshed(token) => self.adopt_token(token),
 			GatewayEvent::Ready(ready) => {
+				if let Some(id) = ready.installation_id() {
+					identity::save_installation_id(self.rest.identity(), &self.store, &self.runtime, id);
+				}
 				self.apply(Event::Ready(&ready));
 				self.remember_account();
 				self.subscribe_selected();
@@ -634,6 +670,7 @@ impl Core {
 	}
 
 	fn select_channel(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
+		self.rest.set_referer(&channel_referer(guild_id, channel_id));
 		self.apply_local(LocalEvent::ChannelSelected { guild_id, channel_id });
 		if let Some(guild_id) = guild_id
 			&& self.selected_guild != Some(guild_id)

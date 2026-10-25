@@ -25,6 +25,13 @@ pub struct Gateway;
 
 impl Gateway {
 	pub fn spawn(config: GatewayConfig, handle: Handle) -> (GatewayHandle, mpsc::Receiver<GatewayEvent>) {
+		Self::spawn_when(async move { Some(config) }, handle)
+	}
+
+	pub fn spawn_when(
+		config: impl Future<Output = Option<GatewayConfig>> + Send + 'static,
+		handle: Handle,
+	) -> (GatewayHandle, mpsc::Receiver<GatewayEvent>) {
 		let (events, event_receiver) = mpsc::channel(EVENT_CAPACITY);
 		let (urgent, urgent_receiver) = mpsc::channel(URGENT_CAPACITY);
 		let (bulk, bulk_receiver) = mpsc::channel(BULK_CAPACITY);
@@ -36,16 +43,29 @@ impl Gateway {
 			shutdown: Arc::new(shutdown),
 			latency: Arc::new(AtomicU64::new(NO_LATENCY)),
 		};
-		let session = Session::new(
-			config,
-			events,
-			urgent_receiver,
-			bulk_receiver,
-			gateway_handle.reconnect.clone(),
-			shutdown_receiver,
-			gateway_handle.latency.clone(),
-		);
-		handle.spawn(session.run());
+		let reconnect = gateway_handle.reconnect.clone();
+		let latency = gateway_handle.latency.clone();
+		handle.spawn(async move {
+			let mut stopped = shutdown_receiver.clone();
+			let config = tokio::select! {
+				config = config => config,
+				_ = stopped.wait_for(|stopped| *stopped) => None,
+			};
+			let Some(config) = config else {
+				return;
+			};
+			Session::new(
+				config,
+				events,
+				urgent_receiver,
+				bulk_receiver,
+				reconnect,
+				shutdown_receiver,
+				latency,
+			)
+			.run()
+			.await;
+		});
 		(gateway_handle, event_receiver)
 	}
 }

@@ -1,5 +1,5 @@
 use protocol::{Token, User};
-use rest::{RestClient, RestConfig, RestError};
+use rest::{ClientIdentity, RestClient, RestConfig, RestError};
 use thiserror::Error;
 use url::Url;
 
@@ -23,11 +23,11 @@ pub struct Login {
 }
 
 impl LoginMethod {
-	pub async fn authenticate(self, rest_base: &Url) -> Result<Login, LoginError> {
+	pub async fn authenticate(self, rest_base: &Url, identity: &ClientIdentity) -> Result<Login, LoginError> {
 		match self {
 			Self::Token(token) => {
 				let token = token.trim().to_owned();
-				let user = validate_token(rest_base, &token).await?;
+				let user = validate_token(rest_base, identity, &token).await?;
 				Ok(Login {
 					token: Token::new(token),
 					user,
@@ -37,14 +37,15 @@ impl LoginMethod {
 	}
 }
 
-pub async fn validate_token(rest_base: &Url, token: &str) -> Result<User, LoginError> {
+pub async fn validate_token(
+	rest_base: &Url,
+	identity: &ClientIdentity,
+	token: &str,
+) -> Result<User, LoginError> {
 	if token.is_empty() {
 		return Err(LoginError::Empty);
 	}
-	let client = RestClient::new(RestConfig {
-		base_url: rest_base.clone(),
-		..RestConfig::default()
-	});
+	let client = RestClient::new(RestConfig::new(rest_base.clone(), identity.clone()));
 	client.set_token(Token::new(token));
 	client.current_user().await.map_err(|error| match error {
 		RestError::Unauthorized | RestError::Forbidden => LoginError::Rejected,

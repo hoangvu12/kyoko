@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::time::{Instant, MissedTickBehavior, interval_at, sleep_until, timeout};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::http::header::ORIGIN;
+use tokio_tungstenite::tungstenite::http::header::{ORIGIN, USER_AGENT};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
@@ -93,6 +93,9 @@ async fn connect(config: &QrConfig) -> Result<Socket> {
 	let origin = HeaderValue::from_str(&config.origin)
 		.map_err(|_| LoginError::Protocol("invalid origin".to_owned()))?;
 	request.headers_mut().insert(ORIGIN, origin);
+	if let Ok(user_agent) = HeaderValue::from_str(config.identity.fingerprint().user_agent()) {
+		request.headers_mut().insert(USER_AGENT, user_agent);
+	}
 	let socket_config = WebSocketConfig::default()
 		.max_frame_size(Some(MAX_MESSAGE_BYTES))
 		.max_message_size(Some(MAX_MESSAGE_BYTES));
@@ -164,10 +167,7 @@ async fn run(config: &QrConfig, events: &Sender<QrEvent>) -> Result<Token> {
 	let flow = Flow {
 		events,
 		key,
-		rest: RestClient::new(RestConfig {
-			base_url: config.rest_base.clone(),
-			..RestConfig::default()
-		}),
+		rest: RestClient::new(RestConfig::new(config.rest_base.clone(), config.identity.clone())),
 	};
 	flow.listen(&mut socket, heartbeat_interval, Instant::now() + session_length)
 		.await

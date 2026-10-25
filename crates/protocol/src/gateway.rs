@@ -1,5 +1,3 @@
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -9,6 +7,7 @@ use serde_json::value::RawValue;
 use crate::channel::{Channel, ChannelType, ThreadMember};
 use crate::emoji::{Emoji, PartialEmoji, Sticker};
 use crate::error::DecodeError;
+use crate::fingerprint::IdentifyProperties;
 use crate::guild::{Guild, UnavailableGuild};
 use crate::lenient::{LenientVec, int_enum, timestamp};
 use crate::member::Member;
@@ -78,156 +77,6 @@ pub struct Hello {
 	pub heartbeat_interval: u64,
 }
 
-macro_rules! chrome_version {
-	() => {
-		"156.0.8078.48"
-	};
-}
-
-pub const CHROME_VERSION: &str = chrome_version!();
-pub const FALLBACK_BUILD_NUMBER: u64 = 647615;
-
-const WINDOWS_USER_AGENT: &str = concat!(
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/",
-	chrome_version!(),
-	" Safari/537.36"
-);
-
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct IdentifyProperties {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub os: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub browser: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub device: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub system_locale: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub browser_user_agent: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub browser_version: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub os_version: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub referrer: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub referring_domain: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub referrer_current: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub referring_domain_current: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub release_channel: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub client_build_number: Option<u64>,
-	pub client_event_source: Value,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub design_id: Option<u64>,
-}
-
-impl IdentifyProperties {
-	pub fn web_client(locale: &str, build_number: u64, chrome_version: &str) -> Self {
-		let os = if cfg!(target_os = "macos") {
-			"Mac OS X"
-		} else if cfg!(target_os = "linux") {
-			"Linux"
-		} else {
-			"Windows"
-		};
-		Self {
-			os: Some(os.to_owned()),
-			browser: Some("Chrome".to_owned()),
-			device: Some(String::new()),
-			system_locale: Some(locale.to_owned()),
-			browser_user_agent: Some(chrome_user_agent(chrome_version)),
-			browser_version: Some(chrome_version.to_owned()),
-			os_version: Some(host_os_version().to_owned()),
-			referrer: Some(String::new()),
-			referring_domain: Some(String::new()),
-			referrer_current: Some(String::new()),
-			referring_domain_current: Some(String::new()),
-			release_channel: Some("stable".to_owned()),
-			client_build_number: Some(build_number),
-			client_event_source: Value::Null,
-			design_id: None,
-		}
-	}
-
-	pub fn super_properties(&self) -> String {
-		STANDARD.encode(serde_json::to_vec(self).unwrap_or_default())
-	}
-
-	pub fn user_agent(&self) -> &str {
-		self.browser_user_agent.as_deref().unwrap_or(WINDOWS_USER_AGENT)
-	}
-}
-
-pub fn chrome_user_agent(version: &str) -> String {
-	let platform = if cfg!(target_os = "macos") {
-		"Macintosh; Intel Mac OS X 10_15_7"
-	} else if cfg!(target_os = "linux") {
-		"X11; Linux x86_64"
-	} else {
-		"Windows NT 10.0; Win64; x64"
-	};
-	format!("Mozilla/5.0 ({platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version} Safari/537.36")
-}
-
-pub fn web_user_agent() -> String {
-	chrome_user_agent(CHROME_VERSION)
-}
-
-pub fn accept_language(locale: &str) -> String {
-	format!("{locale},en;q=0.9")
-}
-
-pub fn sec_ch_ua(version: &str) -> String {
-	let major = version.split('.').next().unwrap_or_default();
-	format!("\"Chromium\";v=\"{major}\", \"Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"{major}\"")
-}
-
-pub fn sec_ch_ua_platform() -> &'static str {
-	if cfg!(target_os = "macos") {
-		"macOS"
-	} else if cfg!(target_os = "linux") {
-		"Linux"
-	} else {
-		"Windows"
-	}
-}
-
-fn host_os_version() -> &'static str {
-	static CACHED: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-	CACHED.get_or_init(detect_os_version).as_str()
-}
-
-fn detect_os_version() -> String {
-	#[cfg(target_os = "windows")]
-	{
-		use windows::Wdk::System::SystemServices::RtlGetVersion;
-		use windows::Win32::Foundation::STATUS_SUCCESS;
-		use windows::Win32::System::SystemInformation::OSVERSIONINFOW;
-		let mut info = OSVERSIONINFOW {
-			dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
-			..Default::default()
-		};
-		if unsafe { RtlGetVersion(&mut info) } == STATUS_SUCCESS {
-			format!(
-				"{}.{}.{}",
-				info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber
-			)
-		} else {
-			String::new()
-		}
-	}
-	#[cfg(not(target_os = "windows"))]
-	{
-		String::new()
-	}
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Identify {
 	pub token: Token,
@@ -268,6 +117,7 @@ pub struct Ready {
 	pub merged_members: Vec<LenientVec<Member>>,
 	pub user_settings_proto: Option<String>,
 	pub user_settings: Option<Value>,
+	pub apex_experiments: Value,
 }
 
 #[derive(Deserialize)]
@@ -284,6 +134,13 @@ pub fn refreshed_token(ready: &RawValue) -> Option<Token> {
 }
 
 impl Ready {
+	pub fn installation_id(&self) -> Option<&str> {
+		self.apex_experiments
+			.get("installation")
+			.and_then(Value::as_str)
+			.filter(|id| crate::fingerprint::plausible_installation_id(id))
+	}
+
 	pub fn normalize_guilds(&mut self) {
 		for guild in self.guilds.iter_mut() {
 			*guild = std::mem::take(guild).normalized();
