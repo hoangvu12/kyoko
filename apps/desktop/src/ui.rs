@@ -1,7 +1,7 @@
 mod composer;
 mod home;
-mod message_actions;
 mod members;
+mod message_actions;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};

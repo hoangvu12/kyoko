@@ -201,9 +201,15 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			}
 		}
 	});
+	let actions = Rc::downgrade(link);
 	host.action("members.open_profile", move |argument| {
-		let user = field(&argument, "id").cloned();
-		tracing::debug!(?user, "member profiles are not built yet");
+		let user_id = match field(&argument, "id") {
+			Some(Value::Str(text)) => text.parse::<u64>().ok().map(Snowflake),
+			_ => None,
+		};
+		if let (Some(link), Some(user_id)) = (actions.upgrade(), user_id) {
+			link.open_member_profile(user_id);
+		}
 	});
 }
 

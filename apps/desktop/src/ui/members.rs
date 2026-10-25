@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use bridge::{MemberListEntry, OpenChannel, OpenMembers};
+use protocol::Snowflake;
 
 use super::Link;
 use crate::capture;
@@ -78,6 +79,11 @@ impl Link {
 			}
 			zgx::timer::sleep(capture::POLL).await;
 		}
+	}
+
+	pub(crate) fn open_member_profile(&self, user_id: Snowflake) {
+		let guild_id = self.members.panel().open().map(|open| open.guild_id);
+		tracing::debug!(%user_id, ?guild_id, "member profiles are not built yet");
 	}
 
 	fn members_settled(&self) -> bool {
