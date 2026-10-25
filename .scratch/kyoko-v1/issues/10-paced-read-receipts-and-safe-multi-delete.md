@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 (REST safety layer)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Read acks are debounced per channel, never sent once per incoming message
 - [ ] Marking a channel, a server or everything as read works and is paced
