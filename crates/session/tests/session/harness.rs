@@ -358,8 +358,10 @@ fn open_session(
 ) -> (Session, Arc<Store>) {
 	let paths = Paths::at(scratch).expect("scratch paths");
 	let mut settings = Settings::load(&paths);
-	settings.storage.plaintext_token = launch.plaintext_secrets;
-	settings.save(&paths).expect("settings save");
+	if settings.storage.plaintext_token != launch.plaintext_secrets {
+		settings.storage.plaintext_token = launch.plaintext_secrets;
+		settings.save(&paths).expect("settings save");
+	}
 	let store = Arc::new(Store::open_with(paths, launch.keyring.clone()).expect("store opens"));
 	let notifier = wake.clone();
 	let session = Session::start(SessionConfig {
