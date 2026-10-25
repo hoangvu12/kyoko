@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 (Gateway send window, heartbeat and reconnect policy)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Guild subscriptions use op 37, debounced and deduplicated
 - [ ] Member-list ranges are requested in 100-row buckets around the viewport, not only the first 100
