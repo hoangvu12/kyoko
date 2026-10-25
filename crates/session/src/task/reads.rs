@@ -22,6 +22,7 @@ pub(super) struct Acks {
 	jitter: Duration,
 	max_delay: Duration,
 	pending: HashMap<Snowflake, PendingAck>,
+	unconfirmed: HashMap<Snowflake, Snowflake>,
 }
 
 impl Acks {
@@ -31,7 +32,25 @@ impl Acks {
 			jitter: tuning.ack_jitter,
 			max_delay: tuning.ack_max_delay,
 			pending: HashMap::new(),
+			unconfirmed: HashMap::new(),
 		}
+	}
+
+	pub(super) fn unconfirmed(&self) -> bool {
+		!self.unconfirmed.is_empty()
+	}
+
+	fn expect_echo(&mut self, channel_id: Snowflake, message_id: Snowflake) {
+		self.unconfirmed.insert(channel_id, message_id);
+	}
+
+	fn confirm(&mut self, ack: &MessageAck) -> Option<Snowflake> {
+		let expected = *self.unconfirmed.get(&ack.channel_id)?;
+		if ack.message_id >= expected {
+			self.unconfirmed.remove(&ack.channel_id);
+			return None;
+		}
+		Some(expected)
 	}
 
 	pub(super) fn deadline(&self) -> Option<Instant> {
@@ -52,6 +71,8 @@ impl Acks {
 		});
 		pending.message_id = pending.message_id.max(message_id);
 		pending.due = due.min(pending.latest);
+		let message_id = pending.message_id;
+		self.expect_echo(channel_id, message_id);
 	}
 
 	fn take_due(&mut self) -> Vec<(Snowflake, Snowflake)> {
@@ -106,6 +127,18 @@ impl Core {
 				rest.ack_message(channel_id, message_id, body).await.map(drop)
 			});
 		}
+	}
+
+	pub(super) fn keep_own_ack(&mut self, ack: &MessageAck) {
+		let Some(expected) = self.acks.confirm(ack) else {
+			return;
+		};
+		self.apply_dispatch(&DispatchEvent::MessageAck(MessageAck {
+			channel_id: ack.channel_id,
+			message_id: expected,
+			version: None,
+			mention_count: Some(0),
+		}));
 	}
 
 	pub(super) fn read_up_to(&mut self, channel_id: Snowflake, message_id: Snowflake) {
@@ -184,6 +217,7 @@ impl Core {
 			version: None,
 			mention_count: Some(0),
 		}));
+		self.acks.expect_echo(channel_id, previous);
 		self.persist_read_state(channel_id);
 		let body = json!({ "manual": true, "mention_count": 0 });
 		self.spawn_rest("mark unread", move |rest| async move {
@@ -219,6 +253,7 @@ impl Core {
 		for &(channel_id, message_id) in &unread {
 			self.ack_local(channel_id, message_id);
 			self.acks.forget(channel_id);
+			self.acks.expect_echo(channel_id, message_id);
 			self.manual_unread.remove(&channel_id);
 		}
 		self.spawn_rest("mark read", move |rest| async move {

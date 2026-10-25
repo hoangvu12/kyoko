@@ -18,6 +18,7 @@ use crate::loaded::Lazy;
 use crate::locks::RiskyLocks;
 use crate::messages::ChannelMessages;
 use crate::settings::GuildFolder;
+use crate::versions::CacheVersions;
 use crate::views::RenderedMessage;
 use crate::views::UserOverride;
 use crate::voice::{Call, MicTest, StreamSummary, VoiceLevels, VoiceSession, VoiceStats};
@@ -104,6 +105,8 @@ pub struct State {
 	pub(crate) limits: CacheLimits,
 	pub(crate) warm: Vec<Snowflake>,
 	pub(crate) risky: RiskyLocks,
+	pub(crate) versions: CacheVersions,
+	pub(crate) ack_versions: HashMap<Snowflake, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

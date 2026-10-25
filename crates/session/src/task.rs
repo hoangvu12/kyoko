@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant as StdInstant};
 
 use chrono::Utc;
-use gateway::{GatewayConfig, GatewayError, GatewayEvent, GatewayHandle, MemberLookup, MemberRequest};
+use gateway::{
+	ClientStateSource, GatewayConfig, GatewayError, GatewayEvent, GatewayHandle, MemberLookup, MemberRequest,
+};
 use parking_lot::Mutex;
 use protocol::fingerprint::channel_referer;
 use protocol::{
@@ -240,12 +242,23 @@ impl Core {
 		mut commands: mpsc::Receiver<Command>,
 		mut internal: mpsc::UnboundedReceiver<Internal>,
 	) {
-		self.start_gateway().await;
+		let store = self.store.clone();
+		let cached = tokio::task::spawn_blocking(move || persist::load_cache(&store));
+		let startup = self.startup.take();
+		if let Some(source) = startup.as_ref().and_then(|startup| startup.build_source.as_ref()) {
+			identity::discover_build_number(self.rest.identity(), &self.store, source).await;
+		}
+		if let Ok(Some(ready)) = cached.await {
+			self.apply(Event::Ready(&ready));
+		}
+		self.apply_local(LocalEvent::Connection(ConnectionStatus::Connecting));
+		if let Some(startup) = startup {
+			self.start_gateway(startup);
+		}
 		let cookie_saver = self.runtime.spawn(identity::keep_cookies_saved(
 			self.rest.identity().clone(),
 			self.store.clone(),
 		));
-		self.restore().await;
 		self.restore_recents().await;
 		let mut gateway_open = true;
 		let rest_stopped = self.rest.stopped();
@@ -290,6 +303,9 @@ impl Core {
 		}
 		self.notifier.flush();
 		self.gateway.shutdown();
+		if self.acks.unconfirmed() {
+			self.persist.submit(Job::ForgetVersions);
+		}
 		cookie_saver.abort();
 		let identity = self.rest.identity().clone();
 		let store = self.store.clone();
@@ -297,42 +313,21 @@ impl Core {
 		self.persist.close().await;
 	}
 
-	async fn start_gateway(&mut self) {
-		let Some(mut startup) = self.startup.take() else {
-			return;
-		};
-		let identity = self.rest.identity().clone();
-		if let Some(source) = &startup.build_source {
-			identity::discover_build_number(&identity, &self.store, source).await;
-		}
-		startup.gateway_config.identify = identity.fingerprint().properties().clone();
+	fn start_gateway(&mut self, mut startup: Startup) {
+		startup.gateway_config.identify = self.rest.identity().fingerprint().properties().clone();
+		let state = self.state.clone();
+		startup.gateway_config.client_state = ClientStateSource::new(move || state.read().client_state());
 		let _ = startup.gateway.send(startup.gateway_config);
 	}
 
-	async fn restore(&mut self) {
-		let store = self.store.clone();
-		let cached = tokio::task::spawn_blocking(move || {
-			(persist::load_ready(&store), persist::load_read_states(&store))
-		})
-		.await;
-		let Ok((Some(mut ready), read_states)) = cached else {
-			return;
+	fn persist_versioned(&self) {
+		let (states, version, settings) = {
+			let state = self.state.read();
+			let states = state.read_states().map(persist::stored_read_state).collect();
+			(states, state.versions().read_state, state.guild_settings_cache())
 		};
-		ready.session_id.clear();
-		ready.resume_gateway_url = None;
-		self.apply(Event::Ready(&ready));
-		for read_state in read_states {
-			let Some(message_id) = read_state.last_message_id else {
-				continue;
-			};
-			self.apply_dispatch(&DispatchEvent::MessageAck(MessageAck {
-				channel_id: Snowflake(read_state.channel_id),
-				message_id: Snowflake(message_id),
-				version: None,
-				mention_count: Some(i64::from(read_state.mention_count)),
-			}));
-		}
-		self.apply_local(LocalEvent::Connection(ConnectionStatus::Connecting));
+		self.persist.submit(Job::ReadStates { states, version });
+		self.persist.submit(Job::GuildSettings(settings));
 	}
 
 	fn apply(&mut self, event: Event<'_>) {
@@ -396,6 +391,7 @@ impl Core {
 				self.remember_account();
 				self.lazy_connected();
 				self.persist.submit(Job::Ready(ready));
+				self.persist_versioned();
 			}
 			GatewayEvent::ReadySupplemental(supplemental) => {
 				self.apply(Event::ReadySupplemental(&supplemental));
@@ -475,7 +471,14 @@ impl Core {
 			DispatchEvent::MessageDeleteBulk(delete) => {
 				self.persist.submit(Job::DeleteMessages(delete.ids));
 			}
-			DispatchEvent::MessageAck(ack) => self.persist_read_state(ack.channel_id),
+			DispatchEvent::MessageAck(ack) => {
+				self.keep_own_ack(&ack);
+				self.persist_read_state(ack.channel_id);
+			}
+			DispatchEvent::UserGuildSettingsUpdate(_) => {
+				let settings = self.state.read().guild_settings_cache();
+				self.persist.submit(Job::GuildSettings(settings));
+			}
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
 			DispatchEvent::GuildMembersChunk(chunk) => self.member_requests.answered(&chunk, Instant::now()),
@@ -499,13 +502,16 @@ impl Core {
 	}
 
 	fn persist_read_state(&self, channel_id: Snowflake) {
-		let stored = self
-			.state
-			.read()
-			.read_state(channel_id)
-			.map(persist::stored_read_state);
+		let (stored, version) = {
+			let state = self.state.read();
+			let stored = state.read_state(channel_id).map(persist::stored_read_state);
+			(stored, state.versions().read_state)
+		};
 		if let Some(stored) = stored {
-			self.persist.submit(Job::ReadState(stored));
+			self.persist.submit(Job::ReadState {
+				state: stored,
+				version,
+			});
 		}
 	}
 

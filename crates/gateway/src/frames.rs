@@ -1,5 +1,5 @@
 use protocol::gateway::Opcode;
-use protocol::{IdentifyProperties, Token};
+use protocol::{ClientState, IdentifyProperties, Token};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -32,11 +32,6 @@ struct Presence<'a> {
 }
 
 #[derive(Serialize)]
-struct ClientState {
-	guild_versions: serde_json::Map<String, Value>,
-}
-
-#[derive(Serialize)]
 struct ResumeData<'a> {
 	token: &'a Token,
 	session_id: &'a str,
@@ -62,9 +57,7 @@ pub(crate) fn identify(config: &GatewayConfig) -> Result<String, GatewayError> {
 			},
 			compress: false,
 			large_threshold: config.large_threshold,
-			client_state: ClientState {
-				guild_versions: serde_json::Map::new(),
-			},
+			client_state: config.client_state.current(),
 		},
 	)
 }

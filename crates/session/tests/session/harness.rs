@@ -141,7 +141,12 @@ impl Running {
 	}
 
 	pub async fn restart(&mut self) {
+		self.restart_after(|_| {}).await;
+	}
+
+	pub async fn restart_after(&mut self, between: impl FnOnce(&Control)) {
 		self.shutdown_session().await;
+		between(&self.mock);
 		let (session, store) = open_session(&self.server, &self.scratch, &self.wake, &self.launch);
 		self.session = Some(session);
 		self.store = store;

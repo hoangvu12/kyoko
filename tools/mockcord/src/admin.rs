@@ -282,6 +282,8 @@ impl Shared {
 			}
 			merged["channel_overrides"] = Value::Array(list);
 		}
+		let version = store.settings_version.bump(scope);
+		merged["version"] = json!(version);
 		if let Ok(parsed) = serde_json::from_value::<UserGuildSettings>(merged.clone()) {
 			settings = parsed;
 		}

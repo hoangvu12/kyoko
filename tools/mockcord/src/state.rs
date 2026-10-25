@@ -44,7 +44,35 @@ pub struct Store {
 	pub audit: HashMap<u64, Vec<Value>>,
 	pub joined_threads: BTreeSet<u64>,
 	pub created_guilds: HashMap<u64, Value>,
+	pub read_state_version: Versions,
+	pub settings_version: Versions,
 	last_id: u64,
+}
+
+pub struct Versions {
+	pub current: u64,
+	changed: BTreeMap<u64, u64>,
+}
+
+impl Default for Versions {
+	fn default() -> Self {
+		Self {
+			current: 1,
+			changed: BTreeMap::new(),
+		}
+	}
+}
+
+impl Versions {
+	pub fn bump(&mut self, id: u64) -> u64 {
+		self.current += 1;
+		self.changed.insert(id, self.current);
+		self.current
+	}
+
+	pub fn changed_since(&self, id: u64, known: u64) -> bool {
+		self.changed.get(&id).is_some_and(|version| *version > known)
+	}
 }
 
 impl Store {
@@ -116,6 +144,8 @@ impl Store {
 			left_guilds: BTreeSet::new(),
 			audit: crate::admin::seed_audit(fixtures),
 			joined_threads: BTreeSet::new(),
+			read_state_version: Versions::default(),
+			settings_version: Versions::default(),
 			last_id,
 		}
 	}

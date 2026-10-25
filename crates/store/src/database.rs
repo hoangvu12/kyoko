@@ -223,6 +223,28 @@ impl Database {
 		Ok(())
 	}
 
+	pub fn replace_read_states(&self, states: &[ReadState]) -> Result<()> {
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		tx.execute("DELETE FROM read_state", [])?;
+		{
+			let mut insert = tx.prepare_cached(
+				"INSERT INTO read_state (channel_id, last_message_id, mention_count, last_viewed)
+				VALUES (?1, ?2, ?3, ?4)",
+			)?;
+			for state in states {
+				insert.execute(params![
+					state.channel_id as i64,
+					state.last_message_id.map(|id| id as i64),
+					state.mention_count,
+					state.last_viewed
+				])?;
+			}
+		}
+		tx.commit()?;
+		Ok(())
+	}
+
 	pub fn get_read_state(&self, channel_id: u64) -> Result<Option<ReadState>> {
 		Ok(self
 			.conn
@@ -265,6 +287,14 @@ impl Database {
 				ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
 			)?
 			.execute(params![key, value, now_millis()])?;
+		Ok(())
+	}
+
+	pub fn kv_delete(&self, key: &str) -> Result<()> {
+		self.conn
+			.lock()
+			.prepare_cached("DELETE FROM kv WHERE key = ?1")?
+			.execute([key])?;
 		Ok(())
 	}
 

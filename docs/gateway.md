@@ -31,7 +31,9 @@ IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the 
 | 15 | CHANNEL_OBFUSCATION | no | Undocumented. |
 | 16 | AUTO_LOBBY_CONNECT | no | Kyoko has no lobbies. |
 
-Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead. Kyoko doesn't parse that event yet either, so unread state for those guilds can go stale until the read-state work handles it.
+Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead, which kyoko applies (see `docs/client-state.md`).
+
+IDENTIFY's `client_state` comes from the persisted read-state and guild-settings versions; `docs/client-state.md` covers what is sent and how partial READY containers merge.
 
 ## Refreshed token
 

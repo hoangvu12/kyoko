@@ -235,8 +235,10 @@ impl Shared {
 				.or_insert_with(|| blank_read_state(channel_id));
 			state.last_message_id = Some(Snowflake(id));
 			state.mention_count = Some(0);
+			store.read_state_version.bump(channel_id);
 		} else if pings_me && let Some(state) = store.read_states.get_mut(&channel_id) {
 			state.mention_count = Some(state.mention_count.unwrap_or(0) + 1);
+			store.read_state_version.bump(channel_id);
 		}
 		let gateway = self.gateway_message(&store, &value);
 		drop(store);
@@ -389,11 +391,12 @@ impl Shared {
 			.or_insert_with(|| blank_read_state(channel_id));
 		state.last_message_id = Some(Snowflake(id));
 		state.mention_count = Some(count);
+		let version = store.read_state_version.bump(channel_id);
 		drop(store);
 		let data = json!({
 			"channel_id": channel_id.to_string(),
 			"message_id": id.to_string(),
-			"version": 1,
+			"version": version,
 			"mention_count": count,
 			"ack_type": 0,
 			"flags": 0,

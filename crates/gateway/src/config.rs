@@ -1,10 +1,12 @@
+use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use protocol::capability::{
 	AUTH_TOKEN_REFRESH, DEDUPE_USER_OBJECTS, LAZY_USER_NOTES, MULTIPLE_GUILD_EXPERIMENT_POPULATIONS,
 	NON_CHANNEL_READ_STATES, PRIORITIZED_READY_PAYLOAD, VERSIONED_READ_STATES, VERSIONED_USER_GUILD_SETTINGS,
 };
-use protocol::{IdentifyProperties, Token};
+use protocol::{ClientState, IdentifyProperties, Token};
 
 use crate::outbox::SendBudget;
 
@@ -50,6 +52,34 @@ pub struct GatewayTuning {
 	pub send_budget: SendBudget,
 }
 
+#[derive(Clone)]
+pub struct ClientStateSource(Arc<dyn Fn() -> ClientState + Send + Sync>);
+
+impl ClientStateSource {
+	pub fn new(current: impl Fn() -> ClientState + Send + Sync + 'static) -> Self {
+		Self(Arc::new(current))
+	}
+
+	pub fn current(&self) -> ClientState {
+		(self.0)()
+	}
+}
+
+impl Default for ClientStateSource {
+	fn default() -> Self {
+		Self::new(ClientState::default)
+	}
+}
+
+impl fmt::Debug for ClientStateSource {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		formatter
+			.debug_tuple("ClientStateSource")
+			.field(&self.current())
+			.finish()
+	}
+}
+
 #[derive(Debug)]
 pub struct GatewayConfig {
 	pub token: Token,
@@ -59,6 +89,7 @@ pub struct GatewayConfig {
 	pub initial_status: String,
 	pub large_threshold: u32,
 	pub tuning: GatewayTuning,
+	pub client_state: ClientStateSource,
 }
 
 impl GatewayConfig {
@@ -74,6 +105,7 @@ impl GatewayConfig {
 			initial_status: "online".to_owned(),
 			large_threshold: Self::DEFAULT_LARGE_THRESHOLD,
 			tuning: GatewayTuning::default(),
+			client_state: ClientStateSource::default(),
 		}
 	}
 }

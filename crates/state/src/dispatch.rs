@@ -62,6 +62,11 @@ impl State {
 				})
 			}
 			DispatchEvent::MessageAck(ack) => self.message_ack(ack),
+			DispatchEvent::ChannelCreate(channel) if channel.guild_id.is_none() => Changes {
+				private_channels: self.add_late_private_channels(std::slice::from_ref(&**channel)),
+				..Changes::default()
+			},
+			DispatchEvent::ChannelUnreadUpdate(update) => self.channel_unread_update(update),
 			DispatchEvent::ChannelCreate(channel)
 			| DispatchEvent::ChannelUpdate(channel)
 			| DispatchEvent::ThreadCreate(channel)
@@ -290,6 +295,9 @@ impl State {
 	}
 
 	fn message_ack(&mut self, ack: &MessageAck) -> Changes {
+		if !self.accepts_ack(ack) {
+			return Changes::default();
+		}
 		let mentions = ack
 			.mention_count
 			.map_or(0, |count| u32::try_from(count).unwrap_or(0));
@@ -473,6 +481,9 @@ impl State {
 	}
 
 	fn guild_settings_update(&mut self, settings: &UserGuildSettings) -> Changes {
+		if !self.accepts_guild_settings(settings) {
+			return Changes::default();
+		}
 		self.store_guild_settings(settings);
 		let mut changes = Changes {
 			guild_list: true,

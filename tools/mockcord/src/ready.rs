@@ -10,11 +10,10 @@ use serde_json::{Value, json};
 
 use crate::fixtures::{Fixtures, GuildFixture};
 use crate::json::to_json;
-use crate::state::{Shared, Store};
+use crate::state::{Shared, Store, Versions};
 use crate::web::installation_id;
 
 pub const DEFAULT_API_VERSION: i64 = 9;
-const CONTAINER_VERSION: i64 = 1;
 const MOCK_FOLDER_ID: i64 = 1_001;
 const MOCK_FOLDER_COLOR: i64 = 0x6666ff;
 const GUILD_EVENT_READ_STATE: i64 = 1;
@@ -130,27 +129,60 @@ fn friend_presences<'a>(fixtures: &Fixtures, store: &'a Store) -> Vec<&'a Presen
 		.collect()
 }
 
-fn container<T: Serialize>(entries: Vec<T>, versioned: bool) -> Value {
-	if versioned {
-		json!({ "entries": entries, "version": CONTAINER_VERSION, "partial": false })
-	} else {
-		json!(entries)
-	}
+fn known_version(client_state: &Value, field: &str, versions: &Versions) -> Option<u64> {
+	client_state[field]
+		.as_u64()
+		.filter(|known| *known > 0 && *known <= versions.current)
 }
 
-fn read_states(fixtures: &Fixtures, store: &Store, capabilities: u64) -> Value {
-	let mut entries: Vec<Value> = store.read_states.values().map(to_json).collect();
-	if has(capabilities, NON_CHANNEL_READ_STATES) {
+fn container<T: Serialize>(
+	entries: impl Iterator<Item = (u64, T)>,
+	versions: Option<(&Versions, Option<u64>)>,
+) -> Value {
+	let Some((versions, known)) = versions else {
+		return json!(entries.map(|(_, entry)| entry).collect::<Vec<_>>());
+	};
+	let entries: Vec<T> = entries
+		.filter(|(id, _)| known.is_none_or(|known| versions.changed_since(*id, known)))
+		.map(|(_, entry)| entry)
+		.collect();
+	json!({ "entries": entries, "version": versions.current, "partial": known.is_some() })
+}
+
+fn read_states(fixtures: &Fixtures, store: &Store, capabilities: u64, client_state: &Value) -> Value {
+	let versions = &store.read_state_version;
+	let known = known_version(client_state, "read_state_version", versions);
+	let mut entries: Vec<(u64, Value)> = store
+		.read_states
+		.iter()
+		.map(|(id, state)| (*id, to_json(state)))
+		.collect();
+	if known.is_none() && has(capabilities, NON_CHANNEL_READ_STATES) {
 		entries.extend(live_guilds(fixtures, store).map(|guild| {
-			json!({
-				"id": guild.id.to_string(),
-				"read_state_type": GUILD_EVENT_READ_STATE,
-				"last_acked_id": "0",
-				"badge_count": 0,
-			})
+			(
+				guild.id,
+				json!({
+					"id": guild.id.to_string(),
+					"read_state_type": GUILD_EVENT_READ_STATE,
+					"last_acked_id": "0",
+					"badge_count": 0,
+				}),
+			)
 		}));
 	}
-	container(entries, has(capabilities, VERSIONED_READ_STATES))
+	let versioned = has(capabilities, VERSIONED_READ_STATES).then_some((versions, known));
+	container(entries.into_iter(), versioned)
+}
+
+fn guild_settings(store: &Store, capabilities: u64, client_state: &Value) -> Value {
+	let versions = &store.settings_version;
+	let known = known_version(client_state, "user_guild_settings_version", versions);
+	let entries = store
+		.settings
+		.iter()
+		.map(|(scope, settings)| (*scope, to_json(settings)));
+	let versioned = has(capabilities, VERSIONED_USER_GUILD_SETTINGS).then_some((versions, known));
+	container(entries, versioned)
 }
 
 fn private_channels(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Vec<Value> {
@@ -190,7 +222,14 @@ fn relationships(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Vec<Value>
 		.collect()
 }
 
-pub fn build(shared: &Shared, session_id: &str, capabilities: u64, version: i64) -> (Value, Value) {
+pub fn build(
+	shared: &Shared,
+	session_id: &str,
+	identify: &Value,
+	capabilities: u64,
+	version: i64,
+) -> (Value, Value) {
+	let client_state = &identify["client_state"];
 	let dedupe = has(capabilities, DEDUPE_USER_OBJECTS);
 	let prioritized = has(capabilities, PRIORITIZED_READY_PAYLOAD);
 
@@ -215,11 +254,8 @@ pub fn build(shared: &Shared, session_id: &str, capabilities: u64, version: i64)
 		"guilds": guilds,
 		"private_channels": private_channels(fixtures, &store, dedupe),
 		"relationships": relationships(fixtures, &store, dedupe),
-		"read_state": read_states(fixtures, &store, capabilities),
-		"user_guild_settings": container(
-			store.settings.values().collect(),
-			has(capabilities, VERSIONED_USER_GUILD_SETTINGS),
-		),
+		"read_state": read_states(fixtures, &store, capabilities, client_state),
+		"user_guild_settings": guild_settings(&store, capabilities, client_state),
 		"session_id": session_id,
 		"resume_gateway_url": shared.urls.gateway,
 		"sessions": [{

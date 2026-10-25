@@ -8,12 +8,15 @@ use crate::state::{ConnectionStatus, State, intern_user};
 
 impl State {
 	pub(crate) fn apply_ready(&mut self, ready: &Ready) -> Changes {
+		let kept = self.keep_versioned();
 		self.reset_for_ready();
 		self.current_user = Some(ready.user.clone());
 		intern_user(&mut self.users, &ready.user);
 		self.session.session_id.clone_from(&ready.session_id);
 		self.session.resume_url.clone_from(&ready.resume_gateway_url);
-		self.session.set_connection(ConnectionStatus::Connected);
+		if !ready.session_id.is_empty() {
+			self.session.set_connection(ConnectionStatus::Connected);
+		}
 		for user in ready.users.iter() {
 			intern_user(&mut self.users, user);
 		}
@@ -31,17 +34,7 @@ impl State {
 		for relationship in ready.relationships.iter() {
 			self.store_relationship(relationship);
 		}
-		for read_state in ready.read_state.entries.iter() {
-			if read_state
-				.read_state_type
-				.is_none_or(|kind| kind == protocol::ReadStateKind::Channel)
-			{
-				self.read_states.insert(read_state.id, read_state.clone());
-			}
-		}
-		for settings in ready.user_guild_settings.entries.iter() {
-			self.store_guild_settings(settings);
-		}
+		self.apply_versioned(&ready.read_state, &ready.user_guild_settings, kept);
 		if let Some(settings) = &ready.user_settings {
 			self.apply_user_settings(settings);
 		}
@@ -96,6 +89,9 @@ impl State {
 				changes.presence.insert(user_id);
 			}
 		}
+		if self.add_late_private_channels(&supplemental.lazy_private_channels) {
+			changes.private_channels = true;
+		}
 		changes.guild_list = true;
 		changes
 	}
@@ -107,9 +103,6 @@ impl State {
 		self.users.clear();
 		self.presences.clear();
 		self.relationships.clear();
-		self.read_states.clear();
-		self.guild_settings.clear();
-		self.global_settings = None;
 		self.typing.clear();
 	}
 

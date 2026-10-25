@@ -264,7 +264,8 @@ impl Connection {
 			},
 			capabilities,
 		);
-		let (mut ready, supplemental) = ready::build(&self.shared, &session_id, capabilities, self.version);
+		let (mut ready, supplemental) =
+			ready::build(&self.shared, &session_id, data, capabilities, self.version);
 		if let Some(transform) = self.shared.scenario.ready() {
 			transform(data, &mut ready);
 		}

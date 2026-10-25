@@ -93,6 +93,16 @@ pub struct Identify {
 	pub client_state: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClientState {
+	pub guild_versions: serde_json::Map<String, Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub read_state_version: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub user_guild_settings_version: Option<u64>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Resume {
 	pub token: Token,
@@ -168,6 +178,7 @@ pub struct ReadySupplemental {
 	pub merged_presences: MergedPresences,
 	pub merged_members: Vec<LenientVec<Member>>,
 	pub guilds: LenientVec<SupplementalGuild>,
+	pub lazy_private_channels: LenientVec<Channel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -238,6 +249,22 @@ pub struct MessageAck {
 	pub message_id: Snowflake,
 	pub version: Option<i64>,
 	pub mention_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChannelUnread {
+	pub id: Snowflake,
+	pub last_message_id: Option<Snowflake>,
+	#[serde(deserialize_with = "timestamp")]
+	pub last_pin_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChannelUnreadUpdate {
+	pub guild_id: Snowflake,
+	pub channel_unread_updates: LenientVec<ChannelUnread>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -432,6 +459,7 @@ pub enum DispatchEvent {
 	ChannelUpdate(Box<Channel>),
 	ChannelDelete(Box<Channel>),
 	ChannelPinsUpdate(ChannelPinsUpdate),
+	ChannelUnreadUpdate(Box<ChannelUnreadUpdate>),
 	ThreadCreate(Box<Channel>),
 	ThreadUpdate(Box<Channel>),
 	ThreadDelete(ThreadDelete),
@@ -503,6 +531,7 @@ impl DispatchEvent {
 			"CHANNEL_UPDATE" => Self::ChannelUpdate(decode(name, data)?),
 			"CHANNEL_DELETE" => Self::ChannelDelete(decode(name, data)?),
 			"CHANNEL_PINS_UPDATE" => Self::ChannelPinsUpdate(decode(name, data)?),
+			"CHANNEL_UNREAD_UPDATE" => Self::ChannelUnreadUpdate(decode(name, data)?),
 			"THREAD_CREATE" => Self::ThreadCreate(decode(name, data)?),
 			"THREAD_UPDATE" => Self::ThreadUpdate(decode(name, data)?),
 			"THREAD_DELETE" => Self::ThreadDelete(decode(name, data)?),

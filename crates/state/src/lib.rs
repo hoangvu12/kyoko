@@ -18,6 +18,7 @@ mod rows;
 mod settings;
 mod state;
 mod threads;
+mod versions;
 mod views;
 mod voice;
 
@@ -42,6 +43,7 @@ pub use state::{
 	ConnectionStatus, DisconnectReason, Rejection, Selection, SessionInfo, SharedState, State, TYPING_TIMEOUT,
 };
 pub use threads::ForumPost;
+pub use versions::CacheVersions;
 pub use views::{
 	ChannelRow, ChannelTreeNode, DmRow, GuildSummary, MemberListRow, MemberRow, MessageRow, MessageView,
 	RelationshipRow, RenderedMessage, UserOverride,

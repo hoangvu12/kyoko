@@ -47,7 +47,7 @@ Never sleep for a fixed time. Wait on an observable event:
 
 - `running.until("what", |state| ...)` re-checks the predicate every time the session publishes changes, and panics with the description after `STEP_TIMEOUT` (15 s).
 - `running.until_wire("what", |recording| Some(..))` re-checks every time mockcord records traffic, and returns the first `Some`.
-- `running.restart()` shuts the session down and starts a new one on the same store and mockcord, for behaviour that must survive a restart.
+- `running.restart()` shuts the session down and starts a new one on the same store and mockcord, for behaviour that must survive a restart. `running.restart_after(|mock| ..)` runs the closure while no session is connected, for changes the next launch must catch up on.
 - `running.connected()` waits for READY and a live connection. `running.identified_connection()` returns the id of the connection that sent the first IDENTIFY. `running.open_text_channel()` selects the first guild text channel and waits for its history to load.
 - `running.eventually("what", || ...)` polls a condition every 10 ms until `STEP_TIMEOUT`. Use it only for effects that publish no state change, such as a token reaching `running.store()` or a hook recording a call.
 - `state.session().connection` holds the `ConnectionStatus` (see `docs/gateway.md`). Wait on it to see reconnect attempts, their `retry_in`, and stop reasons.
@@ -110,7 +110,7 @@ mockcord accepts one token at a time for REST, IDENTIFY and RESUME. It starts as
 
 mockcord shapes its replies by the capabilities in IDENTIFY, so tests prove each bit's effect:
 
-- VERSIONED_READ_STATES and VERSIONED_USER_GUILD_SETTINGS: containers, otherwise plain arrays.
+- VERSIONED_READ_STATES and VERSIONED_USER_GUILD_SETTINGS: containers, otherwise plain arrays. Each container has a version that every ack, own message, mention and guild-settings patch bumps, and MESSAGE_ACK carries the new version. When IDENTIFY's `client_state` names a version mockcord has reached, the container is `partial: true` with only the entries changed since; otherwise it is full.
 - NON_CHANNEL_READ_STATES: one guild-event read state per guild.
 - DEDUPE_USER_OBJECTS: READY `users` plus recipient ids, otherwise full `recipients` and relationship `user` objects.
 - PRIORITIZED_READY_PAYLOAD: presences in READY_SUPPLEMENTAL, otherwise in each READY guild.

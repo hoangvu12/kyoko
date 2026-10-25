@@ -1,8 +1,12 @@
 use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
-use protocol::{Message, Ready, Snowflake};
+use protocol::{
+	EntryContainer, LenientVec, Message, ReadStateContainer, ReadStateKind, Ready, Snowflake,
+	UserGuildSettingsContainer,
+};
 use serde::de::DeserializeOwned;
 use store::{ReadState, Store, Table};
 use tokio::runtime::Handle;
@@ -12,6 +16,8 @@ use tokio::task::JoinHandle;
 const QUEUE_CAPACITY: usize = 1024;
 const BATCH_LIMIT: usize = 256;
 const READY_KEY: &str = "session.ready";
+const READ_STATE_VERSION_KEY: &str = "client_state.read_state_version";
+const GUILD_SETTINGS_KEY: &str = "client_state.user_guild_settings";
 pub(crate) const CACHED_MESSAGES: u32 = 50;
 pub(crate) const RECENT_EMOJI_KEY: &str = "expressions.recent.emoji";
 pub(crate) const RECENT_GIFS_KEY: &str = "expressions.recent.gifs";
@@ -24,7 +30,16 @@ pub(crate) enum Job {
 		messages: Vec<Arc<Message>>,
 	},
 	DeleteMessages(Vec<Snowflake>),
-	ReadState(ReadState),
+	ReadState {
+		state: ReadState,
+		version: Option<u64>,
+	},
+	ReadStates {
+		states: Vec<ReadState>,
+		version: Option<u64>,
+	},
+	GuildSettings(UserGuildSettingsContainer),
+	ForgetVersions,
 	Draft {
 		channel_id: Snowflake,
 		content: String,
@@ -38,17 +53,20 @@ pub(crate) enum Job {
 pub(crate) struct Persistor {
 	queue: mpsc::Sender<Job>,
 	task: JoinHandle<()>,
+	lost: Arc<AtomicBool>,
 }
 
 impl Persistor {
 	pub(crate) fn spawn(store: Arc<Store>, runtime: &Handle) -> Self {
 		let (queue, jobs) = mpsc::channel(QUEUE_CAPACITY);
-		let task = runtime.spawn(write_loop(store, jobs));
-		Self { queue, task }
+		let lost = Arc::new(AtomicBool::new(false));
+		let task = runtime.spawn(write_loop(store, jobs, lost.clone()));
+		Self { queue, task, lost }
 	}
 
 	pub(crate) fn submit(&self, job: Job) {
 		if self.queue.try_send(job).is_err() {
+			self.lost.store(true, Ordering::Relaxed);
 			tracing::warn!("cache write queue is full, dropping a write");
 		}
 	}
@@ -59,14 +77,17 @@ impl Persistor {
 	}
 }
 
-async fn write_loop(store: Arc<Store>, mut jobs: mpsc::Receiver<Job>) {
+async fn write_loop(store: Arc<Store>, mut jobs: mpsc::Receiver<Job>, lost: Arc<AtomicBool>) {
 	let mut batch = Vec::new();
 	while jobs.recv_many(&mut batch, BATCH_LIMIT).await > 0 {
 		let pending = mem::take(&mut batch);
 		let store = store.clone();
+		let lost = lost.clone();
 		let written = tokio::task::spawn_blocking(move || {
 			for job in pending {
-				if let Err(error) = write(&store, job) {
+				let trusted = !lost.load(Ordering::Relaxed);
+				if let Err(error) = write(&store, job, trusted) {
+					lost.store(true, Ordering::Relaxed);
 					tracing::warn!(%error, "cache write failed");
 				}
 			}
@@ -78,7 +99,7 @@ async fn write_loop(store: Arc<Store>, mut jobs: mpsc::Receiver<Job>) {
 	}
 }
 
-fn write(store: &Store, job: Job) -> Result<()> {
+fn write(store: &Store, job: Job, trusted: bool) -> Result<()> {
 	match job {
 		Job::Ready(ready) => write_ready(store, &ready),
 		Job::Messages { channel_id, messages } => {
@@ -95,7 +116,23 @@ fn write(store: &Store, job: Job) -> Result<()> {
 			}
 			Ok(())
 		}
-		Job::ReadState(state) => Ok(store.db.set_read_state(&state)?),
+		Job::ReadState { state, version } => {
+			store.db.set_read_state(&state)?;
+			write_read_state_version(store, version.filter(|_| trusted))
+		}
+		Job::ReadStates { states, version } => {
+			store.db.replace_read_states(&states)?;
+			write_read_state_version(store, version.filter(|_| trusted))
+		}
+		Job::GuildSettings(mut container) => {
+			if !trusted {
+				container.version = None;
+			}
+			Ok(store
+				.db
+				.kv_set(GUILD_SETTINGS_KEY, &serde_json::to_vec(&container)?)?)
+		}
+		Job::ForgetVersions => forget_versions(store),
 		Job::Recent { key, json } => Ok(store.db.kv_set(key, &json)?),
 		Job::Draft { channel_id, content } => {
 			if content.is_empty() {
@@ -105,6 +142,27 @@ fn write(store: &Store, job: Job) -> Result<()> {
 			}
 		}
 	}
+}
+
+fn write_read_state_version(store: &Store, version: Option<u64>) -> Result<()> {
+	match version {
+		Some(version) => store
+			.db
+			.kv_set(READ_STATE_VERSION_KEY, &serde_json::to_vec(&version)?)?,
+		None => store.db.kv_delete(READ_STATE_VERSION_KEY)?,
+	}
+	Ok(())
+}
+
+fn forget_versions(store: &Store) -> Result<()> {
+	store.db.kv_delete(READ_STATE_VERSION_KEY)?;
+	if let Some(mut container) = load_guild_settings(store) {
+		container.version = None;
+		store
+			.db
+			.kv_set(GUILD_SETTINGS_KEY, &serde_json::to_vec(&container)?)?;
+	}
+	Ok(())
 }
 
 fn write_ready(store: &Store, ready: &Ready) -> Result<()> {
@@ -131,10 +189,12 @@ fn write_ready(store: &Store, ready: &Ready) -> Result<()> {
 	for user in ready.users.iter() {
 		db.put_json(Table::Users, user.id.get(), None, &serde_json::to_vec(user)?)?;
 	}
-	for read_state in ready.read_state.entries.iter() {
-		db.set_read_state(&stored_read_state(read_state))?;
-	}
-	db.kv_set(READY_KEY, &serde_json::to_vec(ready)?)?;
+	let snapshot = Ready {
+		read_state: ReadStateContainer::default(),
+		user_guild_settings: UserGuildSettingsContainer::default(),
+		..ready.clone()
+	};
+	db.kv_set(READY_KEY, &serde_json::to_vec(&snapshot)?)?;
 	Ok(())
 }
 
@@ -149,13 +209,57 @@ pub(crate) fn stored_read_state(read_state: &protocol::ReadState) -> ReadState {
 	}
 }
 
+fn cached_read_state(stored: &ReadState) -> protocol::ReadState {
+	protocol::ReadState {
+		id: Snowflake(stored.channel_id),
+		last_message_id: stored.last_message_id.map(Snowflake),
+		mention_count: Some(i64::from(stored.mention_count)),
+		last_viewed: stored.last_viewed,
+		read_state_type: Some(ReadStateKind::Channel),
+		..protocol::ReadState::default()
+	}
+}
+
 pub(crate) fn clear_cache(store: &Store) {
-	if let Err(error) = store.db.kv_set(READY_KEY, &[]) {
+	let cleared = store
+		.db
+		.kv_set(READY_KEY, &[])
+		.and_then(|()| store.db.kv_delete(READ_STATE_VERSION_KEY))
+		.and_then(|()| store.db.kv_delete(GUILD_SETTINGS_KEY))
+		.and_then(|()| store.db.replace_read_states(&[]));
+	if let Err(error) = cleared {
 		tracing::warn!(%error, "could not clear the cached session snapshot");
 	}
 }
 
-pub(crate) fn load_ready(store: &Store) -> Option<Ready> {
+pub(crate) fn load_cache(store: &Store) -> Option<Ready> {
+	let mut ready = load_ready(store)?;
+	let entries: Vec<protocol::ReadState> = load_read_states(store).iter().map(cached_read_state).collect();
+	ready.read_state = EntryContainer {
+		entries: LenientVec::from(entries),
+		version: load_read_state_version(store),
+		partial: false,
+	};
+	ready.user_guild_settings = load_guild_settings(store).unwrap_or_else(|| EntryContainer {
+		version: None,
+		..mem::take(&mut ready.user_guild_settings)
+	});
+	ready.session_id.clear();
+	ready.resume_gateway_url = None;
+	Some(ready)
+}
+
+fn load_read_state_version(store: &Store) -> Option<u64> {
+	let bytes = store.db.kv_get(READ_STATE_VERSION_KEY).ok().flatten()?;
+	serde_json::from_slice(&bytes).ok()
+}
+
+fn load_guild_settings(store: &Store) -> Option<UserGuildSettingsContainer> {
+	let bytes = store.db.kv_get(GUILD_SETTINGS_KEY).ok().flatten()?;
+	serde_json::from_slice(&bytes).ok()
+}
+
+fn load_ready(store: &Store) -> Option<Ready> {
 	let bytes = store
 		.db
 		.kv_get(READY_KEY)
@@ -174,7 +278,7 @@ pub(crate) fn load_ready(store: &Store) -> Option<Ready> {
 	}
 }
 
-pub(crate) fn load_read_states(store: &Store) -> Vec<ReadState> {
+fn load_read_states(store: &Store) -> Vec<ReadState> {
 	store.db.all_read_state().unwrap_or_else(|error| {
 		tracing::warn!(%error, "could not read cached read state");
 		Vec::new()
