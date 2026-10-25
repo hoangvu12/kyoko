@@ -39,14 +39,15 @@ pub(crate) async fn discover_build_number(identity: &ClientIdentity, store: &Arc
 		return;
 	};
 	identity.set_build_number(build_number);
-	let store = store.clone();
-	let saved = tokio::task::spawn_blocking(move || {
-		store.update_settings(|settings| settings.client.build_number = build_number)
-	})
-	.await;
-	if !matches!(saved, Ok(Ok(()))) {
-		tracing::warn!("discovered build number was not saved");
+	if store.settings.read().client.build_number == build_number {
+		return;
 	}
+	let store = store.clone();
+	tokio::task::spawn_blocking(move || {
+		if let Err(error) = store.update_settings(|settings| settings.client.build_number = build_number) {
+			tracing::warn!(%error, "discovered build number was not saved");
+		}
+	});
 }
 
 pub(crate) fn save_cookies(identity: &ClientIdentity, store: &Store) {
