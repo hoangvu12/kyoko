@@ -1,0 +1,50 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use zgx::compose::prelude::*;
+
+use super::rows::tok;
+
+macro_rules! icon_files {
+	($($name:literal),* $(,)?) => {
+		fn source(name: &str) -> Option<&'static [u8]> {
+			match name {
+				$($name => Some(include_bytes!(concat!("../../ui/icons/", $name, ".svg"))),)*
+				_ => None,
+			}
+		}
+	};
+}
+
+icon_files!(
+	"hash", "join", "pin", "thread", "nitro", "close", "phone", "edit", "image", "chat", "play", "file",
+	"download", "check",
+);
+
+thread_local! {
+	static LOADED: RefCell<HashMap<&'static str, Option<Arc<SvgData>>>> = RefCell::default();
+}
+
+fn load(name: &'static str) -> Option<Arc<SvgData>> {
+	LOADED.with(|loaded| {
+		loaded
+			.borrow_mut()
+			.entry(name)
+			.or_insert_with(|| {
+				source(name)
+					.and_then(|bytes| SvgData::new(bytes).ok())
+					.map(|svg| Arc::new(svg.current_color()))
+			})
+			.clone()
+	})
+}
+
+pub fn icon(name: &'static str, size: f32, color: &str) -> View {
+	let shape = load(name);
+	div()
+		.size(size, size)
+		.shrink_0()
+		.text_color(tok(color))
+		.when_some(shape, |slot, shape| slot.child(svg(name, shape).size(size, size)))
+}

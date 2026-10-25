@@ -31,6 +31,9 @@ pub const COLORS: &[(&str, &str)] = &[
 	("modifier_selected", "rgba(79, 84, 92, 0.24)"),
 	("modifier_active", "rgba(79, 84, 92, 0.48)"),
 	("message_hover", "rgba(0, 0, 0, 0.06)"),
+	("reaction_me", "rgba(88, 101, 242, 0.15)"),
+	("poll_fill", "rgba(78, 80, 88, 0.45)"),
+	("poll_fill_chosen", "rgba(88, 101, 242, 0.45)"),
 	("text_normal", "#dbdee1"),
 	("text_muted", "#949ba4"),
 	("header_primary", "#f2f3f5"),
@@ -469,6 +472,18 @@ impl Catalog {
 			tracing::warn!(%error, theme = %name, "could not apply the theme");
 		}
 		name
+	}
+
+	pub fn code_font(&self, theme: &str) -> String {
+		let palette = self
+			.palettes
+			.iter()
+			.find(|palette| palette.name == theme)
+			.or_else(|| self.palettes.first());
+		match palette {
+			Some(palette) => fonts::pick(&palette.code_fonts, &fonts::installed()),
+			None => "monospace".to_owned(),
+		}
 	}
 
 	fn resolve(&self, chosen: &str) -> String {

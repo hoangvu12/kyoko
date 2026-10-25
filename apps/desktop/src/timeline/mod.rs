@@ -1,4 +1,10 @@
-mod avatars;
+mod attachments;
+mod body;
+mod extras;
+mod icons;
+mod inline;
+mod links;
+mod pictures;
 mod rows;
 mod scroll;
 
@@ -17,10 +23,13 @@ use zgx::compose::prelude::*;
 use zgx::compose::{Tasks, VariableHeights, measured_virtual_list};
 use zgx::image::ImageData;
 use zgx::input::InputEvent;
+use zgx::platform::PlatformService;
 use zgx::reactive::{Effect, Runtime, Signal};
 
-use self::avatars::Avatars;
-use self::rows::RowEnv;
+use self::links::Links;
+use self::pictures::Pictures;
+pub use self::rows::Prefs;
+use self::rows::{RowEnv, Sender};
 use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter};
 
 const OVERSCAN: usize = 4;
@@ -31,6 +40,15 @@ const AVATAR_MARGIN: usize = 2;
 const REPORT_AFTER: Duration = Duration::from_millis(250);
 
 type Callback<T> = RefCell<Option<Box<dyn Fn(T)>>>;
+
+pub struct Setup {
+	pub gallery: Gallery,
+	pub cdn: String,
+	pub mock_origin: Option<String>,
+	pub code_font: String,
+	pub prefs: Prefs,
+	pub store: Option<Arc<store::Store>>,
+}
 
 struct Measured<'a>(&'a VariableHeights);
 
@@ -60,17 +78,23 @@ pub struct TimelineView {
 	ends: Cell<Ends>,
 	paging: RefCell<Paging>,
 	reporter: RefCell<Reporter>,
-	avatars: Rc<Avatars>,
-	visible_avatars: RefCell<Vec<ImageName>>,
+	pictures: Rc<Pictures>,
+	visible_images: RefCell<Vec<ImageName>>,
 	tasks: RefCell<Option<Tasks>>,
 	watcher: RefCell<Option<Effect>>,
-	commands: Callback<Command>,
+	commands: Rc<Sender>,
 	visible_changed: Callback<()>,
 }
 
 impl TimelineView {
-	pub fn new(runtime: &Runtime, gallery: Gallery, cdn: String) -> Rc<Self> {
-		let avatars = Rc::new(Avatars::new(runtime.clone(), gallery, cdn));
+	pub fn new(runtime: &Runtime, setup: Setup) -> Rc<Self> {
+		let pictures = Rc::new(Pictures::new(
+			runtime.clone(),
+			setup.gallery,
+			setup.cdn,
+			setup.mock_origin,
+		));
+		let commands: Rc<Sender> = Rc::default();
 		Rc::new(Self {
 			runtime: runtime.clone(),
 			offset: runtime.signal(0.),
@@ -80,8 +104,14 @@ impl TimelineView {
 			size: runtime.signal((0., 0.)),
 			channel: Cell::new(None),
 			env: Rc::new(RowEnv {
-				avatars: avatars.clone(),
+				pictures: pictures.clone(),
+				links: Rc::new(Links::new(runtime, setup.store)),
 				channel_name: runtime.signal(String::new()),
+				code_font: setup.code_font,
+				prefs: setup.prefs,
+				revealed: RefCell::default(),
+				picks: RefCell::default(),
+				commands: commands.clone(),
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,
@@ -91,11 +121,11 @@ impl TimelineView {
 			}),
 			paging: RefCell::default(),
 			reporter: RefCell::default(),
-			avatars,
-			visible_avatars: RefCell::default(),
+			pictures,
+			visible_images: RefCell::default(),
 			tasks: RefCell::new(None),
 			watcher: RefCell::new(None),
-			commands: RefCell::new(None),
+			commands,
 			visible_changed: RefCell::new(None),
 		})
 	}
@@ -113,34 +143,45 @@ impl TimelineView {
 	}
 
 	pub fn set_scale(&self, scale: f64) {
-		self.avatars.set_scale(scale);
+		self.pictures.set_scale(scale);
 	}
 
 	pub fn show_image(&self, name: &ImageName, image: Option<Arc<ImageData>>) {
-		self.avatars.show(name, image);
+		self.pictures.show(name, image);
 	}
 
 	pub fn visible_images(&self) -> Vec<ImageName> {
-		self.visible_avatars.borrow().clone()
+		self.visible_images.borrow().clone()
 	}
 
 	pub fn settled(&self) -> bool {
 		!self.keys.borrow().is_empty()
 			&& self
-				.visible_avatars
+				.visible_images
 				.borrow()
 				.iter()
-				.all(|name| self.avatars.is_shown(name))
+				.all(|name| self.pictures.is_settled(name))
+	}
+
+	pub fn scroll_to(&self, key: &RowKey) -> bool {
+		let index = self.keys.borrow().iter().position(|candidate| candidate == key);
+		let Some(index) = index else {
+			return false;
+		};
+		let offset = self.runtime.untracked(|| self.heights.row_offset(index));
+		self.offset.set(offset);
+		true
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
 		let this = self.clone();
 		component(move |cx| {
 			*this.tasks.borrow_mut() = Some(cx.tasks());
+			this.env.links.attach(cx.try_service::<PlatformService>());
 			this.watch();
 			let keys = this.keys.clone();
 			let builder = Rc::downgrade(&this);
-			measured_virtual_list(
+			let list = measured_virtual_list(
 				this.offset.clone(),
 				this.heights.clone(),
 				OVERSCAN,
@@ -155,7 +196,8 @@ impl TimelineView {
 			.pt(PAD_TOP)
 			.pb(PAD_BOTTOM)
 			.scrollbar(true)
-			.selectable(true)
+			.selectable(true);
+			div().w_full().h_full().child(list).child(this.env.links.view())
 		})
 	}
 
@@ -164,8 +206,10 @@ impl TimelineView {
 			return div();
 		};
 		let hovered = cx.state(false);
+		let bump = cx.state(0u32);
 		let tracker = hovered.clone();
 		let env = self.env.clone();
+		let watched = bump.clone();
 		div()
 			.w_full()
 			.on_event(move |event| {
@@ -176,8 +220,8 @@ impl TimelineView {
 				}
 			})
 			.child(switch(
-				move || signal.get(),
-				move |row: Rc<Row>, _| rows::render(&row, &env, &hovered),
+				move || (signal.get(), watched.get()),
+				move |(row, _): (Rc<Row>, u32), _| rows::render(&row, &env, &hovered, &bump),
 			))
 	}
 
@@ -294,7 +338,7 @@ impl TimelineView {
 		let Some((first, last)) = scroll::visible(&measured, offset, viewport) else {
 			return;
 		};
-		let (page, report, avatars) = {
+		let (page, report, images) = {
 			let keys = self.keys.borrow();
 			if keys.is_empty() {
 				return;
@@ -327,7 +371,7 @@ impl TimelineView {
 				_ => None,
 			};
 			let around = first.saturating_sub(AVATAR_MARGIN)..(last + AVATAR_MARGIN + 1).min(keys.len());
-			(page, report, self.avatars_in(&keys[around]))
+			(page, report, self.images_in(&keys[around]))
 		};
 		if let Some(page) = page {
 			self.send(match page {
@@ -340,28 +384,26 @@ impl TimelineView {
 		{
 			self.schedule_report();
 		}
-		if *self.visible_avatars.borrow() != avatars {
-			*self.visible_avatars.borrow_mut() = avatars;
+		if *self.visible_images.borrow() != images {
+			*self.visible_images.borrow_mut() = images;
 			if let Some(changed) = self.visible_changed.borrow().as_ref() {
 				changed(());
 			}
 		}
 	}
 
-	fn avatars_in(&self, keys: &[RowKey]) -> Vec<ImageName> {
+	fn images_in(&self, keys: &[RowKey]) -> Vec<ImageName> {
 		let store = self.rows.borrow();
+		let inline_media = self.env.prefs.inline_media;
 		let mut names: Vec<ImageName> = keys
 			.iter()
-			.filter_map(|key| {
-				let row = store.get(key)?.with_untracked(Rc::clone);
-				match row.as_ref() {
-					Row::Message(entry) if entry.is_plain() && !entry.grouped => {
-						self.avatars.name_for(&entry.message.author)
-					}
-					_ => None,
-				}
+			.filter_map(|key| store.get(key).map(|row| row.with_untracked(Rc::clone)))
+			.flat_map(|row| match row.as_ref() {
+				Row::Message(entry) => self.pictures.names_in(entry, inline_media),
+				_ => Vec::new(),
 			})
 			.collect();
+		names.sort_by(|left, right| left.as_str().cmp(right.as_str()));
 		names.dedup();
 		names
 	}

@@ -136,6 +136,7 @@ struct Backend {
 	token: Option<Token>,
 	build_source: Option<Url>,
 	cdn: String,
+	mock_origin: Option<String>,
 	loopback_port: Option<u16>,
 }
 
@@ -271,6 +272,14 @@ fn main() -> Result<ExitCode> {
 		runtime.handle(),
 	)?;
 	let reduced_motion = store.settings.read().accessibility.reduced_motion;
+	let prefs = {
+		let chat = &store.settings.read().chat;
+		timeline::Prefs {
+			inline_media: chat.inline_media,
+			link_previews: chat.link_previews,
+			show_reactions: chat.show_reactions,
+		}
+	};
 	let store = Arc::new(store);
 	let gate = Gate::new(store.clone(), identity.clone(), backend.rest_base.clone());
 	let mut flow = Flow::new(
@@ -301,8 +310,10 @@ fn main() -> Result<ExitCode> {
 		ui::Images {
 			gallery,
 			cdn: backend.cdn,
+			mock_origin: backend.mock_origin,
 			reduced_motion,
 			budget,
+			prefs,
 		},
 		appearance,
 		ui::Launch { opening, capture },
@@ -376,6 +387,7 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		token: Some(Token::new(server.token())),
 		build_source: None,
 		cdn: server.cdn_url(),
+		mock_origin: Some(format!("http://{}", server.address())),
 		loopback_port: Some(server.address().port()),
 	})
 }
@@ -392,6 +404,7 @@ fn external_mock_backend(origin: &Url) -> Result<Backend> {
 		token: Some(Token::new(MockConfig::default().token)),
 		build_source: None,
 		cdn: format!("{base}/cdn"),
+		mock_origin: Some(base.clone()),
 		loopback_port: Some(port),
 	})
 }
@@ -407,6 +420,7 @@ fn discord_backend() -> Result<Backend> {
 		token: token.map(Token::new),
 		build_source: Some(session::discord_build_source()),
 		cdn: media::cdn::CDN.to_owned(),
+		mock_origin: None,
 		loopback_port: None,
 	})
 }

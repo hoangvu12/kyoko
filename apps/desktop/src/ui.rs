@@ -28,7 +28,7 @@ use crate::integration::{Desktop, Integration};
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
 use crate::theme::Catalog;
-use crate::timeline::TimelineView;
+use crate::timeline::{Prefs, Setup, TimelineView};
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
@@ -45,8 +45,15 @@ type Observer = Box<dyn Fn(&Changes)>;
 pub struct Images {
 	pub gallery: Gallery,
 	pub cdn: String,
+	pub mock_origin: Option<String>,
 	pub reduced_motion: bool,
 	pub budget: usize,
+	pub prefs: Prefs,
+}
+
+struct Messages {
+	code_font: String,
+	store: Option<Arc<store::Store>>,
 }
 
 pub struct Appearance {
@@ -102,7 +109,11 @@ pub fn run(
 				frame: Cell::new(None),
 				slot: cx.ui.runtime.signal(Slot::default()),
 			};
-			let link = Link::install(&host, window, sign_in, inbox.clone(), images);
+			let messages = Messages {
+				code_font: catalog.code_font(&theme),
+				store: capture.is_none().then(|| desktop.store.clone()),
+			};
+			let link = Link::install(&host, window, sign_in, inbox.clone(), images, messages);
 			link.opening.set(opening);
 			link.rail.restore(desktop.store.clone());
 			let drain = link.clone();
@@ -230,11 +241,22 @@ impl Link {
 		sign_in: SignIn,
 		inbox: Inbox<Changes>,
 		images: Images,
+		messages: Messages,
 	) -> Rc<Link> {
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
 		images.gallery.set_waker(move || wakes.push(()));
-		let timeline_view = TimelineView::new(&window.runtime, images.gallery.clone(), images.cdn.clone());
+		let timeline_view = TimelineView::new(
+			&window.runtime,
+			Setup {
+				gallery: images.gallery.clone(),
+				cdn: images.cdn.clone(),
+				mock_origin: images.mock_origin.clone(),
+				code_font: messages.code_font,
+				prefs: images.prefs,
+				store: messages.store,
+			},
+		);
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),

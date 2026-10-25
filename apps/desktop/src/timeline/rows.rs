@@ -1,31 +1,41 @@
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::Arc;
 
-use bridge::{MessageEntry, Row};
+use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon};
 use chrono::NaiveDate;
-use protocol::MessageType;
+use protocol::{MessageFlags, Snowflake};
+use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 use zgx::scene::Color;
 use zgx::style::ObjectFit;
-use zgx::svg::SvgData;
 use zgx::theme::{Themed, TokenId};
 
-use super::avatars::Avatars;
+use super::attachments;
+use super::body::{self, Look};
+use super::extras;
+use super::icons::icon;
+use super::links::Links;
+use super::pictures::{AVATAR, Pictures, REPLY_AVATAR};
 
-pub const AVATAR: f64 = 40.;
 const GUTTER: f32 = 72.;
 const RIGHT: f32 = 48.;
 const LINE: f32 = 22.;
 const BODY: f32 = 16.;
 const HEADER_GAP: f32 = 16.;
+const REPLY_HEIGHT: f32 = 22.;
 const DAY_HEIGHT: f32 = 32.;
 const UNREAD_HEIGHT: f32 = 29.;
 const START_HEIGHT: f32 = 202.;
 const SKELETON_HEIGHT: f32 = 240.;
 const SKELETON_ROWS: usize = 4;
 const AVERAGE_GLYPH: f32 = 7.5;
-const HASH_ICON: &[u8] = include_bytes!("../../ui/icons/hash.svg");
+const EMBED_TEXT: f32 = 120.;
+const POLL_CHROME: f32 = 110.;
+const POLL_ROW: f32 = 48.;
+const REACTIONS: f32 = 28.;
+const FILE_CARD: f32 = 70.;
 
 pub fn tok(name: &str) -> TokenId {
 	zgx::theme::token(&crate::theme::token(name))
@@ -38,19 +48,52 @@ fn color_or(color: Option<u32>, fallback: &str) -> Themed<Color> {
 	}
 }
 
-pub struct RowEnv {
-	pub avatars: Rc<Avatars>,
-	pub channel_name: Signal<String>,
+#[derive(Debug, Clone, Copy)]
+pub struct Prefs {
+	pub inline_media: bool,
+	pub link_previews: bool,
+	pub show_reactions: bool,
 }
 
-pub fn render(row: &Row, env: &RowEnv, hovered: &Signal<bool>) -> View {
+impl Default for Prefs {
+	fn default() -> Self {
+		Self {
+			inline_media: true,
+			link_previews: true,
+			show_reactions: true,
+		}
+	}
+}
+
+pub type Sender = RefCell<Option<Box<dyn Fn(Command)>>>;
+
+pub struct RowEnv {
+	pub pictures: Rc<Pictures>,
+	pub links: Rc<Links>,
+	pub channel_name: Signal<String>,
+	pub code_font: String,
+	pub prefs: Prefs,
+	pub revealed: RefCell<HashSet<(Snowflake, usize)>>,
+	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
+	pub commands: Rc<Sender>,
+}
+
+impl RowEnv {
+	pub fn send(&self, command: Command) {
+		if let Some(send) = self.commands.borrow().as_ref() {
+			send(command);
+		}
+	}
+}
+
+pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> View {
 	match row {
 		Row::Loading => skeleton(),
 		Row::Start => welcome(env),
 		Row::Day(day) => day_separator(*day),
 		Row::Unread => unread_marker(),
-		Row::Message(entry) if entry.is_plain() && entry.grouped => follow_up(entry, hovered),
-		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env),
+		Row::Message(entry) if entry.is_plain() && entry.grouped => follow_up(entry, env, hovered, bump),
+		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env, bump),
 		Row::Message(entry) => system_row(entry),
 	}
 }
@@ -62,15 +105,54 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 		Row::Day(_) => DAY_HEIGHT,
 		Row::Unread => UNREAD_HEIGHT,
 		Row::Message(entry) => {
-			let lines = body_lines(&entry.content, width - GUTTER - RIGHT);
 			let header = if entry.grouped && entry.is_plain() {
 				0.
 			} else {
 				HEADER_GAP + LINE
 			};
-			header + lines * LINE + 4.
+			let reply = if entry.reply.is_some() { REPLY_HEIGHT } else { 0. };
+			header
+				+ reply + body_lines(&entry.content, width - GUTTER - RIGHT) * LINE
+				+ rich_height(entry)
+				+ 4.
 		}
 	}
+}
+
+fn rich_height(entry: &MessageEntry) -> f32 {
+	let message = &entry.message;
+	let attachments: f32 = message
+		.attachments
+		.iter()
+		.map(|attachment| {
+			if bridge::is_image(attachment) {
+				bridge::fit_box(attachment.width, attachment.height, ATTACHMENT_BOX).1 + 4.
+			} else {
+				FILE_CARD
+			}
+		})
+		.sum();
+	let embeds: f32 = message
+		.embeds
+		.iter()
+		.map(|embed| {
+			let media = super::pictures::large_media(embed).map_or(0., |media| {
+				bridge::fit_box(media.width, media.height, EMBED_MEDIA_BOX).1
+			});
+			EMBED_TEXT + media
+		})
+		.sum();
+	let stickers = message.sticker_items.len() as f32 * (STICKER_SIDE + 4.);
+	let poll = message
+		.poll
+		.as_ref()
+		.map_or(0., |poll| POLL_CHROME + poll.answers.len() as f32 * POLL_ROW);
+	let reactions = if message.reactions.is_empty() {
+		0.
+	} else {
+		REACTIONS
+	};
+	attachments + embeds + stickers + poll + reactions
 }
 
 fn body_lines(content: &str, width: f32) -> f32 {
@@ -95,32 +177,131 @@ fn message_frame(entry: &MessageEntry) -> View {
 		.when(entry.pending, |row| row.opacity(0.5))
 }
 
-fn body(entry: &MessageEntry) -> Option<View> {
-	if entry.content.is_empty() {
-		return None;
+fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<View> {
+	let mut out = Vec::new();
+	if !entry.content.is_empty() {
+		let color = if entry.failed {
+			"danger"
+		} else if entry.deleted {
+			"text_muted"
+		} else {
+			"text_normal"
+		};
+		let trailer = if entry.deleted {
+			Some(("(deleted)", "danger"))
+		} else if entry.edited {
+			Some(("(edited)", "text_muted"))
+		} else {
+			None
+		};
+		let look = Look {
+			size: BODY,
+			color,
+			jumbo: entry.body.jumbo,
+			trailer,
+		};
+		out.push(body::render(
+			&entry.body.content,
+			env,
+			&entry.names,
+			entry.id,
+			0,
+			bump,
+			look,
+		));
+	} else if entry.deleted {
+		out.push(
+			text("(deleted)")
+				.text_size(tok("font_sm"))
+				.text_color(tok("danger")),
+		);
 	}
-	let color = if entry.failed {
-		tok("danger")
-	} else {
-		tok("text_normal")
+	out.extend(attachments::attachments(entry, env));
+	if !entry.message.flags.contains(MessageFlags::SUPPRESS_EMBEDS) {
+		out.extend(attachments::embeds(entry, env, bump));
+	}
+	out.extend(attachments::stickers(entry, env));
+	out.extend(extras::thread_chip(entry));
+	out.extend(extras::poll(entry, env, bump));
+	out.extend(extras::reactions(entry, env));
+	out
+}
+
+fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
+	let reply = entry.reply.as_ref()?;
+	let curve = div()
+		.absolute()
+		.left(-36.)
+		.top(10.)
+		.w(32.)
+		.h(10.)
+		.border_edges(zgx::scene::Insets {
+			left: 2.,
+			top: 2.,
+			..Default::default()
+		})
+		.border_color(tok("interactive_muted"))
+		.rounded_corners(Corners {
+			top_left: 6.,
+			top_right: 0.,
+			bottom_right: 0.,
+			bottom_left: 0.,
+		});
+	let muted = |label: &str| {
+		text(label.to_owned())
+			.text_size(tok("font_sm"))
+			.italic(true)
+			.text_color(tok("text_muted"))
 	};
-	let mut text = rich_text().child(text_span(entry.content.as_str()));
-	if entry.edited {
-		text = text.child(text_span(" (edited)").text_color(tok("text_muted")));
-	}
+	let inner = match reply {
+		ReplyPreview::Unavailable => muted("Original message was deleted"),
+		ReplyPreview::Loading => muted("Loading\u{2026}"),
+		ReplyPreview::Message(quote) | ReplyPreview::Deleted(quote) => {
+			let deleted = matches!(reply, ReplyPreview::Deleted(_));
+			let snippet = if quote.attachment_only() {
+				"Click to see attachment".to_owned()
+			} else {
+				quote.text.clone()
+			};
+			row()
+				.items_center()
+				.gap(4.)
+				.min_w(0.)
+				.child(small_avatar(&quote.author, &quote.name, env))
+				.child(
+					text(format!("@{}", quote.name))
+						.shrink_0()
+						.text_size(tok("font_sm"))
+						.font_weight(600)
+						.text_color(tok("header_secondary")),
+				)
+				.child(
+					text(snippet)
+						.grow()
+						.min_w(0.)
+						.truncate()
+						.text_size(tok("font_sm"))
+						.text_color(tok(if deleted { "danger" } else { "text_muted" })),
+				)
+		}
+	};
 	Some(
-		View::from(text)
-			.w_full()
-			.text_size(BODY)
-			.line_height(LINE)
-			.text_color(color)
-			.text_wrap(true),
+		row()
+			.relative()
+			.items_center()
+			.gap(4.)
+			.h(20.)
+			.mb(2.)
+			.child(curve)
+			.child(inner),
 	)
 }
 
-fn first_of_group(entry: &MessageEntry, env: &RowEnv) -> View {
+fn first_of_group(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> View {
 	let time = bridge::message_time(entry.sent_at, bridge::today());
 	let name_color = color_or(entry.author_color, "header_primary");
+	let reply = reply_header(entry, env);
+	let avatar_top = if reply.is_some() { 24. } else { 4. };
 	let header = row()
 		.items_center()
 		.gap(8.)
@@ -139,12 +320,13 @@ fn first_of_group(entry: &MessageEntry, env: &RowEnv) -> View {
 		);
 	message_frame(entry)
 		.mt(HEADER_GAP)
-		.child(avatar(entry, env).absolute().left(16.).top(4.))
+		.when_some(reply, |row, reply| row.child(reply))
+		.child(avatar(entry, env).absolute().left(16.).top(avatar_top))
 		.child(header)
-		.when_some(body(entry), |row, body| row.child(body))
+		.children(content(entry, env, bump))
 }
 
-fn follow_up(entry: &MessageEntry, hovered: &Signal<bool>) -> View {
+fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> View {
 	let hovered = hovered.clone();
 	let clock = row()
 		.absolute()
@@ -168,23 +350,32 @@ fn follow_up(entry: &MessageEntry, hovered: &Signal<bool>) -> View {
 		});
 	message_frame(entry)
 		.child(clock)
-		.when_some(body(entry), |row, body| row.child(body))
+		.children(content(entry, env, bump))
+}
+
+fn system_icon(icon_kind: SystemIcon) -> (&'static str, &'static str) {
+	match icon_kind {
+		SystemIcon::Join => ("join", "success"),
+		SystemIcon::Pin => ("pin", "interactive_normal"),
+		SystemIcon::Thread => ("thread", "interactive_normal"),
+		SystemIcon::Boost => ("nitro", "brand"),
+		SystemIcon::Leave => ("close", "danger"),
+		SystemIcon::Call => ("phone", "success"),
+		SystemIcon::Rename => ("edit", "interactive_normal"),
+		SystemIcon::Picture => ("image", "interactive_normal"),
+		SystemIcon::Other => ("chat", "interactive_normal"),
+	}
 }
 
 fn system_row(entry: &MessageEntry) -> View {
-	let what = match entry.kind {
-		MessageType::UserJoin => format!("{} joined the server.", entry.author),
-		MessageType::ChannelPinnedMessage => format!("{} pinned a message to this channel.", entry.author),
-		MessageType::ThreadCreated => format!("{} started a thread: {}", entry.author, entry.content),
-		MessageType::ChannelNameChange => {
-			format!("{} changed the channel name: {}", entry.author, entry.content)
-		}
-		_ => format!("{} did something.", entry.author),
+	let Some(line) = entry.system.as_ref() else {
+		return div();
 	};
+	let (glyph, color) = system_icon(line.icon);
 	row()
 		.relative()
 		.w_full()
-		.items_center()
+		.items_baseline()
 		.gap(8.)
 		.pl(GUTTER)
 		.pr(RIGHT)
@@ -192,7 +383,17 @@ fn system_row(entry: &MessageEntry) -> View {
 		.py(2.)
 		.hover(|style| style.bg(tok("message_hover")))
 		.child(
-			text(what)
+			row()
+				.absolute()
+				.left(16.)
+				.top(3.)
+				.w(40.)
+				.justify_end()
+				.child(icon(glyph, 18., color)),
+		)
+		.child(
+			text(line.text.as_str())
+				.min_w(0.)
 				.text_size(tok("font_md"))
 				.line_height(LINE)
 				.text_color(tok("text_muted"))
@@ -200,6 +401,7 @@ fn system_row(entry: &MessageEntry) -> View {
 		)
 		.child(
 			text(bridge::message_time(entry.sent_at, bridge::today()))
+				.shrink_0()
 				.text_size(tok("font_tiny"))
 				.text_color(tok("text_muted")),
 		)
@@ -215,19 +417,50 @@ fn bot_tag() -> View {
 	)
 }
 
-fn avatar(entry: &MessageEntry, env: &RowEnv) -> View {
-	let size = AVATAR as f32;
-	let fallback = color_or(entry.author_color, "brand");
-	let initial: String = entry
-		.author
-		.chars()
+fn initial_of(name: &str) -> String {
+	name.chars()
 		.find(|character| character.is_alphanumeric())
 		.map(|character| character.to_uppercase().collect())
-		.unwrap_or_default();
+		.unwrap_or_default()
+}
+
+fn small_avatar(user: &protocol::User, name: &str, env: &Rc<RowEnv>) -> View {
+	let size = REPLY_AVATAR as f32;
 	let picture = env
-		.avatars
-		.name_for(&entry.message.author)
-		.map(|name| env.avatars.picture(&name));
+		.pictures
+		.avatar(user, REPLY_AVATAR)
+		.map(|name| env.pictures.picture(&name));
+	let circle = div()
+		.size(size, size)
+		.shrink_0()
+		.rounded(size / 2.)
+		.overflow_hidden()
+		.bg(tok("brand"))
+		.items_center()
+		.justify_center()
+		.child(
+			text(initial_of(name))
+				.text_size(size * 0.5)
+				.font_weight(600)
+				.text_color(tok("text_on_brand")),
+		);
+	match picture {
+		Some(picture) => circle.reactive_style(move || match picture.get() {
+			Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
+			None => Styles::new(),
+		}),
+		None => circle,
+	}
+}
+
+fn avatar(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
+	let size = AVATAR as f32;
+	let fallback = color_or(entry.author_color, "brand");
+	let initial = initial_of(&entry.author);
+	let picture = env
+		.pictures
+		.avatar(&entry.message.author, AVATAR)
+		.map(|name| env.pictures.picture(&name));
 	let circle = div()
 		.size(size, size)
 		.rounded(size / 2.)
@@ -310,12 +543,9 @@ fn unread_marker() -> View {
 		)
 }
 
-fn welcome(env: &RowEnv) -> View {
+fn welcome(env: &Rc<RowEnv>) -> View {
 	let title = env.channel_name.clone();
 	let body = env.channel_name.clone();
-	let icon = SvgData::new(HASH_ICON)
-		.map(|svg| Arc::new(svg.current_color()))
-		.ok();
 	column()
 		.gap(8.)
 		.px(16.)
@@ -328,10 +558,7 @@ fn welcome(env: &RowEnv) -> View {
 				.bg(tok("interactive_muted"))
 				.items_center()
 				.justify_center()
-				.text_color(tok("interactive_active"))
-				.when_some(icon, |circle, icon| {
-					circle.child(svg("hash", icon).size(42., 42.))
-				}),
+				.child(icon("hash", 42., "interactive_active")),
 		)
 		.child(
 			text_signal(move || format!("Welcome to #{}!", title.get()))

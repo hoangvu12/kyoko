@@ -3311,6 +3311,7 @@ dependencies = [
  "image",
  "kyoko-bridge",
  "kyoko-gateway",
+ "kyoko-markdown",
  "kyoko-media",
  "kyoko-platform",
  "kyoko-protocol",
@@ -3337,6 +3338,7 @@ version = "0.2.0-beta.1"
 dependencies = [
  "chrono",
  "kyoko-login",
+ "kyoko-markdown",
  "kyoko-media",
  "kyoko-protocol",
  "kyoko-rest",
