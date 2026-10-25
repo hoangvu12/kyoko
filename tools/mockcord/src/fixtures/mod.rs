@@ -3,6 +3,7 @@ mod guilds;
 mod media;
 mod messages;
 mod people;
+pub mod showcase;
 
 use std::collections::BTreeMap;
 
@@ -81,7 +82,10 @@ impl Fixtures {
 		}
 		let private_channel_ids = people::build_private_channels(&mut builder);
 		let relationships = people::build_relationships(&builder);
-		let read_states = build_read_states(&builder, &guilds, &private_channel_ids);
+		let mut read_states = build_read_states(&builder, &guilds, &private_channel_ids);
+		if let Some(read_state) = add_showcase(&mut builder, &mut guilds) {
+			read_states.push(read_state);
+		}
 		let user_guild_settings = build_user_guild_settings(&guilds);
 		let mut users: BTreeMap<u64, User> = builder
 			.people
@@ -156,6 +160,46 @@ impl Fixtures {
 				.sum(),
 		}
 	}
+}
+
+fn add_showcase(builder: &mut Builder, guilds: &mut [GuildFixture]) -> Option<ReadState> {
+	let guild = guilds.first_mut()?;
+	let first_text = *guild.message_channel_ids.first()?;
+	let parent = builder.channels.get(&first_text)?.parent_id?.get();
+	let thread = guild
+		.thread_ids
+		.iter()
+		.filter_map(|id| builder.channels.get(id))
+		.find(|thread| thread.parent_id.map(Snowflake::get) == Some(first_text))
+		.cloned();
+	let people: Vec<&User> = guild
+		.members
+		.iter()
+		.filter_map(|member| member.user.as_ref())
+		.filter(|user| user.id.0 != CURRENT_USER_ID)
+		.take(3)
+		.collect();
+	if people.is_empty() {
+		return None;
+	}
+	let channel_id = builder.ids.next();
+	let built = showcase::build(&showcase::Showcase {
+		channel_id,
+		guild_id: guild.id,
+		parent,
+		anchor: builder.anchor,
+		people: &people,
+		me: &builder.people.current,
+		emojis: &guild.emojis,
+		roles: &guild.roles,
+		mention_channel: first_text,
+		thread: thread.as_ref(),
+	});
+	builder.channels.insert(channel_id, built.channel);
+	builder.messages.insert(channel_id, built.messages);
+	guild.channel_ids.push(channel_id);
+	guild.message_channel_ids.push(channel_id);
+	Some(built.read_state)
 }
 
 fn build_read_states(builder: &Builder, guilds: &[GuildFixture], private: &[u64]) -> Vec<ReadState> {
