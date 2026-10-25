@@ -40,9 +40,10 @@ impl Images {
 		let deadline = tokio::time::Instant::now() + WAIT;
 		loop {
 			let woken = self.woken.notified();
-			match self.gallery.status(name) {
-				Some(status @ (Status::Ready { .. } | Status::Failed | Status::Refreshing)) => return status,
-				_ => {}
+			if let Some(status @ (Status::Ready { .. } | Status::Failed | Status::Refreshing)) =
+				self.gallery.status(name)
+			{
+				return status;
 			}
 			if timeout(deadline - tokio::time::Instant::now(), woken)
 				.await

@@ -28,7 +28,7 @@ pub fn mask_circle(image: &mut DecodedImage) {
 	let radius = image.width.min(image.height) as f32 / 2.;
 	let centre_x = image.width as f32 / 2.;
 	let centre_y = image.height as f32 / 2.;
-	for (index, pixel) in image.rgba.chunks_exact_mut(4).enumerate() {
+	for (index, pixel) in image.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
 		let dx = (index % width) as f32 + 0.5 - centre_x;
 		let dy = (index / width) as f32 + 0.5 - centre_y;
 		let coverage = (radius - (dx * dx + dy * dy).sqrt() + 0.5).clamp(0., 1.);
