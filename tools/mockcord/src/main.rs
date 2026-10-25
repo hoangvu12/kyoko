@@ -9,7 +9,7 @@ const DEFAULT_PORT: u16 = 8485;
 fn next_value<T: FromStr>(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<T, String> {
 	args.next()
 		.and_then(|value| value.parse().ok())
-		.ok_or_else(|| format!("{flag} needs a numeric value"))
+		.ok_or_else(|| format!("{flag} needs a valid value"))
 }
 
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<MockConfig, String> {
@@ -25,6 +25,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<MockConfig, Stri
 			"--members-per-guild" => config.members_per_guild = next_value(&mut args, &flag)?,
 			"--seed" => config.seed = next_value(&mut args, &flag)?,
 			"--port" => config.port = Some(next_value(&mut args, &flag)?),
+			"--anchor" => config.anchor = Some(next_value(&mut args, &flag)?),
 			"--chaos" => config.chaos = true,
 			"--live-traffic" => config.live_traffic = true,
 			other => return Err(format!("unknown flag {other}")),
