@@ -4,7 +4,7 @@
 
 **Blocked by:** 37 (Account and settings pages)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 Decided with the user (2026-10-26): no signing key and no catalog server. Themes carry no code, so HTTPS from the link plus strict validation is enough. The signed-catalog leftovers from oxidcord (`session/src/catalog.rs` fail-closed model, `xtask theme keygen`/`sign`, `themes/catalog.json` instructions in `themes/README.md`) are removed or rewritten to match.
 
