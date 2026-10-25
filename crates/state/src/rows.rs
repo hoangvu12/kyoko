@@ -10,7 +10,7 @@ use protocol::{
 use smallvec::SmallVec;
 
 use crate::guild::{GuildState, is_voice};
-use crate::member_list::MemberSlot;
+use crate::member_list::{MemberList, MemberSlot};
 use crate::messages::{ChannelMessages, PendingMessage};
 use crate::permissions::compute_permissions;
 use crate::state::State;
@@ -424,19 +424,47 @@ impl State {
 		let Some(guild) = self.guilds.get(&guild_id) else {
 			return Vec::new();
 		};
-		let list = &guild.member_list;
-		list.slots
+		guild
+			.member_list
+			.slots
 			.iter()
-			.filter_map(|slot| match slot {
-				MemberSlot::Empty => None,
-				MemberSlot::Group { id, count } => Some(MemberListRow::Group {
-					id: id.clone(),
-					name: group_name(guild, id),
-					count: count_of(list.group_count(id).unwrap_or(*count)),
-				}),
-				MemberSlot::Member(user_id) => Some(MemberListRow::Member(self.member_row(guild, *user_id))),
-			})
+			.filter_map(|slot| self.member_list_row(guild, slot))
 			.collect()
+	}
+
+	pub fn member_list(&self, guild_id: Snowflake) -> Option<&MemberList> {
+		self.guilds
+			.get(&guild_id)
+			.map(|guild| &guild.member_list)
+			.filter(|list| !list.id.is_empty())
+	}
+
+	pub fn member_list_rows(
+		&self,
+		guild_id: Snowflake,
+		first: usize,
+		last: usize,
+	) -> Vec<Option<MemberListRow>> {
+		let Some(guild) = self.guilds.get(&guild_id) else {
+			return Vec::new();
+		};
+		let list = &guild.member_list;
+		list.rows(first, last)
+			.iter()
+			.map(|slot| self.member_list_row(guild, slot))
+			.collect()
+	}
+
+	fn member_list_row(&self, guild: &GuildState, slot: &MemberSlot) -> Option<MemberListRow> {
+		match slot {
+			MemberSlot::Empty => None,
+			MemberSlot::Group { id, count } => Some(MemberListRow::Group {
+				id: id.clone(),
+				name: group_name(guild, id),
+				count: count_of(guild.member_list.group_count(id).unwrap_or(*count)),
+			}),
+			MemberSlot::Member(user_id) => Some(MemberListRow::Member(self.member_row(guild, *user_id))),
+		}
 	}
 
 	fn member_row(&self, guild: &GuildState, user_id: Snowflake) -> MemberRow {

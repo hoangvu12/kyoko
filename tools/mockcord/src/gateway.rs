@@ -329,6 +329,12 @@ impl Connection {
 				}
 			}
 			Opcode::RequestGuildMembers => {
+				if let Some(retry_after) = self.shared.scenario.take_member_rate_limit() {
+					for limited in member_list::rate_limited(data, retry_after) {
+						hub.dispatch_to(session, "RATE_LIMITED", &limited);
+					}
+					return;
+				}
 				for chunk in member_list::members_chunks(&self.shared, data) {
 					hub.dispatch_to(session, "GUILD_MEMBERS_CHUNK", &chunk);
 				}

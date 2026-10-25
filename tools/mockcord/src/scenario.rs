@@ -130,6 +130,7 @@ pub struct Scenario {
 	closing_connections: Mutex<Vec<u16>>,
 	acks: Mutex<HeartbeatAcks>,
 	ready: Mutex<Option<ReadyTransform>>,
+	limited_member_requests: Mutex<Vec<f64>>,
 }
 
 impl Scenario {
@@ -210,6 +211,17 @@ impl Scenario {
 
 	pub fn ready(&self) -> Option<ReadyTransform> {
 		self.ready.lock().clone()
+	}
+
+	pub fn rate_limit_member_requests(&self, retry_after: f64, count: usize) {
+		self.limited_member_requests
+			.lock()
+			.extend(std::iter::repeat_n(retry_after, count));
+	}
+
+	pub fn take_member_rate_limit(&self) -> Option<f64> {
+		let mut limits = self.limited_member_requests.lock();
+		(!limits.is_empty()).then(|| limits.remove(0))
 	}
 }
 

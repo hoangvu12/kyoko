@@ -87,3 +87,44 @@ Every other drop reconnects after `Backoff::delay(failures)`. The delay is `base
 `state.session().connected` is true exactly when the status is `Connected`.
 
 `SessionConfig::gateway` takes a `GatewayTuning` with the backoff and send budget. Production uses the defaults. Tests shrink them.
+
+## Lazy loading
+
+Guild subscriptions and member requests are planned in the session (`crates/session/src/task/subscriptions.rs` and `member_requests.rs`) and leave through the bulk lane. Nothing is sent before READY. A new READY starts over, a RESUMED keeps everything.
+
+### Guild subscriptions (op 37)
+
+One planner builds every op 37 frame. Opening a guild channel (`SelectChannel`), `SubscribeGuild` and `SetMemberViewport { guild_id, channel_id, first, last }` only change what the session wants. The change is sent 150 ms after the last one, and at most 500 ms after the first, so a burst of changes becomes one frame. Several guilds share a frame.
+
+The planner remembers what it last sent per guild and sends only the difference:
+
+- A guild's first entry carries `typing`, `threads` and `activities` set to true, `member_updates` false, empty `members` and `thread_member_lists`, and `channels`.
+- Later entries carry only `channels`. A channel the guild no longer lists goes out with `[]`, which drops its ranges. A guild whose wanted state hasn't changed is left out of the frame, and an empty frame is never sent.
+- The open guild and the three most recently used others keep a member-list channel. When a guild falls out of that set, its channel goes out with `[]`. Its typing and activity flags stay on, because Discord treats those subscriptions as permanent.
+- After a new READY, only the open guild is subscribed again.
+
+Member-list ranges are 100-row buckets. A channel's ranges are always `[0,99]`, the buckets the viewport touches, and one bucket of lookahead. The lookahead goes toward whichever bucket edge is nearer the viewport, and downwards on a tie or at the top. The result is capped at three ranges, keeping `[0,99]` and the viewport first. A viewport of rows 450 to 470 gives `[[0,99],[400,499],[500,599]]`. Without a viewport, a channel gets `[[0,99]]`.
+
+### Member lists
+
+GUILD_MEMBER_LIST_UPDATE is applied to one list per guild, `GuildState::member_list`, identified by its list id. An update for another id replaces the list only if it carries a SYNC. Otherwise it is a late update for a list the session has stopped watching, and it is ignored. Ops:
+
+- SYNC writes the range's items. If it returns fewer items than the range asked for, the list ends there.
+- INSERT and DELETE shift every later row.
+- UPDATE replaces one row.
+- INVALIDATE clears its range to placeholders.
+- Unknown ops are ignored. A bad item becomes an empty placeholder, so the positions of the other rows still line up.
+
+GUILD_MEMBER_REMOVE no longer edits the list, because Discord also sends a list DELETE for it and the row would go twice. Member data goes into the guild's member cache. The list holds only ids and group headers.
+
+`State::member_list(guild_id)` returns the `MemberList`, with `groups` (ids and counts), `row_count()` and `rows(first, last)`. `State::member_list_rows(guild_id, first, last)` returns one `Option<MemberListRow>` per row, where `None` is a row that has not loaded yet. `member_rows(guild_id)` still returns only the loaded rows.
+
+### Member requests (op 8)
+
+`Command::RequestMembers { guild_id, user_ids }`, `Command::SearchMembers { guild_id, query }` and `Core::request_members` inside the session all feed one scheduler:
+
+- **Batching:** ids for a guild wait 50 ms, then go out in requests of at most 100 ids, as `{"guild_id":[id],"user_ids":[..],"presences":false,"nonce":".."}`. A search is `{"guild_id":[id],"query":"..","limit":100,"presences":true,"nonce":".."}`. A newer search replaces one that hasn't gone out yet.
+- **Pacing:** each guild has at most one request waiting for its answer. A request is answered when the last GUILD_MEMBERS_CHUNK with its nonce arrives, or it is given up after 10 s.
+- **Deduplication:** ids that are queued, in flight, or were answered in the last 60 s (found or `not_found`) are not requested again.
+- **Rate limits:** a RATE_LIMITED dispatch for op 8 puts that request back at the front of its guild's queue. The guild is held for `retry_after` seconds, or 5 s if Discord gave none, and never more than 120 s.
+- **Reconnects:** after a new READY, unanswered requests are queued again and holds are cleared.

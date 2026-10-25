@@ -23,6 +23,17 @@ pub(crate) const NO_LATENCY: u64 = u64::MAX;
 
 pub struct Gateway;
 
+pub struct MemberRequest<'a> {
+	pub guild_id: Snowflake,
+	pub nonce: &'a str,
+	pub lookup: MemberLookup<'a>,
+}
+
+pub enum MemberLookup<'a> {
+	Ids(&'a [Snowflake]),
+	Query { query: &'a str, limit: u32 },
+}
+
 impl Gateway {
 	pub fn spawn(config: GatewayConfig, handle: Handle) -> (GatewayHandle, mpsc::Receiver<GatewayEvent>) {
 		Self::spawn_when(async move { Some(config) }, handle)
@@ -87,42 +98,28 @@ impl GatewayHandle {
 		)
 	}
 
-	pub fn subscribe_guild(
-		&self,
-		guild_id: Snowflake,
-		channels: Vec<(Snowflake, Vec<[u32; 2]>)>,
-		typing: bool,
-		threads: bool,
-		activities: bool,
-	) -> Result<(), SendError> {
-		let channels: Map<String, Value> = channels
-			.into_iter()
-			.map(|(channel_id, ranges)| (channel_id.to_string(), json!(ranges)))
-			.collect();
-		let subscription = json!({
-			"typing": typing,
-			"threads": threads,
-			"activities": activities,
-			"members": [],
-			"channels": channels,
-		});
+	pub fn update_guild_subscriptions(&self, subscriptions: Map<String, Value>) -> Result<(), SendError> {
 		self.queue(
 			Opcode::GuildSubscriptionsBulk,
-			json!({ "subscriptions": { guild_id.to_string(): subscription } }),
+			json!({ "subscriptions": subscriptions }),
 		)
 	}
 
-	pub fn request_members(
-		&self,
-		guild_id: Snowflake,
-		query: &str,
-		limit: u32,
-		user_ids: Vec<Snowflake>,
-	) -> Result<(), SendError> {
-		let data = if user_ids.is_empty() {
-			json!({ "guild_id": guild_id, "query": query, "limit": limit })
-		} else {
-			json!({ "guild_id": guild_id, "user_ids": user_ids, "limit": limit })
+	pub fn request_members(&self, request: MemberRequest<'_>) -> Result<(), SendError> {
+		let data = match request.lookup {
+			MemberLookup::Ids(user_ids) => json!({
+				"guild_id": [request.guild_id],
+				"user_ids": user_ids,
+				"presences": false,
+				"nonce": request.nonce,
+			}),
+			MemberLookup::Query { query, limit } => json!({
+				"guild_id": [request.guild_id],
+				"query": query,
+				"limit": limit,
+				"presences": true,
+				"nonce": request.nonce,
+			}),
 		};
 		self.queue(Opcode::RequestGuildMembers, data)
 	}

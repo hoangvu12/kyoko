@@ -10,5 +10,5 @@ mod transport;
 pub use config::{ADVERTISED_CAPABILITIES, Backoff, GatewayConfig, GatewayTuning};
 pub use error::{AUTHENTICATION_FAILED, FATAL_CLOSE_CODES, GatewayError, SendError};
 pub use event::GatewayEvent;
-pub use handle::{Gateway, GatewayHandle};
+pub use handle::{Gateway, GatewayHandle, MemberLookup, MemberRequest};
 pub use outbox::SendBudget;

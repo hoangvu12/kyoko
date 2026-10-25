@@ -34,6 +34,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `hooks(..)` installs session hooks.
 - `heartbeat_ms(ms)` shortens mockcord's heartbeat interval.
 - `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
+- `members(n)` sets mockcord's members per guild, for member lists longer than a few buckets.
 - `caches(CacheLimits { .. })` shrinks the cache limits (see `docs/caches.md`), so tests reach them with a few channels and pages.
 - `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
 - `rest(RestTuning { .. })` sets the REST pacing gaps and breaker timings (see `docs/rest.md`). Tests that don't measure pacing can zero the gaps.
@@ -89,10 +90,13 @@ Gateway controls:
 - `invalidate_session(resumable)` sends op 9. With `false`, mockcord also ends the session, so the client can IDENTIFY again on the same socket. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
 - `set_heartbeat_acks(HeartbeatAcks::Prompt | Delayed(d) | Withheld)` controls op 11 replies.
 - `post_message(channel_id, author_id, content)` posts a message as any fixture user, stores it like a REST send and broadcasts MESSAGE_CREATE. It returns the new id. Use it for incoming messages and for the user's own messages without a send.
+- `rate_limit_member_requests(retry_after, count)` answers the next `count` op 8 requests with a RATE_LIMITED dispatch (`opcode` 8, `retry_after`, `meta.guild_id` and `meta.nonce`) instead of GUILD_MEMBERS_CHUNK.
 - `dispatch(event, data)` sends a dispatch to every session, with sequence numbers, buffered for resume. Use it for late private channels and other events that arrive after READY.
 - `transform_ready(|identify, ready| ..)` edits READY before it is sent. It sees the IDENTIFY payload, so READY can depend on the advertised capabilities. `reset_ready()` removes it.
 
 mockcord serves REST under both `/api/v9` and `/api/v10`. `Server::rest_base_url()` is the v9 base, and `Server::rest_base_url_for(version)` builds either. READY reports the `v` the gateway URL asked for.
+
+mockcord answers op 37 with a GUILD_MEMBER_LIST_UPDATE that SYNCs every range listed for the guild, list id `everyone`, with an online and an offline group. It answers op 8 with one GUILD_MEMBERS_CHUNK per guild, echoing the nonce. Kicking or banning a listed member sends a list DELETE and an UPDATE of its group header, as well as GUILD_MEMBER_REMOVE. To test other list ops, send them with `dispatch("GUILD_MEMBER_LIST_UPDATE", ..)`.
 
 mockcord also stands in for the parts of the web client's identity that Discord hands out:
 

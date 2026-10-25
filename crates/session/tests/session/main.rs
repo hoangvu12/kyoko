@@ -6,6 +6,7 @@ mod gateway;
 mod harness;
 mod hooks;
 mod locks;
+mod members;
 mod reads;
 mod safety;
 mod wire;

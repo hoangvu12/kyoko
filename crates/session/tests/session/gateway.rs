@@ -20,6 +20,8 @@ const BURST_BUDGET: SendBudget = SendBudget {
 };
 const BURST_HEARTBEAT_MS: u64 = 450;
 const BURST_FRAMES: usize = 30;
+const BURST_IDS_PER_FRAME: usize = 100;
+const BURST_USER_BASE: u64 = 990_000_000_000_200_000;
 
 const JITTER_HEARTBEAT_MS: u64 = 250;
 const JITTER_CONNECTIONS: usize = 4;
@@ -120,20 +122,24 @@ async fn a_bulk_burst_stays_inside_the_send_window_while_heartbeats_flow() {
 		.collect();
 	let burst_began = Instant::now();
 	for index in 0..BURST_FRAMES {
-		running.session().send(Command::SubscribeGuild {
+		let first = BURST_USER_BASE + (index * BURST_IDS_PER_FRAME) as u64;
+		running.session().send(Command::RequestMembers {
 			guild_id: guilds[index % guilds.len()],
+			user_ids: (first..first + BURST_IDS_PER_FRAME as u64)
+				.map(Snowflake)
+				.collect(),
 		});
 	}
 	let recording = running
 		.until_wire("every bulk frame", |recording| {
-			(recording.frames_with(Opcode::GuildSubscriptionsBulk).count() >= BURST_FRAMES)
+			(recording.frames_with(Opcode::RequestGuildMembers).count() >= BURST_FRAMES)
 				.then(|| recording.clone())
 		})
 		.await;
 	assert_eq!(recording.connections.len(), 1);
 	assert!(recording.closes.is_empty());
 	let frames = frames_on(&recording, connection);
-	let is_bulk = |frame: &GatewayFrame| frame.opcode() == Opcode::GuildSubscriptionsBulk;
+	let is_bulk = |frame: &GatewayFrame| frame.opcode() == Opcode::RequestGuildMembers;
 	let first_bulk = frames.iter().position(is_bulk).expect("a bulk frame");
 	let last_bulk = frames.iter().rposition(is_bulk).expect("a bulk frame");
 	let sent_during_burst = &frames[first_bulk..];

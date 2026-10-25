@@ -71,32 +71,19 @@ impl MemberList {
 		}
 	}
 
-	pub fn remove_member(&mut self, user_id: Snowflake) {
-		let Some(index) = self
-			.slots
+	pub fn row_count(&self) -> usize {
+		let grouped: i64 = self
+			.groups
 			.iter()
-			.position(|slot| *slot == MemberSlot::Member(user_id))
-		else {
-			return;
-		};
-		self.slots.remove(index);
-		self.member_count = (self.member_count - 1).max(0);
-		let Some(group_index) = self.slots[..index]
-			.iter()
-			.rposition(|slot| matches!(slot, MemberSlot::Group { .. }))
-		else {
-			return;
-		};
-		let MemberSlot::Group { id, count } = &mut self.slots[group_index] else {
-			return;
-		};
-		*count = (*count - 1).max(0);
-		if id == "online" {
-			self.online_count = (self.online_count - 1).max(0);
-		}
-		if let Some(group) = self.groups.iter_mut().find(|group| group.id == *id) {
-			group.count = (group.count - 1).max(0);
-		}
+			.filter(|group| group.count > 0)
+			.map(|group| group.count + 1)
+			.sum();
+		self.slots.len().max(usize::try_from(grouped).unwrap_or(0))
+	}
+
+	pub fn rows(&self, first: usize, last: usize) -> &[MemberSlot] {
+		let end = last.saturating_add(1).min(self.slots.len());
+		&self.slots[first.min(end)..end]
 	}
 
 	pub fn group_count(&self, id: &str) -> Option<i64> {

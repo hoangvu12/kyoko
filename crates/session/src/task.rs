@@ -5,12 +5,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant as StdInstant};
 
 use chrono::Utc;
-use gateway::{GatewayConfig, GatewayError, GatewayEvent, GatewayHandle};
+use gateway::{GatewayConfig, GatewayError, GatewayEvent, GatewayHandle, MemberLookup, MemberRequest};
 use parking_lot::Mutex;
 use protocol::fingerprint::channel_referer;
 use protocol::{
-	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, Message, MessageAck,
-	MessageReference, MessagesQuery, Nonce, Snowflake, StatusKind, Token, User,
+	Channel, ChannelType, CreateMessage, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited,
+	Message, MessageAck, MessageReference, MessagesQuery, Nonce, Opcode, Snowflake, StatusKind, Token, User,
 };
 use rest::api::SearchQuery;
 use rest::{RestClient, RestTuning, UploadFile};
@@ -39,14 +39,14 @@ mod deletes;
 mod expressions;
 mod failures;
 mod locks;
+mod member_requests;
 mod reads;
+mod subscriptions;
 mod themes;
 
 const PAGE_SIZE: u8 = 50;
 const TYPING_THROTTLE: Duration = Duration::from_secs(9);
 const TYPING_EXPIRY_SLACK: Duration = Duration::from_millis(100);
-const MEMBER_SEARCH_LIMIT: u32 = 100;
-const MEMBER_LIST_RANGE: [u32; 2] = [0, 99];
 const DAY_MILLIS: i64 = 86_400_000;
 const NONCE_SEQUENCE_BITS: u32 = 22;
 const RENDER_REVISION: u64 = 1;
@@ -138,7 +138,6 @@ pub(crate) struct Core {
 	internal: mpsc::UnboundedSender<Internal>,
 	typing_sent: HashMap<Snowflake, StdInstant>,
 	loading: HashSet<(Snowflake, Page)>,
-	selected_guild: Option<Snowflake>,
 	typing_expiry: Option<Instant>,
 	nonce_sequence: u64,
 	status: StatusKind,
@@ -158,6 +157,8 @@ pub(crate) struct Core {
 	manual_unread: HashSet<Snowflake>,
 	deletes: mpsc::UnboundedSender<deletes::DeleteJob>,
 	delete_batches: u64,
+	subscriptions: subscriptions::Subscriptions,
+	member_requests: member_requests::MemberRequests,
 }
 
 fn page_query(
@@ -209,7 +210,6 @@ impl Core {
 			internal: parts.internal,
 			typing_sent: HashMap::new(),
 			loading: HashSet::new(),
-			selected_guild: None,
 			typing_expiry: None,
 			nonce_sequence: 0,
 			status: StatusKind::Online,
@@ -229,6 +229,8 @@ impl Core {
 			manual_unread: HashSet::new(),
 			deletes,
 			delete_batches: 0,
+			subscriptions: subscriptions::Subscriptions::default(),
+			member_requests: member_requests::MemberRequests::default(),
 		}
 	}
 
@@ -253,6 +255,7 @@ impl Core {
 			let flush_at = self.notifier.deadline();
 			let expire_at = self.typing_expiry;
 			let ack_at = self.acks.deadline();
+			let lazy_at = self.lazy_deadline();
 			tokio::select! {
 				event = gateway_events.recv(), if gateway_open => match event {
 					Some(event) => self.on_gateway(event),
@@ -279,6 +282,9 @@ impl Core {
 				}
 				() = sleep_until(ack_at.unwrap_or_else(Instant::now)), if ack_at.is_some() => {
 					self.flush_acks();
+				}
+				() = sleep_until(lazy_at.unwrap_or_else(Instant::now)), if lazy_at.is_some() => {
+					self.lazy_tick();
 				}
 			}
 		}
@@ -375,6 +381,7 @@ impl Core {
 				let status = if resuming {
 					ConnectionStatus::Resuming
 				} else {
+					self.lazy_offline();
 					ConnectionStatus::Connecting
 				};
 				self.apply_local(LocalEvent::Connection(status));
@@ -387,7 +394,7 @@ impl Core {
 				}
 				self.apply(Event::Ready(&ready));
 				self.remember_account();
-				self.subscribe_selected();
+				self.lazy_connected();
 				self.persist.submit(Job::Ready(ready));
 			}
 			GatewayEvent::ReadySupplemental(supplemental) => {
@@ -471,6 +478,8 @@ impl Core {
 			DispatchEvent::MessageAck(ack) => self.persist_read_state(ack.channel_id),
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
+			DispatchEvent::GuildMembersChunk(chunk) => self.member_requests.answered(&chunk, Instant::now()),
+			DispatchEvent::RateLimited(limited) => self.on_rate_limited(&limited),
 			_ => {}
 		}
 	}
@@ -675,16 +684,23 @@ impl Core {
 			Command::SetAfk(afk) => self.set_afk(afk),
 			Command::SubscribeGuild { guild_id } => {
 				let channel_id = self.subscription_channel(guild_id);
-				self.subscribe(guild_id, channel_id);
+				self.subscriptions.touch(guild_id, channel_id, Instant::now());
 			}
+			Command::SetMemberViewport {
+				guild_id,
+				channel_id,
+				first,
+				last,
+			} => self.subscriptions.member_viewport(
+				guild_id,
+				channel_id,
+				subscriptions::MemberViewport { first, last },
+				Instant::now(),
+			),
 			Command::SearchMembers { guild_id, query } => {
-				if let Err(error) =
-					self.gateway
-						.request_members(guild_id, &query, MEMBER_SEARCH_LIMIT, Vec::new())
-				{
-					tracing::warn!(%error, "member search was not sent");
-				}
+				self.member_requests.search(guild_id, query, Instant::now());
 			}
+			Command::RequestMembers { guild_id, user_ids } => self.request_members(guild_id, user_ids),
 			Command::OpenDm { user_id } => self.open_dm(user_id),
 			Command::Search {
 				guild_id,
@@ -735,12 +751,12 @@ impl Core {
 	fn select_channel(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
 		self.rest.set_referer(&channel_referer(guild_id, channel_id));
 		self.apply_local(LocalEvent::ChannelSelected { guild_id, channel_id });
-		if let Some(guild_id) = guild_id
-			&& self.selected_guild != Some(guild_id)
-		{
-			self.subscribe(guild_id, Some(channel_id));
+		match guild_id {
+			Some(guild_id) => self
+				.subscriptions
+				.open(guild_id, Some(channel_id), Instant::now()),
+			None => self.subscriptions.leave_guilds(),
 		}
-		self.selected_guild = guild_id;
 		let (has_messages, has_draft) = {
 			let state = self.state.read();
 			(
@@ -1104,25 +1120,71 @@ impl Core {
 			})
 	}
 
-	fn subscribe(&self, guild_id: Snowflake, channel_id: Option<Snowflake>) {
-		let channels = channel_id
-			.map(|channel_id| (channel_id, vec![MEMBER_LIST_RANGE]))
+	pub(crate) fn request_members(&mut self, guild_id: Snowflake, user_ids: Vec<Snowflake>) {
+		self.member_requests.want_ids(guild_id, user_ids, Instant::now());
+	}
+
+	fn lazy_deadline(&self) -> Option<Instant> {
+		[self.subscriptions.deadline(), self.member_requests.deadline()]
 			.into_iter()
-			.collect();
-		if let Err(error) = self
-			.gateway
-			.subscribe_guild(guild_id, channels, true, true, false)
-		{
-			tracing::warn!(%error, "guild subscription was not sent");
+			.flatten()
+			.min()
+	}
+
+	fn lazy_tick(&mut self) {
+		let now = Instant::now();
+		if self.subscriptions.deadline().is_some_and(|due| due <= now) {
+			self.flush_subscriptions();
+		}
+		for request in self.member_requests.due(now) {
+			let lookup = match &request.lookup {
+				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),
+				member_requests::Lookup::Query(query) => MemberLookup::Query {
+					query,
+					limit: member_requests::SEARCH_LIMIT,
+				},
+			};
+			let sent = self.gateway.request_members(MemberRequest {
+				guild_id: request.guild_id,
+				nonce: &request.nonce,
+				lookup,
+			});
+			if let Err(error) = sent {
+				tracing::warn!(%error, "member request was not sent");
+				self.member_requests.unsent(request, now);
+			}
 		}
 	}
 
-	fn subscribe_selected(&self) {
-		let selected = self.state.read().selected();
-		if let Some(selected) = selected
-			&& let Some(guild_id) = selected.guild_id
-		{
-			self.subscribe(guild_id, Some(selected.channel_id));
+	fn flush_subscriptions(&mut self) {
+		let Some(subscriptions) = self.subscriptions.flush() else {
+			return;
+		};
+		if let Err(error) = self.gateway.update_guild_subscriptions(subscriptions) {
+			tracing::warn!(%error, "guild subscriptions were not sent");
+		}
+	}
+
+	fn lazy_connected(&mut self) {
+		let now = Instant::now();
+		let open = self
+			.state
+			.read()
+			.selected()
+			.and_then(|selected| Some((selected.guild_id?, selected.channel_id)));
+		self.subscriptions.connected(open, now);
+		self.member_requests.connected(now);
+	}
+
+	fn lazy_offline(&mut self) {
+		self.subscriptions.offline();
+		self.member_requests.offline();
+	}
+
+	fn on_rate_limited(&mut self, limited: &GatewayRateLimited) {
+		tracing::info!(opcode = ?limited.opcode, retry_after = ?limited.retry_after, "gateway rate limited");
+		if limited.opcode.map(Opcode::from) == Some(Opcode::RequestGuildMembers) {
+			self.member_requests.rate_limited(limited, Instant::now());
 		}
 	}
 

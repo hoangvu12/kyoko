@@ -72,9 +72,19 @@ pub enum Command {
 	SubscribeGuild {
 		guild_id: Snowflake,
 	},
+	SetMemberViewport {
+		guild_id: Snowflake,
+		channel_id: Snowflake,
+		first: u32,
+		last: u32,
+	},
 	SearchMembers {
 		guild_id: Snowflake,
 		query: String,
+	},
+	RequestMembers {
+		guild_id: Snowflake,
+		user_ids: Vec<Snowflake>,
 	},
 	OpenDm {
 		user_id: Snowflake,

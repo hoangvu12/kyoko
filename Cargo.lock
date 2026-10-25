@@ -3471,6 +3471,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "hex",
+ "indexmap",
  "kyoko-gateway",
  "kyoko-protocol",
  "kyoko-rest",

@@ -11,6 +11,7 @@ use crate::error::ApiError;
 use crate::fixtures::{CURRENT_USER_ID, Fixtures, GuildFixture};
 use crate::ids::snowflake_at;
 use crate::json::{parse_id, to_json};
+use crate::member_list;
 use crate::ops::now_iso;
 use crate::ready::is_thread;
 use crate::state::{Shared, Store};
@@ -697,6 +698,7 @@ impl Shared {
 		ban: bool,
 		reason: Option<&str>,
 	) -> Result<(), ApiError> {
+		let listed_at = member_list::list_position(self, guild_id, user_id);
 		let mut store = self.store.lock();
 		let guild = self.live_guild(&store, guild_id)?;
 		store
@@ -723,6 +725,9 @@ impl Shared {
 			"GUILD_MEMBER_REMOVE",
 			&json!({ "guild_id": guild_id.to_string(), "user": user }),
 		);
+		if let Some(update) = listed_at.and_then(|index| member_list::removal_update(self, guild_id, index)) {
+			self.hub.broadcast("GUILD_MEMBER_LIST_UPDATE", &update);
+		}
 		Ok(())
 	}
 

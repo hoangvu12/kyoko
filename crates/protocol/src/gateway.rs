@@ -299,6 +299,21 @@ pub struct GuildMembersChunk {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
+pub struct RateLimitedMeta {
+	pub guild_id: Option<Snowflake>,
+	pub nonce: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GatewayRateLimited {
+	pub opcode: Option<i64>,
+	pub retry_after: Option<f64>,
+	pub meta: RateLimitedMeta,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MemberListGroup {
 	pub id: String,
 	pub count: i64,
@@ -431,6 +446,7 @@ pub enum DispatchEvent {
 	GuildMemberRemove(Box<GuildMemberRemove>),
 	GuildMembersChunk(Box<GuildMembersChunk>),
 	GuildMemberListUpdate(Box<GuildMemberListUpdate>),
+	RateLimited(Box<GatewayRateLimited>),
 	GuildRoleCreate(Box<GuildRoleChange>),
 	GuildRoleUpdate(Box<GuildRoleChange>),
 	GuildRoleDelete(GuildRoleDelete),
@@ -501,6 +517,7 @@ impl DispatchEvent {
 			"GUILD_MEMBER_REMOVE" => Self::GuildMemberRemove(decode(name, data)?),
 			"GUILD_MEMBERS_CHUNK" => Self::GuildMembersChunk(decode(name, data)?),
 			"GUILD_MEMBER_LIST_UPDATE" => Self::GuildMemberListUpdate(decode(name, data)?),
+			"RATE_LIMITED" => Self::RateLimited(decode(name, data)?),
 			"GUILD_ROLE_CREATE" => Self::GuildRoleCreate(decode(name, data)?),
 			"GUILD_ROLE_UPDATE" => Self::GuildRoleUpdate(decode(name, data)?),
 			"GUILD_ROLE_DELETE" => Self::GuildRoleDelete(decode(name, data)?),

@@ -99,7 +99,6 @@ impl State {
 				let mut changes = Changes::default();
 				if let Some(guild) = self.guilds.get_mut(&remove.guild_id) {
 					guild.members.remove(&remove.user.id);
-					guild.member_list.remove_member(remove.user.id);
 					changes.members.insert(remove.guild_id);
 				}
 				changes
@@ -515,6 +514,9 @@ impl State {
 			return changes;
 		};
 		if guild.member_list.id != update.id {
+			if !guild.member_list.id.is_empty() && !starts_list(update) {
+				return changes;
+			}
 			guild.member_list.reset(&update.id);
 		}
 		for op in &update.ops {
@@ -615,6 +617,13 @@ impl State {
 		}
 		MemberSlot::Member(user_id)
 	}
+}
+
+fn starts_list(update: &GuildMemberListUpdate) -> bool {
+	update
+		.ops
+		.iter()
+		.any(|op| op.get("op").and_then(Value::as_str) == Some("SYNC"))
 }
 
 fn op_range(op: &Value) -> Option<(usize, usize)> {

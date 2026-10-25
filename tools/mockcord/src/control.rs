@@ -103,6 +103,12 @@ impl Control {
 		self.shared.scenario.set_acks(acks);
 	}
 
+	pub fn rate_limit_member_requests(&self, retry_after: f64, count: usize) {
+		self.shared
+			.scenario
+			.rate_limit_member_requests(retry_after, count);
+	}
+
 	pub fn dispatch(&self, event: &str, data: &Value) {
 		self.shared.hub.broadcast(event, data);
 	}

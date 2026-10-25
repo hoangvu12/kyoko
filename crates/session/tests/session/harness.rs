@@ -80,6 +80,11 @@ impl Options {
 		self
 	}
 
+	pub fn members(mut self, per_guild: usize) -> Self {
+		self.mock.members_per_guild = per_guild;
+		self
+	}
+
 	pub fn caches(mut self, limits: CacheLimits) -> Self {
 		self.caches = limits;
 		self

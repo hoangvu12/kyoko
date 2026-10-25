@@ -161,11 +161,58 @@ pub fn legacy_updates(shared: &Shared, data: &Value) -> Vec<Value> {
 		.collect()
 }
 
-pub fn members_chunks(shared: &Shared, data: &Value) -> Vec<Value> {
-	let guild_ids: Vec<u64> = match &data["guild_id"] {
+fn requested_guilds(data: &Value) -> Vec<u64> {
+	match &data["guild_id"] {
 		Value::Array(ids) => ids.iter().filter_map(parse_id).collect(),
 		single => parse_id(single).into_iter().collect(),
-	};
+	}
+}
+
+pub fn rate_limited(data: &Value, retry_after: f64) -> Vec<Value> {
+	requested_guilds(data)
+		.into_iter()
+		.map(|guild_id| {
+			json!({
+				"opcode": 8,
+				"retry_after": retry_after,
+				"meta": { "guild_id": guild_id.to_string(), "nonce": data["nonce"] },
+			})
+		})
+		.collect()
+}
+
+pub fn list_position(shared: &Shared, guild_id: u64, user_id: u64) -> Option<usize> {
+	let guild = shared.fixtures.guild(guild_id)?;
+	build_member_list(shared, guild)
+		.items
+		.iter()
+		.position(|item| parse_id(&item["member"]["user"]["id"]) == Some(user_id))
+}
+
+pub fn removal_update(shared: &Shared, guild_id: u64, index: usize) -> Option<Value> {
+	let guild = shared.fixtures.guild(guild_id)?;
+	let list = build_member_list(shared, guild);
+	let header = list.items[..index.min(list.items.len())]
+		.iter()
+		.rposition(|item| item.get("group").is_some())?;
+	Some(json!({
+		"guild_id": guild_id.to_string(),
+		"id": "everyone",
+		"member_count": list.online + list.offline,
+		"online_count": list.online,
+		"groups": [
+			{ "id": "online", "count": list.online },
+			{ "id": "offline", "count": list.offline },
+		],
+		"ops": [
+			{ "op": "DELETE", "index": index },
+			{ "op": "UPDATE", "index": header, "item": list.items[header] },
+		],
+	}))
+}
+
+pub fn members_chunks(shared: &Shared, data: &Value) -> Vec<Value> {
+	let guild_ids = requested_guilds(data);
 	let query = data["query"].as_str().unwrap_or("").to_lowercase();
 	let limit = data["limit"].as_u64().unwrap_or(0) as usize;
 	let wanted: Vec<u64> = data["user_ids"]
