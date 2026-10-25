@@ -8393,6 +8393,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "hex",
+ "image",
  "kyoko-protocol",
  "kyoko-session",
  "kyoko-state",
@@ -8406,6 +8407,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "windows",
 ]
 
 [[package]]

@@ -26,3 +26,5 @@ sha2.workspace = true
 hex.workspace = true
 chrono.workspace = true
 toml.workspace = true
+image.workspace = true
+windows = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_Storage_Xps", "Win32_UI_HiDpi"] }

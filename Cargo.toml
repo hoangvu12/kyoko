@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*", "tools/*"]
+exclude = ["tools/parity"]
 
 [workspace.package]
 version = "0.2.0-beta.1"

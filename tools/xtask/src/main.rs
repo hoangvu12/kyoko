@@ -1,5 +1,6 @@
 mod checks;
 mod headless;
+mod parity;
 mod release;
 mod signing;
 mod theme;
@@ -18,6 +19,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Task {
 	HeadlessRun(headless::Args),
+	Parity(parity::Args),
 	Release(release::ReleaseArgs),
 	Theme(theme::ThemeArgs),
 	FmtCheck,
@@ -30,6 +32,7 @@ fn main() -> ExitCode {
 	let cli = Cli::parse();
 	let outcome = match cli.task {
 		Task::HeadlessRun(args) => headless::run(args),
+		Task::Parity(args) => parity::run(args),
 		Task::Release(args) => release::run(args),
 		Task::Theme(args) => theme::run(args),
 		Task::FmtCheck => checks::fmt_check(),
