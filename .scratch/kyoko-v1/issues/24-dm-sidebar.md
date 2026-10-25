@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The DM sidebar matches oxidcord in the parity captures
 - [ ] Conversations reorder live when new messages arrive
