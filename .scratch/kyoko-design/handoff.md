@@ -22,15 +22,28 @@ Kyoko's look moves from a 1:1 port of oxidcord to a 1:1 of Discord's current des
 - Message menu: Discord's look and order with kyoko's actions only (no Apps or Speak Message; kyoko's Select Message kept). When porting, `bridge::message_menu` changes to this order.
 - Login wording follows `docs/sign-in.md`. Toasts are overlays and never move the timeline.
 
+## Expressions and commands (second design chat)
+
+Done on `design`: 37 more pages (97 in all), all checked at 1280 by 800, and the "Expressions and commands" section of `docs/design/midnight.md`. Briefs sent to Claude Design are kept beside this file (`brief-*.md`).
+
+- Pickers, measured on the live client: one 498 by 486 popover anchored 8 above the composer and 35 in from its right edge, never centred. GIF results, emoji search, no-Nitro (greyed and locked, no upsell), emoji autocomplete, reactions with super reactions and the list dialog, expressions in messages with their popouts.
+- Slash commands: picker, options, choices and autocomplete states, file options, reply states (sending, thinking, ephemeral, did not respond, interaction failed), components (buttons, selects, Components V2), the app modal, the apps launcher (498 wide, no Promoted activities).
+- Composer extras: live markdown in the field, uploads tray, drop overlay, upload failure, + menu, poll creation and polls, voice message playback, a sent link's embed.
+- Decided by the user: Unicode emoji are Twemoji (`jdecked/twemoji`, CC-BY 4.0) everywhere, bundled; every mockup uses them. The gift button is left out (Discord shows no send button either).
+- Captures from this chat (ignored, never commit): `live-gif-picker`, `live-gif-results-hover`, `live-sticker-picker`, `live-emoji-picker*`, `live-command-picker`, `live-command-options`, `live-apps-launcher`, `live-message-menu-hover`.
+- Not captured (running a command or sending would act on the account): command replies, ephemeral messages, components; those follow Discord from memory.
+- To raise with the orchestrator: Discord's GIF provider is now Klipy ("Search Klipy"), but `crates/rest/src/api/expressions.rs` sends `provider=tenor`. Built-in commands (`/shrug`, `/tableflip`, `/me`, `/spoiler`) show in the picker mockups but kyoko does not implement them yet; recommended: add the text-only ones.
+- Download helper: the project's `ListFiles` endpoint (POST `/design/anthropic.omelette.api.v1alpha.OmeletteService/ListFiles` with `{projectId, path: "export"}` from the design tab) lists every exported page.
+
 ## Open items
 
-- Menu item hover colour is unverified (the mockups use the neutral `--hover` wash). Settle it by right-clicking a message in the user's Discord, with their permission, and not while they are streaming.
+- Settled: menu item hover is the neutral `--hover` wash (`#373534` on the menu's `#31302f`, measured).
 - Pages without a live capture behind them follow Discord from Claude Design's memory; their exact spacing is approximate.
 - Icons, avatars, banners, nameplates and game art are placeholders; the port uses kyoko's icons and the gallery.
 - The v1 tickets and `docs/parity.md` still say "matches oxidcord", and tickets 30, 31 and 37 landed on main in the oxidcord look. Switching their target is the orchestrator's and the user's call; raise it, don't edit them.
 - Not started: the port itself. Suggested first step: Midnight's palette and sizes as kyoko theme tokens (`apps/desktop/src/theme.rs` and `ui/theme.luau`), then the floating-panel shell in `ui/shell/frame.luau`, which restyles every existing screen at once.
 
-## Next topic: expressions and commands
+## Brief given to the second chat: expressions and commands
 
 The user flagged this as the next important area: emoji, slash commands, GIFs, stickers and the rest of what people put into messages. What exists today and what needs designing:
 
