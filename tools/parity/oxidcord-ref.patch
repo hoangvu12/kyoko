@@ -190,10 +190,10 @@ index 3decd26..3bf6214 100644
  pub mod pages;
 diff --git a/crates/ui/src/shell/capture.rs b/crates/ui/src/shell/capture.rs
 new file mode 100644
-index 0000000..ca31dfa
+index 0000000..ec3e520
 --- /dev/null
 +++ b/crates/ui/src/shell/capture.rs
-@@ -0,0 +1,636 @@
+@@ -0,0 +1,637 @@
 +use std::path::PathBuf;
 +use std::sync::Arc;
 +use std::time::{Duration, Instant};
@@ -483,6 +483,7 @@ index 0000000..ca31dfa
 +				Ok(())
 +			})?;
 +			opened_dm(&shell, cx).await?;
++			cx.background_executor().timer(SETTLE).await;
 +			let tab = format!("friends-tab-{}", &screen["friends-".len()..]);
 +			act(&shell, cx, |shell, _, cx| {
 +				shell.home_pages.show(HomePage::Friends, cx);
