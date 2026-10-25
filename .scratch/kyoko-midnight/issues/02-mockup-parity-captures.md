@@ -4,7 +4,7 @@
 
 **Blocked by:** v1 19 (parity capture tooling)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** every page
 
