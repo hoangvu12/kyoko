@@ -4,7 +4,7 @@
 
 **Blocked by:** 24 (DM sidebar)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Friends screens match oxidcord in the parity captures
 - [ ] Adding, accepting, removing and blocking work
