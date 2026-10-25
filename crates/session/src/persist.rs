@@ -3,12 +3,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use protocol::{
-	EntryContainer, LenientVec, Message, ReadStateContainer, ReadStateKind, Ready, Snowflake,
+	EntryContainer, LenientVec, Message, MessageUpdate, ReadStateContainer, ReadStateKind, Ready, Snowflake,
 	UserGuildSettingsContainer,
 };
 use serde::de::DeserializeOwned;
-use store::{ReadState, Store, Table};
+use state::{CacheLimits, KeptWrite, MessageVersion};
+use store::{DeletedRow, ReadState, Store, Table};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -29,7 +31,8 @@ pub(crate) enum Job {
 		channel_id: Snowflake,
 		messages: Vec<Arc<Message>>,
 	},
-	DeleteMessages(Vec<Snowflake>),
+	Kept(Vec<KeptWrite>),
+	EditStored(Box<MessageUpdate>),
 	ReadState {
 		state: ReadState,
 		version: Option<u64>,
@@ -110,12 +113,8 @@ fn write(store: &Store, job: Job, trusted: bool) -> Result<()> {
 			let rows: Vec<(u64, &[u8])> = encoded.iter().map(|(id, json)| (*id, json.as_slice())).collect();
 			Ok(store.db.put_messages_batch(channel_id.get(), &rows)?)
 		}
-		Job::DeleteMessages(ids) => {
-			for id in ids {
-				store.db.delete_message(id.get())?;
-			}
-			Ok(())
-		}
+		Job::Kept(writes) => write_kept(store, writes),
+		Job::EditStored(update) => edit_stored(store, &update),
 		Job::ReadState { state, version } => {
 			store.db.set_read_state(&state)?;
 			write_read_state_version(store, version.filter(|_| trusted))
@@ -142,6 +141,67 @@ fn write(store: &Store, job: Job, trusted: bool) -> Result<()> {
 			}
 		}
 	}
+}
+
+fn write_kept(store: &Store, writes: Vec<KeptWrite>) -> Result<()> {
+	let mut deleted = Vec::new();
+	for write in writes {
+		match write {
+			KeptWrite::Deleted {
+				channel_id,
+				message_id,
+				message,
+				at,
+			} => {
+				let json = message.map(|message| serde_json::to_vec(&*message)).transpose()?;
+				deleted.push((channel_id, message_id, at, json));
+			}
+			KeptWrite::Forgotten { message_id } => store.db.forget_message(message_id.get())?,
+			KeptWrite::Version {
+				channel_id,
+				message_id,
+				version,
+			} => store
+				.db
+				.keep_version(channel_id.get(), message_id.get(), &serde_json::to_vec(&version)?)?,
+		}
+	}
+	if deleted.is_empty() {
+		return Ok(());
+	}
+	let rows: Vec<DeletedRow<'_>> = deleted
+		.iter()
+		.map(|(channel_id, message_id, at, json)| DeletedRow {
+			id: message_id.get(),
+			channel_id: channel_id.get(),
+			deleted_at: at.timestamp_millis(),
+			json: json.as_deref(),
+		})
+		.collect();
+	Ok(store.db.keep_deleted(&rows)?)
+}
+
+fn edit_stored(store: &Store, update: &MessageUpdate) -> Result<()> {
+	let Some(json) = store.db.get_json(Table::Messages, update.id.get())? else {
+		return Ok(());
+	};
+	let Ok(mut message) = serde_json::from_slice::<Message>(&json) else {
+		return Ok(());
+	};
+	if let Some(version) = state::replaced_version(&message, update) {
+		store.db.keep_version(
+			update.channel_id.get(),
+			update.id.get(),
+			&serde_json::to_vec(&version)?,
+		)?;
+	}
+	state::apply_update(&mut message, update);
+	Ok(store.db.put_json(
+		Table::Messages,
+		update.id.get(),
+		Some(update.channel_id.get()),
+		&serde_json::to_vec(&message)?,
+	)?)
 }
 
 fn write_read_state_version(store: &Store, version: Option<u64>) -> Result<()> {
@@ -284,6 +344,60 @@ pub(crate) fn load_messages(store: &Store, channel_id: Snowflake) -> Vec<Message
 	rows.iter()
 		.filter_map(|(_, json)| serde_json::from_slice(json).ok())
 		.collect()
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Kept {
+	pub(crate) deleted: Vec<(Message, DateTime<Utc>)>,
+	pub(crate) versions: Vec<(Snowflake, Vec<MessageVersion>)>,
+}
+
+impl Kept {
+	pub(crate) fn is_empty(&self) -> bool {
+		self.deleted.is_empty() && self.versions.is_empty()
+	}
+}
+
+pub(crate) fn load_kept(store: &Store, channel_id: Snowflake, limits: &CacheLimits) -> Kept {
+	let deleted = store
+		.db
+		.kept_deleted(channel_id.get(), cap(limits.kept_deleted))
+		.unwrap_or_else(|error| {
+			tracing::warn!(%error, "could not read kept deleted messages");
+			Vec::new()
+		})
+		.into_iter()
+		.filter_map(|row| {
+			let message = serde_json::from_slice(&row.json).ok()?;
+			Some((message, DateTime::from_timestamp_millis(row.deleted_at)?))
+		})
+		.collect();
+	let rows = store
+		.db
+		.kept_versions(
+			channel_id.get(),
+			cap(limits.kept_edited.saturating_mul(limits.kept_versions)),
+		)
+		.unwrap_or_else(|error| {
+			tracing::warn!(%error, "could not read kept message versions");
+			Vec::new()
+		});
+	let mut versions: Vec<(Snowflake, Vec<MessageVersion>)> = Vec::new();
+	for row in rows {
+		let Ok(version) = serde_json::from_slice::<MessageVersion>(&row.json) else {
+			continue;
+		};
+		let message_id = Snowflake(row.message_id);
+		match versions.iter_mut().find(|(id, _)| *id == message_id) {
+			Some((_, history)) => history.push(version),
+			None => versions.push((message_id, vec![version])),
+		}
+	}
+	Kept { deleted, versions }
+}
+
+fn cap(limit: usize) -> u32 {
+	u32::try_from(limit).unwrap_or(u32::MAX)
 }
 
 pub(crate) fn load_draft(store: &Store, channel_id: Snowflake) -> Option<String> {

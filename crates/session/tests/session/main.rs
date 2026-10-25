@@ -6,6 +6,7 @@ mod fingerprint;
 mod gateway;
 mod harness;
 mod hooks;
+mod kept;
 mod locks;
 mod members;
 mod reads;

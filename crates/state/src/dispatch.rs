@@ -251,9 +251,11 @@ impl State {
 		if let Some(author) = &update.author {
 			intern_user(&mut self.users, author);
 		}
-		let mut changes = self.edit_message(update.channel_id, update.id, |message| {
+		let mut changes = Changes::default();
+		self.keep_version(update, &mut changes);
+		changes.merge(self.edit_message(update.channel_id, update.id, |message| {
 			apply_update(message, update)
-		});
+		}));
 		self.referenced_updated(update, &mut changes);
 		if update.content.is_some()
 			&& let Some(edited) = self
@@ -283,15 +285,7 @@ impl State {
 
 	fn messages_delete(&mut self, channel_id: Snowflake, ids: &[Snowflake]) -> Changes {
 		let mut changes = Changes::default();
-		if let Some(cache) = self.messages.get_mut(&channel_id) {
-			let mut removed = false;
-			for &id in ids {
-				removed |= cache.remove(id);
-			}
-			if removed {
-				changes.messages.insert(channel_id);
-			}
-		}
+		self.keep_deleted(channel_id, ids, &mut changes);
 		self.referenced_deleted(ids, &mut changes);
 		changes
 	}

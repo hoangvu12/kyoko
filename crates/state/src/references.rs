@@ -17,6 +17,7 @@ pub enum Referenced {
 #[derive(Debug, Clone, Copy)]
 pub enum ReplyTarget<'a> {
 	Message(&'a Message),
+	Deleted(&'a Message),
 	Unavailable,
 	Loading,
 }
@@ -81,6 +82,18 @@ impl State {
 	}
 
 	pub fn reply_target<'a>(&'a self, message: &'a Message) -> Option<ReplyTarget<'a>> {
+		if let Some(target) = reply_reference(message)
+			&& let Some(kept) = self
+				.messages
+				.get(&message.channel_id)
+				.and_then(|cache| cache.deleted_message(target))
+		{
+			return Some(if self.show_deleted {
+				ReplyTarget::Deleted(kept)
+			} else {
+				ReplyTarget::Unavailable
+			});
+		}
 		if let Some(embedded) = message.referenced_message.as_deref() {
 			return Some(ReplyTarget::Message(embedded));
 		}

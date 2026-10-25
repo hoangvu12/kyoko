@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use protocol::{ChannelType, Message, Snowflake, StatusKind};
 use smallvec::SmallVec;
 
+use crate::kept::{DeletedInfo, MessageVersion};
 use crate::messages::SendFailure;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,11 +77,13 @@ pub struct MessageView {
 	pub author_display: String,
 	pub author_badge: Option<String>,
 	pub member_roles: SmallVec<[Snowflake; 4]>,
+	pub deleted: Option<DeletedInfo>,
+	pub versions: Arc<[MessageVersion]>,
 }
 
 #[derive(Debug, Clone)]
 pub enum MessageRow {
-	Message(MessageView),
+	Message(Box<MessageView>),
 	DaySeparator(NaiveDate),
 	UnreadMarker,
 	HistoryStart,

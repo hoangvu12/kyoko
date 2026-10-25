@@ -343,7 +343,12 @@ impl State {
 		} else {
 			MessageRow::Loading
 		});
-		let confirmed = cache.ordered.iter().map(|message| (message, None));
+		let show_deleted = self.show_deleted;
+		let confirmed = cache
+			.ordered
+			.iter()
+			.filter(|message| show_deleted || cache.deleted(message.id).is_none())
+			.map(|message| (message, None));
 		let pending = cache
 			.pending
 			.iter()
@@ -356,6 +361,7 @@ impl State {
 				rows.push(MessageRow::DaySeparator(day));
 			}
 			let is_unread = pending.is_none()
+				&& cache.deleted(message.id).is_none()
 				&& last_read.is_some_and(|read| message.id > read)
 				&& Some(message.author.id) != me;
 			if !marker_placed && is_unread && (previous.is_some() || cache.reached_start) {
@@ -364,9 +370,9 @@ impl State {
 			}
 			let grouped = previous
 				.is_some_and(|(earlier, earlier_day)| earlier_day == day && groups_with(earlier, message));
-			rows.push(MessageRow::Message(
+			rows.push(MessageRow::Message(Box::new(
 				self.message_view(guild, cache, message, grouped, pending),
-			));
+			)));
 			previous = Some((message.as_ref(), day));
 		}
 		rows
@@ -417,6 +423,8 @@ impl State {
 			author_display: over.and_then(|over| over.name.clone()).unwrap_or(author_display),
 			author_badge: over.and_then(|over| over.badge.clone()),
 			member_roles,
+			deleted: pending.map_or_else(|| cache.deleted(message.id), |_| None),
+			versions: cache.versions_of(message.id),
 		}
 	}
 

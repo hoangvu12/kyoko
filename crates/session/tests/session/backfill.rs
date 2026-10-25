@@ -98,7 +98,7 @@ fn target_of(state: &State, channel_id: Snowflake, reply_id: Snowflake) -> Optio
 	let message = state.messages(channel_id)?.by_id.get(&reply_id)?;
 	match state.reply_target(message)? {
 		ReplyTarget::Message(found) => Some(Some(found.id)),
-		ReplyTarget::Unavailable => Some(None),
+		ReplyTarget::Unavailable | ReplyTarget::Deleted(_) => Some(None),
 		ReplyTarget::Loading => None,
 	}
 }

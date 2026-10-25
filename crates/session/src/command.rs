@@ -474,5 +474,6 @@ pub enum Command {
 	},
 	Reconnect,
 	Logout,
+	ShowDeletedMessages(bool),
 	Shutdown,
 }

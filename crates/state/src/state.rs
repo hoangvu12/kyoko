@@ -14,6 +14,7 @@ use crate::changes::Changes;
 use crate::deletions::DeleteBatch;
 use crate::event::{Event, LoadDirection, LocalEvent};
 use crate::guild::GuildState;
+use crate::kept::KeptWrite;
 use crate::loaded::Lazy;
 use crate::locks::RiskyLocks;
 use crate::messages::ChannelMessages;
@@ -117,6 +118,8 @@ pub struct State {
 	pub(crate) versions: CacheVersions,
 	pub(crate) ack_versions: HashMap<Snowflake, u64>,
 	pub(crate) referenced: Recent<Snowflake, StoredReference>,
+	pub(crate) show_deleted: bool,
+	pub(crate) kept_writes: Vec<KeptWrite>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -369,7 +372,7 @@ impl State {
 		let mut changes = Changes::default();
 		self.warm_up(channel_id, &mut changes);
 		let limits = self.limits;
-		self.messages.entry(channel_id).or_default().merge_loaded(
+		let spliced = self.messages.entry(channel_id).or_default().merge_loaded(
 			loaded,
 			direction,
 			reached_start,
@@ -377,6 +380,7 @@ impl State {
 			open,
 			&limits,
 		);
+		self.unrendered.extend(spliced);
 		changes.messages.insert(channel_id);
 		changes
 	}
@@ -592,6 +596,12 @@ impl State {
 			LocalEvent::UserFetched { channel_id, user } => {
 				self.user_fetched(*channel_id, user, &mut changes)
 			}
+			LocalEvent::KeptRestored {
+				channel_id,
+				deleted,
+				versions,
+			} => self.restore_kept(*channel_id, deleted, versions, &mut changes),
+			LocalEvent::ShowDeletedMessages(show) => self.show_deleted_changed(*show, &mut changes),
 		}
 		changes
 	}

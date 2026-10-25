@@ -6,6 +6,7 @@ mod event;
 mod eviction;
 mod expressions;
 mod guild;
+mod kept;
 mod loaded;
 mod locks;
 mod member_list;
@@ -31,13 +32,14 @@ pub use expressions::{
 	CatalogEmoji, EXPRESSIONS_KEY, EmojiCatalog, EmojiRef, GuildEmojis, RECENT_CAP, UnicodeSection,
 };
 pub use guild::GuildState;
+pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{
 	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, ConnectedAccount, InviteInfo, InvitePreview,
 	Loaded, ProfileBadge, UserProfile, audit_action_label,
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
-pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport};
+pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply_update};
 pub use permissions::DM_PERMISSIONS;
 pub use references::{BackfillNeeds, Referenced, ReplyTarget, reply_reference};
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};

@@ -10,13 +10,15 @@ use crate::seal::{Sealer, is_sealed};
 
 const CANARY_KEY: &str = "seal-check";
 const CANARY_VALUE: &[u8] = b"kyoko";
-const SEALED_COLUMNS: [(&str, &str, &str); 6] = [
+const SEALED_COLUMNS: [(&str, &str, &str); 8] = [
 	("kv", "value", "key"),
 	("guilds", "json", "id"),
 	("channels", "json", "id"),
 	("users", "json", "id"),
 	("messages", "json", "id"),
 	("drafts", "content", "channel_id"),
+	("kept_deleted", "json", "id"),
+	("kept_versions", "json", "id"),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +76,35 @@ pub struct MessageLimits {
 	pub per_channel: u32,
 	pub total: u32,
 	pub max_age: Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeptLimits {
+	pub deleted_per_channel: u32,
+	pub versions_per_message: u32,
+	pub versions_per_channel: u32,
+	pub max_age: Duration,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DeletedRow<'a> {
+	pub id: u64,
+	pub channel_id: u64,
+	pub deleted_at: i64,
+	pub json: Option<&'a [u8]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptDeleted {
+	pub id: u64,
+	pub deleted_at: i64,
+	pub json: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptVersion {
+	pub message_id: u64,
+	pub json: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,12 +203,149 @@ impl Database {
 		Ok(())
 	}
 
-	pub fn delete_message(&self, id: u64) -> Result<()> {
+	pub fn keep_deleted(&self, rows: &[DeletedRow<'_>]) -> Result<()> {
+		let sealed = rows
+			.iter()
+			.map(|row| Ok((row, row.json.map(|json| self.sealer.seal(json)).transpose()?)))
+			.collect::<Result<Vec<_>>>()?;
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		{
+			let mut provided = tx.prepare_cached(
+				"INSERT INTO kept_deleted (id, channel_id, deleted_at, json) VALUES (?1, ?2, ?3, ?4)
+				ON CONFLICT (id) DO NOTHING",
+			)?;
+			let mut moved = tx.prepare_cached(
+				"INSERT INTO kept_deleted (id, channel_id, deleted_at, json)
+				SELECT id, channel_id, ?2, json FROM messages WHERE id = ?1
+				ON CONFLICT (id) DO NOTHING",
+			)?;
+			let mut forget = tx.prepare_cached("DELETE FROM messages WHERE id = ?1")?;
+			for (row, json) in &sealed {
+				match json {
+					Some(json) => provided.execute(params![
+						row.id as i64,
+						row.channel_id as i64,
+						row.deleted_at,
+						json
+					])?,
+					None => moved.execute(params![row.id as i64, row.deleted_at])?,
+				};
+				forget.execute([row.id as i64])?;
+			}
+		}
+		tx.commit()?;
+		Ok(())
+	}
+
+	pub fn forget_message(&self, id: u64) -> Result<()> {
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		tx.execute("DELETE FROM messages WHERE id = ?1", [id as i64])?;
+		tx.execute("DELETE FROM kept_deleted WHERE id = ?1", [id as i64])?;
+		tx.execute("DELETE FROM kept_versions WHERE message_id = ?1", [id as i64])?;
+		tx.commit()?;
+		Ok(())
+	}
+
+	pub fn kept_deleted(&self, channel_id: u64, limit: u32) -> Result<Vec<KeptDeleted>> {
+		let conn = self.conn.lock();
+		let mut statement = conn.prepare_cached(
+			"SELECT id, deleted_at, json FROM kept_deleted WHERE channel_id = ?1
+			ORDER BY deleted_at DESC, id DESC LIMIT ?2",
+		)?;
+		let rows = statement
+			.query_map(params![channel_id as i64, limit], |row| {
+				Ok((
+					row.get::<_, i64>(0)? as u64,
+					row.get::<_, i64>(1)?,
+					row.get::<_, Vec<u8>>(2)?,
+				))
+			})?
+			.collect::<rusqlite::Result<Vec<_>>>()?;
+		rows.into_iter()
+			.map(|(id, deleted_at, sealed)| {
+				Ok(KeptDeleted {
+					id,
+					deleted_at,
+					json: self.sealer.open(&sealed)?,
+				})
+			})
+			.collect()
+	}
+
+	pub fn keep_version(&self, channel_id: u64, message_id: u64, json: &[u8]) -> Result<()> {
+		let json = self.sealer.seal(json)?;
 		self.conn
 			.lock()
-			.prepare_cached("DELETE FROM messages WHERE id = ?1")?
-			.execute([id as i64])?;
+			.prepare_cached(
+				"INSERT INTO kept_versions (message_id, channel_id, kept_at, json) VALUES (?1, ?2, ?3, ?4)",
+			)?
+			.execute(params![message_id as i64, channel_id as i64, now_millis(), json])?;
 		Ok(())
+	}
+
+	pub fn kept_versions(&self, channel_id: u64, limit: u32) -> Result<Vec<KeptVersion>> {
+		let conn = self.conn.lock();
+		let mut statement = conn.prepare_cached(
+			"SELECT message_id, json FROM (
+				SELECT id, message_id, json FROM kept_versions WHERE channel_id = ?1
+				ORDER BY id DESC LIMIT ?2
+			) ORDER BY id ASC",
+		)?;
+		let rows = statement
+			.query_map(params![channel_id as i64, limit], |row| {
+				Ok((row.get::<_, i64>(0)? as u64, row.get::<_, Vec<u8>>(1)?))
+			})?
+			.collect::<rusqlite::Result<Vec<_>>>()?;
+		rows.into_iter()
+			.map(|(message_id, sealed)| {
+				Ok(KeptVersion {
+					message_id,
+					json: self.sealer.open(&sealed)?,
+				})
+			})
+			.collect()
+	}
+
+	pub fn prune_kept(&self, limits: KeptLimits) -> Result<usize> {
+		let cutoff =
+			now_millis().saturating_sub(i64::try_from(limits.max_age.as_millis()).unwrap_or(i64::MAX));
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		let mut pruned = tx.execute("DELETE FROM kept_deleted WHERE deleted_at < ?1", [cutoff])?;
+		pruned += tx.execute(
+			"DELETE FROM kept_deleted WHERE id IN (
+				SELECT id FROM (
+					SELECT id, ROW_NUMBER() OVER (
+						PARTITION BY channel_id ORDER BY deleted_at DESC, id DESC
+					) AS rank
+					FROM kept_deleted
+				) WHERE rank > ?1
+			)",
+			[limits.deleted_per_channel],
+		)?;
+		pruned += tx.execute("DELETE FROM kept_versions WHERE kept_at < ?1", [cutoff])?;
+		pruned += tx.execute(
+			"DELETE FROM kept_versions WHERE id IN (
+				SELECT id FROM (
+					SELECT id, ROW_NUMBER() OVER (PARTITION BY message_id ORDER BY id DESC) AS rank
+					FROM kept_versions
+				) WHERE rank > ?1
+			)",
+			[limits.versions_per_message],
+		)?;
+		pruned += tx.execute(
+			"DELETE FROM kept_versions WHERE id IN (
+				SELECT id FROM (
+					SELECT id, ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY id DESC) AS rank
+					FROM kept_versions
+				) WHERE rank > ?1
+			)",
+			[limits.versions_per_channel],
+		)?;
+		tx.commit()?;
+		Ok(pruned)
 	}
 
 	pub fn set_draft(&self, channel_id: u64, content: &str) -> Result<()> {

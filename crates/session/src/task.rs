@@ -107,6 +107,10 @@ pub(crate) enum Internal {
 		job: backfill::Job,
 		outcome: backfill::Outcome,
 	},
+	Kept {
+		channel_id: Snowflake,
+		kept: persist::Kept,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -351,11 +355,14 @@ impl Core {
 	}
 
 	fn apply(&mut self, event: Event<'_>) {
-		let (changes, fresh) = {
+		let (changes, fresh, kept) = {
 			let mut state = self.state.write();
 			let changes = state.apply(&event);
-			(changes, state.take_unrendered())
+			(changes, state.take_unrendered(), state.take_kept_writes())
 		};
+		if !kept.is_empty() {
+			self.persist.submit(Job::Kept(kept));
+		}
 		if !fresh.is_empty() {
 			self.render_messages(fresh);
 		}
@@ -476,8 +483,11 @@ impl Core {
 				self.backfill_channel(channel_id, Some(message_id));
 			}
 			DispatchEvent::MessageUpdate(update) => {
-				self.persist_cached_message(update.channel_id, update.id);
-				self.backfill_channel(update.channel_id, Some(update.id));
+				let (channel_id, message_id) = (update.channel_id, update.id);
+				if !self.persist_cached_message(channel_id, message_id) {
+					self.persist.submit(Job::EditStored(update));
+				}
+				self.backfill_channel(channel_id, Some(message_id));
 			}
 			DispatchEvent::MessageReactionAdd(reaction) => {
 				self.persist_cached_message(reaction.channel_id, reaction.message_id);
@@ -490,12 +500,6 @@ impl Core {
 			}
 			DispatchEvent::MessageReactionRemoveEmoji(reaction) => {
 				self.persist_cached_message(reaction.channel_id, reaction.message_id);
-			}
-			DispatchEvent::MessageDelete(delete) => {
-				self.persist.submit(Job::DeleteMessages(vec![delete.id]));
-			}
-			DispatchEvent::MessageDeleteBulk(delete) => {
-				self.persist.submit(Job::DeleteMessages(delete.ids));
 			}
 			DispatchEvent::MessageAck(ack) => {
 				self.keep_own_ack(&ack);
@@ -516,18 +520,25 @@ impl Core {
 		}
 	}
 
-	fn persist_cached_message(&self, channel_id: Snowflake, message_id: Snowflake) {
-		let message = self
-			.state
-			.read()
-			.messages(channel_id)
-			.and_then(|cache| cache.by_id.get(&message_id).cloned());
-		if let Some(message) = message {
+	fn persist_cached_message(&self, channel_id: Snowflake, message_id: Snowflake) -> bool {
+		let (message, deleted) = {
+			let state = self.state.read();
+			let cache = state.messages(channel_id);
+			(
+				cache.and_then(|cache| cache.by_id.get(&message_id).cloned()),
+				cache.is_some_and(|cache| cache.deleted(message_id).is_some()),
+			)
+		};
+		let Some(message) = message else {
+			return false;
+		};
+		if !deleted {
 			self.persist.submit(Job::Messages {
 				channel_id,
 				messages: vec![message],
 			});
 		}
+		true
 	}
 
 	fn persist_read_state(&self, channel_id: Snowflake) {
@@ -603,6 +614,11 @@ impl Core {
 				status,
 			}),
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
+			Internal::Kept { channel_id, kept } => self.apply_local(LocalEvent::KeptRestored {
+				channel_id,
+				deleted: kept.deleted,
+				versions: kept.versions,
+			}),
 		}
 	}
 
@@ -635,6 +651,7 @@ impl Core {
 			.messages(channel_id)
 			.map(|cached| {
 				ids.iter()
+					.filter(|id| cached.deleted(**id).is_none())
 					.filter_map(|id| cached.by_id.get(id).cloned())
 					.collect()
 			})
@@ -757,6 +774,7 @@ impl Core {
 				self.on_theme_command(command)
 			}
 			Command::Reconnect => self.gateway.reconnect(),
+			Command::ShowDeletedMessages(show) => self.apply_local(LocalEvent::ShowDeletedMessages(show)),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;
@@ -812,10 +830,19 @@ impl Core {
 		let rest = self.rest.clone();
 		let store = self.store.clone();
 		let internal = self.internal.clone();
+		let limits = *self.state.read().limits();
 		self.runtime.spawn(async move {
-			let cached = tokio::task::spawn_blocking(move || persist::load_messages(&store, channel_id))
-				.await
-				.unwrap_or_default();
+			let (kept, cached) = tokio::task::spawn_blocking(move || {
+				(
+					persist::load_kept(&store, channel_id, &limits),
+					persist::load_messages(&store, channel_id),
+				)
+			})
+			.await
+			.unwrap_or_default();
+			if !kept.is_empty() {
+				let _ = internal.send(Internal::Kept { channel_id, kept });
+			}
 			let had_cache = !cached.is_empty();
 			if had_cache {
 				let _ = internal.send(Internal::Messages {

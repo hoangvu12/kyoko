@@ -26,6 +26,7 @@ async fn prune_periodically(store: Arc<Store>, retention: Retention) {
 		match pruned {
 			Ok(Ok(pruned)) => tracing::debug!(
 				messages = pruned.messages,
+				kept = pruned.kept,
 				media_files = pruned.media_files,
 				media_bytes = pruned.media_bytes,
 				"pruned the local cache"

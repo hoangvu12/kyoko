@@ -95,6 +95,7 @@ Gateway controls:
 - `invalidate_session(resumable)` sends op 9. With `false`, mockcord also ends the session, so the client can IDENTIFY again on the same socket. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
 - `set_heartbeat_acks(HeartbeatAcks::Prompt | Delayed(d) | Withheld)` controls op 11 replies.
 - `post_message(channel_id, author_id, content)` posts a message as any fixture user, stores it like a REST send and broadcasts MESSAGE_CREATE. It returns the new id. Use it for incoming messages and for the user's own messages without a send.
+- `edit_message(channel_id, id, content)` edits any stored message as if its author did, sets `edited_timestamp` and broadcasts MESSAGE_UPDATE. `delete_message(channel_id, id)` and `bulk_delete(channel_id, ids)` remove messages as another client or a moderator would and broadcast MESSAGE_DELETE or MESSAGE_DELETE_BULK. Each returns whether mockcord knew the target.
 - `rate_limit_member_requests(retry_after, count)` answers the next `count` op 8 requests with a RATE_LIMITED dispatch (`opcode` 8, `retry_after`, `meta.guild_id` and `meta.nonce`) instead of GUILD_MEMBERS_CHUNK.
 - `dispatch(event, data)` sends a dispatch to every session, with sequence numbers, buffered for resume. Use it for late private channels and other events that arrive after READY.
 - `transform_ready(|identify, ready| ..)` edits READY before it is sent. It sees the IDENTIFY payload, so READY can depend on the advertised capabilities. `reset_ready()` removes it.

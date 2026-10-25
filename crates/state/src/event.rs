@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
 
 use crate::deletions::{DeleteBatch, DeleteStatus};
+use crate::kept::MessageVersion;
 use crate::loaded::Loaded;
 use crate::locks::{RiskyReason, RiskyTarget};
 use crate::messages::{SendFailure, Viewport};
@@ -132,6 +134,12 @@ pub enum LocalEvent {
 		channel_id: Snowflake,
 		user: Box<User>,
 	},
+	KeptRestored {
+		channel_id: Snowflake,
+		deleted: Vec<(Message, DateTime<Utc>)>,
+		versions: Vec<(Snowflake, Vec<MessageVersion>)>,
+	},
+	ShowDeletedMessages(bool),
 }
 
 #[derive(Debug)]

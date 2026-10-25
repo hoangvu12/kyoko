@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use crate::database::MessageLimits;
+use crate::database::{KeptLimits, MessageLimits};
 use crate::error::Result;
 use crate::settings::StorageSettings;
 
@@ -17,6 +17,10 @@ pub struct Retention {
 	pub message_max_age: Duration,
 	pub media_bytes: u64,
 	pub media_max_age: Duration,
+	pub kept_deleted_per_channel: u32,
+	pub kept_versions_per_message: u32,
+	pub kept_versions_per_channel: u32,
+	pub kept_max_age: Duration,
 	pub interval: Duration,
 }
 
@@ -28,6 +32,10 @@ impl Default for Retention {
 			message_max_age: 30 * DAY,
 			media_bytes: 512 * MIB,
 			media_max_age: 30 * DAY,
+			kept_deleted_per_channel: 100,
+			kept_versions_per_message: 10,
+			kept_versions_per_channel: 500,
+			kept_max_age: 7 * DAY,
 			interval: Duration::from_secs(60 * 60),
 		}
 	}
@@ -48,11 +56,21 @@ impl Retention {
 			max_age: self.message_max_age,
 		}
 	}
+
+	pub(crate) fn kept_limits(&self) -> KeptLimits {
+		KeptLimits {
+			deleted_per_channel: self.kept_deleted_per_channel,
+			versions_per_message: self.kept_versions_per_message,
+			versions_per_channel: self.kept_versions_per_channel,
+			max_age: self.kept_max_age,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Pruned {
 	pub messages: usize,
+	pub kept: usize,
 	pub media_files: usize,
 	pub media_bytes: u64,
 }

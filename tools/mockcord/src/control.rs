@@ -122,6 +122,18 @@ impl Control {
 		parse_id(&message["id"])
 	}
 
+	pub fn edit_message(&self, channel_id: u64, id: u64, content: &str) -> bool {
+		self.shared.edit_any_message(channel_id, id, content).is_ok()
+	}
+
+	pub fn delete_message(&self, channel_id: u64, id: u64) -> bool {
+		self.shared.delete_message(channel_id, id).is_ok()
+	}
+
+	pub fn bulk_delete(&self, channel_id: u64, ids: &[u64]) -> bool {
+		self.shared.bulk_delete(channel_id, ids).is_ok()
+	}
+
 	pub fn transform_ready(&self, transform: impl Fn(&Value, &mut Value) + Send + Sync + 'static) {
 		self.shared.scenario.set_ready(Some(Arc::new(transform)));
 	}

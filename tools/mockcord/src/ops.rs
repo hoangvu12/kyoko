@@ -247,12 +247,30 @@ impl Shared {
 	}
 
 	pub fn edit_message(&self, channel_id: u64, id: u64, edit: EditMessage) -> Result<Value, ApiError> {
+		self.edit_as(channel_id, id, edit, Some(CURRENT_USER_ID))
+	}
+
+	pub fn edit_any_message(&self, channel_id: u64, id: u64, content: &str) -> Result<Value, ApiError> {
+		let edit = EditMessage {
+			content: Some(content.to_owned()),
+			..EditMessage::default()
+		};
+		self.edit_as(channel_id, id, edit, None)
+	}
+
+	fn edit_as(
+		&self,
+		channel_id: u64,
+		id: u64,
+		edit: EditMessage,
+		editor: Option<u64>,
+	) -> Result<Value, ApiError> {
 		let mut store = self.store.lock();
 		Self::guild_of(&store, channel_id)?;
 		let message = store
 			.message_mut(channel_id, id)
 			.ok_or_else(ApiError::unknown_message)?;
-		if author_id(message) != CURRENT_USER_ID {
+		if editor.is_some_and(|editor| author_id(message) != editor) {
 			return Err(ApiError::not_author());
 		}
 		if let Some(content) = edit.content {

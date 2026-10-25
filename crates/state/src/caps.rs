@@ -22,6 +22,9 @@ pub struct CacheLimits {
 	pub users: usize,
 	pub profiles: usize,
 	pub referenced_messages: usize,
+	pub kept_deleted: usize,
+	pub kept_edited: usize,
+	pub kept_versions: usize,
 }
 
 impl Default for CacheLimits {
@@ -34,6 +37,9 @@ impl Default for CacheLimits {
 			users: 10_000,
 			profiles: 128,
 			referenced_messages: 256,
+			kept_deleted: 100,
+			kept_edited: 100,
+			kept_versions: 10,
 		}
 	}
 }

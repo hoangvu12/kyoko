@@ -18,7 +18,9 @@ use protocol::Snowflake;
 
 pub use accounts::{Account, AccountStore};
 pub use atomic::write_atomic;
-pub use database::{Database, MediaEntry, MessageLimits, ReadState, Table};
+pub use database::{
+	Database, DeletedRow, KeptDeleted, KeptLimits, KeptVersion, MediaEntry, MessageLimits, ReadState, Table,
+};
 pub use error::{Result, StoreError};
 pub use paths::Paths;
 pub use retention::{Pruned, Retention};
@@ -103,6 +105,7 @@ impl Store {
 	pub fn prune(&self, retention: &Retention) -> Result<Pruned> {
 		let mut pruned = Pruned {
 			messages: self.db.prune_messages(retention.message_limits())?,
+			kept: self.db.prune_kept(retention.kept_limits())?,
 			..Pruned::default()
 		};
 		retention::prune_media(

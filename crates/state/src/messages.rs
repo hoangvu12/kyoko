@@ -6,6 +6,7 @@ use protocol::{Message, MessageUpdate, Nonce, PartialEmoji, Reaction, Snowflake}
 
 use crate::caps::CacheLimits;
 use crate::event::LoadDirection;
+use crate::kept::{DeletedInfo, DeletedMessage, MessageVersion};
 use crate::views::RenderedMessage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +47,8 @@ pub struct ChannelMessages {
 	detached: bool,
 	window: usize,
 	viewport: Option<Viewport>,
+	deleted: HashMap<Snowflake, DeletedMessage>,
+	versions: HashMap<Snowflake, Arc<[MessageVersion]>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,7 +108,7 @@ impl ChannelMessages {
 		channel_last: Option<Snowflake>,
 		open: bool,
 		limits: &CacheLimits,
-	) {
+	) -> Vec<Arc<Message>> {
 		let was_empty = self.ordered.is_empty();
 		let received = messages.len();
 		if direction == LoadDirection::Around {
@@ -123,7 +126,7 @@ impl ChannelMessages {
 		} else {
 			self.window(limits)
 		};
-		match direction {
+		let (limit, end) = match direction {
 			LoadDirection::History => {
 				self.reached_start = reached_start;
 				if was_empty {
@@ -131,24 +134,27 @@ impl ChannelMessages {
 				}
 				if open && !was_empty {
 					self.window = widened;
-					self.trim(widened, End::Newest);
+					(widened, End::Newest)
 				} else {
-					self.trim(widened, End::Oldest);
+					(widened, End::Oldest)
 				}
 			}
 			LoadDirection::Around => {
 				self.reached_start = reached_start;
 				self.detached = self.behind(channel_last);
 				let end = if self.detached { End::Newest } else { End::Oldest };
-				self.trim(self.window(limits), end);
+				(self.window(limits), end)
 			}
 			LoadDirection::Newer => {
 				self.detached = received != 0 && self.behind(channel_last);
 				self.window = widened;
-				self.trim(widened, End::Oldest);
+				(widened, End::Oldest)
 			}
-		}
+		};
+		let spliced = self.splice_deleted();
+		self.trim(limit, end);
 		self.reset_tail_gap(channel_last);
+		spliced
 	}
 
 	pub fn set_viewport(&mut self, viewport: Viewport, limits: &CacheLimits) -> bool {
@@ -235,7 +241,120 @@ impl ChannelMessages {
 		self.extend_tail_gap(newest_dropped);
 	}
 
+	pub fn deleted(&self, id: Snowflake) -> Option<DeletedInfo> {
+		self.deleted.get(&id).map(|kept| kept.info)
+	}
+
+	pub fn deleted_message(&self, id: Snowflake) -> Option<&Arc<Message>> {
+		self.deleted.get(&id).map(|kept| &kept.message)
+	}
+
+	pub fn edit_history(&self, id: Snowflake) -> &[MessageVersion] {
+		self.versions.get(&id).map_or(&[], |versions| versions)
+	}
+
+	pub fn versions_of(&self, id: Snowflake) -> Arc<[MessageVersion]> {
+		self.versions.get(&id).cloned().unwrap_or_else(|| Arc::from([]))
+	}
+
+	pub(crate) fn mark_deleted(&mut self, id: Snowflake, info: DeletedInfo) -> bool {
+		if self.deleted.contains_key(&id) {
+			return false;
+		}
+		let Some(message) = self.by_id.get(&id) else {
+			return false;
+		};
+		let message = Arc::clone(message);
+		self.deleted.insert(id, DeletedMessage { message, info });
+		true
+	}
+
+	pub(crate) fn restore_deleted(&mut self, message: Arc<Message>, info: DeletedInfo) {
+		self.deleted
+			.entry(message.id)
+			.or_insert(DeletedMessage { message, info });
+	}
+
+	pub(crate) fn push_version(&mut self, id: Snowflake, version: MessageVersion) {
+		let mut history = self.edit_history(id).to_vec();
+		history.push(version);
+		self.versions.insert(id, Arc::from(history));
+	}
+
+	pub(crate) fn restore_versions(&mut self, id: Snowflake, restored: &[MessageVersion]) {
+		if self.versions.contains_key(&id) || restored.is_empty() {
+			return;
+		}
+		self.versions.insert(id, Arc::from(restored));
+	}
+
+	pub(crate) fn splice_deleted(&mut self) -> Vec<Arc<Message>> {
+		let Some((oldest, newest)) = self.resident() else {
+			return Vec::new();
+		};
+		let lower = if self.reached_start {
+			Snowflake::default()
+		} else {
+			oldest
+		};
+		let upper = if self.detached {
+			newest
+		} else {
+			Snowflake(u64::MAX)
+		};
+		let missing: Vec<Arc<Message>> = self
+			.deleted
+			.values()
+			.filter(|kept| {
+				let id = kept.message.id;
+				lower <= id && id <= upper && !self.by_id.contains_key(&id)
+			})
+			.map(|kept| Arc::clone(&kept.message))
+			.collect();
+		for message in &missing {
+			self.insert(Arc::clone(message));
+		}
+		missing
+	}
+
+	pub(crate) fn cap_kept(&mut self, limits: &CacheLimits) -> bool {
+		let mut dropped = false;
+		if self.deleted.len() > limits.kept_deleted {
+			let mut by_age: Vec<(DeletedInfo, Snowflake)> =
+				self.deleted.iter().map(|(id, kept)| (kept.info, *id)).collect();
+			by_age.sort_unstable_by_key(|(info, id)| (info.at, *id));
+			let excess = self.deleted.len() - limits.kept_deleted;
+			for (_, id) in by_age.into_iter().take(excess) {
+				self.deleted.remove(&id);
+				dropped |= self.remove_row(id);
+			}
+		}
+		for history in self.versions.values_mut() {
+			if history.len() > limits.kept_versions {
+				let start = history.len() - limits.kept_versions;
+				*history = Arc::from(&history[start..]);
+			}
+		}
+		self.versions.retain(|_, history| !history.is_empty());
+		if self.versions.len() > limits.kept_edited {
+			let mut ids: Vec<Snowflake> = self.versions.keys().copied().collect();
+			ids.sort_unstable();
+			let excess = self.versions.len() - limits.kept_edited;
+			for id in ids.into_iter().take(excess) {
+				self.versions.remove(&id);
+				dropped = true;
+			}
+		}
+		dropped
+	}
+
 	pub fn remove(&mut self, id: Snowflake) -> bool {
+		self.deleted.remove(&id);
+		self.versions.remove(&id);
+		self.remove_row(id)
+	}
+
+	fn remove_row(&mut self, id: Snowflake) -> bool {
 		let Ok(index) = self.ordered.binary_search_by_key(&id, |message| message.id) else {
 			return false;
 		};
@@ -325,7 +444,7 @@ impl ChannelMessages {
 
 	fn behind(&self, channel_last: Option<Snowflake>) -> bool {
 		match (self.newest_id(), channel_last) {
-			(Some(newest), Some(last)) => newest < last,
+			(Some(newest), Some(last)) => newest < last && !self.deleted.contains_key(&last),
 			_ => false,
 		}
 	}

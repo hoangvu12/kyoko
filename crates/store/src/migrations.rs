@@ -2,7 +2,8 @@ use rusqlite::Connection;
 
 use crate::error::{Result, StoreError};
 
-const MIGRATIONS: &[&str] = &["
+const MIGRATIONS: &[&str] = &[
+	"
 	CREATE TABLE kv (
 		key TEXT PRIMARY KEY,
 		value BLOB NOT NULL,
@@ -49,7 +50,26 @@ const MIGRATIONS: &[&str] = &["
 		bytes INTEGER NOT NULL,
 		last_used INTEGER NOT NULL
 	);
-	"];
+	",
+	"
+	CREATE TABLE kept_deleted (
+		id INTEGER PRIMARY KEY,
+		channel_id INTEGER NOT NULL,
+		deleted_at INTEGER NOT NULL,
+		json BLOB NOT NULL
+	);
+	CREATE INDEX kept_deleted_channel ON kept_deleted (channel_id, deleted_at DESC);
+	CREATE TABLE kept_versions (
+		id INTEGER PRIMARY KEY,
+		message_id INTEGER NOT NULL,
+		channel_id INTEGER NOT NULL,
+		kept_at INTEGER NOT NULL,
+		json BLOB NOT NULL
+	);
+	CREATE INDEX kept_versions_message ON kept_versions (message_id, id DESC);
+	CREATE INDEX kept_versions_channel ON kept_versions (channel_id, id DESC);
+	",
+];
 
 pub fn apply(conn: &mut Connection) -> Result<()> {
 	let current: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
