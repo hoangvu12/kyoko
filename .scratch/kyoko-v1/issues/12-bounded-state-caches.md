@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Messages per channel are capped. A limited set of warm channels keep message bodies, and colder channels keep metadata only
 - [ ] Profile and member caches are capped
