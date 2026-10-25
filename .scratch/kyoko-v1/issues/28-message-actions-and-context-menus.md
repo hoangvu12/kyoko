@@ -4,7 +4,7 @@
 
 **Blocked by:** 26 (Message rendering), 10 (Paced read receipts and safe multi-delete)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The context menu matches oxidcord in the parity captures
 - [ ] Copy text, copy link, copy ID, reply, edit, delete, pin, mark unread and react all work
