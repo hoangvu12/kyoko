@@ -13,6 +13,8 @@ name = "bridge"
 protocol.workspace = true
 state.workspace = true
 session.workspace = true
+media.workspace = true
+chrono.workspace = true
 parking_lot.workspace = true
 
 [dev-dependencies]

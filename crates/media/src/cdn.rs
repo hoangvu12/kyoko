@@ -1,6 +1,6 @@
 use url::Url;
 
-const CDN: &str = "https://cdn.discordapp.com";
+pub const CDN: &str = "https://cdn.discordapp.com";
 const MEDIA_PROXY: &str = "https://media.discordapp.net";
 const CDN_HOST: &str = "cdn.discordapp.com";
 const PROXY_HOSTS: [&str; 3] = [
@@ -79,6 +79,14 @@ pub fn avatar_url(
 		),
 		None => default_avatar_url(user_id, legacy_discriminator),
 	}
+}
+
+pub fn still_avatar_url(cdn: &str, user_id: u64, hash: &str, size: u32) -> String {
+	format!(
+		"{}/avatars/{user_id}/{hash}.webp?size={}",
+		cdn.trim_end_matches('/'),
+		clamp_size(size)
+	)
 }
 
 pub fn default_avatar_url(user_id: u64, legacy_discriminator: Option<&str>) -> String {

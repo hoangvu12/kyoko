@@ -3309,6 +3309,7 @@ dependencies = [
  "embed-resource",
  "kyoko-bridge",
  "kyoko-gateway",
+ "kyoko-media",
  "kyoko-protocol",
  "kyoko-rest",
  "kyoko-session",
@@ -3328,6 +3329,8 @@ dependencies = [
 name = "kyoko-bridge"
 version = "0.2.0-beta.1"
 dependencies = [
+ "chrono",
+ "kyoko-media",
  "kyoko-protocol",
  "kyoko-session",
  "kyoko-state",

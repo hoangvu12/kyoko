@@ -14,6 +14,7 @@ use crate::config::MockConfig;
 use crate::control::Control;
 use crate::fixtures::Fixtures;
 use crate::json::parse_id;
+use crate::ops::Draft;
 use crate::rest;
 use crate::state::{Shared, Urls};
 use crate::traffic;
@@ -110,6 +111,19 @@ impl Server {
 			.create_channel(guild_id.0, &json!({ "name": name, "type": 0 }))
 			.ok()?;
 		parse_id(&channel["id"]).map(Snowflake)
+	}
+
+	pub fn cdn_url(&self) -> String {
+		format!("{}/cdn", self.shared.urls.origin)
+	}
+
+	pub fn post_message(&self, channel_id: Snowflake, content: &str) -> Option<Snowflake> {
+		let author = self.shared.fixtures.someone_in(channel_id.0)?.clone();
+		let message = self
+			.shared
+			.post_message(channel_id.0, &author, Draft::text(content))
+			.ok()?;
+		parse_id(&message["id"]).map(Snowflake)
 	}
 
 	pub async fn shutdown(mut self) {

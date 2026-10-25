@@ -1,22 +1,33 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, GuildEntry, Inbox, Sidebar};
+use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, Sidebar, Timeline};
+use media::MediaService;
 use protocol::Snowflake;
 use session::{Command, Session};
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
+use zgx::image::ImageData;
 use zgx::reactive::Runtime;
-use zgx_desktop::{Application, WindowOptions};
+use zgx_desktop::{Application, TaskSpawner, WindowInfo, WindowOptions};
 use zgx_script::{ScriptHost, Shared, Value};
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const INITIALS: usize = 3;
+const AVATAR_POINTS: f64 = 32.;
+const AVATAR_IMAGE: &str = "avatar";
 
-pub fn run(session: Session, inbox: Inbox<Changes>) -> Result<()> {
+pub struct Avatars {
+	pub media: MediaService,
+	pub cdn: String,
+	pub runtime: tokio::runtime::Handle,
+}
+
+pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars) -> Result<()> {
 	let script = ui_dir().join("app.luau");
 	Application::new()
 		.window(WindowOptions {
@@ -28,7 +39,12 @@ pub fn run(session: Session, inbox: Inbox<Changes>) -> Result<()> {
 		})
 		.run(move |cx| {
 			let host = ScriptHost::new(&cx.ui.runtime, script);
-			let link = Link::install(&host, cx.ui.runtime.clone(), session, inbox.clone());
+			let window = Window {
+				runtime: cx.ui.runtime.clone(),
+				tasks: cx.tasks.clone(),
+				info: cx.window_info.clone(),
+			};
+			let link = Link::install(&host, window, session, inbox.clone(), avatars);
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			if let Err(error) = host.reload() {
@@ -49,38 +65,69 @@ fn ui_dir() -> PathBuf {
 		.unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui"))
 }
 
-struct Link {
+struct Window {
 	runtime: Runtime,
+	tasks: TaskSpawner,
+	info: WindowInfo,
+}
+
+struct Link {
+	window: Window,
+	host: ScriptHost,
 	session: RefCell<Option<Session>>,
 	inbox: Inbox<Changes>,
+	avatars: Avatars,
+	avatar_requested: Cell<bool>,
 	sidebar: RefCell<Sidebar>,
+	timeline: RefCell<Timeline>,
 	guilds: Shared,
 	channels: Shared,
 	selected: Shared,
 	guild_name: Shared,
 	status: Shared,
+	open_channel: Shared,
+	channel_name: Shared,
+	messages: Shared,
+	avatar_ready: Shared,
 }
 
 impl Link {
-	fn install(host: &ScriptHost, runtime: Runtime, session: Session, inbox: Inbox<Changes>) -> Rc<Link> {
+	fn install(
+		host: &ScriptHost,
+		window: Window,
+		session: Session,
+		inbox: Inbox<Changes>,
+		avatars: Avatars,
+	) -> Rc<Link> {
 		let link = Rc::new(Link {
-			runtime,
+			window,
+			host: host.clone(),
 			session: RefCell::new(Some(session)),
 			inbox,
+			avatars,
+			avatar_requested: Cell::new(false),
 			sidebar: RefCell::new(Sidebar::default()),
+			timeline: RefCell::new(Timeline::default()),
 			guilds: host.shared("guilds", Value::List(Rc::new([]))),
 			channels: host.shared("channels", Value::List(Rc::new([]))),
 			selected: host.shared("selected_guild", ""),
 			guild_name: host.shared("guild_name", ""),
 			status: host.shared("status", "Connecting"),
+			open_channel: host.shared("open_channel", ""),
+			channel_name: host.shared("channel_name", ""),
+			messages: host.shared("messages", Value::List(Rc::new([]))),
+			avatar_ready: host.shared("avatar_ready", false),
 		});
 		let actions = Rc::downgrade(&link);
 		host.action("select_guild", move |argument| {
-			let Some(link) = actions.upgrade() else {
-				return;
-			};
-			if let Some(guild_id) = snowflake(&argument) {
+			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
 				link.select_guild(guild_id);
+			}
+		});
+		let actions = Rc::downgrade(&link);
+		host.action("select_channel", move |argument| {
+			if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake(&argument)) {
+				link.select_channel(channel_id);
 			}
 		});
 		link
@@ -88,6 +135,7 @@ impl Link {
 
 	async fn drain(self: Rc<Self>) {
 		while let Some(batch) = self.inbox.next().await {
+			tracing::trace!(items = batch.len(), "inbox batch");
 			let mut changes = Changes::default();
 			for item in batch {
 				changes.merge(item);
@@ -102,7 +150,16 @@ impl Link {
 		};
 		let state = state.read();
 		let refresh = self.sidebar.borrow_mut().apply(&state, changes);
-		self.runtime.batch(|| {
+		let moved = refresh.selected && self.open_guild() != self.sidebar.borrow().selected();
+		let messages = if moved {
+			self.timeline.borrow_mut().close()
+		} else {
+			self.timeline.borrow_mut().apply(&state, changes)
+		};
+		if changes.current_user {
+			self.request_avatar(&state);
+		}
+		self.window.runtime.batch(|| {
 			if changes.session || changes.current_user {
 				self.status.set(status_text(&state).as_str().into());
 			}
@@ -112,7 +169,20 @@ impl Link {
 			if refresh.channels || refresh.selected || refresh.guilds {
 				self.publish_selection(&state);
 			}
+			if messages || moved {
+				self.publish_timeline(&state);
+			}
 		});
+		if messages {
+			tracing::debug!(
+				shown = self.timeline.borrow().messages().len(),
+				"timeline published"
+			);
+		}
+	}
+
+	fn open_guild(&self) -> Option<Snowflake> {
+		self.timeline.borrow().open().and_then(|open| open.guild_id)
 	}
 
 	fn select_guild(&self, guild_id: Snowflake) {
@@ -122,12 +192,102 @@ impl Link {
 		let command = {
 			let state = shared.read();
 			let command = self.sidebar.borrow_mut().select(&state, guild_id);
-			self.runtime.batch(|| self.publish_selection(&state));
+			if command.is_some() {
+				self.timeline.borrow_mut().close();
+			}
+			self.window.runtime.batch(|| {
+				self.publish_selection(&state);
+				self.publish_timeline(&state);
+			});
 			command
 		};
 		if let Some(command) = command {
 			self.send(command);
 		}
+	}
+
+	fn select_channel(&self, channel_id: Snowflake) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let command = {
+			let state = shared.read();
+			let sidebar = self.sidebar.borrow();
+			let openable = sidebar
+				.channels()
+				.iter()
+				.any(|channel| channel.id == channel_id && readable(channel.kind));
+			if !openable {
+				return;
+			}
+			let command = self
+				.timeline
+				.borrow_mut()
+				.select(&state, sidebar.selected(), channel_id);
+			self.window.runtime.batch(|| self.publish_timeline(&state));
+			command
+		};
+		if let Some(command) = command {
+			self.send(command);
+		}
+	}
+
+	fn request_avatar(&self, state: &State) {
+		if self.avatar_requested.get() {
+			return;
+		}
+		let Some(user) = state.current_user() else {
+			return;
+		};
+		let pixels = bridge::device_pixels(AVATAR_POINTS, self.scale_factor());
+		let Some(url) = bridge::avatar_url(&self.avatars.cdn, user, pixels) else {
+			return;
+		};
+		self.avatar_requested.set(true);
+		let media = self.avatars.media.clone();
+		let started = Instant::now();
+		let load = self
+			.avatars
+			.runtime
+			.spawn(async move { bridge::load_avatar(&media, &url, pixels).await });
+		let host = self.host.clone();
+		let ready = self.avatar_ready.clone();
+		self.window.tasks.spawn(async move {
+			let decoded = match load.await {
+				Ok(Ok(decoded)) => decoded,
+				Ok(Err(error)) => {
+					tracing::warn!(%error, "the avatar did not load");
+					return;
+				}
+				Err(error) => {
+					tracing::warn!(%error, "the avatar task failed");
+					return;
+				}
+			};
+			match ImageData::new(decoded.width, decoded.height, decoded.rgba) {
+				Ok(image) => {
+					host.image(AVATAR_IMAGE, Some(Arc::new(image)));
+					ready.set(true.into());
+					tracing::info!(
+						pixels,
+						elapsed_ms = started.elapsed().as_millis() as u64,
+						"avatar decoded and handed to the window"
+					);
+				}
+				Err(error) => tracing::warn!(error, "the avatar was not a usable image"),
+			}
+		});
+	}
+
+	fn scale_factor(&self) -> f64 {
+		let info = &self.window.info;
+		let current = info.current_display.with_untracked(|index| *index);
+		info.displays.with_untracked(|displays| {
+			current
+				.and_then(|index| displays.get(index))
+				.or_else(|| displays.iter().find(|display| display.primary))
+				.map_or(1., |display| display.scale_factor)
+		})
 	}
 
 	fn state(&self) -> Option<state::SharedState> {
@@ -163,12 +323,33 @@ impl Link {
 		self.guild_name.set(name.into());
 	}
 
+	fn publish_timeline(&self, state: &State) {
+		let timeline = self.timeline.borrow();
+		let items = timeline.messages().iter().map(message_value).collect();
+		self.messages.set(Value::List(items));
+		let open = timeline.open();
+		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
+		self.open_channel.set(id.as_str().into());
+		let name = open
+			.and_then(|open| state.channel(open.channel_id))
+			.and_then(|channel| channel.name.as_deref())
+			.unwrap_or_default();
+		self.channel_name.set(name.into());
+	}
+
 	fn shutdown(&self) {
 		self.inbox.close();
 		if let Some(session) = self.session.borrow_mut().take() {
 			session.shutdown();
 		}
 	}
+}
+
+fn readable(kind: ChannelKind) -> bool {
+	matches!(
+		kind,
+		ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Thread
+	)
 }
 
 fn snowflake(value: &Value) -> Option<Snowflake> {
@@ -226,6 +407,15 @@ fn channel_value(channel: &ChannelEntry) -> Value {
 		("unread", channel.unread.into()),
 		("muted", channel.muted.into()),
 		("mentions", f64::from(channel.mentions).into()),
+	])
+}
+
+fn message_value(message: &MessageEntry) -> Value {
+	record([
+		("id", message.id.to_string().as_str().into()),
+		("author", message.author.as_str().into()),
+		("content", message.content.as_str().into()),
+		("timestamp", message.timestamp.as_str().into()),
 	])
 }
 

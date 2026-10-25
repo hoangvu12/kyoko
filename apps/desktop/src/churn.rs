@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use mockcord::Server;
 use protocol::Snowflake;
+use state::SharedState;
 
 const GUILD_EVERY: u64 = 3;
 
@@ -26,6 +27,25 @@ pub async fn run(server: Arc<Server>, every: Duration) {
 			if server.create_channel(home, &name).is_some() {
 				tracing::info!(%name, "mock server created a channel");
 			}
+		}
+	}
+}
+
+pub async fn chatter(server: Arc<Server>, state: SharedState, every: Duration) {
+	let mut ticker = tokio::time::interval(every);
+	ticker.tick().await;
+	let mut step = 0u64;
+	loop {
+		ticker.tick().await;
+		let Some(open) = state.read().selected() else {
+			continue;
+		};
+		step += 1;
+		if server
+			.post_message(open.channel_id, &format!("Live message {step}"))
+			.is_some()
+		{
+			tracing::info!(step, "mock server posted a message into the open channel");
 		}
 	}
 }

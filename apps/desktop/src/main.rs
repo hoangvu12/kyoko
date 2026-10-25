@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, bail};
 use bridge::{Inbox, changes_notifier};
 use clap::Parser;
+use media::{Limits, MediaFetcher, MediaService};
 use mockcord::{MockConfig, Server};
 use protocol::Token;
 use session::{Session, SessionConfig};
@@ -19,6 +20,7 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 
 const TOKEN_VARIABLE: &str = "KYOKO_TOKEN";
+const MEDIA_DIR: &str = "media";
 
 #[derive(Parser)]
 #[command(name = "kyoko", version, about = "A native Discord client")]
@@ -49,6 +51,12 @@ struct Cli {
 	churn: Option<u64>,
 	#[arg(
 		long,
+		value_name = "SECONDS",
+		help = "Post a message into the open channel every few seconds, used with --mock"
+	)]
+	chatter: Option<u64>,
+	#[arg(
+		long,
 		value_name = "PATH",
 		help = "Store settings and cache under this directory instead of a scratch one"
 	)]
@@ -68,6 +76,8 @@ struct Backend {
 	token: Token,
 	build_source: Option<Url>,
 	remember_account: bool,
+	cdn: String,
+	loopback_port: Option<u16>,
 }
 
 struct Scratch(Option<PathBuf>);
@@ -88,7 +98,7 @@ fn main() -> Result<()> {
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	let (store, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
+	let (store, media_dir, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
 	let server = if cli.mock {
 		Some(Arc::new(
 			runtime
@@ -114,8 +124,13 @@ fn main() -> Result<()> {
 		_ => None,
 	};
 	let inbox: Inbox<Changes> = Inbox::new();
+	let identity = session::client_identity(&store);
+	let media = {
+		let _entered = runtime.enter();
+		media_service(&identity, backend.loopback_port, media_dir)?
+	};
 	let session = Session::start(SessionConfig {
-		identity: session::client_identity(&store),
+		identity,
 		build_source: backend.build_source,
 		store: Arc::new(store),
 		rest_base: backend.rest_base,
@@ -130,9 +145,25 @@ fn main() -> Result<()> {
 		remember_account: backend.remember_account,
 	})
 	.context("start the session")?;
-	let outcome = ui::run(session, inbox);
-	if let Some(churn) = churn {
-		churn.abort();
+	let chatter = match (&server, cli.chatter) {
+		(Some(server), Some(seconds)) => Some(runtime.spawn(churn::chatter(
+			server.clone(),
+			session.state().clone(),
+			Duration::from_secs(seconds.max(1)),
+		))),
+		_ => None,
+	};
+	let outcome = ui::run(
+		session,
+		inbox,
+		ui::Avatars {
+			media,
+			cdn: backend.cdn,
+			runtime: runtime.handle().clone(),
+		},
+	);
+	for task in [churn, chatter].into_iter().flatten() {
+		task.abort();
 	}
 	if let Some(server) = server {
 		runtime.block_on(async move {
@@ -152,6 +183,8 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		token: Token::new(server.token()),
 		build_source: None,
 		remember_account: true,
+		cdn: server.cdn_url(),
+		loopback_port: Some(server.address().port()),
 	})
 }
 
@@ -169,10 +202,25 @@ fn discord_backend() -> Result<Backend> {
 		token: Token::new(token),
 		build_source: Some(session::discord_build_source()),
 		remember_account: false,
+		cdn: media::cdn::CDN.to_owned(),
+		loopback_port: None,
 	})
 }
 
-fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, Scratch)> {
+fn media_service(
+	identity: &rest::ClientIdentity,
+	loopback_port: Option<u16>,
+	dir: PathBuf,
+) -> Result<MediaService> {
+	let mut fetcher = MediaFetcher::builder().user_agent(identity.fingerprint().user_agent());
+	if let Some(port) = loopback_port {
+		fetcher = fetcher.allow_loopback_http(port);
+	}
+	let fetcher = fetcher.build().context("build the media fetcher")?;
+	Ok(MediaService::new(fetcher, dir, Limits::default()))
+}
+
+fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, Scratch)> {
 	let (root, scratch) = match data_dir {
 		Some(path) => (path, Scratch(None)),
 		None => {
@@ -188,8 +236,9 @@ fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, Scratch)>
 			.save(&paths)
 			.context("keep the store's secrets out of Credential Manager")?;
 	}
+	let media_dir = paths.cache_dir().join(MEDIA_DIR);
 	let store = Store::open(paths).context("open store")?;
-	Ok((store, scratch))
+	Ok((store, media_dir, scratch))
 }
 
 fn init_tracing(filter: &str) {

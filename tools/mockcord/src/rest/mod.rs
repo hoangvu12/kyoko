@@ -165,6 +165,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))
 		.route("/media/{name}", get(media::media))
+		.route("/cdn/avatars/{user_id}/{file}", get(media::avatar))
 		.route("/app", get(web::app))
 		.route("/assets/{name}", get(web::asset))
 		.nest("/api/v9", api.clone())

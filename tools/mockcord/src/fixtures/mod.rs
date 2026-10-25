@@ -108,6 +108,29 @@ impl Fixtures {
 		self.guilds.iter().find(|guild| guild.id == id)
 	}
 
+	pub fn someone_in(&self, channel_id: u64) -> Option<&User> {
+		let others = |user: &&User| user.id.0 != CURRENT_USER_ID;
+		let in_guild = self
+			.guilds
+			.iter()
+			.find(|guild| guild.channel_ids.contains(&channel_id))
+			.and_then(|guild| {
+				guild
+					.members
+					.iter()
+					.filter_map(|member| member.user.as_ref())
+					.find(others)
+			});
+		let in_dm = || {
+			self.channels
+				.get(&channel_id)
+				.and_then(|channel| channel.recipients.iter().find(others))
+		};
+		in_guild
+			.or_else(in_dm)
+			.or_else(|| self.users.values().find(others))
+	}
+
 	pub fn summary(&self) -> FixtureSummary {
 		let unread_channels = self
 			.read_states

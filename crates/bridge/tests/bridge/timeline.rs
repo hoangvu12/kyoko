@@ -1,0 +1,135 @@
+use std::collections::BTreeSet;
+
+use bridge::{ChannelKind, WINDOW};
+use protocol::Snowflake;
+use session::Command;
+
+use crate::harness::Running;
+
+fn first_text_channel(running: &Running) -> Snowflake {
+	running
+		.view
+		.sidebar
+		.channels()
+		.iter()
+		.find(|channel| channel.kind == ChannelKind::Text)
+		.map(|channel| channel.id)
+		.expect("the first guild has a text channel")
+}
+
+fn ack_count(running: &Running, channel_id: Snowflake) -> usize {
+	let path = format!("/channels/{channel_id}/messages/*/ack");
+	running
+		.server
+		.control()
+		.recording()
+		.requests_to("POST", &path)
+		.count()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn opening_a_channel_loads_its_history_and_appends_live_messages() {
+	let mut running = Running::start("timeline").await;
+	let channel_id = first_text_channel(&running);
+	let command = running.open_channel(channel_id).expect("a select command");
+	assert!(matches!(command, Command::SelectChannel { channel_id: id, .. } if id == channel_id));
+	assert!(running.open_channel(channel_id).is_none());
+	running.session().send(command);
+	running
+		.until("the channel history to load", |view| {
+			!view.timeline.messages().is_empty()
+		})
+		.await;
+	let loaded = running.view.timeline.messages().len();
+	assert!(loaded <= WINDOW);
+	let acks_after_open = ack_count(&running, channel_id);
+	assert!(acks_after_open <= 1, "opening acks at most once");
+
+	let posted = running
+		.server
+		.post_message(channel_id, "spike live message")
+		.expect("mockcord posts the message");
+	running
+		.until("the live message to appear", |view| {
+			view.timeline
+				.messages()
+				.last()
+				.is_some_and(|message| message.id == posted)
+		})
+		.await;
+	let messages = running.view.timeline.messages();
+	let last = messages.last().expect("a last message");
+	assert_eq!(last.content, "spike live message");
+	assert!(!last.author.is_empty());
+	assert!(!last.timestamp.is_empty());
+	let ids: BTreeSet<Snowflake> = messages.iter().map(|message| message.id).collect();
+	assert_eq!(ids.len(), messages.len(), "no message is listed twice");
+	assert!(
+		messages.windows(2).all(|pair| pair[0].id < pair[1].id),
+		"messages stay in id order"
+	);
+
+	let second = running
+		.server
+		.post_message(channel_id, "another live message")
+		.expect("mockcord posts again");
+	running
+		.until("the second live message to appear", |view| {
+			view.timeline
+				.messages()
+				.last()
+				.is_some_and(|message| message.id == second)
+		})
+		.await;
+	assert_eq!(
+		ack_count(&running, channel_id),
+		acks_after_open,
+		"live messages are not acked one by one"
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn messages_in_other_channels_leave_the_open_one_alone() {
+	let mut running = Running::start("timeline-other").await;
+	let channel_id = first_text_channel(&running);
+	let guild_id = running.view.sidebar.selected().expect("a guild is selected");
+	let command = running.open_channel(channel_id).expect("a select command");
+	running.session().send(command);
+	running
+		.until("the channel history to load", |view| {
+			!view.timeline.messages().is_empty()
+		})
+		.await;
+	let before = running.view.timeline.messages().to_vec();
+	let other = running
+		.server
+		.create_channel(guild_id, "elsewhere")
+		.expect("mockcord creates a channel");
+	running
+		.until("the other channel to be listed", |view| {
+			view.sidebar.channels().iter().any(|channel| channel.id == other)
+		})
+		.await;
+	running
+		.server
+		.post_message(other, "not here")
+		.expect("mockcord posts elsewhere");
+	let marker = running
+		.server
+		.post_message(channel_id, "here")
+		.expect("mockcord posts into the open channel");
+	running
+		.until("the open channel's message to appear", |view| {
+			view.timeline
+				.messages()
+				.last()
+				.is_some_and(|message| message.id == marker)
+		})
+		.await;
+	let after = running.view.timeline.messages();
+	assert!(after.iter().all(|message| message.content != "not here"));
+	let kept = &after[..after.len() - 1];
+	assert!(before.ends_with(kept), "the earlier messages are unchanged");
+	running.stop().await;
+}
