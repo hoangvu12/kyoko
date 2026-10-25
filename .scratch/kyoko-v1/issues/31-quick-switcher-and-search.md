@@ -4,7 +4,7 @@
 
 **Blocked by:** 28 (Message actions and context menus)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The quick switcher and search panel match oxidcord in the parity captures
 - [ ] Jumping to any server, channel or DM by name works
