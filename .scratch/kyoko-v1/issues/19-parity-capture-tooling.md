@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 (Spike B: live messages, WebP avatar and findings)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A pinned oxidcord reference build (0.2.0-beta.1) runs from a separate checkout outside kyoko's tree
 - [ ] Both apps can be driven to a named screen and state on the same mockcord seed
