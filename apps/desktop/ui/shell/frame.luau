@@ -12,6 +12,7 @@ local login = require("./login")
 local storage_notice = require("./storage_notice")
 local home_page = require("./home_page")
 local settings = require("./settings")
+local search_panel = require("./search_panel")
 
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
@@ -69,10 +70,12 @@ return function()
 						composer(),
 					},
 					ui.show(function()
+						return state.search.panel:get().open and sidebar_shown()
+					end, search_panel(), ui.show(function()
 						return members_room()
 							and state.shell.members_visible:get()
 							and state.sidebar.guild_id:get() ~= ""
-					end, member_list()),
+					end, member_list())),
 				},
 				home_page(),
 			},

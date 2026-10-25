@@ -145,8 +145,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `quick-switcher` | 31 | Default selection, then open the quick switcher with no query. | no |
-| `search` | 31 | Default selection, then search the guild for "the" and show the results panel. | no |
+| `quick-switcher` | 31 | Default selection, then open the quick switcher with no query. Kyoko's field shows its caret, being focused. | yes |
+| `search` | 31 | Default selection, then search the guild for "the" and show the results panel. Kyoko runs it through the top bar's `search.run`. | yes |
 
 ### 32 Lightbox and pickers
 

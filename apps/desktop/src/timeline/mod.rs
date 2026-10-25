@@ -17,7 +17,9 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bridge::{Access, DeleteProgress, Delta, EmojiPicker, Row, RowKey, Timeline};
+use bridge::{
+	Access, DeleteProgress, Delta, EmojiPicker, MessageAction, MessageEntry, Row, RowKey, Timeline,
+};
 use media::{Gallery, ImageName};
 use protocol::Snowflake;
 use session::Command;
@@ -32,9 +34,10 @@ use zgx::reactive::{Effect, Runtime, Signal};
 pub use self::actions::Compose;
 use self::actions::{MessageActions, Wiring};
 use self::dialogs::Dialogs;
+pub(crate) use self::icons::icon;
 use self::links::Links;
 use self::picker::ReactionPicker;
-use self::pictures::Pictures;
+pub(crate) use self::pictures::Pictures;
 pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
 pub(crate) use self::rows::{TypeSize, tok};
@@ -97,6 +100,7 @@ pub struct TimelineView {
 	visible_changed: Callback<()>,
 	actions: Rc<MessageActions>,
 	pending_jump: Cell<Option<Snowflake>>,
+	pending_action: Cell<Option<MessageAction>>,
 }
 
 impl TimelineView {
@@ -157,6 +161,7 @@ impl TimelineView {
 			visible_changed: RefCell::new(None),
 			actions,
 			pending_jump: Cell::new(None),
+			pending_action: Cell::new(None),
 		});
 		let jumper = Rc::downgrade(&view);
 		view.actions.on_jump(move |message_id| {
@@ -219,8 +224,39 @@ impl TimelineView {
 		self.actions.rejected(reason);
 	}
 
+	pub fn on_reveal(&self, reveal: impl Fn((Snowflake, MessageAction)) + 'static) {
+		self.actions.on_reveal(reveal);
+	}
+
+	pub fn open_menu_at(&self, entry: &MessageEntry, access: Access, at: (f32, f32)) -> bool {
+		self.actions.open_menu_at(entry, access, at)
+	}
+
+	pub fn jump_then(&self, message_id: Snowflake, action: MessageAction) {
+		self.pending_action.set(Some(action));
+		self.jump_to(message_id);
+		if self.pending_jump.get().is_none() {
+			self.run_pending(message_id);
+		}
+	}
+
+	fn run_pending(&self, message_id: Snowflake) {
+		let Some(action) = self.pending_action.take() else {
+			return;
+		};
+		let row = self
+			.rows
+			.borrow()
+			.get(&RowKey::Message(message_id))
+			.map(|row| row.with_untracked(Rc::clone));
+		if let Some(Row::Message(entry)) = row.as_deref() {
+			self.actions.run(action, entry, zgx::input::Modifiers::default());
+		}
+	}
+
 	pub fn jump_to(&self, message_id: Snowflake) {
 		if self.scroll_to(&RowKey::Message(message_id)) {
+			self.pending_jump.set(None);
 			return;
 		}
 		let Some(channel_id) = self.channel.get() else {
@@ -466,6 +502,7 @@ impl TimelineView {
 		let switched = channel != self.channel.replace(channel);
 		if switched {
 			self.pending_jump.set(None);
+			self.pending_action.set(None);
 			self.actions.reset();
 		}
 		let reset = delta.reset || switched;
@@ -544,6 +581,7 @@ impl TimelineView {
 			&& self.scroll_to(&RowKey::Message(message_id))
 		{
 			self.pending_jump.set(None);
+			self.run_pending(message_id);
 		}
 	}
 

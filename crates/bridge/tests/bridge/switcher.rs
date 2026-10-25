@@ -201,59 +201,60 @@ fn remembering_keeps_the_newest_eight_without_repeats() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_server_channel_and_conversation_can_be_reached_by_name() {
 	let running = Running::start("switcher-entries").await;
-	let state = running.session().state().read();
-	let entries = switcher_entries(&state);
-	for guild in state.guild_summaries() {
-		assert!(
-			entries
-				.iter()
-				.any(|entry| entry.target == SwitcherTarget::Guild(guild.id))
-		);
-		for row in state
-			.guild_channel_tree(guild.id)
-			.into_iter()
-			.flat_map(|node| node.children)
-		{
-			let listed = entries.iter().any(|entry| {
-				entry.target
-					== SwitcherTarget::Channel {
-						guild_id: Some(guild.id),
-						channel_id: row.id,
-					}
-			});
-			let reachable =
-				!row.locked && !matches!(row.kind, ChannelType::GuildForum | ChannelType::GuildMedia);
-			assert_eq!(listed, reachable, "{} ({:?})", row.name, row.kind);
+	{
+		let state = running.session().state().read();
+		let entries = switcher_entries(&state);
+		for guild in state.guild_summaries() {
+			assert!(
+				entries
+					.iter()
+					.any(|entry| entry.target == SwitcherTarget::Guild(guild.id))
+			);
+			for row in state
+				.guild_channel_tree(guild.id)
+				.into_iter()
+				.flat_map(|node| node.children)
+			{
+				let listed = entries.iter().any(|entry| {
+					entry.target
+						== SwitcherTarget::Channel {
+							guild_id: Some(guild.id),
+							channel_id: row.id,
+						}
+				});
+				let reachable =
+					!row.locked && !matches!(row.kind, ChannelType::GuildForum | ChannelType::GuildMedia);
+				assert_eq!(listed, reachable, "{} ({:?})", row.name, row.kind);
+			}
 		}
-	}
-	for row in state.dm_rows() {
-		let entry = entries
-			.iter()
-			.find(|entry| {
-				entry.target
-					== SwitcherTarget::Channel {
-						guild_id: None,
-						channel_id: row.channel_id,
-					}
-			})
-			.expect("the conversation is listed");
-		assert_eq!(entry.name, row.name);
-		let mut switcher = QuickSwitcher::new(entries.clone(), &RecentTargets::default());
-		switcher.set_query(&format!("@{}", row.name));
-		assert!(
-			switcher
-				.results()
+		for row in state.dm_rows() {
+			let entry = entries
 				.iter()
-				.any(|shown| switcher.entry(shown).target == entry.target),
-			"typing the name finds {}",
-			row.name
-		);
+				.find(|entry| {
+					entry.target
+						== SwitcherTarget::Channel {
+							guild_id: None,
+							channel_id: row.channel_id,
+						}
+				})
+				.expect("the conversation is listed");
+			assert_eq!(entry.name, row.name);
+			let mut switcher = QuickSwitcher::new(entries.clone(), &RecentTargets::default());
+			switcher.set_query(&format!("@{}", row.name));
+			assert!(
+				switcher
+					.results()
+					.iter()
+					.any(|shown| switcher.entry(shown).target == entry.target),
+				"typing the name finds {}",
+				row.name
+			);
+		}
+		let voice = entries
+			.iter()
+			.filter(|entry| entry.category == SwitcherCategory::Voice)
+			.count();
+		assert!(voice > 0, "voice channels are listed apart");
 	}
-	let voice = entries
-		.iter()
-		.filter(|entry| entry.category == SwitcherCategory::Voice)
-		.count();
-	assert!(voice > 0, "voice channels are listed apart");
-	drop(state);
 	running.stop().await;
 }

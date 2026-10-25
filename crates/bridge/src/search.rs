@@ -293,11 +293,17 @@ fn refusal_text(failure: &SendFailure) -> String {
 	}
 }
 
-fn hit(state: &State, message: &Arc<protocol::Message>, today: NaiveDate) -> SearchHit {
-	let entry = detached_entry(state, message);
+fn hit(
+	state: &State,
+	scope: Option<Snowflake>,
+	message: &Arc<protocol::Message>,
+	today: NaiveDate,
+) -> SearchHit {
 	let guild_id = message
 		.guild_id
+		.or(scope)
 		.or_else(|| state.channel_guild(message.channel_id));
+	let entry = detached_entry(state, guild_id, message);
 	let place = state
 		.channel(message.channel_id)
 		.and_then(|channel| channel.name.clone())
@@ -320,7 +326,7 @@ impl SearchPanel {
 		let hits = results
 			.messages
 			.iter()
-			.map(|message| hit(state, &Arc::new(message.clone()), today))
+			.map(|message| hit(state, results.guild_id, &Arc::new(message.clone()), today))
 			.collect();
 		let searching = results.status == SearchStatus::Searching && results.messages.is_empty();
 		Self {

@@ -5,6 +5,7 @@ mod message_actions;
 mod profiles;
 #[cfg(test)]
 mod scripts;
+mod search;
 mod settings;
 mod sign_in;
 
@@ -155,8 +156,10 @@ pub fn run(
 			let transcript = link.timeline_view.view();
 			let profiles = link.profile.view();
 			let escaped = Rc::downgrade(&link);
+			let switcher = link.finder.view();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
+			let keys = Rc::downgrade(&link);
 			cx.on_closed(move || {
 				frame::wake_until_loop_ends();
 				if let Some(integration) = integration {
@@ -172,6 +175,7 @@ pub fn run(
 					.child(host.view())
 					.child(timeline_slot(slot, transcript))
 					.child(profiles)
+					.child(switcher)
 					.on_event(move |event| {
 						if event.phase == zgx::input::EventPhase::Capture {
 							return;
@@ -181,6 +185,14 @@ pub fn run(
 							..
 						} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
 						{
+							event.stop_propagation();
+							return;
+						}
+						if is_switcher_key(&event.event) {
+							if let Some(link) = keys.upgrade() {
+								link.open_switcher();
+							}
+							event.prevent_default();
 							event.stop_propagation();
 							return;
 						}
@@ -223,6 +235,17 @@ fn timeline_slot(slot: Signal<Slot>, transcript: View) -> View {
 			.w(slot.width)
 			.h(slot.height)
 	})
+}
+
+fn is_switcher_key(event: &zgx::input::InputEvent) -> bool {
+	match event {
+		zgx::input::InputEvent::KeyDown {
+			key: zgx::input::Key::Character(character),
+			modifiers,
+			repeat: false,
+		} => modifiers.control && !modifiers.alt && character.eq_ignore_ascii_case("k"),
+		_ => false,
+	}
 }
 
 fn themes_dir() -> PathBuf {
@@ -282,6 +305,7 @@ pub(crate) struct Link {
 	pending_dm: Cell<Option<Snowflake>>,
 	composer: composer::ComposerView,
 	settings: settings::SettingsView,
+	finder: search::Finder,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -325,6 +349,7 @@ impl Link {
 		);
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
 		let profile = ProfileLayer::new(&window.runtime, timeline_view.pictures());
+		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -354,6 +379,7 @@ impl Link {
 			pending_dm: Cell::new(None),
 			composer,
 			settings,
+			finder,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -379,6 +405,7 @@ impl Link {
 		member_list::install_actions(host, &link);
 		Link::install_settings(host, &link);
 		Link::install_profiles(host, &link);
+		Link::install_search(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -571,6 +598,7 @@ impl Link {
 		}
 		self.watch_session(changes);
 		let opened = self.publish(changes);
+		self.follow_friend(changes);
 		if let Some((opening, open)) = opened {
 			if let Some(guild_id) = open.guild_id {
 				self.select_guild(guild_id);
@@ -624,12 +652,27 @@ impl Link {
 			| capture::Screen::ProfilePopout
 			| capture::Screen::FullProfile => self.drive_profiles(capture.screen).await,
 			capture::Screen::UserPanel => {}
+			capture::Screen::QuickSwitcher => {
+				self.open_switcher();
+				self.until_capture(|link| link.switcher_settled()).await;
+			}
+			capture::Screen::Search => {
+				self.drive_search(capture::SEARCH_QUERY);
+				self.until_capture(|link| link.search_settled()).await;
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
 		match capture::signal_ready(&capture.ready) {
 			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),
 			Err(error) => tracing::warn!(%error, "could not signal the capture screen"),
+		}
+	}
+
+	async fn until_capture(&self, ready: impl Fn(&Self) -> bool) {
+		let started = Instant::now();
+		while !ready(self) && started.elapsed() < capture::LIMIT {
+			zgx::timer::sleep(capture::POLL).await;
 		}
 	}
 
@@ -769,6 +812,7 @@ impl Link {
 			self.publish_actions(&state, changes);
 			self.settings_apply(&state, changes);
 			self.publish_profiles(&state, changes);
+			self.search_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -892,6 +936,7 @@ impl Link {
 	fn publish_timeline(&self, state: &State) {
 		let timeline = self.timeline.borrow();
 		let open = timeline.open();
+		self.remember_open(open);
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
 		self.show_members(open);
@@ -934,6 +979,7 @@ impl Link {
 		names.extend(self.member_avatars.borrow().iter().cloned());
 		names.extend(self.settings_images());
 		names.extend(self.profile_images());
+		names.extend(self.search_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

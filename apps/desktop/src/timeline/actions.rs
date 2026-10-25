@@ -55,6 +55,7 @@ pub struct HeldReaction {
 pub struct ContextMenu {
 	serial: u64,
 	entry: Rc<MessageEntry>,
+	access: Access,
 	at: (f32, f32),
 	open: Signal<bool>,
 }
@@ -86,6 +87,7 @@ pub struct MessageActions {
 	commands: Rc<Sender>,
 	compose: Hook<Compose>,
 	jump: Hook<Snowflake>,
+	reveal: Hook<(Snowflake, MessageAction)>,
 	profile: Hook<(Snowflake, (f32, f32))>,
 	emoji: Source<EmojiPicker>,
 	pointer: Cell<(f32, f32)>,
@@ -123,6 +125,7 @@ impl MessageActions {
 			commands: wiring.commands,
 			compose: RefCell::new(None),
 			jump: RefCell::new(None),
+			reveal: RefCell::new(None),
 			profile: RefCell::new(None),
 			emoji: RefCell::new(None),
 			pointer: Cell::new((0., 0.)),
@@ -138,6 +141,10 @@ impl MessageActions {
 
 	pub fn on_jump(&self, hook: impl Fn(Snowflake) + 'static) {
 		*self.jump.borrow_mut() = Some(Box::new(hook));
+	}
+
+	pub fn on_reveal(&self, hook: impl Fn((Snowflake, MessageAction)) + 'static) {
+		*self.reveal.borrow_mut() = Some(Box::new(hook));
 	}
 
 	pub fn on_profile(&self, hook: impl Fn((Snowflake, (f32, f32))) + 'static) {
@@ -276,9 +283,41 @@ impl MessageActions {
 	}
 
 	pub fn run(self: &Rc<Self>, action: MessageAction, entry: &MessageEntry, modifiers: Modifiers) {
+		let access = self.access.with_untracked(|access| *access);
+		self.run_in(action, entry, modifiers, access);
+	}
+
+	fn is_open(&self, access: &Access) -> bool {
+		self.access
+			.with_untracked(|open| open.channel_id.is_some() && open.channel_id == access.channel_id)
+	}
+
+	fn act(
+		self: &Rc<Self>,
+		action: MessageAction,
+		entry: &MessageEntry,
+		modifiers: Modifiers,
+		access: Access,
+	) {
+		if self.is_open(&access) || !needs_open_channel(action) {
+			self.run_in(action, entry, modifiers, access);
+			return;
+		}
+		match self.reveal.borrow().as_ref() {
+			Some(reveal) => reveal((entry.id, action)),
+			None => tracing::debug!(?action, "nothing opens the message to act on it"),
+		}
+	}
+
+	fn run_in(
+		self: &Rc<Self>,
+		action: MessageAction,
+		entry: &MessageEntry,
+		modifiers: Modifiers,
+		access: Access,
+	) {
 		let channel_id = entry.message.channel_id;
 		let message_id = entry.id;
-		let access = self.access.with_untracked(|access| *access);
 		match action {
 			MessageAction::React => self.open_picker(entry),
 			MessageAction::Reply => self.compose(Compose::Reply(message_id)),
@@ -385,17 +424,22 @@ impl MessageActions {
 	}
 
 	pub fn open_menu(&self, entry: &MessageEntry) -> bool {
+		let access = self.access.with_untracked(|access| *access);
+		self.open_menu_at(entry, access, self.pointer.get())
+	}
+
+	pub fn open_menu_at(&self, entry: &MessageEntry, access: Access, (x, y): (f32, f32)) -> bool {
 		if !bridge::has_actions(entry) {
 			return false;
 		}
-		let entries = self.menu_entries(entry);
+		let entries = self.menu_entries(entry, &access);
 		if entries.is_empty() {
 			return false;
 		}
 		let serial = self.menus.get() + 1;
 		self.menus.set(serial);
-		let ((x, y), (left, top), (width, height)) =
-			(self.pointer.get(), self.origin.get(), self.window.get());
+		self.pointer.set((x, y));
+		let ((left, top), (width, height)) = (self.origin.get(), self.window.get());
 		let x = (x - MENU_BORDER).min(width - MENU_MARGIN - MENU_WIDTH).max(0.);
 		let y = (y - MENU_BORDER)
 			.min(height - MENU_MARGIN - menu_height(&entries))
@@ -403,6 +447,7 @@ impl MessageActions {
 		self.context.set(Some(ContextMenu {
 			serial,
 			entry: Rc::new(entry.clone()),
+			access,
 			at: (x - left, y - top),
 			open: self.runtime.signal(true),
 		}));
@@ -426,35 +471,49 @@ impl MessageActions {
 						offset: 0.,
 					}),
 				)
-				.children(this.menu_items(&menu.entry))
+				.children(this.menu_items(&menu.entry, menu.access))
 			},
 		)
 	}
 
-	fn menu_entries(&self, entry: &MessageEntry) -> Vec<MenuEntry> {
-		let access = self.access.with_untracked(|access| *access);
-		let context = MenuContext {
-			developer_mode: self.developer_mode.get(),
-			selected: self
-				.selection
-				.with_untracked(|selection| selection.contains(&entry.id)),
-			selection: self.selection.with_untracked(BTreeSet::len),
-		};
-		bridge::message_menu(entry, &access, context)
+	fn selection_in(&self, access: &Access) -> usize {
+		if self.is_open(access) {
+			self.selection.with_untracked(BTreeSet::len)
+		} else {
+			0
+		}
 	}
 
-	pub fn menu_items(self: &Rc<Self>, entry: &Rc<MessageEntry>) -> Vec<View> {
-		let selection = self.selection.with_untracked(BTreeSet::len);
-		self.menu_entries(entry)
+	fn menu_entries(&self, entry: &MessageEntry, access: &Access) -> Vec<MenuEntry> {
+		let context = MenuContext {
+			developer_mode: self.developer_mode.get(),
+			selected: self.is_open(access)
+				&& self
+					.selection
+					.with_untracked(|selection| selection.contains(&entry.id)),
+			selection: self.selection_in(access),
+		};
+		bridge::message_menu(entry, access, context)
+	}
+
+	pub fn menu_items(self: &Rc<Self>, entry: &Rc<MessageEntry>, access: Access) -> Vec<View> {
+		let selection = self.selection_in(&access);
+		self.menu_entries(entry, &access)
 			.into_iter()
 			.map(|item| match item {
 				MenuEntry::Separator => separator(),
-				MenuEntry::Action(action) => self.menu_item(action, entry, selection),
+				MenuEntry::Action(action) => self.menu_item(action, entry, selection, access),
 			})
 			.collect()
 	}
 
-	fn menu_item(self: &Rc<Self>, action: MessageAction, entry: &Rc<MessageEntry>, selection: usize) -> View {
+	fn menu_item(
+		self: &Rc<Self>,
+		action: MessageAction,
+		entry: &Rc<MessageEntry>,
+		selection: usize,
+		access: Access,
+	) -> View {
 		let label = action.label(selection);
 		let color = if action.is_danger() {
 			"danger"
@@ -474,7 +533,7 @@ impl MessageActions {
 					.child(icon(action.icon(), MENU_ICON, color))
 					.child(text(label).text_size(tok("font_sm")).text_color(tok(color))),
 			)
-			.on_click_with(move |modifiers| this.run(action, &entry, modifiers))
+			.on_click_with(move |modifiers| this.act(action, &entry, modifiers, access))
 	}
 
 	pub fn toolbar(self: &Rc<Self>, entry: &Rc<MessageEntry>, more_open: Signal<bool>) -> View {
@@ -504,7 +563,7 @@ impl MessageActions {
 			.border_color(tok("divider"))
 			.bg(tok("background_primary"))
 			.children(buttons)
-			.child(menu_panel(menu("More", more_open, more)).children(self.menu_items(entry)))
+			.child(menu_panel(menu("More", more_open, more)).children(self.menu_items(entry, access)))
 	}
 
 	pub fn footer(self: &Rc<Self>) -> View {
@@ -620,6 +679,18 @@ impl MessageActions {
 			}
 		}
 	}
+}
+
+fn needs_open_channel(action: MessageAction) -> bool {
+	matches!(
+		action,
+		MessageAction::React
+			| MessageAction::Reply
+			| MessageAction::Edit
+			| MessageAction::Select
+			| MessageAction::Deselect
+			| MessageAction::DeleteSelected
+	)
 }
 
 fn copy(text: &str) {

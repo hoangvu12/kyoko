@@ -13,7 +13,7 @@ use crate::ui::{Link, record};
 
 const AVATAR_POINTS: f64 = 32.;
 const PAGES: [&str; 4] = ["friends", "nitro", "shop", "requests"];
-const LATER: [&str; 2] = ["dms.search", "dms.create_group"];
+const LATER: [&str; 1] = ["dms.create_group"];
 
 pub(crate) struct DmSidebarView {
 	list: RefCell<DmList>,

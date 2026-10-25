@@ -48,6 +48,13 @@ icon_files!(
 	"profile",
 	"account",
 	"log_out",
+	"megaphone",
+	"volume",
+	"stage",
+	"forum",
+	"at_sign",
+	"group",
+	"home",
 );
 
 thread_local! {

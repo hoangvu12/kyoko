@@ -11,6 +11,7 @@ pub const SCROLL_PASSES: usize = 10;
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
+pub const SEARCH_QUERY: &str = "the";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -41,6 +42,8 @@ pub enum Screen {
 	CustomStatus,
 	ProfilePopout,
 	FullProfile,
+	QuickSwitcher,
+	Search,
 }
 
 impl Screen {
@@ -65,6 +68,8 @@ impl Screen {
 			"custom-status" => Some(Screen::CustomStatus),
 			"profile-popout" => Some(Screen::ProfilePopout),
 			"full-profile" => Some(Screen::FullProfile),
+			"quick-switcher" => Some(Screen::QuickSwitcher),
+			"search" => Some(Screen::Search),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
@@ -91,7 +96,9 @@ impl Screen {
 			| Screen::StatusMenu
 			| Screen::CustomStatus
 			| Screen::ProfilePopout
-			| Screen::FullProfile => Some(Opening::First),
+			| Screen::FullProfile
+			| Screen::QuickSwitcher
+			| Screen::Search => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

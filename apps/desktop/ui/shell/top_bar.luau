@@ -3,8 +3,11 @@ local state = require("../state")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local status_dot = require("@components/status_dot")
+local actions = require("../actions")
 
 local SEARCH_WIDTH = 144
+local SEARCH_FOCUSED_WIDTH = 240
+local SEARCH_SLIDE = 180
 local SEARCH_HEIGHT = 24
 local TITLE_ICON = 24
 local SEARCH_ICON = 16
@@ -12,6 +15,7 @@ local STATUS_DOT = 10
 local STATUSES = { "online", "idle", "dnd", "offline" }
 
 local query = ui.state("query", "")
+local searching = ui.state("top_bar.search_focused", false)
 
 local function topic()
 	return ui.show(function()
@@ -72,7 +76,7 @@ end
 
 local function search()
 	return ui.row {
-		w = SEARCH_WIDTH,
+		w = ui.tween(searching, { from = SEARCH_WIDTH, to = SEARCH_FOCUSED_WIDTH, duration = SEARCH_SLIDE, ease = "outQuint" }),
 		h = SEARCH_HEIGHT,
 		shrink = 0,
 		items = "center",
@@ -93,6 +97,22 @@ local function search()
 			placeholder = "Search",
 			placeholder_color = theme.color.text_muted,
 			value = query,
+			on_focus = function()
+				searching:set(true)
+			end,
+			on_blur = function()
+				searching:set(false)
+			end,
+			on_key = function(event: any): boolean?
+				if event.key == "Enter" then
+					local text = query:get()
+					if string.match(text, "%S") then
+						actions.run_search(text)
+					end
+					return true
+				end
+				return nil
+			end,
 		},
 		icon { name = "search", size = SEARCH_ICON, color = theme.color.text_muted },
 	}

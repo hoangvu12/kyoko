@@ -91,6 +91,14 @@ export type UserPanel = {
 	status: string,
 	latency: string,
 }
+export type SearchHit = { key: string, id: string, author: string, avatar: string, time: string, place: string, text: string }
+export type SearchPanel = {
+	open: boolean,
+	title: string,
+	notice: string,
+	busy: boolean,
+	more: boolean,
+}
 
 local M = {}
 
@@ -192,6 +200,18 @@ M.settings = {
 	account = ui.shared("settings.account", nil :: SettingsAccount?),
 	notes = ui.shared("settings.notes", {} :: { [string]: string }),
 	about = ui.shared("settings.about", { data_dir = "", version = "" } :: SettingsAbout),
+}
+
+M.search = {
+	panel = ui.shared("search.panel", {
+		open = false,
+		title = "",
+		notice = "",
+		busy = false,
+		more = false,
+	} :: SearchPanel),
+	hits = ui.shared("search.hits", {} :: { SearchHit }),
+	chips = ui.shared("search.chips", {} :: { string }),
 }
 
 return M

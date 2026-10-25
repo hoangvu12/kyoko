@@ -11,6 +11,7 @@ mod notify;
 mod profile;
 mod rail;
 mod sidebar;
+mod switcher;
 mod theme;
 mod timeline;
 mod tray;

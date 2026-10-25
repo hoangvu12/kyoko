@@ -115,6 +115,28 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"the search results",
+		"i spent the weekend on the parser",
+		&[
+			(
+				"search.panel",
+				json!({ "open": true, "title": "2 Results", "notice": "", "busy": false, "more": true }),
+			),
+			("search.chips", json!(["from: ada", "has: link"])),
+			("search.hits", search_hits()),
+		],
+	);
+	shows(
+		&mut app,
+		"the closed search results",
+		"Playing Chess",
+		&[(
+			"search.panel",
+			json!({ "open": false, "title": "", "notice": "", "busy": false, "more": false }),
+		)],
+	);
+	shows(
+		&mut app,
 		"a home page",
 		"Coming in a later version.",
 		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],
@@ -218,6 +240,19 @@ fn setting_values(typing_animation: bool) -> serde_json::Value {
 			.map(|(key, value)| (key.to_owned(), value))
 			.collect(),
 	)
+}
+
+fn search_hits() -> serde_json::Value {
+	json!([
+		{
+			"key": "s50", "id": "50", "author": "ada", "avatar": "", "time": "Today at 9:41 AM",
+			"place": "#general", "text": "i spent the weekend on the parser",
+		},
+		{
+			"key": "s51", "id": "51", "author": "grace", "avatar": "", "time": "Yesterday at 6:02 PM",
+			"place": "", "text": "the docs are missing a section",
+		},
+	])
 }
 
 fn settings_account() -> serde_json::Value {

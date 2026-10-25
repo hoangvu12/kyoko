@@ -196,4 +196,24 @@ function M.settings_action(name: string)
 	ui.invoke("settings." .. name)
 end
 
+function M.run_search(query: string)
+	ui.invoke("search.run", query)
+end
+
+function M.close_search()
+	ui.invoke("search.close")
+end
+
+function M.more_results()
+	ui.invoke("search.more")
+end
+
+function M.open_result(id: string)
+	ui.invoke("search.open_result", id)
+end
+
+function M.result_menu(id: string, x: number, y: number)
+	ui.invoke("search.menu", { id = id, x = x, y = y })
+end
+
 return M

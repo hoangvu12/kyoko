@@ -399,11 +399,12 @@ fn entry(state: &State, guild_id: Option<Snowflake>, view: MessageView, body: Ar
 	}
 }
 
-pub fn detached_entry(state: &State, message: &Arc<Message>) -> MessageEntry {
-	let view = state.detached_view(message);
+pub fn detached_entry(state: &State, guild_id: Option<Snowflake>, message: &Arc<Message>) -> MessageEntry {
 	let guild_id = message
 		.guild_id
+		.or(guild_id)
 		.or_else(|| state.channel_guild(message.channel_id));
+	let view = state.detached_view(guild_id, message);
 	let body = Arc::new(Body::parse(&view.message, view.rendered.as_deref()));
 	entry(state, guild_id, view, body)
 }
