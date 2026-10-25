@@ -19,9 +19,9 @@ tools/mockcord      mock Discord REST and gateway server driven by fixtures, wit
 tools/xtask         test, headless-run, theme catalog tooling, release notes
 ```
 
-Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session` and `state`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
+Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state` and `media`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
 
-Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`. Cache limits, warm channels and the message window are in `docs/caches.md`. Risky-action locks and the safety setting are in `docs/locks.md`.
+Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`. Cache limits, warm channels and the message window are in `docs/caches.md`. Risky-action locks and the safety setting are in `docs/locks.md`. Findings from the zgx spike (build times, memory, bridge latency, the real-traffic comparison) are in `docs/spike.md`.
 
 ## Session hooks
 

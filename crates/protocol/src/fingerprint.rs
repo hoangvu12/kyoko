@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::snowflake::Snowflake;
 
 pub const CHROME_MAJOR: u32 = 152;
-pub const FALLBACK_BUILD_NUMBER: u64 = 647615;
+pub const FALLBACK_BUILD_NUMBER: u64 = 649389;
 pub const API_VERSION: u32 = 9;
 pub const WEB_ORIGIN: &str = "https://discord.com";
 pub const APP_URL: &str = "https://discord.com/app";
