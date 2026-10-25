@@ -100,7 +100,15 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `timeline-media` | 26 | Default selection, then jump to the newest loaded message with an image attachment. | no |
+| `timeline-media` | 26 | Default selection, then jump to the newest loaded message with an image attachment. | yes |
+| `timeline-markdown` | 26 | Open `#showcase` (the mock fixtures' channel with every kind of message), then jump to its `-# showcase: markdown` message: styles, headings, subtext, lists, a quote, a highlighted code block. | yes |
+| `timeline-inline` | 26 | As above, jump to `-# showcase: inline`: spoilers, links, mentions, timestamps, custom and jumbo emoji. | yes |
+| `timeline-embeds` | 26 | As above, jump to `-# showcase: embeds`: a rich embed with fields, an article and a link preview. | yes |
+| `timeline-embeds-media` | 26 | As above, jump to `-# showcase: embed media`: video, image and GIF embeds. | yes |
+| `timeline-attachments` | 26 | As above, jump to `-# showcase: attachments`: image attachments and a GIF. | yes |
+| `timeline-files` | 26 | As above, jump to `-# showcase: files and stickers`: file and video cards, PNG, GIF and Lottie stickers. | yes |
+| `timeline-replies` | 26 | As above, jump to `-# showcase: replies, polls and reactions`: reply previews (one to a missing original), a poll, reactions and an edited message. | yes |
+| `timeline-system` | 26 | As above, jump to `-# showcase: system messages`: the unread divider and system messages with their icons. | yes |
 
 ### 27 Composer
 

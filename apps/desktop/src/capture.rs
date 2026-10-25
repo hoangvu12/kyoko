@@ -7,6 +7,7 @@ pub const HEIGHT: f64 = 800.;
 pub const POLL: Duration = Duration::from_millis(100);
 pub const SETTLE: Duration = Duration::from_millis(1500);
 pub const LIMIT: Duration = Duration::from_secs(30);
+pub const SCROLL_PASSES: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -21,6 +22,8 @@ pub enum Screen {
 	LoginTos,
 	LoginToken,
 	SidebarCollapsed,
+	NewestImage,
+	Showcase(&'static str),
 }
 
 impl Screen {
@@ -31,13 +34,18 @@ impl Screen {
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
-			_ => None,
+			"timeline-media" => Some(Screen::NewestImage),
+			other => mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase),
 		}
 	}
 
 	pub fn opening(self) -> Option<Opening> {
 		match self {
-			Screen::FirstChannel | Screen::RailFolders | Screen::SidebarCollapsed => Some(Opening::First),
+			Screen::FirstChannel
+			| Screen::RailFolders
+			| Screen::SidebarCollapsed
+			| Screen::NewestImage
+			| Screen::Showcase(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

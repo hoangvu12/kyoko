@@ -34,6 +34,13 @@ pub const SECTIONS: [(&str, &str); 8] = [
 	("timeline-system", "showcase: system messages"),
 ];
 
+pub fn screen_section(screen: &str) -> Option<&'static str> {
+	SECTIONS
+		.iter()
+		.find(|(name, _)| *name == screen)
+		.map(|(_, section)| *section)
+}
+
 pub fn marker(section: &str) -> String {
 	format!("-# {section}")
 }

@@ -500,11 +500,15 @@ impl Link {
 			}
 			zgx::timer::sleep(capture::POLL).await;
 		}
-		if capture.screen == capture::Screen::RailFolders {
-			self.rail.open_all();
-		}
-		if capture.screen == capture::Screen::SidebarCollapsed {
-			self.collapse_first_category();
+		match &capture.screen {
+			capture::Screen::RailFolders => self.rail.open_all(),
+			capture::Screen::NewestImage => self.reveal(None).await,
+			capture::Screen::Showcase(section) => {
+				self.reveal(Some(&mockcord::fixtures::showcase::marker(section)))
+					.await
+			}
+			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
+			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
 		match capture::signal_ready(&capture.ready) {
@@ -525,6 +529,53 @@ impl Link {
 		if let Some(command) = command {
 			self.send(command);
 		}
+	}
+
+	async fn reveal(self: &Rc<Self>, marker: Option<&str>) {
+		if marker.is_some() {
+			let showcase = self
+				.sidebar
+				.sidebar()
+				.channels()
+				.find(|channel| channel.name == mockcord::fixtures::showcase::CHANNEL_NAME)
+				.map(|channel| channel.id);
+			match showcase {
+				Some(channel_id) => self.select_channel(channel_id),
+				None => tracing::warn!("the showcase channel is missing"),
+			}
+		}
+		let started = Instant::now();
+		let target = loop {
+			let found = {
+				let timeline = self.timeline.borrow();
+				let mut messages = timeline.messages();
+				match marker {
+					Some(marker) => messages
+						.find(|entry| entry.content == marker)
+						.map(|entry| entry.id),
+					None => messages
+						.rev()
+						.find(|entry| entry.message.attachments.iter().any(bridge::is_image))
+						.map(|entry| entry.id),
+				}
+			};
+			if found.is_some() || started.elapsed() >= capture::LIMIT {
+				break found;
+			}
+			zgx::timer::sleep(capture::POLL).await;
+		};
+		let Some(target) = target else {
+			tracing::warn!("the capture target message was not found");
+			return;
+		};
+		for _ in 0..capture::SCROLL_PASSES {
+			self.timeline_view.scroll_to(&bridge::RowKey::Message(target));
+			zgx::timer::sleep(capture::POLL).await;
+		}
+		while !self.settled(capture::Screen::FirstChannel) && started.elapsed() < capture::LIMIT {
+			zgx::timer::sleep(capture::POLL).await;
+		}
+		self.timeline_view.scroll_to(&bridge::RowKey::Message(target));
 	}
 
 	fn settled(&self, screen: capture::Screen) -> bool {

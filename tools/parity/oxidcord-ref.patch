@@ -190,10 +190,10 @@ index 3decd26..3bf6214 100644
  pub mod pages;
 diff --git a/crates/ui/src/shell/capture.rs b/crates/ui/src/shell/capture.rs
 new file mode 100644
-index 0000000..ecb0c1e
+index 0000000..3bae769
 --- /dev/null
 +++ b/crates/ui/src/shell/capture.rs
-@@ -0,0 +1,539 @@
+@@ -0,0 +1,599 @@
 +use std::path::PathBuf;
 +use std::sync::Arc;
 +use std::time::{Duration, Instant};
@@ -520,6 +520,25 @@ index 0000000..ecb0c1e
 +				.update(cx, |timeline, cx| timeline.set_connected(false, cx));
 +			Ok(())
 +		})?,
++		other if showcase_marker(other).is_some() => {
++			let marker = showcase_marker(other).context("no showcase marker")?;
++			let channel = act(&shell, cx, |shell, _, cx| {
++				let guild = shell.guild.context("no guild is open")?;
++				let channel = showcase_in(shell, guild, cx).context("the guild has no showcase channel")?;
++				shell.select(Some(guild), channel, cx);
++				Ok(channel)
++			})?;
++			opened(&shell, cx, channel).await?;
++			let message = until(cx, "the showcase section", |cx| {
++				shell
++					.read_with(cx, |shell, cx| marked(shell, channel, &marker, cx))
++			})
++			.await?;
++			act(&shell, cx, |shell, _, cx| {
++				shell.timeline.update(cx, |timeline, cx| timeline.jump_to(message, cx));
++				Ok(())
++			})?;
++		}
 +		other if other.starts_with("server-settings-") => {
 +			let page = server_settings_page(other).with_context(|| format!("unknown page {other}"))?;
 +			act(&shell, cx, |shell, window, cx| {
@@ -733,6 +752,48 @@ index 0000000..ecb0c1e
 +		_ => return None,
 +	})
 +}
++
++const SHOWCASE_CHANNEL: &str = "showcase";
++const SHOWCASE_SECTIONS: [(&str, &str); 8] = [
++	("timeline-markdown", "showcase: markdown"),
++	("timeline-inline", "showcase: inline"),
++	("timeline-embeds", "showcase: embeds"),
++	("timeline-embeds-media", "showcase: embed media"),
++	("timeline-attachments", "showcase: attachments"),
++	("timeline-files", "showcase: files and stickers"),
++	("timeline-replies", "showcase: replies, polls and reactions"),
++	("timeline-system", "showcase: system messages"),
++];
++
++fn showcase_marker(screen: &str) -> Option<String> {
++	SHOWCASE_SECTIONS
++		.iter()
++		.find(|(name, _)| *name == screen)
++		.map(|(_, section)| format!("-# {section}"))
++}
++
++fn showcase_in(shell: &Shell, guild: Snowflake, cx: &gpui::App) -> Option<Snowflake> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state
++		.guild_channel_tree(guild)
++		.into_iter()
++		.flat_map(|node| node.children)
++		.find(|row| state.channel(row.id).and_then(|channel| channel.name.as_deref()) == Some(SHOWCASE_CHANNEL))
++		.map(|row| row.id)
++}
++
++fn marked(shell: &Shell, channel: Snowflake, marker: &str, cx: &gpui::App) -> Option<Snowflake> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state
++		.messages(channel)?
++		.ordered
++		.iter()
++		.find(|message| message.content == marker)
++		.map(|message| message.id)
++}
+\ No newline at end of file
 diff --git a/crates/ui/src/shell/friends/mod.rs b/crates/ui/src/shell/friends/mod.rs
 index dda6b9b..63bea00 100644
 --- a/crates/ui/src/shell/friends/mod.rs
