@@ -168,7 +168,8 @@ async fn the_tree_follows_categories_positions_and_threads() {
 			"random",
 			"staff-only",
 			"announcements",
-			"help-forum"
+			"help-forum",
+			"showcase"
 		]
 	);
 	let threads: Vec<(bool, bool)> = sidebar.sections()[0]
