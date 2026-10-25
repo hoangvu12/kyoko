@@ -4,7 +4,7 @@
 
 **Blocked by:** 27 (Composer), 37 (Account and settings pages)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Each plugin declares a manifest (permissions, settings schema, version), and enabling it asks the user to approve its permissions
 - [ ] The plugin's logic runs in a sandboxed Luau VM on a worker thread with call deadlines. Repeated errors or overruns disable the plugin with a notice and never crash kyoko
