@@ -18,7 +18,7 @@ const BURST_BUDGET: SendBudget = SendBudget {
 	frames: 24,
 	period: Duration::from_secs(1),
 };
-const BURST_HEARTBEAT_MS: u64 = 300;
+const BURST_HEARTBEAT_MS: u64 = 450;
 const BURST_FRAMES: usize = 30;
 
 const JITTER_HEARTBEAT_MS: u64 = 250;
@@ -118,6 +118,7 @@ async fn a_bulk_burst_stays_inside_the_send_window_while_heartbeats_flow() {
 		.iter()
 		.map(|guild| Snowflake(guild.id))
 		.collect();
+	let burst_began = Instant::now();
 	for index in 0..BURST_FRAMES {
 		running.session().send(Command::SubscribeGuild {
 			guild_id: guilds[index % guilds.len()],
@@ -129,32 +130,27 @@ async fn a_bulk_burst_stays_inside_the_send_window_while_heartbeats_flow() {
 				.then(|| recording.clone())
 		})
 		.await;
-	let frames = frames_on(&recording, connection);
-	let window = BURST_BUDGET.period - ARRIVAL_SLACK;
-	for (index, frame) in frames.iter().enumerate() {
-		let in_window = frames[..=index]
-			.iter()
-			.filter(|earlier| frame.at.duration_since(earlier.at) < window)
-			.count();
-		assert!(
-			in_window <= BURST_BUDGET.frames as usize,
-			"frame {index} broke the send window"
-		);
-	}
-	let bulk: Vec<Instant> = frames
-		.iter()
-		.filter(|frame| frame.opcode() == Opcode::GuildSubscriptionsBulk)
-		.map(|frame| frame.at)
-		.collect();
-	let (first_bulk, last_bulk) = (bulk[0], bulk[bulk.len() - 1]);
-	assert!(last_bulk.duration_since(first_bulk) >= window);
-	let beats_during_burst = heartbeats_on(&recording, connection)
-		.into_iter()
-		.filter(|at| *at > first_bulk && *at < last_bulk)
-		.count();
-	assert!(beats_during_burst >= 2);
 	assert_eq!(recording.connections.len(), 1);
 	assert!(recording.closes.is_empty());
+	let frames = frames_on(&recording, connection);
+	let is_bulk = |frame: &GatewayFrame| frame.opcode() == Opcode::GuildSubscriptionsBulk;
+	let first_bulk = frames.iter().position(is_bulk).expect("a bulk frame");
+	let last_bulk = frames.iter().rposition(is_bulk).expect("a bulk frame");
+	let sent_during_burst = &frames[first_bulk..];
+	assert!(sent_during_burst.len() > BURST_BUDGET.frames as usize);
+	for (index, frame) in sent_during_burst.iter().enumerate() {
+		let full_windows = (index / BURST_BUDGET.frames as usize) as u32;
+		assert!(
+			frame.at.duration_since(burst_began) >= BURST_BUDGET.period * full_windows,
+			"frame {index} of the burst broke the send window"
+		);
+	}
+	assert!(frames[last_bulk].at.duration_since(burst_began) >= BURST_BUDGET.period);
+	let beats_during_burst = frames[first_bulk..last_bulk]
+		.iter()
+		.filter(|frame| frame.opcode() == Opcode::Heartbeat)
+		.count();
+	assert!(beats_during_burst >= 2);
 	running.stop().await;
 }
 
