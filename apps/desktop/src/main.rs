@@ -57,6 +57,11 @@ struct Cli {
 	chatter: Option<u64>,
 	#[arg(
 		long,
+		help = "Open the most recently active text channel once the guilds arrive"
+	)]
+	open_busiest: bool,
+	#[arg(
+		long,
 		value_name = "PATH",
 		help = "Store settings and cache under this directory instead of a scratch one"
 	)]
@@ -161,6 +166,7 @@ fn main() -> Result<()> {
 			cdn: backend.cdn,
 			runtime: runtime.handle().clone(),
 		},
+		cli.open_busiest,
 	);
 	for task in [churn, chatter].into_iter().flatten() {
 		task.abort();

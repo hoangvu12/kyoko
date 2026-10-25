@@ -133,3 +133,33 @@ async fn messages_in_other_channels_leave_the_open_one_alone() {
 	assert!(before.ends_with(kept), "the earlier messages are unchanged");
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_busiest_channel_is_the_one_with_the_newest_message() {
+	let mut running = Running::start("timeline-busiest").await;
+	let guild = running.view.sidebar.guilds().last().expect("a guild").id;
+	let channel_id = running
+		.server
+		.fixtures()
+		.guild(guild.0)
+		.and_then(|guild| guild.message_channel_ids.first().copied())
+		.map(Snowflake)
+		.expect("the guild has a message channel");
+	let posted = running
+		.server
+		.post_message(channel_id, "newest anywhere")
+		.expect("mockcord posts");
+	let state = running.session().state().clone();
+	running
+		.until("the channel to know its newest message", |_| {
+			state
+				.read()
+				.channel(channel_id)
+				.is_some_and(|channel| channel.last_message_id == Some(posted))
+		})
+		.await;
+	let busiest = bridge::busiest_channel(&state.read()).expect("a busiest channel");
+	assert_eq!(busiest.channel_id, channel_id);
+	assert_eq!(busiest.guild_id, Some(guild));
+	running.stop().await;
+}

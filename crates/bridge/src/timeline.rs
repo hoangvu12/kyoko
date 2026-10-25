@@ -2,6 +2,8 @@ use protocol::{Message, Snowflake};
 use session::Command;
 use state::{Changes, State};
 
+use crate::sidebar::ChannelKind;
+
 pub const WINDOW: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,4 +121,33 @@ fn author_name(state: &State, guild_id: Option<Snowflake>, message: &Message) ->
 		.filter(|name| !name.is_empty())
 		.unwrap_or(&message.author.username)
 		.to_owned()
+}
+
+pub fn busiest_channel(state: &State) -> Option<OpenChannel> {
+	state
+		.guild_summaries()
+		.into_iter()
+		.flat_map(|guild| {
+			state
+				.guild_channel_tree(guild.id)
+				.into_iter()
+				.flat_map(|node| node.children)
+				.filter(|row| !row.locked)
+				.filter(|row| {
+					matches!(
+						ChannelKind::of(row.kind),
+						ChannelKind::Text | ChannelKind::Announcement
+					)
+				})
+				.filter_map(|row| {
+					let last = state.channel(row.id)?.last_message_id?;
+					Some((last, guild.id, row.id))
+				})
+				.collect::<Vec<_>>()
+		})
+		.max_by_key(|(last, _, _)| *last)
+		.map(|(_, guild_id, channel_id)| OpenChannel {
+			guild_id: Some(guild_id),
+			channel_id,
+		})
 }

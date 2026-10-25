@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, Sidebar, Timeline};
+use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, OpenChannel, Sidebar, Timeline};
 use media::MediaService;
 use protocol::Snowflake;
 use session::{Command, Session};
@@ -27,7 +27,7 @@ pub struct Avatars {
 	pub runtime: tokio::runtime::Handle,
 }
 
-pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars) -> Result<()> {
+pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars, open_busiest: bool) -> Result<()> {
 	let script = ui_dir().join("app.luau");
 	Application::new()
 		.window(WindowOptions {
@@ -45,6 +45,7 @@ pub fn run(session: Session, inbox: Inbox<Changes>, avatars: Avatars) -> Result<
 				info: cx.window_info.clone(),
 			};
 			let link = Link::install(&host, window, session, inbox.clone(), avatars);
+			link.open_busiest.set(open_busiest);
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			if let Err(error) = host.reload() {
@@ -78,6 +79,7 @@ struct Link {
 	inbox: Inbox<Changes>,
 	avatars: Avatars,
 	avatar_requested: Cell<bool>,
+	open_busiest: Cell<bool>,
 	sidebar: RefCell<Sidebar>,
 	timeline: RefCell<Timeline>,
 	guilds: Shared,
@@ -106,6 +108,7 @@ impl Link {
 			inbox,
 			avatars,
 			avatar_requested: Cell::new(false),
+			open_busiest: Cell::new(false),
 			sidebar: RefCell::new(Sidebar::default()),
 			timeline: RefCell::new(Timeline::default()),
 			guilds: host.shared("guilds", Value::List(Rc::new([]))),
@@ -145,10 +148,24 @@ impl Link {
 	}
 
 	fn apply(&self, changes: &Changes) {
-		let Some(state) = self.state() else {
-			return;
-		};
+		let busiest = self.publish(changes);
+		if let Some(open) = busiest {
+			if let Some(guild_id) = open.guild_id {
+				self.select_guild(guild_id);
+			}
+			self.select_channel(open.channel_id);
+			tracing::info!(
+				guilds = self.sidebar.borrow().guilds().len(),
+				channels = self.sidebar.borrow().channels().len(),
+				"opened the most recently active text channel"
+			);
+		}
+	}
+
+	fn publish(&self, changes: &Changes) -> Option<OpenChannel> {
+		let state = self.state()?;
 		let state = state.read();
+		let newest = self.timeline.borrow().messages().last().map(|message| message.id);
 		let refresh = self.sidebar.borrow_mut().apply(&state, changes);
 		let moved = refresh.selected && self.open_guild() != self.sidebar.borrow().selected();
 		let messages = if moved {
@@ -174,11 +191,20 @@ impl Link {
 			}
 		});
 		if messages {
-			tracing::debug!(
-				shown = self.timeline.borrow().messages().len(),
-				"timeline published"
-			);
+			let timeline = self.timeline.borrow();
+			let appended = timeline
+				.messages()
+				.iter()
+				.filter(|message| newest.is_some_and(|newest| message.id > newest))
+				.count();
+			tracing::debug!(shown = timeline.messages().len(), appended, "timeline published");
 		}
+		let ready = self.open_busiest.get() && !self.sidebar.borrow().guilds().is_empty();
+		if !ready {
+			return None;
+		}
+		self.open_busiest.set(false);
+		bridge::busiest_channel(&state)
 	}
 
 	fn open_guild(&self) -> Option<Snowflake> {
