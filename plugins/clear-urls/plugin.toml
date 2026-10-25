@@ -4,7 +4,7 @@ version = "1.0.0"
 api = 1
 description = "Strips tracking parameters from the links you send and edit. The rules ship with Kyoko; nothing is downloaded."
 authors = ["Kyoko"]
-permissions = ["hook:send"]
+permissions = ["hook:send", "hook:edit"]
 
 [[settings]]
 key = "referrals"

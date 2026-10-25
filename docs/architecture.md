@@ -28,7 +28,7 @@ Behaviour tests drive a session against an in-process mockcord; see `docs/testin
 
 The session has no plugin runtime; `plugins::PluginHost` implements this interface (`docs/plugins.md`). `SessionConfig::hooks` takes an optional `Arc<dyn SessionHooks>`; every method has a no-op default:
 
-- `before_send(channel_id, content)` may return a `Rewrite` (the replacement text and, optionally, who rewrote it) and `before_edit(channel_id, message_id, content)` replacement text. A rewritten send is shown as altered by the rewrite's `by`, or `name()` without one.
+- `before_send(channel_id, content)` and `before_edit(channel_id, message_id, content)` may return a `Rewrite` (the replacement text and, optionally, who rewrote it). A rewritten send or edit is shown as altered by the rewrite's `by`, or `name()` without one; an edit sent unchanged clears the mark.
 - `allow_typing(channel_id)` can veto the typing indicator.
 - `allow_notification(message)` filters the session's notification alerts (`docs/desktop.md`). It is also exposed as `Session::should_notify`.
 - `on_dispatch(event)` observes every gateway dispatch after it is applied to state. It runs on the session task, so implementations must return quickly and queue any real work.

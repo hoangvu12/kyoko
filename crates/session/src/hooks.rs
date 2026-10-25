@@ -39,7 +39,7 @@ pub trait SessionHooks: Send + Sync {
 		_channel_id: Snowflake,
 		_message_id: Snowflake,
 		_content: &str,
-	) -> Result<Option<String>> {
+	) -> Result<Option<Rewrite>> {
 		Ok(None)
 	}
 

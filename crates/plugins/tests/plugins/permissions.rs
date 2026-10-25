@@ -21,6 +21,45 @@ async fn a_hook_without_its_permission_never_runs() {
 	lab.stop().await;
 }
 
+const SHOUT_BOTH: &str = "local function shout(message) return string.upper(message.content) end\nreturn { before_send = shout, before_edit = shout }";
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sends_and_edits_are_rewritten_only_with_their_own_permission() {
+	let root = scratch("edit-permission");
+	write_plugin(&root, "sender", &["hook:send"], "", SHOUT_BOTH);
+	let lab = start("edit-permission", root, Limits::default(), false).await;
+	approve(&lab.host, "sender");
+	let channel_id = lab.running.open_text_channel().await;
+	let message_id = lab
+		.running
+		.send_and_wait(channel_id, "sent loud", "SENT LOUD")
+		.await;
+	lab.edit_and_wait(channel_id, message_id, "edited quietly", "edited quietly")
+		.await;
+
+	write_plugin(
+		&lab.root,
+		"sender",
+		&["hook:edit"],
+		"description = \"edits\"",
+		SHOUT_BOTH,
+	);
+	lab.host.scan();
+	assert_eq!(lab.host.status("sender"), Some(Status::NeedsApproval));
+	approve(&lab.host, "sender");
+	lab.running
+		.send_and_wait(channel_id, "sent quietly", "sent quietly")
+		.await;
+	lab.edit_and_wait(channel_id, message_id, "edited loud", "EDITED LOUD")
+		.await;
+	lab.running
+		.until("the edit to be marked as rewritten", |state| {
+			state.altered_by(message_id) == Some("sender")
+		})
+		.await;
+	lab.stop().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_apis_refuse_what_was_not_granted_and_shared_data_is_read_only() {
 	let root = scratch("granted-apis");

@@ -42,6 +42,11 @@ pub enum LocalEvent {
 		content: String,
 		by: String,
 	},
+	EditAltered {
+		channel_id: Snowflake,
+		id: Snowflake,
+		by: Option<String>,
+	},
 	MessageRendered {
 		channel_id: Snowflake,
 		id: Snowflake,

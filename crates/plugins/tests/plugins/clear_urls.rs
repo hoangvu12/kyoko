@@ -5,6 +5,10 @@ use crate::support::{scratch, start};
 
 const ID: &str = "clear-urls";
 
+fn asked() -> Vec<Permission> {
+	vec![Permission::parse("hook:send"), Permission::parse("hook:edit")]
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn clear_urls_strips_tracking_parameters_once_approved() {
 	let lab = start("clear-urls", scratch("clear-urls"), Limits::default(), true).await;
@@ -12,15 +16,13 @@ async fn clear_urls_strips_tracking_parameters_once_approved() {
 	assert_eq!(lab.host.status(ID), Some(Status::Disabled));
 	assert_eq!(
 		lab.host.enable(ID),
-		Err(EnableError::NeedsApproval(vec![Permission::parse("hook:send")])),
+		Err(EnableError::NeedsApproval(asked())),
 		"enabling asks for approval first"
 	);
 	let untouched = "before https://example.com/a?utm_source=news&id=3";
 	lab.running.send_and_wait(channel_id, untouched, untouched).await;
 
-	lab.host
-		.approve(ID, &[Permission::parse("hook:send")])
-		.expect("approved");
+	lab.host.approve(ID, &asked()).expect("approved");
 	assert_eq!(lab.host.status(ID), Some(Status::Running));
 	let message_id = lab
 		.running

@@ -36,7 +36,7 @@ impl SessionHooks for Broken {
 		_channel_id: Snowflake,
 		_message_id: Snowflake,
 		_content: &str,
-	) -> Result<Option<String>> {
+	) -> Result<Option<Rewrite>> {
 		bail!("broken before_edit")
 	}
 

@@ -497,11 +497,16 @@ impl PluginHost {
 		}
 	}
 
-	pub(crate) fn rewrite(&self, call: impl Fn(&str) -> Call, original: &str) -> Option<(String, String)> {
+	pub(crate) fn rewrite(
+		&self,
+		hook: Hook,
+		call: impl Fn(&str) -> Call,
+		original: &str,
+	) -> Option<(String, String)> {
 		let deadline = self.inner.config.limits.send_deadline;
 		let mut text = original.to_owned();
 		let mut by = None;
-		for target in self.inner.targets(Hook::Send, call(&text).hook_name(), true) {
+		for target in self.inner.targets(hook, call(&text).hook_name(), true) {
 			match target.worker.call(call(&text), deadline) {
 				Ok(Reply::Text(Some(rewritten))) => {
 					text = rewritten;

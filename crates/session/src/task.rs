@@ -108,6 +108,11 @@ pub(crate) enum Internal {
 		outgoing: Box<outbox::Outgoing>,
 		rewritten: Option<Rewrite>,
 	},
+	Edited {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		altered_by: Option<String>,
+	},
 	CommandIndex {
 		scope: Snowflake,
 		index: Option<Box<protocol::ApplicationCommandIndex>>,
@@ -639,6 +644,15 @@ impl Core {
 				outgoing,
 				rewritten,
 			} => self.on_before_send(nonce, *outgoing, rewritten),
+			Internal::Edited {
+				channel_id,
+				message_id,
+				altered_by,
+			} => self.apply_local(LocalEvent::EditAltered {
+				channel_id,
+				id: message_id,
+				by: altered_by,
+			}),
 			Internal::Alert(alert) => self.raise_alert(alert),
 			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
 				theme_catalog: true,
@@ -1046,19 +1060,34 @@ impl Core {
 		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
 			let original = content.clone();
-			let content = guarded_blocking(&hooks, "before_edit", move |hooks| {
+			let rewritten = guarded_blocking(&hooks, "before_edit", move |hooks| {
 				hooks.before_edit(channel_id, message_id, &original)
 			})
 			.await
 			.flatten()
-			.unwrap_or(content);
+			.filter(|rewritten| rewritten.content != content);
+			let owner = hooks.as_deref().map(|hooks| hooks.name().to_owned());
+			let (content, altered_by) = match rewritten {
+				Some(rewritten) => (rewritten.content, rewritten.by.or(owner)),
+				None => (content, None),
+			};
 			let body = EditMessage {
 				content: Some(content),
 				..EditMessage::default()
 			};
-			if let Err(error) = rest.edit_message(channel_id, message_id, body).await {
-				tracing::warn!(%error, what = "edit message", "rest call failed");
-				let _ = internal.send(Internal::Rejected(actions::failure_reason("Edit", &error)));
+			match rest.edit_message(channel_id, message_id, body).await {
+				Ok(_) if hooks.is_some() => {
+					let _ = internal.send(Internal::Edited {
+						channel_id,
+						message_id,
+						altered_by,
+					});
+				}
+				Ok(_) => {}
+				Err(error) => {
+					tracing::warn!(%error, what = "edit message", "rest call failed");
+					let _ = internal.send(Internal::Rejected(actions::failure_reason("Edit", &error)));
+				}
 			}
 		});
 	}

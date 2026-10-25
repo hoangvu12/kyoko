@@ -434,6 +434,15 @@ impl State {
 					}
 				}
 			}
+			LocalEvent::EditAltered { channel_id, id, by } => {
+				let changed = match by {
+					Some(by) => self.altered.insert(*id, by.clone()).as_ref() != Some(by),
+					None => self.altered.remove(id).is_some(),
+				};
+				if changed {
+					changes.messages.insert(*channel_id);
+				}
+			}
 			LocalEvent::MessageRendered {
 				channel_id,
 				id,

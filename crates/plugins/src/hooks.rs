@@ -14,6 +14,7 @@ impl SessionHooks for PluginHost {
 	fn before_send(&self, channel_id: Snowflake, content: &str) -> Result<Option<Rewrite>> {
 		let guild_id = self.guild_of(channel_id);
 		let rewritten = self.rewrite(
+			Hook::Send,
 			|content| Call::BeforeSend {
 				channel_id,
 				guild_id,
@@ -29,9 +30,10 @@ impl SessionHooks for PluginHost {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 		content: &str,
-	) -> Result<Option<String>> {
+	) -> Result<Option<Rewrite>> {
 		let guild_id = self.guild_of(channel_id);
 		let rewritten = self.rewrite(
+			Hook::Edit,
 			|content| Call::BeforeEdit {
 				channel_id,
 				guild_id,
@@ -40,7 +42,7 @@ impl SessionHooks for PluginHost {
 			},
 			content,
 		);
-		Ok(rewritten.map(|(content, _)| content))
+		Ok(rewritten.map(|(content, by)| Rewrite::by(content, by)))
 	}
 
 	fn allow_typing(&self, channel_id: Snowflake) -> Result<bool> {

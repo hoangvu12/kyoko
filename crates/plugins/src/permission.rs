@@ -12,6 +12,7 @@ pub enum Scope {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Hook {
 	Send,
+	Edit,
 	Typing,
 	Notify,
 	DisplayName,
@@ -58,8 +59,9 @@ const SCOPES: [(Scope, &str); 5] = [
 	(Scope::ReadState, "read_state"),
 ];
 
-const HOOKS: [(Hook, &str); 7] = [
+const HOOKS: [(Hook, &str); 8] = [
 	(Hook::Send, "send"),
+	(Hook::Edit, "edit"),
 	(Hook::Typing, "typing"),
 	(Hook::Notify, "notify"),
 	(Hook::DisplayName, "display_name"),
@@ -113,7 +115,7 @@ impl Hook {
 	}
 
 	pub fn available(self) -> bool {
-		matches!(self, Hook::Send | Hook::Typing | Hook::Notify)
+		matches!(self, Hook::Send | Hook::Edit | Hook::Typing | Hook::Notify)
 	}
 }
 
@@ -187,7 +189,10 @@ impl Permission {
 			Permission::Read(Scope::Guilds) => "Read your servers, channels and roles.".to_owned(),
 			Permission::Read(Scope::ReadState) => "Read which channels are unread.".to_owned(),
 			Permission::Hook(Hook::Send) => {
-				"Read and rewrite the messages you send and edit, before they leave.".to_owned()
+				"Read and rewrite the messages you send, before they leave.".to_owned()
+			}
+			Permission::Hook(Hook::Edit) => {
+				"Read and rewrite your messages when you edit them, before they leave.".to_owned()
 			}
 			Permission::Hook(Hook::Typing) => "Stop your typing indicator from being sent.".to_owned(),
 			Permission::Hook(Hook::Notify) => {
@@ -219,7 +224,7 @@ impl Permission {
 			self,
 			Permission::Network(_)
 				| Permission::Read(Scope::Messages | Scope::DirectMessages)
-				| Permission::Hook(Hook::Send | Hook::Notify)
+				| Permission::Hook(Hook::Send | Hook::Edit | Hook::Notify)
 				| Permission::Action(_)
 		)
 	}
