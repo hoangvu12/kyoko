@@ -118,7 +118,7 @@ Discord's current settings are not a full screen: a rounded dialog over the dimm
 
 ## Mockups
 
-`docs/design/mockups/` holds the target as plain HTML and CSS at 1280 by 800, one page per screen, every value a Midnight variable from one `:root` block: the main screen, settings (My Account, Notifications, Appearance, Plugins, Themes), the profile popout and full profile, the status menu, the message menu and hover bar, the emoji picker, Home with Friends and Active Now, the quick switcher, search results, server Roles, the delete dialog, and the login screen in its two states. They were drafted in Claude Design from this spec, the Midnight CSS, the reference screenshot and captures of the live client, then checked against them. Measured from the reference: server icons 40, channel sidebar 280, member list 264, rounded-square server icons. Icons, avatars, banners and nameplates are stand-ins; text is filler except on the login pages, which follow `docs/sign-in.md`. Open one in a browser at 1280 by 800 to compare with a kyoko capture.
+`docs/design/mockups/` holds the target as plain HTML and CSS at 1280 by 800, one page per screen, every value a Midnight variable from one `:root` block: the main screen, settings (My Account, Notifications, Appearance, Plugins, Themes), the profile popout and full profile, the status menu, the message menu and hover bar, the emoji picker, Home with Friends and Active Now, the quick switcher, search results, server Roles, the delete dialog, and the login screen in its two states. The expression pages add the GIF, sticker and emoji pickers anchored to the composer, GIF results, the emoji picker without Nitro and with a search, emoji autocomplete, reaction states with super reactions, the reactions list, and GIFs, stickers and emoji in messages with their popouts; they were checked against captures of the live pickers. They were drafted in Claude Design from this spec, the Midnight CSS, the reference screenshot and captures of the live client, then checked against them. Measured from the reference: server icons 40, channel sidebar 280, member list 264, rounded-square server icons. Icons, avatars, banners and nameplates are stand-ins; text is filler except on the login pages, which follow `docs/sign-in.md`. Open one in a browser at 1280 by 800 to compare with a kyoko capture.
 
 Measured on the live Windows client at 100%, the shell matches: 12-point gaps, rail 66, header 50, composer 47, channel rows 36 high and 38 apart, member rows 44 apart whether or not they have an activity line. Pages beyond the main screen and the settings pages follow Discord's current client from memory, not captures, so their exact spacing is approximate. On the toast page the typing line is left out to keep the toast clear of messages; in the app a toast is an overlay and never moves the timeline.
 
@@ -133,6 +133,35 @@ Measured on the live Windows client at 100%, the shell matches: 12-point gaps, r
 - Progress bars and sliders: track `--bg-2`, fill `--accent-2`, grabber `--text-3`.
 - Notice banners: 40 high, `--radius-md`, inset 12 like a panel.
 - Settings: the sidebar items `--bg-3` hovered and `--bg-2` selected, sliding right 10 points on hover.
+
+## Expressions and commands
+
+Measured on the live Windows client with Midnight at 100%.
+
+### Unicode emoji
+
+Discord draws Unicode emoji from its own image set, never the system font, in messages, reactions, pickers, autocomplete, names and statuses. Kyoko bundles Twemoji (`jdecked/twemoji`, graphics CC-BY 4.0, credited in `THIRD_PARTY_NOTICES.md`) for the same look, and draws them through the same path as custom emoji. The mockups load the SVGs from jsDelivr.
+
+### Expression picker
+
+- One popover with the tabs GIFs, Stickers and Emoji, opened by the composer's GIF, sticker or emoji button on that tab. It is anchored to the composer, not centred: its bottom edge 8 above the composer's top border, its right edge 35 in from the composer's right edge. 498 by 486 including the 1-point `--border`, `--radius-md`, and a soft dark shadow of about 12 points even with Midnight.
+- Header in `--bg-3`, closed by a 1-point divider at 124: the tabs as text buttons (14 semibold, `--text-4`; the selected one `--text-2` on a 28-high `--bg-2` pill), then the search field, 38 high, `--bg-4`, focused with the `--accent-2` border when the picker opens. Placeholders: "Search Klipy" (Discord's GIF provider is now Klipy), "Find the perfect sticker", "Find the perfect emoji". The emoji tab adds the skin tone button and an "Add Emoji" secondary button after a narrower field.
+- GIFs: `--bg-4`, two columns of 12-apart category tiles about 230 by 110 (Favorites, Trending GIFs, then search terms) with centred white 16 semibold labels on a dimmed still. A category or a search shows a back arrow and its title, then a two-column masonry at the GIFs' own ratios. A hovered GIF gets a 2-point `--accent-2` border and a star at its top right to favourite it.
+- Emoji and stickers: a 48-wide category rail in `--bg-4` (24-point icons in `--text-4`, the current one `--text-3` with the 4-point pill at its left), the grid in `--bg-3`, and a 47-high `--bg-4` footer naming the hovered item (28-point image, `:name:`, "from <Server>", sometimes a POPULAR tag). Emoji: 9 columns of 48-point cells with 40-point emoji, the hovered cell a `--active` square; sections Top Emoji in this server, Favorites, Frequently Used, each server, then People, Nature, Food, Activities, Travel, Objects, Symbols, Flags, each with a 28-high header and a collapse chevron. While an emoji is hovered the search placeholder shows its `:name:`. Stickers: 4 columns, Frequently Used first.
+- Without Nitro, emoji kyoko can't send there are greyscale at 50% with a lock on their section; the footer says why. Kyoko never shows an upsell.
+
+### Command picker and options
+
+- Typing `/` opens a panel 8 above the composer and exactly as wide as it, up to about 420 high, `--bg-3`: a 48-wide rail of 32-point app icons on the left, sections on the right (Frequently Used, then each app, Built-In last). Rows are 56 apart: the app icon (Frequently Used only), `/name` 16 medium `--text-2` followed by option chips, the description 13 `--text-4` under it, and the app name right-aligned 12 `--text-4`. The selected row has the `--hover` wash.
+- Picking a command turns the composer into the app's icon, `/name`, and a chip per option; the focused chip has an `--accent-2` border. A 36-high bar joined above the composer shows the focused option's name and description and a clear button; only the emoji button stays at the composer's right.
+
+### Composer buttons
+
+`+` at the left; GIF, sticker, emoji and the apps launcher at the right. Kyoko leaves out Discord's gift button and, like Discord, shows no send button. The apps launcher is a popover anchored like the expression picker: search, Recents, Apps in this Server; Discord's Promoted activities are left out.
+
+### Menus
+
+The context menu is `--bg-3` with a 1-point `--border`, about 220 wide, items inset 8 from its sides; the hovered item is the neutral `--hover` wash (measured `#373534` on `#31302f`), not an accent.
 
 ## Motion
 

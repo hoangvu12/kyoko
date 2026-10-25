@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<style data-omelette-injected>html,body{background:transparent}</style>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discord · Midnight · Emoji picker · search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* text */
+  --text-0: var(--bg-4);
+  --text-1: hsl(38, 47%, 90%);
+  --text-2: hsl(38, 47%, 80%);
+  --text-3: #d4be98;
+  --text-4: #a79a83;
+  --text-5: #d4be9866;
+  /* backgrounds */
+  --bg-1: hsl(20, 5%, 25%);
+  --bg-2: #3c3836;
+  --bg-3: hsl(20, 2%, 19%);
+  --bg-4: #282828;
+  --hover: hsla(20, 3%, 40%, 0.1);
+  --active: hsla(20, 3%, 40%, 0.2);
+  --active-2: hsla(20, 3%, 40%, 0.3);
+  --message-hover: hsla(0, 0%, 0%, 0.1);
+  /* accents */
+  --accent-1: var(--purple-1);
+  --accent-2: var(--purple-2);
+  --accent-3: var(--purple-3);
+  --accent-4: var(--purple-4);
+  --accent-5: var(--purple-5);
+  --accent-new: var(--accent-2);
+  --mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 90%) 40%, transparent);
+  --mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 95%) 40%, transparent);
+  --reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+  --reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+  /* status */
+  --online: var(--green-2);
+  --dnd: var(--red-2);
+  --idle: var(--yellow-2);
+  --streaming: var(--purple-2);
+  --offline: var(--text-4);
+  /* borders */
+  --border-light: var(--hover);
+  --border: var(--active);
+  --border-hover: var(--active);
+  --button-border: hsl(0, 0%, 100%, 0.1);
+  /* base scales */
+  --red-1: hsl(3, 76%, 70%); --red-2: #ea6962; --red-3: #ea6962; --red-4: hsl(3, 76%, 60%); --red-5: hsl(3, 76%, 55%);
+  --green-1: hsl(70, 36%, 60%); --green-2: #a8b665; --green-3: #a8b665; --green-4: hsl(70, 36%, 50%); --green-5: hsl(70, 36%, 45%);
+  --blue-1: hsl(167, 24%, 63%); --blue-2: #7caea3; --blue-3: #7caea3; --blue-4: hsl(167, 24%, 53%); --blue-5: hsl(167, 24%, 48%);
+  --yellow-1: hsl(37, 63%, 64%); --yellow-2: #d8a656; --yellow-3: #d8a656; --yellow-4: hsl(37, 63%, 54%); --yellow-5: hsl(37, 63%, 49%);
+  --purple-1: hsl(344, 47%, 73%); --purple-2: #d3869b; --purple-3: #d3869b; --purple-4: hsl(344, 47%, 63%); --purple-5: hsl(344, 47%, 58%);
+  /* Discord semantic colours as midnight.css maps them */
+  --mention-background: color-mix(in hsl, var(--accent-2), transparent 90%);
+  --mention-foreground: var(--accent-1);
+  --text-link: var(--accent-1);
+  --background-code: var(--bg-3);
+  --background-scrim: hsl(0, 0%, 0%, 0.7);
+  --background-feedback-critical: color-mix(in hsl, var(--red-2), transparent 80%);
+  --background-feedback-positive: color-mix(in hsl, var(--green-2), transparent 80%);
+  --input-background-error-default: color-mix(in hsl, var(--red-2), transparent 90%);
+  --highlight-background: var(--accent-3);
+  --highlight-text: var(--text-0);
+  --spine-default: var(--text-5);
+  --input-background-default: var(--bg-3);
+  --input-border-default: var(--border-light);
+  --input-border-hover: var(--border);
+  --input-border-active: var(--accent-2);
+  --input-border-error: var(--red-2);
+  --input-placeholder-text-default: var(--text-5);
+  --input-text-default: var(--text-3);
+  --reaction-background-default: var(--hover);
+  --reaction-border-default: var(--border-light);
+  --reaction-text-default: var(--text-3);
+  --reaction-background-reacted-default: color-mix(in hsl, var(--accent-2), transparent 80%);
+  --reaction-border-reacted-default: var(--accent-2);
+  --reaction-text-reacted-default: var(--text-1);
+  --user-panel-button-active-background: color-mix(in hsl, var(--accent-new), transparent 90%);
+  --switch-background-default: var(--bg-3);
+  --switch-border-default: var(--border);
+  --switch-background-selected: var(--accent-3);
+  --switch-border-selected: var(--button-border);
+  --switch-thumb-default: var(--text-3);
+  --switch-thumb-selected: var(--bg-4);
+  --switch-thumb-background: rgb(255, 255, 255);
+  --radio-background-default: var(--bg-2);
+  --radio-background-selected: var(--accent-2);
+  --slider-track-background: var(--bg-2);
+  --slider-fill-background: var(--accent-2);
+  --slider-grabber: var(--text-3);
+  --card-background-default: var(--bg-3);
+  --guild-pill: var(--text-2);
+  --channel-unread-dot: var(--text-3);
+  /* content-only colours (stand-ins for nameplate images, banners) */
+  --nameplate-1: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--blue-5), transparent 65%));
+  --nameplate-2: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--purple-5), transparent 60%));
+  --nameplate-3: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--bg-1), transparent 10%));
+  --nameplate-4: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--red-5), transparent 65%));
+  --desktop: #000;
+  /* type */
+  --font-primary: 'Inter', 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-code: 'gg mono', 'Source Code Pro', Consolas, Monaco, monospace;
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-optical-sizing: auto; /* Inter's opsz follows the font size, as on Windows at 100% */
+  --font-size-tag: 10px;
+  --font-size-timestamp-alt: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-inline-code: 0.85em;
+  --line-height-xs: 16px;
+  --line-height-sm: 18px;
+  --line-height-md: 22px;
+  --line-height-lg: 24px;
+  --line-height-xl: 30px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* theme sizes (theme.css) */
+  --gap: 12px;
+  --divider-thickness: 4px;
+  --border-thickness: 1px;
+  --chatbar-height: 47px;
+  --top-bar-height: var(--gap);
+  --window-control-size: 14px;
+  --window-controls-padding: calc(var(--gap) - (var(--window-control-size) / 2) + 1px);
+  --list-item-hover-shift: 10px;
+  --member-hover-shift: 18px;
+  /* Discord sizes Midnight builds on */
+  --space-1: 1px; --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-12: 12px; --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px; --space-40: 40px;
+  --space-xs: var(--space-8); --space-sm: var(--space-12); --space-md: var(--space-16); --space-lg: var(--space-24);
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --guildbar-avatar-size: 40px;
+  --custom-guild-list-padding: 12px;
+  --custom-guild-list-width: calc(var(--guildbar-avatar-size) + var(--custom-guild-list-padding) * 2 + var(--border-thickness) * 2);
+  --custom-guild-sidebar-width: calc(var(--custom-guild-list-width) + 280px);
+  --custom-channel-header-height: calc(var(--guildbar-avatar-size) + var(--space-xs) + var(--border-thickness) * 2);
+  --member-list-width: 264px;
+  --search-results-width: 420px;
+  --window-width: 1280px;
+  --window-height: 800px;
+  --icon-size-xs: 12px; --icon-size-sm: 16px; --icon-size-md: 20px; --icon-size-lg: 24px;
+  --button-size: 32px;
+  --button-height-sm: 32px; --button-height-md: 38px; --button-height-lg: 44px;
+  --input-height: 40px;
+  --avatar-size-xs: 16px; --avatar-size-sm: 32px; --avatar-size-md: 40px; --avatar-size-lg: 80px;
+  --status-size: 10px; --status-cutout: 3px;
+  --status-size-lg: 16px; --status-cutout-lg: 5px;
+  --role-icon-size: 20px;
+  --folder-size: 48px;
+  --guild-pill-width: 4px;
+  --guild-pill-selected-height: 36px;
+  --guild-pill-unread-height: 8px;
+  --guild-separator-width: 32px;
+  --badge-size: 16px;
+  --unread-dot-size: 8px;
+  --channel-row-height: 36px; /* measured: 38px pitch = 36 row + 1px padding top and bottom */
+  --category-row-height: 24px;
+  --member-row-height: 42px; /* measured: constant 44px pitch */
+  --dm-row-height: 42px;
+  --group-header-height: 40px;
+  --search-width: 240px;
+  --new-messages-bar-height: 32px;
+  --typing-height: 24px;
+  --message-gutter: 72px;
+  --message-group-gap: 17px;
+  --message-padding-right: 48px;
+  --reply-spine-width: 2px;
+  --reply-spine-radius: 6px;
+  --reaction-height: 24px;
+  --reaction-border-width: 2px;
+  --embed-max-width: 432px;
+  --embed-accent-width: 4px;
+  --tag-height: 16px;
+  --bot-tag-height: 15px;
+  --unread-pill-height: 13px;
+  --switch-width: 48px; --switch-height: 24px; --switch-thumb-size: 14px;
+  --radio-size: 20px;
+  --slider-track-height: 4px;
+  --menu-width: 220px; --menu-item-height: 32px;
+  --popout-width: 300px; --banner-height: 105px; --settings-banner-height: 100px;
+  --modal-width-sm: 440px; --modal-width-md: 570px;
+    --expression-picker-width: 498px; --expression-picker-height: 486px; --expression-picker-anchor-inset: 35px;
+  --expression-picker-shadow: 0 0 var(--space-12) hsl(0, 0%, 0%, 0.4);
+  --picker-tab-height: 28px; --picker-search-height: 38px; --picker-header-height: 124px; --picker-rail-width: 48px; --picker-footer-height: 47px; --picker-section-header-height: 28px;
+  --emoji-cell-size: 48px; --emoji-size: 40px; --emoji-size-footer: 28px; --emoji-size-inline: 22px; --emoji-size-jumbo: 48px; --emoji-size-tooltip: 32px; --emoji-size-autocomplete: 20px;
+  --gif-tile-height: 110px; --sticker-cell-size: 100px; --sticker-size-message: 160px; --gif-max-width: 400px;
+  --autocomplete-row-height: 36px; --emoji-popout-width: 300px;
+  --overlay-text: hsl(0, 0%, 100%);
+  --locked-filter: grayscale(1); --locked-opacity: 0.5;
+  --popular-tag-background: linear-gradient(90deg, var(--red-3), var(--yellow-3)); --new-ribbon-background: var(--green-2);
+  --super-reaction-start: var(--purple-2); --super-reaction-end: var(--blue-2);
+  --super-reaction-glow: drop-shadow(0 0 var(--space-4) var(--super-reaction-start));
+  --super-reaction-reacted-background: linear-gradient(90deg, color-mix(in hsl, var(--super-reaction-start), transparent 80%), color-mix(in hsl, var(--super-reaction-end), transparent 80%));
+  --emoji-size-reaction: 16px;
+  --reaction-background-hover: var(--active); --reaction-border-hover: var(--bg-2); /* midnight: .reactionBtn:hover border-color --bg-2 */
+  --super-reaction-border: linear-gradient(90deg, var(--super-reaction-start), var(--super-reaction-end));
+  --tooltip-background: var(--bg-3); --tooltip-text: var(--text-3); --reaction-tooltip-width: 220px;
+  --reactions-list-height: 400px; --reactions-list-column-width: 120px; --reactions-list-item-height: 32px; --reactions-list-row-height: 44px;
+  --gif-message-width: 240px;
+  --qr-size: 176px;
+  --disabled-opacity: 0.3;
+  --offline-opacity: 0.3;
+  /* settings dialog (measured from live captures) */
+  --settings-dialog-inset: calc(var(--space-40) + var(--top-bar-height));
+  --settings-dialog-max-width: 1400px;
+  --settings-nav-width: 254px;
+  --settings-topbar-height: 48px;
+  --settings-column-width: 696px;
+  --settings-item-height: 40px;
+  --settings-row-gap: 34px;
+  --settings-divider-margin: 56px;
+  --settings-page-padding-top: 64px;
+  --space-10: 10px; --space-14: 14px; --space-56: 56px;
+  --line-height-label: 20px;
+  --select-height: 40px;
+  --vc-switch-width: 40px; --vc-switch-thumb-size: 18px;
+  --radio-border-selected: 6px;
+  --slider-grabber-size: 16px;
+  --theme-swatch-size: 46px;
+  --disabled-opacity-control: 0.5;
+  --scrollbar-thin-thumb: var(--bg-1);
+  --background-feedback-warning: color-mix(in hsl, var(--yellow-2), transparent 80%);
+  --background-feedback-info: color-mix(in hsl, var(--blue-2), transparent 80%);
+  --border-feedback-warning: var(--yellow-1);
+  /* Discord's own theme-preview colours (light maps to --text-0 because midnight sets --white to it) */
+  --overlay-button-background: hsl(0, 0%, 0%, 0.5);
+  --avatar-size-xl: 120px; --status-size-xl: 24px; --status-cutout-xl: 7px;
+  --profile-dialog-width: 900px; --profile-dialog-height: 640px; --profile-banner-height: 160px; --profile-column-width: 340px;
+  --menu-item-hover-background: var(--hover); /* = --background-mod-subtle, the 2025 client's neutral menu hover */
+  --menu-item-hover-text: var(--text-3); /* = --interactive-text-hover */
+  --menu-item-danger-hover-background: var(--background-feedback-critical);
+  --checkbox-background-default: var(--bg-2); --checkbox-border-default: var(--border);
+  --checkbox-background-selected: var(--accent-2); --checkbox-border-selected: var(--button-border); --checkbox-size: 20px;
+  --context-menu-width: 220px; --status-menu-width: 240px;
+  --toast-width: 360px; --lightbox-max-width: 960px;
+  --forum-card-thumb: 96px; --thread-panel-width: 420px; --dm-profile-width: 340px;
+  --login-card-width: 784px; --login-card-narrow: 480px; --web-login-width: 480px; --web-login-height: 720px;
+  --placeholder-stripe-a: var(--bg-3); --placeholder-stripe-b: var(--bg-2);
+  --background-scrim-lightbox: hsl(0, 0%, 0%, 0.9);
+  --theme-preview-light: var(--text-0);
+  --theme-preview-ash: #323339;
+  --theme-preview-dark: #1d1d21;
+  --theme-preview-onyx: #000000;
+}
+html, body { margin: 0; padding: 0; background: var(--desktop); }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div data-region="window" data-screen-label="Emoji picker · search" style="position:relative;width:var(--window-width);height:var(--window-height);overflow:hidden;display:flex;flex-direction:column;background:var(--bg-3);font-family:var(--font-primary);font-optical-sizing:var(--font-optical-sizing);font-weight:var(--font-weight-normal);color:var(--text-3)">
+  <div data-region="titlebar" style="flex:none;height:var(--top-bar-height)"></div>
+  <div data-region="base" style="flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap) var(--gap)">
+    <div data-region="sidebar" style="flex:none;display:flex;gap:var(--gap)">
+      <nav data-region="server-rail" style="flex:none;width:var(--custom-guild-list-width);height:100%;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--custom-guild-list-padding) 0">
+        <div data-item="home" style="position:relative;flex:none;width:100%;display:flex;justify-content:center">
+          <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--text-4)">
+            <svg viewBox="0 0 27 27" fill="currentColor" style="width:calc(var(--guildbar-avatar-size) * 0.585);height:calc(var(--guildbar-avatar-size) * 0.585)"><path d="M0 0h7v1H6v1H5v1H4v1H3v1H2v1h5v1H0V6h1V5h1V4h1V3h1V2h1V1H0m13 2h5v1h-1v1h-1v1h-1v1h3v1h-5V7h1V6h1V5h1V4h-3m8 5h1v5h1v-1h1v1h-1v1h1v-1h1v1h-1v3h-1v1h-2v1h-1v1h1v-1h2v-1h1v2h-1v1h-2v1h-1v-1h-1v1h-6v-1h-1v-1h-1v-2h1v1h2v1h3v1h1v-1h-1v-1h-3v-1h-4v-4h1v-2h1v-1h1v-1h1v2h1v1h1v-1h1v1h-1v1h2v-2h1v-2h1v-1h1M8 14h2v1H9v4h1v2h1v1h1v1h1v1h4v1h-6v-1H5v-1H4v-5h1v-1h1v-2h2m17 3h1v3h-1v1h-1v1h-1v2h-2v-2h2v-1h1v-1h1m1 0h1v3h-1v1h-2v-1h1v-1h1"></path></svg>
+          </div>
+        </div>
+        <div data-item="separator" style="flex:none;width:var(--guild-separator-width);height:var(--border-thickness);background:var(--border)"></div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center">
+          <div style="border-radius:var(--radius-xs);background:var(--text-1)"></div><div style="border-radius:var(--radius-xs);background:var(--green-3)"></div><div style="border-radius:var(--radius-xs);background:var(--yellow-4)"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center">
+          <div style="border-radius:var(--radius-xs);background:var(--bg-4)"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)"></div><div style="border-radius:var(--radius-xs);background:var(--purple-4)"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center">
+          <div style="border-radius:var(--radius-xs);background:var(--yellow-2)"></div><div style="border-radius:var(--radius-xs);background:var(--blue-4)"></div><div style="border-radius:var(--radius-xs);background:var(--red-3)"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)"></div>
+        </div>
+        <div data-item="folder-expanded" style="flex:none;width:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--space-4) 0">
+          <div data-part="folder-icon" style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);display:flex;align-items:center;justify-content:center;color:var(--accent-2)">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M2 5a2 2 0 0 1 2-2h5.17a2 2 0 0 1 1.42.59L12 5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5Z"></path></svg>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2"></path></svg></div>
+          </div>
+          <div data-item="guild" data-state="selected" style="position:relative;width:100%;display:flex;justify-content:center">
+            <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2 - (var(--custom-guild-list-width) - var(--border-thickness) * 2 - var(--folder-size)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-selected-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-selected-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)"></div>
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)">Vc</div>
+          </div>
+          <div data-item="guild" data-state="unread" style="position:relative;width:100%;display:flex;justify-content:center">
+            <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2 - (var(--custom-guild-list-width) - var(--border-thickness) * 2 - var(--folder-size)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-unread-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-unread-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)"></div>
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--purple-2);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)">ny</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--yellow-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-code);font-size:var(--font-size-sm);font-weight:var(--font-weight-bold)">&lt;/&gt;</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--blue-1);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)">3D</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)">m</div>
+          </div>
+          <div data-item="guild" data-state="mention" style="width:100%;display:flex;justify-content:center">
+            <div style="position:relative;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--red-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)">wc
+              <div data-part="mention-badge" style="position:absolute;right:calc(var(--space-4) * -1);bottom:calc(var(--space-4) * -1);min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);box-shadow:0 0 0 var(--space-4) var(--bg-4);color:var(--text-0);font-size:var(--font-size-xs);font-weight:var(--font-weight-bold);line-height:var(--badge-size);text-align:center">2</div>
+            </div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)">Ts</div>
+          </div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center">
+          <div style="border-radius:var(--radius-xs);background:var(--purple-3)"></div><div style="border-radius:var(--radius-xs);background:var(--blue-2)"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)"></div><div style="border-radius:var(--radius-xs);background:var(--green-2)"></div>
+        </div>
+        <div data-item="add-server" style="flex:none;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--text-3)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 5v14M5 12h14"></path></svg>
+        </div>
+      </nav>
+      <div data-region="sidebar-column" style="flex:none;width:calc(var(--custom-guild-sidebar-width) - var(--custom-guild-list-width));display:flex;flex-direction:column;gap:var(--gap)">
+        <div data-region="channel-sidebar" style="flex:1;min-height:0;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column">
+          <div data-region="guild-header" style="flex:none;height:calc(var(--custom-channel-header-height) - var(--border-thickness));border-bottom:var(--border-thickness) solid var(--border);display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-8) 0 var(--space-16)">
+            <div style="flex:1;min-width:0;display:flex;align-items:center;color:var(--text-2)">
+              <div data-part="guild-icon" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);margin-right:var(--space-6);border-radius:var(--radius-xs);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-tag);font-weight:var(--font-weight-bold)">Vc</div>
+              <span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);white-space:nowrap">Vencord</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);margin-left:var(--space-4)"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+            <div data-part="invite" style="flex:none;width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><circle cx="10" cy="7.5" r="4.5"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z"></path></svg>
+            </div>
+          </div>
+          <div data-region="channel-list" style="flex:1;min-height:0;overflow:hidden">
+            <div data-item="category" style="padding-top:calc(var(--space-8) + var(--space-2))">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap"><span>Support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M4 3h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8l-4 3.5V14a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path><path d="M19 8h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2v2.5L17 19h-6a2 2 0 0 1-2-2v-1h6a4 4 0 0 0 4-4V8Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">known-issues</span>
+                <span style="flex:none;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--accent-1)">1 New</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path transform="translate(0 4) scale(.8)" d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path><path d="M18.5 1a4.5 4.5 0 0 0-3.9 6.75l-.55 1.85a.3.3 0 0 0 .37.37l1.85-.55A4.5 4.5 0 1 0 18.5 1Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">🏥-vencord-support-🏥</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path transform="translate(0 4) scale(.8)" d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path><path d="M18.5 1a4.5 4.5 0 0 0-3.9 6.75l-.55 1.85a.3.3 0 0 0 .37.37l1.85-.55A4.5 4.5 0 1 0 18.5 1Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">🖥️-vesktop-support-🖥️</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)">theme-support</span>
+              </div>
+            </div>
+            <div data-item="category" style="padding-top:var(--space-16)">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap"><span>💬 Chat (❌ NO SUPPORT)</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)">✍️-help-and-questions</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="selected unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--active);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-2)">😳-generagal</span>
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)"><circle cx="10" cy="7.5" r="4.5"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z"></path></svg>
+              </div>
+            </div>
+            <div data-item="channel" data-state="hover unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:var(--space-4);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8) 0 calc(var(--space-8) + var(--list-item-hover-shift));padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--hover);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">🇧🇪-deutsch-german</span>
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)"><circle cx="10" cy="7.5" r="4.5"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z"></path></svg>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">🎇-progaming</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">🤖-bot-commands</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)">🍮-linecord</span>
+              </div>
+            </div>
+            <div data-item="category" style="padding-top:var(--space-16)">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap"><span>📩 Modmail</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)">📩-modmail</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section data-region="user-panel" style="flex:none;height:calc(var(--chatbar-height) + var(--space-8) + var(--border-thickness));overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8)">
+          <div data-part="avatar" style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm)">
+            <div style="width:100%;height:100%;border-radius:50%;background:var(--bg-2);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2.5"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2.5"></path></svg></div>
+            <div data-part="status" data-status="invisible" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)">refact0r</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">Invisible</span>
+          </div>
+          <div data-part="mic" data-state="muted" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--accent-new)">
+            <div style="width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M15 9.4V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5 2.2"></path><path d="M5 11a7 7 0 0 0 11.2 5.6M19 11a7 7 0 0 1-.6 2.8M12 18v3M3 3l18 18"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+          </div>
+          <div data-part="deafen" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--text-4)">
+            <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+          </div>
+          <div data-part="settings" style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-4)">
+            <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M10.6 2h2.8l.5 2.6 1.9.8 2.2-1.5 2 2-1.5 2.2.8 1.9 2.6.5v2.8l-2.6.5-.8 1.9 1.5 2.2-2 2-2.2-1.5-1.9.8-.5 2.6h-2.8l-.5-2.6-1.9-.8-2.2 1.5-2-2 1.5-2.2-.8-1.9-2.6-.5v-2.8l2.6-.5.8-1.9-1.5-2.2 2-2 2.2 1.5 1.9-.8.5-2.6ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"></path></svg>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div data-region="page" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap)">
+      <header data-region="channel-header" style="flex:none;height:var(--custom-channel-header-height);overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;align-items:center;padding-left:var(--space-8)">
+        <div data-part="title" style="flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap">
+          <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg);margin:0 var(--space-8) 0 var(--space-6);color:var(--text-4)"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z"></path></svg>
+          <span style="flex:none;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--text-2)">😳-generagal</span>
+          <span style="flex:none;width:var(--space-4);height:var(--space-4);margin:0 var(--space-8);border-radius:50%;background:var(--text-5)"></span>
+          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-5)">key is a little bitch</span>
+        </div>
+        <div data-part="toolbar" style="flex:none;display:flex;align-items:center;gap:var(--space-8);padding-right:var(--space-12)">
+          <div data-part="threads" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 2.8a8.7 8.7 0 0 0-7.6 13l-1.3 4.3a.6.6 0 0 0 .8.8l4.3-1.3A8.7 8.7 0 1 0 12 2.8ZM8 9h8v2H8V9Zm0 4h5v2H8v-2Z"></path></svg></div>
+          <div data-part="notifications" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 2.5a6.5 6.5 0 0 0-6.5 6.5v3.38c0 .4-.12.8-.34 1.13L3.6 15.9a1 1 0 0 0 .83 1.6h15.14a1 1 0 0 0 .83-1.56l-1.56-2.4a2 2 0 0 1-.34-1.13V9A6.5 6.5 0 0 0 12 2.5ZM9.27 19a.5.5 0 0 0-.45.72 3.5 3.5 0 0 0 6.36 0 .5.5 0 0 0-.45-.72H9.27Z"></path></svg></div>
+          <div data-part="pins" data-state="unread" style="position:relative;width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M14.6 2.3a1 1 0 0 1 1.4 0l5.7 5.7a1 1 0 0 1 0 1.4l-.9.9a1.5 1.5 0 0 1-1.6.33l-3.5 3.5.4 3.3a1.5 1.5 0 0 1-.43 1.24l-.85.85a1 1 0 0 1-1.42 0L9.6 15.8l-5.3 5.3a1 1 0 0 1-1.4-1.4l5.3-5.3-3.8-3.8a1 1 0 0 1 0-1.42l.85-.85a1.5 1.5 0 0 1 1.24-.43l3.3.4 3.5-3.5a1.5 1.5 0 0 1 .33-1.6l.9-.9Z"></path></svg>
+            <div data-part="badge" style="position:absolute;right:var(--space-4);bottom:var(--space-4);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--accent-new);box-shadow:0 0 0 var(--space-2) var(--bg-4)"></div>
+          </div>
+          <div data-part="member-list-toggle" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><circle cx="9" cy="8" r="3.5"></circle><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6v1H2v-1Z"></path><circle cx="16.5" cy="7.5" r="3"></circle><path d="M17.2 13.1c2.8.4 4.8 2.6 4.8 5.4V20h-4.2v-.5c0-2.6-1-4.8-2.7-6.2l.5-.2c.5-.05 1.1-.05 1.6 0Z"></path></svg></div>
+          <div data-part="search" style="margin-left:var(--space-4);width:var(--search-width);height:var(--button-size);border-radius:var(--radius-sm);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-default);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8)">
+            <span style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--input-placeholder-text-default)">Search Vencord</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 21 21"></path></svg>
+          </div>
+        </div>
+        <div data-part="trailing" style="flex:none;display:flex;align-items:center;gap:var(--space-8);height:var(--button-size);padding-right:var(--space-8)">
+          <div data-part="inbox" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm-1 3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8h-4.38a1 1 0 0 0-.9.55l-.44.9a1 1 0 0 1-.9.55h-2.76a1 1 0 0 1-.9-.55l-.44-.9a1 1 0 0 0-.9-.55H4V5Z"></path></svg></div>
+          <div data-part="window-controls" style="display:flex;align-items:center;padding-right:var(--window-controls-padding)">
+            <div style="flex:none;width:var(--space-8);height:var(--space-16);border-left:var(--border-thickness) solid var(--border)"></div>
+            <div data-control="minimize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--idle)"></div></div>
+            <div data-control="maximize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--online)"></div></div>
+            <div data-control="close" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--dnd)"></div></div>
+          </div>
+        </div>
+      </header>
+      <div data-region="content" style="flex:1;min-height:0;display:flex;gap:var(--gap)">
+        <main data-region="chat" style="position:relative;flex:1;min-width:0;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column">
+          <div data-part="new-messages-bar" style="position:absolute;z-index:1;top:var(--space-12);left:var(--space-12);right:var(--space-12);height:var(--new-messages-bar-height);padding:0 var(--space-8);border-radius:var(--radius-sm);border-top:var(--border-thickness) solid var(--border);background:var(--accent-3);color:var(--text-0);display:flex;align-items:center;justify-content:space-between;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap">
+            <span style="padding-left:var(--space-4)">11 new messages since 5:11 PM</span>
+            <span style="display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8);font-weight:var(--font-weight-semibold)">Mark As Read<svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 2.8a8.7 8.7 0 0 0-7.6 13l-1.3 4.3a.6.6 0 0 0 .8.8l4.3-1.3A8.7 8.7 0 1 0 12 2.8Z"></path><path d="M8.5 12.2l2.4 2.4 4.6-4.8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent-3)"></path></svg></span>
+          </div>
+          <div data-part="timeline" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;font-size:var(--font-size-md);line-height:var(--line-height-md);color:var(--text-3)">
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--purple-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)">G</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--text-2)">GattoDev (please ping)</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🐰</span>COZY</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>la piss</div>
+            </div>
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2"></path></svg></div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">refact0r</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center">🐣</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>can someone ping me</div>
+            </div>
+
+            <div data-msg="group" data-state="mentioned" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md);background:var(--mention)">
+              <div data-part="highlight-bar" style="position:absolute;left:calc(var(--radius-sm) / 2);top:var(--radius-sm);bottom:var(--radius-sm);width:var(--divider-thickness);border-radius:var(--divider-thickness);background:var(--accent-2)"></div>
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--purple-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)">G</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--text-2)">GattoDev (please ping)</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🐰</span>COZY</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div><span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@refact0r</span> <span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)">@refact0r</span></div>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--green-1)"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--blue-1)">@hungry</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)">how is it already september</span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--red-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)">n</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-2)">nvhhr</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🐱</span>COS</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center">🌸</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>time keeps marching forward</div>
+            </div>
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2"></path></svg></div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)">refact0r</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center">🐣</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>for theme reasons</div>
+            </div>
+            <div data-msg="follow-up" data-state="hover" style="position:relative;flex:none;margin:0 var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md);background:var(--message-hover)">
+              <span data-part="hover-timestamp" style="position:absolute;left:0;top:var(--space-2);width:calc(var(--message-gutter) - var(--space-16));text-align:right;font-size:var(--font-size-timestamp-alt);line-height:var(--line-height-md);color:var(--text-5);white-space:nowrap">4:21 PM</span>
+              <div>thanks</div>
+              <div data-part="reactions" style="display:flex;flex-wrap:wrap;gap:var(--space-4);padding:var(--space-2) 0">
+                <div data-state="reacted" style="height:var(--reaction-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-6);border-radius:var(--radius-sm);border:var(--reaction-border-width) solid var(--reaction-border-reacted-default);background:var(--reaction-background-reacted-default)"><span style="font-size:var(--font-size-md);line-height:var(--line-height-xs)">🙏</span><span style="font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--reaction-text-reacted-default)">3</span></div>
+                <div style="height:var(--reaction-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-6);border-radius:var(--radius-sm);border:var(--reaction-border-width) solid var(--reaction-border-default);background:var(--reaction-background-default)"><span style="font-size:var(--font-size-md);line-height:var(--line-height-xs)">💀</span><span style="font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--reaction-text-default)">1</span></div>
+              </div>
+              <div data-part="message-actions" style="position:absolute;top:calc(var(--space-16) * -1);right:var(--space-12);display:flex;background:var(--bg-3);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-sm);color:var(--text-4)">
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M21 12a9 9 0 1 1-9-9"></path><path d="M19 2v6M16 5h6"></path><path d="M8 14.5a4.5 4.5 0 0 0 8 0"></path><circle cx="9" cy="10" r=".6" fill="currentColor"></circle><circle cx="15" cy="10" r=".6" fill="currentColor"></circle></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M2.3 7.3a1 1 0 0 0 0 1.4l5 5a1 1 0 0 0 1.4-1.4L5.42 9H11a7 7 0 0 1 7 7v4a1 1 0 1 0 2 0v-4a9 9 0 0 0-9-9H5.41l3.3-3.3a1 1 0 0 0-1.42-1.4l-5 5Z"></path></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M21.7 7.3a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.4-1.4L18.58 9H13a7 7 0 0 0-7 7v4a1 1 0 1 1-2 0v-4a9 9 0 0 1 9-9h5.59l-3.3-3.3a1 1 0 0 1 1.42-1.4l5 5Z"></path></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></div>
+              </div>
+            </div>
+
+            <div data-part="unread-divider" style="position:relative;flex:none;height:0;margin:var(--space-6) calc(var(--space-12) + var(--space-2)) 0 var(--space-16);border-top:var(--divider-thickness) solid var(--accent-new);border-radius:var(--divider-thickness)">
+              <span style="position:absolute;right:0;top:calc((var(--divider-thickness) + (var(--unread-pill-height) - var(--divider-thickness)) / 2) * -1);height:var(--unread-pill-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--unread-pill-height);font-weight:var(--font-weight-bold);text-transform:uppercase">New</span>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:calc(var(--message-group-gap) - var(--space-6) - var(--divider-thickness)) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--blue-2)"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--blue-1)">@coco</span>
+                <span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>☁️</span>rain</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)">I've still got jailbreak the app is just gone after I restarted ...</span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--blue-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)">d</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)">doing okayish</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>💜</span>NURO</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center">🐈</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>uicache is finicky</div>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--purple-1)"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--green-1)">@sardine</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)">wasnt there a syntax that was like <code style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--background-code);border:var(--border-thickness) solid var(--border);font-family:var(--font-code);font-size:var(--font-size-inline-code)">-readonly</code></span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--blue-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--text-1)">e</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)">edelweiß</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>❄️</span>=ω=</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center">🦊</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:21 PM</span>
+              </div>
+              <div>yes but idk what youre even trying to do with your type</div>
+            </div>
+            <div data-msg="follow-up" style="position:relative;flex:none;margin:0 var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <pre data-part="code-block" style="margin:var(--space-6) 0 0 0;max-width:90%;padding:calc(var(--font-size-sm) / 2);border-radius:var(--radius-md);background:var(--background-code);border:var(--border-thickness) solid var(--border);font-family:var(--font-code);font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-3);white-space:pre;overflow:hidden">type M&lt;T&gt; = { -readonly [K in keyof T]: T[K] }</pre>
+            </div>
+
+            <div data-msg="group" data-author="bot" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-bold)">V</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)">venapp</span>
+                <span data-part="bot-tag" style="align-self:center;height:var(--bot-tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-2);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--bot-tag-height);font-weight:var(--font-weight-semibold);text-transform:uppercase">App</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)">4:22 PM</span>
+              </div>
+              <div data-part="embed" style="max-width:var(--embed-max-width);margin:var(--space-2) 0;padding:var(--space-8) var(--space-16) var(--space-16) var(--space-12);border-radius:var(--radius-md);background:var(--bg-3);border:var(--border-thickness) solid var(--border);border-left:var(--embed-accent-width) solid var(--blue-2)">
+                <div style="margin-top:var(--space-8);font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--text-link)">Modmail thread #412 opened for coco</div>
+              </div>
+            </div>
+          </div>
+          <div data-part="typing" style="flex:none;height:var(--typing-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-16);font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-3);white-space:nowrap">
+            <span style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3);opacity:0.4"></span><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3);opacity:0.7"></span><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3)"></span></span>
+            <span><strong style="font-weight:var(--font-weight-semibold);color:var(--text-3)">zeousky</strong> is typing…</span>
+          </div>
+          <div data-part="composer" style="position:relative;flex:none;height:var(--chatbar-height);margin:0 var(--space-8) var(--space-8) var(--space-8);border-radius:var(--radius-md);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-default);display:flex;align-items:center;color:var(--text-4)">
+            <div data-part="attach" style="flex:none;width:calc(var(--space-16) * 2 + var(--icon-size-md));height:100%;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M12 4v16M4 12h16"></path></svg></div>
+            <span style="flex:1;min-width:0;margin-left:var(--space-12);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);color:var(--input-placeholder-text-default)">Message #😳-generagal</span>
+            <div data-part="buttons" style="flex:none;display:flex;align-items:center;padding-right:var(--space-8)"><div data-part="composer-button" data-key="gif" style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><rect x="2" y="5" width="20" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"></rect><text x="12" y="15" text-anchor="middle" fill="currentColor" style="font-family:var(--font-primary);font-size:7.5px;font-weight:var(--font-weight-bold)">GIF</text></svg></div><div data-part="composer-button" data-key="sticker" style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><path d="M5 3h9.6a2 2 0 0 1 1.4.6l4.4 4.4a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path><path d="M14 3v4a2 2 0 0 0 2 2h5"></path><path d="M8.5 14.5a4 4 0 0 0 7 0"></path></svg></div><div data-part="composer-button" data-key="emoji" data-state="active" style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center;color:var(--text-2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><circle cx="12" cy="12" r="9"></circle><path d="M8 14a4.5 4.5 0 0 0 8 0"></path><circle cx="9" cy="9.5" r=".8" fill="currentColor"></circle><circle cx="15" cy="9.5" r=".8" fill="currentColor"></circle></svg></div><div data-part="composer-button" data-key="apps" style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)"><rect x="3" y="3" width="8" height="8" rx="2.5"></rect><rect x="3" y="13" width="8" height="8" rx="2.5"></rect><rect x="13" y="13" width="8" height="8" rx="2.5"></rect><path d="M17 2.5l1.2 3.3 3.3 1.2-3.3 1.2L17 11.5l-1.2-3.3-3.3-1.2 3.3-1.2L17 2.5Z"></path></svg></div></div>
+          </div>
+        </main>
+        <aside data-region="member-list" style="flex:none;width:var(--member-list-width);overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column">
+          <div data-item="group-header" style="flex:none;height:var(--group-header-height);padding:var(--space-20) var(--space-8) var(--space-4) var(--space-16);font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-medium);color:var(--text-4);white-space:nowrap">the almighty — 2</div>
+          <div data-item="member" data-state="offline" style="flex:none;padding:var(--space-1) 0;opacity:var(--offline-opacity)">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-4);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">C</div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--purple-1)">Dear Clyde</span><span data-part="bot-tag" style="flex:none;height:var(--bot-tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-2);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--bot-tag-height);font-weight:var(--font-weight-semibold);text-transform:uppercase">App</span></div>
+            </div>
+          </div>
+          <div data-item="member" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-bold)">V<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--online);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
+                <div style="display:flex;align-items:center;gap:var(--space-4)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--purple-1)">venapp</span><span data-part="bot-tag" style="flex:none;height:var(--bot-tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-2);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--bot-tag-height);font-weight:var(--font-weight-semibold);text-transform:uppercase">App</span></div>
+                <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">/modmail</span>
+              </div>
+            </div>
+          </div>
+          <div data-item="group-header" style="flex:none;height:var(--group-header-height);padding:var(--space-20) var(--space-8) var(--space-4) var(--space-16);font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-medium);color:var(--text-4);white-space:nowrap">janny — 10</div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-1);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--blue-1)">b<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--purple-1)">/boninya/suteki</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🩷</span>.esc</span></div>
+            </div>
+          </div>
+          <div data-item="member" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--green-4);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">d<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
+                <div style="display:flex;align-items:center;gap:var(--space-4)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--green-1)">/dev/disk/by-label/root</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🐰</span>COZY</span></div>
+                <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">🐌</span>
+              </div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-2);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--red-4);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">c<div data-part="status" data-status="dnd" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--dnd);box-shadow:0 0 0 var(--status-cutout) var(--bg-4);display:flex;align-items:center;justify-content:center"><div style="width:calc(var(--status-size) * 0.6);height:calc(var(--status-size) * 0.25);border-radius:var(--status-size);background:var(--bg-4)"></div></div></div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
+                <div style="display:flex;align-items:center;gap:var(--space-4)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-2)">ceo of steamed hams</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>💙</span>DIVA</span></div>
+                <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">💜 won't you believe in a future with me</span>
+              </div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-3);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-2);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">d<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--online);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap">
+                <div style="display:flex;align-items:center;gap:var(--space-4)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--purple-1)">doing okayish</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>💜</span>NURO</span></div>
+                <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">🌸 Don't do something permanent</span>
+              </div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-3);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--text-1)">e<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--purple-1)">edelweiß</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>❄️</span>=ω=</span><span>👑</span></div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-4);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">f<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--online);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-bold);color:var(--red-1)">fffff</span></div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-2);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--text-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--purple-2)">n<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--purple-1)">nyako</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>💜</span>MEOW</span></div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-4);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--text-1)">s<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-bold);color:var(--red-1)">serena 𐔌՞. .՞𐦯</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🪶</span>ᓚᘏᗢ</span></div>
+            </div>
+          </div>
+          <div data-item="member" data-state="nameplate" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);background:var(--nameplate-4);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--bg-2);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">v<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-4);white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-2)">vap</span><span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)"><span>🎸</span>HYTL</span></div>
+            </div>
+          </div>
+          <div data-item="member" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--bg-1);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">X<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375));box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap"><span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-2)">Xinto</span><span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)">⏰ The time has come and so have I</span></div>
+            </div>
+          </div>
+          <div data-item="group-header" style="flex:none;height:var(--group-header-height);padding:var(--space-20) var(--space-8) var(--space-4) var(--space-16);font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-medium);color:var(--text-4);white-space:nowrap">vencord experience specialist — 2</div>
+          <div data-item="member" style="flex:none;padding:var(--space-1) 0">
+            <div style="height:var(--member-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-12)">
+              <div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--green-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold)">h<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--online);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)"></div></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--blue-1)">hungry</span></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+<div data-region="emoji-picker" style="position:absolute;z-index:6;right:calc(var(--gap) + var(--member-list-width) + var(--gap) + var(--border-thickness) + var(--space-8) + var(--expression-picker-anchor-inset));bottom:calc(var(--gap) + var(--border-thickness) + var(--space-8) + var(--chatbar-height) + var(--space-8));width:var(--expression-picker-width);height:var(--expression-picker-height);overflow:hidden;border-radius:var(--radius-md);background:var(--bg-3);border:var(--border-thickness) solid var(--border);box-shadow:var(--expression-picker-shadow);display:flex;flex-direction:column"><div data-part="header" style="flex:none;height:var(--picker-header-height);padding:var(--space-16) var(--space-16) 0;display:flex;flex-direction:column;gap:var(--space-16);background:var(--bg-3);border-bottom:var(--border-thickness) solid var(--border)"><div data-part="tabs" style="display:flex;gap:var(--space-8)"><div data-part="tab" style="height:var(--picker-tab-height);display:flex;align-items:center;padding:0 var(--space-8);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-4)">GIFs</div><div data-part="tab" style="height:var(--picker-tab-height);display:flex;align-items:center;padding:0 var(--space-8);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-4)">Stickers</div><div data-part="tab" data-state="selected" style="height:var(--picker-tab-height);display:flex;align-items:center;padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--bg-2);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)">Emoji</div></div><div style="display:flex;align-items:center;gap:var(--space-12);height:var(--input-height)"><div data-part="search" data-state="filled" style="flex:1;min-width:0;height:var(--picker-search-height);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-12);border-radius:var(--radius-sm);background:var(--bg-4);border:var(--border-thickness) solid var(--input-border-active)"><span style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;display:flex;align-items:center;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--input-text-default)">sm<span style="width:var(--space-1);height:var(--line-height-label);margin-left:var(--space-1);background:var(--text-2)"></span></span><span style="display:flex;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></div><div data-part="skin-tone" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><img data-emoji="👋" alt="👋" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f44b.svg" style="flex:none;display:block;width:var(--icon-size-lg);height:var(--icon-size-lg)"></div><div data-part="button" data-variant="secondary" style="flex:none;height:var(--input-height);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--bg-2);border:var(--border-thickness) solid var(--border-light);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap">Add Emoji</div></div></div><div style="flex:1;min-height:0;display:flex"><div data-part="category-rail" style="flex:none;width:var(--picker-rail-width);padding:var(--space-8) 0;display:flex;flex-direction:column;align-items:center;gap:var(--space-8);background:var(--bg-4);overflow:hidden"><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M7 4h10v3a5 5 0 0 1-10 0V4ZM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 12v4M8 20h8M10 16h4v4h-4z"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></div><div style="flex:none;width:var(--space-24);height:var(--border-thickness);background:var(--border)"></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><div style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-tag);font-weight:var(--font-weight-bold)">Vc</div></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><div style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);background:var(--purple-2);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-tag);font-weight:var(--font-weight-bold)">ny</div></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><div style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-tag);font-weight:var(--font-weight-bold)">Ts</div></div><div style="flex:none;width:var(--space-24);height:var(--border-thickness);background:var(--border)"></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><circle cx="12" cy="12" r="9"></circle><path d="M8 14a4.5 4.5 0 0 0 8 0"></path><circle cx="9" cy="9.5" r=".8" fill="currentColor"></circle><circle cx="15" cy="9.5" r=".8" fill="currentColor"></circle></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M5 19c0-8 5-14 15-15-1 10-7 15-15 15ZM5 19l7-7"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M3 11h18a9 9 0 0 1-18 0ZM8 7c0-2 2-2 2-4M13 7c0-2 2-2 2-4"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M7 7h10a5 5 0 0 1 5 5v2.5a3 3 0 0 1-5.4 1.8L15.5 15h-7l-1.1 1.3A3 3 0 0 1 2 14.5V12a5 5 0 0 1 5-5ZM7 10v4M5 12h4M16 11h.01M18 13h.01"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><circle cx="6" cy="16" r="3.5"></circle><circle cx="18" cy="16" r="3.5"></circle><path d="M6 16l4-7h5l3 7M10 9 8 5H6M15 9l-3 7"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2 0 3.5 1.2 5 3 1.5-1.8 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z"></path></svg></div><div data-part="rail-item" style="position:relative;flex:none;width:100%;height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)"><path d="M5 21V4M5 4h11l-2 4 2 4H5"></path></svg></div></div><div data-part="grid" style="flex:1;min-width:0;overflow:hidden;padding:0 var(--space-8) var(--space-8);display:grid;grid-template-columns:repeat(9, var(--emoji-cell-size));grid-auto-rows:min-content;align-content:start;background:var(--bg-3)"><div data-part="section-header" style="grid-column:1 / -1;height:var(--picker-section-header-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-4)"><span style="display:flex;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 21 21"></path></svg></span><span style="font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)">Search results</span><span style="display:flex;color:var(--text-4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)"><path d="M6 9l6 6 6-6"></path></svg></span></div><div data-part="emoji-cell" data-state="hover" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);background:var(--active);"><img data-emoji="😄" alt="😄" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f604.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😃" alt="😃" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f603.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😏" alt="😏" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f60f.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😸" alt="😸" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f638.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="🙂" alt="🙂" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f642.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😊" alt="😊" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f60a.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😆" alt="😆" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f606.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😁" alt="😁" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f601.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><img data-emoji="😼" alt="😼" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f63c.svg" style="flex:none;display:block;width:var(--emoji-size);height:var(--emoji-size)"></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><div data-emoji="custom" style="flex:none;width:var(--emoji-size);height:var(--emoji-size);border-radius:calc(var(--emoji-size) * 0.28);background:linear-gradient(135deg, var(--purple-3), var(--blue-3));color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--emoji-size) * 0.32);font-weight:var(--font-weight-bold);line-height:1">smug</div></div><div data-part="emoji-cell" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><div data-emoji="custom" style="flex:none;width:var(--emoji-size);height:var(--emoji-size);border-radius:calc(var(--emoji-size) * 0.28);background:linear-gradient(135deg, var(--blue-2), var(--green-2));color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--emoji-size) * 0.32);font-weight:var(--font-weight-bold);line-height:1">smol</div></div><div data-part="emoji-cell" data-locked="true" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><div style="filter:var(--locked-filter);opacity:var(--locked-opacity)"><div data-emoji="custom" style="flex:none;width:var(--emoji-size);height:var(--emoji-size);border-radius:calc(var(--emoji-size) * 0.28);background:linear-gradient(135deg, var(--red-3), var(--yellow-3));color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--emoji-size) * 0.32);font-weight:var(--font-weight-bold);line-height:1">smh</div></div></div><div data-part="emoji-cell" data-locked="true" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><div style="filter:var(--locked-filter);opacity:var(--locked-opacity)"><div data-emoji="custom" style="flex:none;width:var(--emoji-size);height:var(--emoji-size);border-radius:calc(var(--emoji-size) * 0.28);background:linear-gradient(135deg, var(--green-3), var(--purple-3));color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--emoji-size) * 0.32);font-weight:var(--font-weight-bold);line-height:1">smrt</div></div></div><div data-part="emoji-cell" data-locked="true" style="position:relative;width:var(--emoji-cell-size);height:var(--emoji-cell-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);"><div style="filter:var(--locked-filter);opacity:var(--locked-opacity)"><div data-emoji="custom" style="flex:none;width:var(--emoji-size);height:var(--emoji-size);border-radius:calc(var(--emoji-size) * 0.28);background:linear-gradient(135deg, var(--purple-4), var(--blue-4));color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--emoji-size) * 0.32);font-weight:var(--font-weight-bold);line-height:1">smirk2</div></div></div></div></div><div data-part="preview" style="flex:none;height:var(--picker-footer-height);display:flex;align-items:center;gap:var(--space-10);padding:0 var(--space-16);background:var(--bg-4);border-top:var(--border-thickness) solid var(--border)"><img data-emoji="😄" alt="😄" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/1f604.svg" style="flex:none;display:block;width:var(--emoji-size-footer);height:var(--emoji-size-footer)"><div style="flex:1;min-width:0;white-space:nowrap"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)">:smile:</div></div></div></div>
+</div>
+</body>
+</html>
