@@ -9,6 +9,7 @@ mod images;
 mod inbox;
 mod member_list;
 mod message;
+mod profile;
 mod rail;
 mod settings;
 mod sidebar;
@@ -47,6 +48,10 @@ pub use message::{
 	PollSummary, Quote, ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL,
 	UNKNOWN_ROLE, UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name,
 	reaction_key, snippet, system_line, timestamp_in, timestamp_text, user_display,
+};
+pub use profile::{
+	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
+	ProfileCard, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,
 };
 pub use rail::{
 	DEFAULT_FOLDER_COLOR, Drop, Rail, RailFolder, RailGuild, RailItem, acronym, new_folder_id, rearranged,

@@ -6,6 +6,7 @@ mod harness;
 mod media;
 mod members;
 mod message;
+mod profile;
 mod rail;
 mod reorder;
 mod settings;
