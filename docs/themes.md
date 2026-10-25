@@ -55,7 +55,7 @@ The ones worth changing:
 | `message_avatar`, `message_gutter` | Message avatar size and the space around the message column |
 | `server_rail_width`, `channel_sidebar_width`, `member_list_width` | Column widths |
 
-The complete list, with the defaults, is the `tokens!` block in `crates/ui/src/theme.rs`. Every identifier there is a valid key.
+The complete list, with the defaults, is `COLORS` and `SIZES` in `apps/desktop/src/theme.rs`. Every key there is a valid token. `docs/ui.md` describes how the interface reads them.
 
 ## Share a theme
 

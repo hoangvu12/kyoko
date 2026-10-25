@@ -2,8 +2,11 @@
 
 mod capture;
 mod churn;
+mod fonts;
+mod frame;
 mod integration;
 mod notify;
+mod theme;
 mod tray;
 mod ui;
 
@@ -210,6 +213,10 @@ fn main() -> Result<ExitCode> {
 		.build()
 		.context("start async runtime")?;
 	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), mocked)?;
+	let appearance = ui::Appearance {
+		theme: store.settings.read().theme.clone(),
+		user_themes: store.paths.themes_dir(),
+	};
 	let server = if cli.mock {
 		Some(Arc::new(
 			runtime
@@ -295,8 +302,8 @@ fn main() -> Result<ExitCode> {
 			cdn: backend.cdn,
 			reduced_motion,
 		},
-		opening,
-		capture,
+		appearance,
+		ui::Launch { opening, capture },
 		Desktop {
 			store,
 			requests: Inbox::new(),
@@ -309,6 +316,7 @@ fn main() -> Result<ExitCode> {
 			move || scratch.remove()
 		},
 	);
+	frame::loop_ended();
 	tracing::debug!("window loop ended");
 	for task in [churn, chatter, pings].into_iter().flatten() {
 		task.abort();

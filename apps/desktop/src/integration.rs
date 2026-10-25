@@ -157,7 +157,7 @@ impl Integration {
 			}
 		});
 		let gallery = link.gallery().clone();
-		host.action("copy_image", move |name| copy_image(&gallery, &name));
+		host.action("media.copy_image", move |name| copy_image(&gallery, &name));
 		let closing = Rc::downgrade(&integration);
 		cx.on_close_requested(move || {
 			closing

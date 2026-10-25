@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,15 +11,22 @@ use protocol::Snowflake;
 use session::Alert;
 use session::{Command, Session};
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
+use zgx::compose::prelude::*;
 use zgx::image::ImageData;
-use zgx::reactive::Runtime;
-use zgx_desktop::{Application, WindowInfo, WindowOptions};
+use zgx::reactive::{Effect, Runtime, Signal};
+use zgx_desktop::{Application, Titlebar, WindowHandle, WindowInfo, WindowOptions};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::capture::{self, Capture, Opening};
+use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
+use crate::theme::Catalog;
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
+const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
+const FRAME_POLL: Duration = Duration::from_millis(50);
+const FRAME_TRIES: usize = 100;
+const TIMELINE_SLOT: &str = "timeline";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const INITIALS: usize = 3;
 const AVATAR_POINTS: f64 = 32.;
@@ -34,15 +41,26 @@ pub struct Images {
 	pub reduced_motion: bool,
 }
 
+pub struct Appearance {
+	pub theme: String,
+	pub user_themes: PathBuf,
+}
+
+pub struct Launch {
+	pub opening: Option<Opening>,
+	pub capture: Option<Capture>,
+}
+
 pub fn run(
 	session: Session,
 	inbox: Inbox<Changes>,
 	images: Images,
-	opening: Option<Opening>,
-	capture: Option<Capture>,
+	appearance: Appearance,
+	launch: Launch,
 	desktop: Desktop,
 	after_close: impl Fn() + 'static,
 ) -> Result<()> {
+	let Launch { opening, capture } = launch;
 	let script = ui_dir().join("app.luau");
 	let (width, height) = match capture {
 		Some(_) => (capture::WIDTH, capture::HEIGHT),
@@ -61,13 +79,20 @@ pub fn run(
 			width,
 			height,
 			min_size: Some((640., 420.)),
+			titlebar: Titlebar::Hidden,
 			..Default::default()
 		})
 		.run(move |cx| {
+			let catalog = Catalog::load(&[themes_dir(), appearance.user_themes.clone()]);
+			let theme = catalog.install(&cx.ui.runtime, &appearance.theme);
+			tracing::info!(%theme, themes = catalog.palettes.len(), "themes installed");
 			let host = ScriptHost::new(&cx.ui.runtime, script);
 			let window = Window {
 				runtime: cx.ui.runtime.clone(),
 				info: cx.window_info.clone(),
+				handle: cx.window.clone(),
+				frame: Cell::new(None),
+				slot: cx.ui.runtime.signal(Slot::default()),
 			};
 			let link = Link::install(&host, window, session, inbox.clone(), images);
 			link.opening.set(opening);
@@ -78,6 +103,7 @@ pub fn run(
 			}
 			let pictures = link.clone();
 			cx.tasks.spawn(async move { pictures.show_images().await });
+			cx.tasks.spawn(link.clone().attach_frame());
 			if let Err(error) = host.reload() {
 				tracing::warn!(%error, "the interface script did not load");
 			}
@@ -87,14 +113,22 @@ pub fn run(
 			let integration = capture
 				.is_none()
 				.then(|| Integration::install(cx, &host, &link, desktop));
+			let slot = link.window.slot.clone();
 			cx.on_closed(move || {
+				frame::wake_until_loop_ends();
 				if let Some(integration) = integration {
 					integration.shutdown();
 				}
 				link.shutdown();
 				after_close();
 			});
-			cx.render(host.view());
+			cx.render(
+				overlay()
+					.w_full()
+					.h_full()
+					.child(host.view())
+					.child(timeline_slot(slot)),
+			);
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
 }
@@ -107,6 +141,32 @@ pub fn hand_over(app_id: &str) -> Result<()> {
 		.map_err(|error| anyhow!("the running kyoko did not answer: {error}"))
 }
 
+fn timeline_slot(slot: Signal<Slot>) -> View {
+	div().pointer_events(false).reactive_style(move || {
+		let slot = slot.get();
+		Styles::new()
+			.absolute()
+			.left(slot.x)
+			.top(slot.y)
+			.w(slot.width)
+			.h(slot.height)
+	})
+}
+
+fn themes_dir() -> PathBuf {
+	std::env::var_os(THEMES_DIR_VARIABLE)
+		.map(PathBuf::from)
+		.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes"))
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Slot {
+	x: f32,
+	y: f32,
+	width: f32,
+	height: f32,
+}
+
 fn ui_dir() -> PathBuf {
 	std::env::var_os(UI_DIR_VARIABLE)
 		.map(PathBuf::from)
@@ -116,6 +176,9 @@ fn ui_dir() -> PathBuf {
 struct Window {
 	runtime: Runtime,
 	info: WindowInfo,
+	handle: WindowHandle,
+	frame: Cell<Option<Frame>>,
+	slot: Signal<Slot>,
 }
 
 pub(crate) struct Link {
@@ -138,10 +201,13 @@ pub(crate) struct Link {
 	status: Shared,
 	open_channel: Shared,
 	channel_name: Shared,
+	channel_topic: Shared,
 	messages: Shared,
 	avatar_ready: Shared,
 	avatar_name: Shared,
 	observer: RefCell<Option<Observer>>,
+	maximized: Shared,
+	frame_effect: RefCell<Option<Effect>>,
 }
 
 impl Link {
@@ -172,48 +238,103 @@ impl Link {
 			opening: Cell::new(None),
 			sidebar: RefCell::new(Sidebar::default()),
 			timeline: RefCell::new(Timeline::default()),
-			guilds: host.shared("guilds", Value::List(Rc::new([]))),
-			channels: host.shared("channels", Value::List(Rc::new([]))),
-			selected: host.shared("selected_guild", ""),
-			guild_name: host.shared("guild_name", ""),
-			status: host.shared("status", "Connecting"),
-			open_channel: host.shared("open_channel", ""),
-			channel_name: host.shared("channel_name", ""),
-			messages: host.shared("messages", Value::List(Rc::new([]))),
-			avatar_ready: host.shared("avatar_ready", false),
-			avatar_name: host.shared("avatar", ""),
+			guilds: host.shared("rail.guilds", Value::List(Rc::new([]))),
+			channels: host.shared("sidebar.channels", Value::List(Rc::new([]))),
+			selected: host.shared("sidebar.guild_id", ""),
+			guild_name: host.shared("sidebar.guild_name", ""),
+			status: host.shared("session.status", "Connecting"),
+			open_channel: host.shared("timeline.channel_id", ""),
+			channel_name: host.shared("timeline.channel_name", ""),
+			channel_topic: host.shared("timeline.channel_topic", ""),
+			messages: host.shared("timeline.messages", Value::List(Rc::new([]))),
+			avatar_ready: host.shared("user.avatar_ready", false),
+			avatar_name: host.shared("user.avatar", ""),
+			maximized: host.shared("window.maximized", false),
+			frame_effect: RefCell::new(None),
 			observer: RefCell::new(None),
 		});
+		Link::install_window_actions(host, &link);
 		let actions = Rc::downgrade(&link);
-		host.action("select_guild", move |argument| {
+		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
 				link.select_guild(guild_id);
 			}
 		});
 		let actions = Rc::downgrade(&link);
-		host.action("select_channel", move |argument| {
+		host.action("sidebar.select_channel", move |argument| {
 			if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake(&argument)) {
 				link.select_channel(channel_id);
 			}
 		});
 		let gallery = link.images.gallery.clone();
-		host.function("media_visible", move |names| {
+		host.function("media.visible", move |names| {
 			gallery.set_visible(texts(&names));
 			Value::Nil
 		});
 		let gallery = link.images.gallery.clone();
-		host.function("media_hover", move |name| {
+		host.function("media.hover", move |name| {
 			gallery.set_hovered(text(&name).filter(|name| !name.is_empty()));
 			Value::Nil
 		});
 		let gallery = link.images.gallery.clone();
 		let reduced_setting = link.images.reduced_motion;
-		host.function("media_reduced_motion", move |system| {
+		host.function("media.reduced_motion", move |system| {
 			gallery.set_reduced_motion(reduced_setting || matches!(system, Value::Bool(true)));
 			Value::Nil
 		});
 		link.images.gallery.set_reduced_motion(reduced_setting);
 		link
+	}
+
+	fn install_window_actions(host: &ScriptHost, link: &Rc<Link>) {
+		let actions = Rc::downgrade(link);
+		host.action("window.minimize", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.window.handle.set_minimized(true);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("window.maximize", move |_| {
+			if let Some(link) = actions.upgrade() {
+				let maximized = link.window.frame.get().is_some_and(Frame::is_maximized);
+				link.window.handle.set_maximized(!maximized);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("window.close", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.window.handle.request_close();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.function("frame.slot", move |argument| {
+			if let (Some(link), Some((name, slot))) = (actions.upgrade(), slot(&argument))
+				&& name == TIMELINE_SLOT
+			{
+				link.window.slot.set(slot);
+			}
+			Value::Nil
+		});
+	}
+
+	async fn attach_frame(self: Rc<Self>) {
+		for _ in 0..FRAME_TRIES {
+			if let Some(frame) = Frame::attach() {
+				self.window.frame.set(Some(frame));
+				let link = Rc::downgrade(&self);
+				let bounds = self.window.info.bounds.clone();
+				let effect = self.window.runtime.effect_now(move || {
+					bounds.get();
+					if let Some(link) = link.upgrade() {
+						link.maximized.set(frame.is_maximized().into());
+					}
+				});
+				*self.frame_effect.borrow_mut() = Some(effect);
+				return;
+			}
+			zgx::timer::sleep(FRAME_POLL).await;
+		}
+		tracing::warn!("the native window was not found; close requests rely on zgx alone");
 	}
 
 	async fn show_images(self: Rc<Self>) {
@@ -496,11 +617,15 @@ impl Link {
 		let open = timeline.open();
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
-		let name = open
-			.and_then(|open| state.channel(open.channel_id))
+		let channel = open.and_then(|open| state.channel(open.channel_id));
+		let name = channel
 			.and_then(|channel| channel.name.as_deref())
 			.unwrap_or_default();
 		self.channel_name.set(name.into());
+		let topic = channel
+			.and_then(|channel| channel.topic.as_deref())
+			.unwrap_or_default();
+		self.channel_topic.set(topic.into());
 	}
 
 	fn shutdown(&self) {
@@ -519,6 +644,36 @@ fn readable(kind: ChannelKind) -> bool {
 		kind,
 		ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Thread
 	)
+}
+
+fn field<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+	match value {
+		Value::Map(fields) => fields
+			.iter()
+			.find(|(name, _)| name.as_ref() == key)
+			.map(|(_, value)| value),
+		_ => None,
+	}
+}
+
+fn number(value: &Value, key: &str) -> Option<f32> {
+	match field(value, key)? {
+		Value::Num(number) if number.is_finite() => Some(*number as f32),
+		_ => None,
+	}
+}
+
+fn slot(value: &Value) -> Option<(&str, Slot)> {
+	let name = field(value, "name").and_then(text)?;
+	Some((
+		name,
+		Slot {
+			x: number(value, "x")?,
+			y: number(value, "y")?,
+			width: number(value, "w")?.max(0.),
+			height: number(value, "h")?.max(0.),
+		},
+	))
 }
 
 fn text(value: &Value) -> Option<&str> {

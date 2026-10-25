@@ -1,0 +1,71 @@
+local theme = require("../theme")
+local state = require("../state")
+local title_bar = require("./title_bar")
+local top_bar = require("./top_bar")
+local server_rail = require("./server_rail")
+local channel_sidebar = require("./channel_sidebar")
+local user_panel = require("./user_panel")
+local timeline = require("./timeline")
+local composer = require("./composer")
+local member_list = require("./member_list")
+
+local SIDEBAR_MIN_WIDTH = 900
+local MEMBER_LIST_MIN_WIDTH = 1200
+
+return function()
+	local root = ui.ref()
+	local function wider(than: number): () -> boolean
+		return function()
+			return (root.width or than) >= than
+		end
+	end
+	local sidebar_shown = wider(SIDEBAR_MIN_WIDTH)
+	local members_room = wider(MEMBER_LIST_MIN_WIDTH)
+	return ui.column {
+		ref = root,
+		w_full = true,
+		h_full = true,
+		bg = theme.color.background_tertiary,
+		color = theme.color.text_normal,
+		text_size = theme.size.font_md,
+		font = theme.font.ui,
+		title_bar(),
+		ui.row {
+			w_full = true,
+			grow = 1,
+			min_h = 0,
+			server_rail(),
+			ui.show(sidebar_shown, ui.column {
+				w = theme.size.channel_sidebar_width,
+				h_full = true,
+				shrink = 0,
+				rounded_tl = theme.number(theme.size.radius_md),
+				overflow = "hidden",
+				channel_sidebar(),
+				user_panel(),
+			}),
+			ui.column {
+				grow = 1,
+				min_w = 0,
+				h_full = true,
+				bg = theme.color.background_primary,
+				top_bar(),
+				ui.row {
+					w_full = true,
+					grow = 1,
+					min_h = 0,
+					ui.column {
+						grow = 1,
+						min_w = 0,
+						h_full = true,
+						timeline(),
+						composer(),
+					},
+					ui.show(function()
+						return members_room() and state.shell.members_visible:get()
+					end, member_list()),
+				},
+			},
+		},
+	}
+end

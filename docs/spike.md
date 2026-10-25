@@ -52,11 +52,48 @@ Mockcord runs in-process under `--mock`, so the mock figures include it. The rea
 
 ## zgx issues met
 
-- **Exit hang.** `Application::run` sometimes does not return after the window closes. The session has already stopped by then. It happened in about one of three mockcord runs, including runs with no channel open and runs without the host image, so it predates this ticket. In real run 1 it left the process alive and the scratch directory on disk. Kyoko now removes the scratch directory from `on_closed` right after the session stops, so cleanup no longer depends on `run` returning. The cause inside zgx is not found yet.
+- **Exit hang.** `Application::run` sometimes did not return after the window closed, after `on_closed` had run and the session had stopped. Ticket 20 found the cause and works around it; see [Exit hang](#exit-hang) below.
 - **Rounding.** `rounded = 16` on `ui.image` does not clip the image. The avatar shows square.
 - **Helper windows.** Windows titled `Kyoko` include zero-size zgx helper windows, as 03 noted. Scripts that look for the window must take the largest match. A window minimised by a stray click needs `ShowWindow` before its client rect is non-zero.
 - `follow = true` on `ui.scroll` keeps the message list pinned to the newest message as messages arrive, with no extra code.
 - Host images need exactly `width * height * 4` RGBA bytes. `media`'s `DecodedImage` fits directly, and the first frame is used for animated images.
+
+## Exit hang
+
+**Symptom.** After the last window closed, `on_closed` ran and kyoko's cleanup finished, but `Application::run` did not return and the process stayed alive with no window. Posting any message to the UI thread (`PostThreadMessageW(thread, WM_NULL)`) made it return at once.
+
+**Cause (zgx and its winit fork, `fc7d0f1`).** When the last window closes, zgx calls `event_loop.exit()` from `about_to_wait` (`WindowManager::about_to_wait_turn` in `zgx-desktop/src/application.rs`) and returns without changing the control flow. On Windows, winit's `EventLoop::wait_for_messages` (`vendor/winit/src/platform_impl/windows/event_loop.rs`) dispatches `AboutToWait` through `runner.prepare_wait()` and then goes straight into `MsgWaitForMultipleObjectsEx` with that control flow. It only checks the exit code after the wait returns. With `ControlFlow::Wait`, or a far `WaitUntil`, and no message arriving, the thread sleeps forever. Usually some message arrives right after the window is destroyed, which is why only some closes hang. Upstream fix: zgx should `set_control_flow(ControlFlow::Poll)` when it calls `exit()`, or winit should skip the wait once an exit is requested.
+
+**Workaround in kyoko.** `frame::wake_until_loop_ends` starts from `on_closed`. It posts `WM_NULL` to the UI thread every 50 ms until `run` returns, for at most 10 seconds. Every close path ends in `on_closed`: the title bar's close button, Alt+F4, the taskbar, `WM_CLOSE` from the parity capture, and the tray's Quit. The waker thread exists only while the app is exiting, so it costs nothing while kyoko runs.
+
+**Measurements** (debug build, mock, capture mode so close-to-tray is off, `WM_CLOSE` posted to the window 4 s after it appears, 15 s allowed to exit):
+
+| Build | Runs | Process still alive |
+|---|---|---|
+| Waker disabled | 20 | 2 |
+| Waker | 25 | 0 |
+| Waker | 19 | 0 |
+
+With the waker, close to `run` returning took 0.10 to 0.51 s, median 0.11 s.
+
+**Minimal repro for an upstream report** (a bare zgx window, no kyoko code; about one close in ten to one in three stays alive, depending on load):
+
+```rust
+use zgx::compose::prelude::*;
+use zgx_desktop::{Application, WindowOptions};
+
+fn main() {
+	Application::new()
+		.window(WindowOptions { title: "repro".into(), width: 800., height: 600., ..Default::default() })
+		.run(|cx| cx.render(column().w_full().h_full().child(text("close me"))))
+		.unwrap();
+	eprintln!("window loop ended");
+}
+```
+
+Run it, close the window (or post `WM_CLOSE` to it) and repeat. In a hung run the window is gone, `window loop ended` never prints, the main thread waits in `NtUserMsgWaitForMultipleObjectsEx`, and posting `WM_NULL` to the thread ends it.
+
+An early theory blamed winit buffering a `WM_CLOSE` dispatched from a nested message loop. That came from a test script that sometimes posted to the window before it was ready. Once the script picked the window at close time, every close was dispatched, and the only failure left was the exit stall above.
 
 ## Real Discord runs
 
@@ -123,7 +160,7 @@ The docs do not describe the web client's exact current traffic. Their IDENTIFY 
   - Animated hashes get a still WebP; animation is ticket 18's job.
   - zgx does not clip host images with `rounded`, so pre-mask the RGBA or ask zgx for clipping.
   - End-to-end avatar time was 200 to 300 ms against the real CDN.
-- **20 / 58, app frame and packaging.** Find the zgx exit hang; cleanup no longer depends on it, but the process can linger. Rounded image clipping also belongs here.
+- **20 / 58, app frame and packaging.** Done in 20: the exit hang is explained and worked around (see [Exit hang](#exit-hang)); report it upstream. Rounded image clipping is still open for 22 and 30.
 - **25, timeline.** Replace `bridge::Timeline` with the Rust timeline view. Publish diffs instead of the whole list. Show local timestamps instead of UTC. `follow = true` already gives end anchoring.
 - **35, community flows.** Joins and invites need `X-Context-Properties`, which kyoko never sends today.
 - **43, web login.** The cookies to expect are `__dcfduid` and `__sdcfduid` from `/app`, and `_cfuvid` from the API. The build scrape works from the same jar.

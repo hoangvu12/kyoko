@@ -30,6 +30,11 @@ clap.workspace = true
 zgx.workspace = true
 zgx-desktop.workspace = true
 zgx-script.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
 
 [build-dependencies]
 embed-resource.workspace = true

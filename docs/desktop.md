@@ -58,7 +58,7 @@ Registering `discord://` is opt-in: `integration.discord_links` (default off) wr
 
 ## Image clipboard
 
-The host action `copy_image` takes an image name (`media/<hex>`, with or without `host:`), reads the decoded frame from `media::Gallery::pixels` and writes it to the clipboard as an image on a worker thread. An image that is not loaded is logged and skipped. Context menus (28, 32) call it.
+The host action `media.copy_image` takes an image name (`media/<hex>`, with or without `host:`), reads the decoded frame from `media::Gallery::pixels` and writes it to the clipboard as an image on a worker thread. An image that is not loaded is logged and skipped. Context menus (28, 32) call it.
 
 ## Mock traffic
 
