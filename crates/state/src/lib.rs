@@ -13,6 +13,7 @@ mod messages;
 mod notifications;
 mod permissions;
 mod ready;
+mod references;
 mod relationships;
 mod rows;
 mod settings;
@@ -38,6 +39,7 @@ pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
 pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport};
 pub use permissions::DM_PERMISSIONS;
+pub use references::{BackfillNeeds, Referenced, ReplyTarget, reply_reference};
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};
 pub use state::{
 	ConnectionStatus, DisconnectReason, Rejection, Selection, SessionInfo, SharedState, State, TYPING_TIMEOUT,

@@ -14,6 +14,9 @@ pub struct RestTuning {
 	pub forbidden_window: Duration,
 	pub breaker_cool_down: Duration,
 	pub max_retry_wait: Duration,
+	pub backfill_gap: Duration,
+	pub backfill_per_minute: u32,
+	pub backfill_cool_down: Duration,
 }
 
 impl Default for RestTuning {
@@ -31,6 +34,9 @@ impl Default for RestTuning {
 			forbidden_window: Duration::from_secs(60),
 			breaker_cool_down: Duration::from_secs(300),
 			max_retry_wait: Duration::from_secs(60),
+			backfill_gap: Duration::from_millis(500),
+			backfill_per_minute: 30,
+			backfill_cool_down: Duration::from_secs(300),
 		}
 	}
 }

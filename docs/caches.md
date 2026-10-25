@@ -10,6 +10,7 @@
 | `members` | 5000 | Guild members across all guilds. |
 | `users` | 10,000 | Users. Kept above `members`, because a user with a cached member entry is never evicted. |
 | `profiles` | 128 | Fetched user profiles (popouts). They are refetched on demand. |
+| `referenced_messages` | 256 | Originals of replies fetched by the backfill (`docs/rest.md`), and the ones known to be unavailable. |
 
 The sweeps evict down to 7/8 of a limit, so they run rarely. Eviction removes data from memory only. The sqlite message cache, and anything ticket 16 keeps there, is left alone.
 
@@ -27,6 +28,10 @@ Each `ChannelMessages` holds a contiguous window of messages. `window(limits)` i
 - An older page loaded into the open channel widens the window up to `history_ceiling`. Past the ceiling the newest messages are dropped instead. The window becomes detached and `LoadNewer` fetches them again.
 - Newer pages widen the window the same way and drop the oldest messages.
 - The window shrinks back to `messages_per_channel`, dropping the oldest messages, when the user returns to the bottom (a viewport with `at_bottom` on a window that is not detached) or leaves the channel.
+
+## Referenced messages
+
+Originals fetched for replies live in their own least-recently-used store, never in a channel window, so they cannot widen a window or push out a visible row. `State::reply_target(message)` resolves a reply in order: the `referenced_message` Discord embedded, the channel window, the store. It returns `ReplyTarget::Message`, `Unavailable` (deleted or not readable) or `Loading`. A channel going cold drops its entries. A MESSAGE_DELETE of a stored original turns it unavailable, and a MESSAGE_UPDATE edits it.
 
 ## The viewport
 

@@ -36,6 +36,7 @@ use crate::search::SearchResults;
 
 mod accounts;
 mod actions;
+mod backfill;
 mod commands;
 mod deletes;
 mod expressions;
@@ -100,6 +101,10 @@ pub(crate) enum Internal {
 		message_id: Snowflake,
 		status: DeleteStatus,
 	},
+	Backfilled {
+		job: backfill::Job,
+		outcome: backfill::Outcome,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -161,6 +166,7 @@ pub(crate) struct Core {
 	delete_batches: u64,
 	subscriptions: subscriptions::Subscriptions,
 	member_requests: member_requests::MemberRequests,
+	backfill: backfill::Backfill,
 }
 
 fn page_query(
@@ -233,6 +239,7 @@ impl Core {
 			delete_batches: 0,
 			subscriptions: subscriptions::Subscriptions::default(),
 			member_requests: member_requests::MemberRequests::default(),
+			backfill: backfill::Backfill::new(&parts.tuning),
 		}
 	}
 
@@ -445,14 +452,19 @@ impl Core {
 		match event {
 			DispatchEvent::MessageCreate(message) => {
 				let channel_id = message.channel_id;
+				let message_id = message.id;
 				self.persist.submit(Job::Messages {
 					channel_id,
 					messages: vec![Arc::from(message)],
 				});
 				self.persist_read_state(channel_id);
 				self.read_if_viewing(channel_id);
+				self.backfill_channel(channel_id, Some(message_id));
 			}
-			DispatchEvent::MessageUpdate(update) => self.persist_cached_message(update.channel_id, update.id),
+			DispatchEvent::MessageUpdate(update) => {
+				self.persist_cached_message(update.channel_id, update.id);
+				self.backfill_channel(update.channel_id, Some(update.id));
+			}
 			DispatchEvent::MessageReactionAdd(reaction) => {
 				self.persist_cached_message(reaction.channel_id, reaction.message_id);
 			}
@@ -481,7 +493,10 @@ impl Core {
 			}
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
-			DispatchEvent::GuildMembersChunk(chunk) => self.member_requests.answered(&chunk, Instant::now()),
+			DispatchEvent::GuildMembersChunk(chunk) => {
+				self.member_requests.answered(&chunk, Instant::now());
+				self.backfill_members_answered(&chunk);
+			}
 			DispatchEvent::RateLimited(limited) => self.on_rate_limited(&limited),
 			_ => {}
 		}
@@ -572,6 +587,7 @@ impl Core {
 				message_id,
 				status,
 			}),
+			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
 		}
 	}
 
@@ -594,6 +610,7 @@ impl Core {
 			direction,
 			reached_start,
 		});
+		self.backfill_channel(channel_id, None);
 		if !cache {
 			return;
 		}
@@ -779,6 +796,7 @@ impl Core {
 			self.load_draft(channel_id);
 		}
 		self.on_channel_opened(channel_id);
+		self.backfill_opened(channel_id);
 	}
 
 	fn load_initial(&self, channel_id: Snowflake) {
@@ -1131,10 +1149,14 @@ impl Core {
 	}
 
 	fn lazy_deadline(&self) -> Option<Instant> {
-		[self.subscriptions.deadline(), self.member_requests.deadline()]
-			.into_iter()
-			.flatten()
-			.min()
+		[
+			self.subscriptions.deadline(),
+			self.member_requests.deadline(),
+			self.backfill.deadline(),
+		]
+		.into_iter()
+		.flatten()
+		.min()
 	}
 
 	fn lazy_tick(&mut self) {
@@ -1142,6 +1164,7 @@ impl Core {
 		if self.subscriptions.deadline().is_some_and(|due| due <= now) {
 			self.flush_subscriptions();
 		}
+		self.run_backfill(now);
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {
 				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),

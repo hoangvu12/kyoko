@@ -21,6 +21,7 @@ pub struct CacheLimits {
 	pub members: usize,
 	pub users: usize,
 	pub profiles: usize,
+	pub referenced_messages: usize,
 }
 
 impl Default for CacheLimits {
@@ -32,6 +33,7 @@ impl Default for CacheLimits {
 			members: 5000,
 			users: 10_000,
 			profiles: 128,
+			referenced_messages: 256,
 		}
 	}
 }

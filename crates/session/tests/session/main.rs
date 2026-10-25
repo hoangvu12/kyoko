@@ -1,3 +1,4 @@
+mod backfill;
 mod caches;
 mod capabilities;
 mod deletes;

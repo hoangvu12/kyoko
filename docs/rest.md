@@ -57,6 +57,37 @@ The 1.5 s delay follows how people read: a message is acked once it has had time
 - Progress is in `State::deletions()`: each `DeleteBatch` lists its messages with a `DeleteStatus` of `Queued`, `Deleted`, `Refused`, `Failed(SendFailure)` or `Cancelled`. The last 16 batches are kept.
 - A 404 counts as deleted. Any other failure (403, 429, captcha, a suspended route, 401, network) stops the batch: that message is `Failed` and the rest are `Cancelled`, never sent.
 
+## Backfill
+
+Replies whose original is not loaded, and mentions of users kyoko has not seen, resolve through one background queue in the session (`crates/session/src/task/backfill.rs`). It is kyoko's built-in version of Vencord's ValidReply and ValidUser.
+
+What is fetched:
+
+- A reply (`type` 19, a `message_reference` in the same channel, not a forward) whose `referenced_message` Discord did not embed and whose original is neither in the channel window nor already fetched. kyoko asks for `GET /channels/<c>/messages?around=<m>&limit=1`, the messages list the web client reads, rather than the single-message route. A result whose id is not the original counts as missing.
+- A user mentioned as `<@id>` in the content but absent from the message's `mentions` and from the user cache. Inside a guild the lookup is an op 8 request through the member request scheduler (`docs/gateway.md`); it batches, dedupes and backs off on its own. If op 8 reports the id in `not_found`, or the channel is a DM, kyoko asks `GET /users/<id>` through the queue.
+- The author of a guild message that arrived without a `member` (history pages) and has no member entry: an op 8 request, so names and role colours resolve. Ids op 8 reported as not found are not asked again for the cool-down.
+
+Only the open channel is scanned: when it is selected, when a page loads and when a message arrives or is edited. Originals are only fetched where the user has View Channel and Read Message History. Selecting another channel drops the queued work of every other channel. A request already sent finishes.
+
+The queue sends one request at a time:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `backfill_gap` | 500 ms | between the starts of two backfill requests |
+| `backfill_per_minute` | 30 | backfill requests in any 60 s |
+| `backfill_cool_down` | 5 min | how long a failed or missing target is not asked again |
+
+At most 200 jobs wait; more are dropped and come back on a later scan. A target that is queued, in flight or in its cool-down is never queued twice, so many replies to one message give one request.
+
+Failures never loop:
+
+- 404, 403 and Missing Permissions mark the original unavailable (`ReplyTarget::Unavailable`); it is never fetched again while cached. A user that is not found is remembered for the cool-down.
+- A 429 that the client's own retry could not absorb pauses the whole queue for `retry_after` (at least the gap) and puts the job back once. A second 429 drops it for the cool-down.
+- A suspended route pauses the queue for the breaker's `retry_in`, a captcha for 10 minutes, a network or server error for 5 s; the job waits out the cool-down.
+- A 401 stops the queue for good.
+
+Backfill GETs go through the same client as everything else, so they also respect the route probe, the learned buckets and the 403 breaker.
+
 ## Stop on 401
 
 A 401 from any request stops the client. That request, everything queued in pacing or bucket waits, and every later request fail immediately with `RestError::Unauthorized`, without reaching the network. A 401 is never retried. A gateway close with 4004 stops REST the same way. The session sees the stop (`RestClient::stopped()`) and shuts the gateway down. It publishes `ConnectionStatus::Disconnected(DisconnectReason::AuthenticationFailed)` at `SessionInfo::connection` and ignores later gateway events. The stop is permanent for that client. Signing in again starts a new session.

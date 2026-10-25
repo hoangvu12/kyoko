@@ -122,6 +122,15 @@ pub enum LocalEvent {
 		target: RiskyTarget,
 		reason: RiskyReason,
 	},
+	ReferenceFetched {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		message: Option<Box<Message>>,
+	},
+	UserFetched {
+		channel_id: Snowflake,
+		user: Box<User>,
+	},
 }
 
 #[derive(Debug)]

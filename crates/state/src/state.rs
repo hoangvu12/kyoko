@@ -17,6 +17,7 @@ use crate::guild::GuildState;
 use crate::loaded::Lazy;
 use crate::locks::RiskyLocks;
 use crate::messages::ChannelMessages;
+use crate::references::StoredReference;
 use crate::settings::GuildFolder;
 use crate::versions::CacheVersions;
 use crate::views::RenderedMessage;
@@ -107,6 +108,7 @@ pub struct State {
 	pub(crate) risky: RiskyLocks,
 	pub(crate) versions: CacheVersions,
 	pub(crate) ack_versions: HashMap<Snowflake, u64>,
+	pub(crate) referenced: Recent<Snowflake, StoredReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -569,6 +571,14 @@ impl State {
 			} => self.delete_progressed(*batch, *message_id, status, &mut changes),
 			LocalEvent::RiskyConfirmed { target, reason } => {
 				changes.locks = self.confirm_risky(*target, *reason);
+			}
+			LocalEvent::ReferenceFetched {
+				channel_id,
+				message_id,
+				message,
+			} => self.reference_fetched(*channel_id, *message_id, message.as_deref(), &mut changes),
+			LocalEvent::UserFetched { channel_id, user } => {
+				self.user_fetched(*channel_id, user, &mut changes)
 			}
 		}
 		changes

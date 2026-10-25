@@ -251,9 +251,10 @@ impl State {
 		if let Some(author) = &update.author {
 			intern_user(&mut self.users, author);
 		}
-		let changes = self.edit_message(update.channel_id, update.id, |message| {
+		let mut changes = self.edit_message(update.channel_id, update.id, |message| {
 			apply_update(message, update)
 		});
+		self.referenced_updated(update, &mut changes);
 		if update.content.is_some()
 			&& let Some(edited) = self
 				.messages
@@ -291,6 +292,7 @@ impl State {
 				changes.messages.insert(channel_id);
 			}
 		}
+		self.referenced_deleted(ids, &mut changes);
 		changes
 	}
 

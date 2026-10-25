@@ -65,6 +65,7 @@ impl State {
 			}
 		}
 		let me = self.current_user_id();
+		self.evict_references();
 		for user_id in self
 			.lazy
 			.profiles
@@ -83,6 +84,7 @@ impl State {
 				continue;
 			}
 			self.warm.remove(index);
+			self.forget_references(channel_id);
 			if self.messages.remove(&channel_id).is_some() {
 				changes.messages.insert(channel_id);
 			}
