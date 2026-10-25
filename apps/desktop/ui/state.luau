@@ -157,6 +157,63 @@ export type ForumCard = {
 	archived: boolean,
 }
 
+export type ServerPageEntry = { key: string, title: string, icon: string }
+export type ServerGroup = { title: string, pages: { ServerPageEntry } }
+export type ServerGuild = { id: string, name: string, groups: { ServerGroup } }
+export type ServerOverview = { name: string, description: string, icon: string, pending: boolean }
+export type ServerRoleRow = {
+	id: string,
+	name: string,
+	color: string,
+	members: number,
+	everyone: boolean,
+	movable: boolean,
+}
+export type ServerRole = {
+	id: string,
+	name: string,
+	title: string,
+	color: string,
+	hoist: boolean,
+	mentionable: boolean,
+	everyone: boolean,
+	deletable: boolean,
+	granted: { number },
+}
+export type ServerRight = { index: number, name: string, hint: string }
+export type ServerRightGroup = { title: string, rights: { ServerRight } }
+export type ServerChip = { name: string, color: string, tint: string }
+export type ServerMemberRow = {
+	id: string,
+	name: string,
+	username: string,
+	color: string,
+	avatar: string,
+	roles: { ServerChip },
+}
+export type ServerUpload = { serial: number, name: string, preview: string }
+export type ServerEmojiRow = { id: string, name: string, image: string, uploader: string, avatar: string }
+export type ServerStickerRow = { id: string, name: string, tags: string, image: string }
+export type ServerInviteRow = {
+	id: string,
+	inviter: string,
+	avatar: string,
+	channel: string,
+	uses: string,
+	expires: string,
+	temporary: boolean,
+}
+export type ServerBanRow = { id: string, name: string, reason: string, avatar: string }
+export type ServerAuditChange = { key: string, old: string, new: string }
+export type ServerAuditRow = {
+	id: string,
+	sentence: string,
+	when: string,
+	avatar: string,
+	changes: { ServerAuditChange },
+	reason: string,
+}
+
 local M = {}
 
 M.session = {
@@ -311,6 +368,38 @@ M.forum = {
 	view = ui.shared("forum.view", { open = false, id = "", sort = "Recently Active", gallery = false } :: ForumView),
 	tags = ui.shared("forum.tags", {} :: { ForumTag }),
 	cards = ui.shared("forum.cards", {} :: { ForumCard }),
+}
+
+M.server = {
+	page = ui.shared("server.page", ""),
+	guild = ui.shared("server.guild", nil :: ServerGuild?),
+	overview = ui.shared("server.overview", nil :: ServerOverview?),
+	roles = ui.shared("server.roles", nil :: { count: number, rows: { ServerRoleRow } }?),
+	role = ui.shared("server.role", nil :: ServerRole?),
+	rights = ui.shared("server.rights", {} :: { ServerRightGroup }),
+	members = ui.shared("server.members", nil :: { total: number, rows: { ServerMemberRow }, actions: boolean }?),
+	bans = ui.shared("server.bans", nil :: { loaded: boolean, has_more: boolean, rows: { ServerBanRow } }?),
+	audit = ui.shared("server.audit", nil :: {
+		loaded: boolean,
+		has_more: boolean,
+		filter: number,
+		rows: { ServerAuditRow },
+	}?),
+	audit_filters = ui.shared("server.audit_filters", {} :: { string }),
+	emoji = ui.shared("server.emoji", nil :: {
+		still: number,
+		animated: number,
+		slots: number,
+		rows: { ServerEmojiRow },
+		upload: ServerUpload?,
+	}?),
+	stickers = ui.shared("server.stickers", nil :: {
+		count: number,
+		slots: number,
+		rows: { ServerStickerRow },
+		upload: ServerUpload?,
+	}?),
+	invites = ui.shared("server.invites", nil :: { rows: { ServerInviteRow } }?),
 }
 
 return M

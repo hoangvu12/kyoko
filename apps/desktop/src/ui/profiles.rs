@@ -178,7 +178,7 @@ impl Link {
 		}
 	}
 
-	fn message_user(&self, user_id: Snowflake) {
+	pub(super) fn message_user(&self, user_id: Snowflake) {
 		let existing = self
 			.state()
 			.and_then(|shared| bridge::dm_channel(&shared.read(), user_id));
@@ -243,7 +243,7 @@ impl Link {
 		loaded && self.profile.settled()
 	}
 
-	fn newest_other_author(&self) -> Option<Snowflake> {
+	pub(super) fn newest_other_author(&self) -> Option<Snowflake> {
 		let me = self.state()?.read().current_user_id();
 		let timeline = self.timeline.borrow();
 		timeline

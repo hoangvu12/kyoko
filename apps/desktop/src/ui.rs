@@ -11,6 +11,7 @@ mod root;
 #[cfg(test)]
 mod scripts;
 mod search;
+mod server_settings;
 mod settings;
 mod sign_in;
 mod threads;
@@ -43,6 +44,7 @@ use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::member_list::{self, MemberListView};
+use crate::moderation::ModerationLayer;
 use crate::profile::ProfileLayer;
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
@@ -168,6 +170,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
 			cx.tasks.spawn(link.clone().follow_gif_search());
+			cx.tasks.spawn(link.clone().follow_server_settings());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -192,6 +195,7 @@ pub fn run(
 			let profiles = link.profile.view();
 			let lightbox = link.timeline_view.lightbox_view();
 			let expressions = link.expressions.view();
+			let moderation = link.moderation.view();
 			let escaped = Rc::downgrade(&link);
 			let switcher = link.finder.view();
 			let community = link.community.view();
@@ -219,6 +223,7 @@ pub fn run(
 						community,
 						expressions,
 						lightbox,
+						moderation,
 					],
 				)
 				.on_event(move |event| {
@@ -372,6 +377,9 @@ pub(crate) struct Link {
 	settings: settings::SettingsView,
 	finder: search::Finder,
 	plugins: plugins::PluginsView,
+	moderation: Rc<ModerationLayer>,
+	moderation_effect: RefCell<Option<Effect>>,
+	server: server_settings::ServerSettingsView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -435,6 +443,7 @@ impl Link {
 		let community = CommunityLayer::new(&window.runtime, timeline_view.pictures());
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
+		let moderation = ModerationLayer::new(&window.runtime);
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -470,6 +479,9 @@ impl Link {
 			settings,
 			finder,
 			plugins,
+			moderation,
+			moderation_effect: RefCell::new(None),
+			server: server_settings::ServerSettingsView::new(host),
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -494,6 +506,7 @@ impl Link {
 		Link::install_expressions(host, &link);
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
+		Link::install_server_settings(host, &link);
 		Link::install_settings(host, &link);
 		Link::install_plugins(host, &link);
 		Link::install_profiles(host, &link);
@@ -783,6 +796,15 @@ impl Link {
 			| capture::Screen::Forum
 			| capture::Screen::ForumPost
 			| capture::Screen::ForumPostCreate => self.drive_threads(capture.screen).await,
+			capture::Screen::ServerSettings(page) => {
+				self.open_server_settings(bridge::ServerPage::named(page));
+				self.until_capture(|link| link.server_settled()).await;
+			}
+			capture::Screen::Moderation(kind) => {
+				if let Some(author) = self.newest_other_author() {
+					self.open_moderation_dialog(author, kind);
+				}
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -953,6 +975,7 @@ impl Link {
 			self.publish_profiles(&state, changes);
 			self.search_apply(&state, changes);
 			self.threads_apply(&state, changes);
+			self.server_settings_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -1129,6 +1152,7 @@ impl Link {
 		names.extend(self.search_images());
 		names.extend(self.thread_images());
 		names.extend(self.community_images());
+		names.extend(self.server_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local pages = require("@settings/pages")
 local widgets = require("@settings/widgets")
+local frame = require("@settings/frame")
 
 local NAV_WIDTH = 218
 local CONTENT_WIDTH = 740
@@ -13,59 +14,27 @@ local TOP = 60
 local NAV_ITEM = 32
 local NAV_PAD = 10
 local NAV_ICON = 18
-local CLOSE = 36
-local CLOSE_ICON = 18
 local TITLE_LINE = 24
 
 local function page_key(): string
 	return state.settings.page:get()
 end
 
-local nav_item = ui.component(function(props: { page: pages.Page })
-	local hovered = ui.use_state(false)
-	local function selected(): boolean
-		return page_key() == props.page.key
-	end
-	local function color(): string
-		if selected() then
-			return theme.color.interactive_active
-		end
-		return if hovered:get() then theme.color.interactive_hover else theme.color.interactive_normal
-	end
-	return ui.button {
-		w_full = true,
-		h = NAV_ITEM,
-		px = NAV_PAD,
-		gap = theme.size.space_8,
-		items = "center",
-		border = 0,
-		focus = { border = 0 },
-		rounded = theme.size.radius_sm,
-		cursor = "pointer",
-		bg = function()
-			if selected() then
-				return theme.color.modifier_selected
-			end
-			return if hovered:get() then theme.color.modifier_hover else "#00000000"
-		end,
-		on_hover = function(inside: boolean)
-			hovered:set(inside)
+local function nav_item(props: { page: pages.Page })
+	return frame.nav_item {
+		title = props.page.title,
+		icon = props.page.icon,
+		selected = function()
+			return page_key() == props.page.key
 		end,
 		on_click = function()
 			actions.open_settings(props.page.key)
 		end,
-		icon { name = props.page.icon, size = NAV_ICON, color = color },
-		ui.text {
-			props.page.title,
-			literal = true,
-			min_w = 0,
-			truncate = true,
-			text_size = theme.size.font_md,
-			weight = theme.weight.medium,
-			color = color,
-		},
+		height = NAV_ITEM,
+		pad = NAV_PAD,
+		glyph = NAV_ICON,
 	}
-end)
+end
 
 local log_out = ui.component(function()
 	local hovered = ui.use_state(false)
@@ -172,46 +141,6 @@ local function content()
 	}
 end
 
-local close_button = ui.component(function()
-	local hovered = ui.use_state(false)
-	return ui.column {
-		absolute = true,
-		top = TOP,
-		right = theme.number(theme.size.space_16),
-		items = "center",
-		gap = theme.size.space_4,
-		ui.button {
-			w = CLOSE,
-			h = CLOSE,
-			p = 0,
-			rounded = CLOSE,
-			border = 2,
-			focus = { border = 2 },
-			justify = "center",
-			items = "center",
-			cursor = "pointer",
-			tooltip = "Close",
-			border_color = function()
-				return if hovered:get() then theme.color.interactive_hover else theme.color.interactive_normal
-			end,
-			bg = function()
-				return if hovered:get() then theme.color.modifier_hover else "#00000000"
-			end,
-			on_hover = function(inside: boolean)
-				hovered:set(inside)
-			end,
-			on_click = actions.close_settings,
-			icon { name = "close", size = CLOSE_ICON, color = theme.color.interactive_normal },
-		},
-		ui.text {
-			"ESC",
-			text_size = theme.size.font_xs,
-			weight = theme.weight.bold,
-			color = theme.color.interactive_normal,
-		},
-	}
-end)
-
 local function view()
 	local root = ui.ref()
 	local function right(): number
@@ -264,7 +193,7 @@ local function view()
 					content(),
 				},
 			},
-			close_button(),
+			frame.close_button { on_close = actions.close_settings, esc = true, top = TOP },
 		},
 	}
 end

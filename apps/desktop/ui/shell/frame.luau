@@ -13,6 +13,7 @@ local storage_notice = require("./storage_notice")
 local plugin_notice = require("./plugin_notice")
 local home_page = require("./home_page")
 local settings = require("./settings")
+local server_settings = require("./server_settings")
 local search_panel = require("./search_panel")
 local forum = require("./forum")
 local thread_panel = require("./thread_panel")
@@ -91,6 +92,7 @@ return function()
 			},
 		},
 		settings(),
+		server_settings(),
 	}
 	return ui.show(function()
 		return state.login.screen:get() == "main"

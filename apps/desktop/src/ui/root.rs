@@ -12,6 +12,7 @@ use super::expressions::Expressions;
 use super::scripts::{WIDE, host_names, member_window, rail_items, shows, sidebar_rows};
 use super::{Slot, layered, themes_dir, threads, timeline_slot, ui_dir};
 use crate::community::CommunityLayer;
+use crate::moderation::ModerationLayer;
 use crate::profile::ProfileLayer;
 use crate::switcher::SwitcherView;
 use crate::theme::Catalog;
@@ -19,7 +20,7 @@ use crate::threads::ThreadsLayer;
 use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 
-const LAYERS: [&str; 8] = [
+const LAYERS: [&str; 9] = [
 	"timeline slot",
 	"thread slot",
 	"profiles",
@@ -28,6 +29,7 @@ const LAYERS: [&str; 8] = [
 	"community dialogs",
 	"expression picker",
 	"lightbox",
+	"moderation dialogs and member menu",
 ];
 
 const LUAU_BUTTONS: [(&str, &str); 2] = [
@@ -163,6 +165,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		"community dialogs" => CommunityLayer::new(runtime, pictures).view(),
 		"expression picker" => Expressions::new(runtime, pictures).view(),
 		"lightbox" => timeline().lightbox_view(),
+		"moderation dialogs and member menu" => ModerationLayer::new(runtime).view(),
 		_ => unreachable!("no layer named {name}"),
 	}
 }

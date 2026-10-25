@@ -3,6 +3,7 @@ mod composer;
 mod deep_links;
 mod dms;
 mod expressions;
+mod guild_admin;
 mod harness;
 mod media;
 mod members;

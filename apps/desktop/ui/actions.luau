@@ -285,4 +285,20 @@ function M.forum_more()
 	ui.invoke("forum.more")
 end
 
+function M.member_menu(id: string, x: number, y: number)
+	ui.invoke("members.menu", { id = id, x = x, y = y })
+end
+
+function M.open_server_settings(page: string?)
+	ui.invoke("server.open", page or "")
+end
+
+function M.close_server_settings()
+	ui.invoke("server.close")
+end
+
+function M.server_action(name: string, argument: any?)
+	ui.invoke("server." .. name, argument)
+end
+
 return M

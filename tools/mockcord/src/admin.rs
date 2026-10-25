@@ -19,6 +19,7 @@ use crate::state::{Shared, Store};
 const AUDIT_PAGE: usize = 50;
 const MAX_BAN_PAGE: usize = 1000;
 const SEED_AUDIT_ENTRIES: i64 = 3;
+const SEED_INVITES: [(&str, i64, i64, i64); 2] = [("rustaceans", 12, 0, 0), ("weekend-jam", 3, 25, 604_800)];
 const SEED_BAN_REASONS: [Option<&str>; 3] = [Some("Spam links in every channel"), None, Some("Raid account")];
 const MINUTE_MS: i64 = 60_000;
 const ACTION_CHANNEL_CREATE: i64 = 10;
@@ -95,6 +96,47 @@ pub fn seed_audit(fixtures: &Fixtures) -> HashMap<u64, Vec<Value>> {
 				}));
 			}
 			(guild.id, entries)
+		})
+		.collect()
+}
+
+pub fn seed_invites(fixtures: &Fixtures) -> std::collections::BTreeMap<String, Value> {
+	let Some(guild) = fixtures.guilds.first() else {
+		return std::collections::BTreeMap::new();
+	};
+	let channel = guild
+		.message_channel_ids
+		.first()
+		.and_then(|id| fixtures.channels.get(id));
+	let inviter = guild
+		.properties
+		.owner_id
+		.and_then(|id| fixtures.users.get(&id.get()))
+		.map_or(Value::Null, to_json);
+	let created = fixtures.anchor - Duration::days(3);
+	SEED_INVITES
+		.iter()
+		.map(|(code, uses, max_uses, max_age)| {
+			let expires = (*max_age > 0).then(|| (created + Duration::seconds(*max_age)).to_rfc3339());
+			let value = json!({
+				"type": 0,
+				"code": code,
+				"guild_id": guild.id.to_string(),
+				"guild": { "id": guild.id.to_string(), "name": guild.properties.name },
+				"channel": channel.map(|channel| json!({
+					"id": channel.id.to_string(),
+					"type": channel.kind,
+					"name": channel.name,
+				})),
+				"inviter": inviter,
+				"uses": uses,
+				"max_uses": max_uses,
+				"max_age": max_age,
+				"temporary": false,
+				"created_at": created.to_rfc3339(),
+				"expires_at": expires,
+			});
+			((*code).to_owned(), value)
 		})
 		.collect()
 }

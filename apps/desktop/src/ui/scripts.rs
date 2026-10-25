@@ -104,6 +104,50 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"the server settings",
+		"A mock guild",
+		&[
+			("server.guild", server_guild()),
+			("server.rights", server_rights()),
+			("server.audit_filters", json!(["All Actions", "Member Kick"])),
+			(
+				"server.overview",
+				json!({ "name": "Kyoko", "description": "A mock guild", "icon": "" }),
+			),
+			("server.page", json!("overview")),
+		],
+	);
+	for (page, marker, key, value) in server_pages() {
+		shows(
+			&mut app,
+			page,
+			marker,
+			&[(key, value), ("server.page", json!(page))],
+		);
+	}
+	shows(
+		&mut app,
+		"a role being edited",
+		"Display role members separately",
+		&[
+			("server.page", json!("roles")),
+			(
+				"server.role",
+				json!({
+					"id": "41", "name": "Mods", "title": "Mods", "color": "#2ecc71", "hoist": true,
+					"mentionable": false, "everyone": false, "deletable": true, "granted": [1, 4],
+				}),
+			),
+		],
+	);
+	shows(
+		&mut app,
+		"the closed server settings",
+		"Playing Chess",
+		&[("server.page", json!("")), ("server.role", json!(null))],
+	);
+	shows(
+		&mut app,
 		"a plugin notice",
 		"ClearURLs was stopped because it ran past its time limit.",
 		&[(
@@ -194,6 +238,113 @@ fn the_interface_loads_and_builds_every_screen() {
 		"Coming in a later version.",
 		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],
 	);
+}
+
+fn server_guild() -> serde_json::Value {
+	let page = |key: &str, title: &str, icon: &str| json!({ "key": key, "title": title, "icon": icon });
+	json!({
+		"id": "10",
+		"name": "Kyoko",
+		"groups": [
+			{ "title": "Server", "pages": [page("overview", "Overview", "settings"), page("roles", "Roles", "shield")] },
+			{ "title": "People", "pages": [page("members", "Members", "members"), page("bans", "Bans", "ban")] },
+			{ "title": "Moderation", "pages": [page("audit-log", "Audit Log", "audit_log")] },
+		],
+	})
+}
+
+fn server_rights() -> serde_json::Value {
+	json!([{
+		"title": "General Server Permissions",
+		"rights": [
+			{ "index": 1, "name": "View Channels", "hint": "Members can view channels." },
+			{ "index": 4, "name": "Kick Members", "hint": "Remove other members." },
+		],
+	}])
+}
+
+fn server_pages() -> [(&'static str, &'static str, &'static str, serde_json::Value); 7] {
+	[
+		(
+			"roles",
+			"Create Role",
+			"server.roles",
+			json!({
+				"count": 2,
+				"rows": [
+					{ "id": "41", "name": "Mods", "color": "#2ecc71", "members": 7, "everyone": false, "movable": true },
+					{ "id": "10", "name": "@everyone", "color": "", "members": 50, "everyone": true, "movable": false },
+				],
+			}),
+		),
+		(
+			"members",
+			"brave_ember",
+			"server.members",
+			json!({
+				"total": 1,
+				"actions": true,
+				"rows": [{
+					"id": "30", "name": "Brave Ember", "username": "brave_ember", "color": "#5865f2", "avatar": "",
+					"roles": [{ "name": "Members", "color": "#5865f2", "tint": "#5865f22e" }],
+				}],
+			}),
+		),
+		(
+			"bans",
+			"Spam links in every channel",
+			"server.bans",
+			json!({
+				"loaded": true,
+				"has_more": true,
+				"rows": [{ "id": "31", "name": "Raider", "reason": "Spam links in every channel", "avatar": "" }],
+			}),
+		),
+		(
+			"audit-log",
+			"Clever Lynx kicked Brave Ember",
+			"server.audit",
+			json!({
+				"loaded": true,
+				"has_more": false,
+				"filter": 0,
+				"rows": [{
+					"id": "32", "sentence": "Clever Lynx kicked Brave Ember", "when": "10/01/2026", "avatar": "",
+					"changes": [{ "key": "nick", "old": "a", "new": "b" }], "reason": "spam",
+				}],
+			}),
+		),
+		(
+			"emoji",
+			":pepe_ok:",
+			"server.emoji",
+			json!({
+				"still": 1, "animated": 0, "slots": 50,
+				"rows": [{ "id": "33", "name": "pepe_ok", "image": "", "uploader": "Ada", "avatar": "" }],
+				"upload": { "serial": 1, "name": "wave", "preview": "" },
+			}),
+		),
+		(
+			"stickers",
+			"crab_wave",
+			"server.stickers",
+			json!({
+				"count": 1, "slots": 5,
+				"rows": [{ "id": "34", "name": "crab_wave", "tags": "crab", "image": "" }],
+			}),
+		),
+		(
+			"invites",
+			"rustaceans",
+			"server.invites",
+			json!({
+				"rows": [{
+					"id": "rustaceans", "inviter": "Ada", "avatar": "", "channel": "#general", "uses": "12",
+					"expires": "Never", "temporary": true,
+				}],
+			}),
+		),
+	]
 }
 
 const SETTINGS_PAGES: [(&str, &str); 16] = [
@@ -399,6 +550,51 @@ fn the_channel_menu_mutes_invites_and_sets_notifications() {
 	assert_eq!(
 		last_call(&calls, "sidebar.channel_notifications"),
 		Some(json!({ "id": "20", "level": "nothing" }))
+	);
+}
+
+#[test]
+fn the_server_settings_pages_call_the_host() {
+	let calls: std::rc::Rc<std::cell::RefCell<Vec<(String, serde_json::Value)>>> = std::rc::Rc::default();
+	let seen = calls.clone();
+	let mut app = TestApp::new(move |runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		for name in ["server.open", "server.unban"] {
+			let seen = seen.clone();
+			host.action(name, move |argument| {
+				let value = serde_json::from_str(&argument.to_json()).unwrap_or_default();
+				seen.borrow_mut().push((name.to_owned(), value));
+			});
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let [_, _, (page, marker, key, value), ..] = server_pages();
+	shows(
+		&mut app,
+		page,
+		marker,
+		&[
+			("login.screen", json!("main")),
+			("server.guild", server_guild()),
+			(key, value),
+			("server.page", json!(page)),
+		],
+	);
+	app.click("ban_revoke_31");
+	app.click("server_nav_roles");
+	app.frames(2);
+	assert_eq!(
+		calls.borrow().as_slice(),
+		[
+			("server.unban".to_owned(), json!({ "id": "31", "name": "Raider" })),
+			("server.open".to_owned(), json!("roles")),
+		]
 	);
 }
 

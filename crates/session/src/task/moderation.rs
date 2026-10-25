@@ -379,11 +379,9 @@ impl Core {
 				guild_id,
 				user_id,
 				deafened,
-			} => {
-				if self.may_moderate(guild_id, user_id, Permissions::DEAFEN_MEMBERS, "Deafen Members") {
-					let body = fields([("deaf", Some(json!(deafened)))]);
-					self.edit_member(guild_id, user_id, body, None, "server deafen");
-				}
+			} if self.may_moderate(guild_id, user_id, Permissions::DEAFEN_MEMBERS, "Deafen Members") => {
+				let body = fields([("deaf", Some(json!(deafened)))]);
+				self.edit_member(guild_id, user_id, body, None, "server deafen");
 			}
 			_ => {}
 		}
@@ -584,7 +582,7 @@ impl Core {
 		self.apply_dispatch(&protocol::DispatchEvent::GuildRoleUpdate(Box::new(
 			protocol::GuildRoleChange { guild_id, role },
 		)));
-		Some(Undo::Role(before))
+		Some(Undo::Role(Box::new(before)))
 	}
 
 	fn member_snapshot(&self, guild_id: Snowflake, user_id: Snowflake) -> Option<Member> {

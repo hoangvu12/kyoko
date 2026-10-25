@@ -30,6 +30,7 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `settings_delay` | 1 s | quiet time after the last server-order change before it is saved |
 | `settings_gap` | 10 s | between two server-order saves |
 | `collapse_gap` | 2 s | between two saves of collapsed categories |
+| `guild_write_gap` | 500 ms | after one server write before the next in the same server |
 
 A message send is `POST /channels/<id>/messages`, and creating a thread or a forum post (`POST /channels/<id>/threads` and `POST /channels/<id>/messages/<message>/threads`) counts as one. The defaults sit between how fast a person acts and what Discord tolerates:
 
@@ -82,6 +83,19 @@ A category's collapsed state is the `collapsed` flag of its channel override in 
 - Only the user's own messages (known from the cache) are queued, plus any message in a server channel where the user has Manage Messages. Others are marked `Refused` and the command reports a rejection.
 - Progress is in `State::deletions()`: each `DeleteBatch` lists its messages with a `DeleteStatus` of `Queued`, `Deleted`, `Refused`, `Failed(SendFailure)` or `Cancelled`. The last 16 batches are kept.
 - A 404 counts as deleted. Any other failure (403, 429, captcha, a suspended route, 401, network) stops the batch: that message is `Failed` and the rest are `Cancelled`, never sent.
+
+## Server administration and moderation
+
+Every write to a server (editing the server, channels, roles, overwrites, emoji, stickers and invites, and kicks, bans, unbans, timeouts, nicknames, role grants, voice moves and server mutes) goes through one queue per server in the session (`crates/session/src/task/guild_writes.rs`), then the mutation lane:
+
+- One write at a time per server, `guild_write_gap` (500 ms) after the last one finished. Servers do not wait for each other.
+- A write still waiting absorbs a newer one for the same target: edits of the server, of one channel, of one role or of one member's fields merge into one request with the latest values, role reorders keep the latest position of each role, and a role grant or emoji edit is replaced by the newer one.
+- Before anything is queued the session checks permissions as the web client does: the permission itself (Kick Members, Ban Members, Moderate Members, Manage Nicknames, Manage Roles, Manage Channels, Manage Server, Manage Expressions and so on) and the role hierarchy: members are only moderated below the user's highest role and never the owner; roles are only edited, deleted, moved or granted below it, never managed ones, and a role only gets permissions the user has. A refusal publishes `CommandRejected` and never reaches REST.
+- Role, member and channel edits show at once (a gateway-shaped local update) and roll back if the request fails, unless a newer write for the same target is waiting; the failure publishes `CommandRejected` with the reason. Nothing is retried.
+- Kicks, bans and timeouts send their reason as `X-Audit-Log-Reason` (percent-encoded), as the web client does. A ban carries `{"delete_message_seconds": N}`. An unban leaves the loaded ban list once Discord confirms it.
+- `LoadAuditLog` is `GET /guilds/{id}/audit-logs?limit=50`, with `before=<last id>` for the next page and `action_type` for the filter; a full page of 50 means there may be more. `LoadBans` is `GET /guilds/{id}/bans?limit=1000`; `LoadMoreBans` asks again with `after=<last user id>` while the last page was full. `LoadInvites` is `GET /guilds/{id}/invites`.
+
+Every action is one user gesture: the dialogs confirm what they send, and nothing is repeated or automated.
 
 ## Backfill
 

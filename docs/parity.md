@@ -193,18 +193,18 @@ Oxidcord has no rules (membership screening) or onboarding screens, so they have
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `server-settings-overview` | 36 | Default selection, then open server settings on Overview. | no |
-| `server-settings-roles` | 36 | As above, on Roles. | no |
-| `server-settings-emoji` | 36 | As above, on Emoji. | no |
-| `server-settings-stickers` | 36 | As above, on Stickers. | no |
-| `server-settings-members` | 36 | As above, on Members. | no |
-| `server-settings-invites` | 36 | As above, on Invites. | no |
-| `server-settings-bans` | 36 | As above, on Bans. | no |
-| `server-settings-audit-log` | 36 | As above, on Audit Log. | no |
-| `moderation-nickname` | 36 | Default selection, then open the change-nickname dialog for the newest other author. | no |
-| `moderation-timeout` | 36 | As above, the timeout dialog. | no |
-| `moderation-kick` | 36 | As above, the kick dialog. | no |
-| `moderation-ban` | 36 | As above, the ban dialog. | no |
+| `server-settings-overview` | 36 | Default selection, then open server settings on Overview. The mock fixtures seed three bans, their audit entries and two invites in the first guild. | yes |
+| `server-settings-roles` | 36 | As above, on Roles. | yes |
+| `server-settings-emoji` | 36 | As above, on Emoji. | yes |
+| `server-settings-stickers` | 36 | As above, on Stickers. | yes |
+| `server-settings-members` | 36 | As above, on Members. | yes |
+| `server-settings-invites` | 36 | As above, on Invites. | yes |
+| `server-settings-bans` | 36 | As above, on Bans. | yes |
+| `server-settings-audit-log` | 36 | As above, on Audit Log. | yes |
+| `moderation-nickname` | 36 | Default selection, then open the change-nickname dialog for the newest other author. | yes |
+| `moderation-timeout` | 36 | As above, the timeout dialog. | yes |
+| `moderation-kick` | 36 | As above, the kick dialog. | yes |
+| `moderation-ban` | 36 | As above, the ban dialog. | yes |
 
 ### 37 Account and settings pages
 

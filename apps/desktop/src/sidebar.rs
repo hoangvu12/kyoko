@@ -15,13 +15,6 @@ use crate::rail::Icons;
 use crate::ui::{Link, record};
 
 const VOICE_AVATAR_POINTS: f64 = 24.;
-const LATER: [&str; 4] = [
-	"sidebar.server_settings",
-	"sidebar.create_channel",
-	"sidebar.edit_channel",
-	"sidebar.delete_channel",
-];
-
 pub(crate) struct SidebarView {
 	sidebar: RefCell<Sidebar>,
 	avatars: RefCell<HashMap<(Snowflake, Option<String>), ImageName>>,
@@ -156,11 +149,6 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			copy_link(guild_id, channel_id);
 		}
 	});
-	for name in LATER {
-		host.action(name, move |_| {
-			tracing::debug!(action = name, "this sidebar action is not built yet");
-		});
-	}
 }
 
 fn copy_link(guild_id: Option<Snowflake>, channel_id: Snowflake) {

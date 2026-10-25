@@ -144,7 +144,7 @@ impl Store {
 			removed_members: HashMap::new(),
 			bans: crate::admin::seed_bans(fixtures),
 			member_edits: HashMap::new(),
-			invites: BTreeMap::new(),
+			invites: crate::admin::seed_invites(fixtures),
 			created_guilds: HashMap::new(),
 			community: None,
 			left_guilds: BTreeSet::new(),

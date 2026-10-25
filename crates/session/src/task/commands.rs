@@ -6,7 +6,7 @@ use rest::api::{ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
 use serde_json::{Value, json};
 use state::Loaded;
 
-use super::actions::{mute_config, object, some, timestamp};
+use super::actions::{mute_config, object, some};
 use super::outbox::ForumPost;
 use super::{Command, Core};
 

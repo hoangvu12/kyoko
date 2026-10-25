@@ -67,6 +67,17 @@ icon_files!(
 	"list_layout",
 	"grid_layout",
 	"upload",
+	"shield",
+	"timer",
+	"user_x",
+	"ban",
+	"mic",
+	"mic_off",
+	"headphones",
+	"headphones_off",
+	"chevron_right",
+	"friend_requests",
+	"phone_off",
 );
 
 thread_local! {

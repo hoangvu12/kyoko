@@ -59,6 +59,8 @@ pub enum Screen {
 	ForumPost,
 	ForumPostCreate,
 	Community(Community),
+	ServerSettings(&'static str),
+	Moderation(&'static str),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +110,8 @@ impl Screen {
 			"guild-notifications" => Some(Screen::Community(Community::GuildNotifications)),
 			other => settings_page(other)
 				.map(Screen::Settings)
+				.or_else(|| server_page(other).map(Screen::ServerSettings))
+				.or_else(|| moderation_dialog(other).map(Screen::Moderation))
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
 		}
 	}
@@ -144,7 +148,9 @@ impl Screen {
 			| Screen::Forum
 			| Screen::ForumPost
 			| Screen::ForumPostCreate
-			| Screen::Community(_) => Some(Opening::First),
+			| Screen::Community(_)
+			| Screen::ServerSettings(_)
+			| Screen::Moderation(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}
@@ -172,6 +178,30 @@ fn settings_page(name: &str) -> Option<&'static str> {
 		"settings-streamer-mode" => Some("streamer-mode"),
 		"settings-advanced" => Some("advanced"),
 		"settings-plugins" => Some("plugins"),
+		_ => None,
+	}
+}
+
+fn server_page(name: &str) -> Option<&'static str> {
+	match name.strip_prefix("server-settings-")? {
+		"overview" => Some("overview"),
+		"roles" => Some("roles"),
+		"emoji" => Some("emoji"),
+		"stickers" => Some("stickers"),
+		"members" => Some("members"),
+		"invites" => Some("invites"),
+		"bans" => Some("bans"),
+		"audit-log" => Some("audit-log"),
+		_ => None,
+	}
+}
+
+fn moderation_dialog(name: &str) -> Option<&'static str> {
+	match name.strip_prefix("moderation-")? {
+		"nickname" => Some("nickname"),
+		"timeout" => Some("timeout"),
+		"kick" => Some("kick"),
+		"ban" => Some("ban"),
 		_ => None,
 	}
 }

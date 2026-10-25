@@ -8,6 +8,7 @@ mod fonts;
 mod frame;
 mod integration;
 mod member_list;
+mod moderation;
 mod notify;
 mod pickers;
 mod profile;

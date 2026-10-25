@@ -243,7 +243,7 @@ impl Call {
 
 #[derive(Debug, Clone)]
 pub(super) enum Undo {
-	Role(Role),
+	Role(Box<Role>),
 	Member(Box<Member>),
 	Channel(Box<Channel>),
 }
@@ -455,7 +455,7 @@ impl Core {
 			Undo::Role(role) => {
 				protocol::DispatchEvent::GuildRoleUpdate(Box::new(protocol::GuildRoleChange {
 					guild_id,
-					role,
+					role: *role,
 				}))
 			}
 			Undo::Member(member) => protocol::DispatchEvent::GuildMemberUpdate(member),

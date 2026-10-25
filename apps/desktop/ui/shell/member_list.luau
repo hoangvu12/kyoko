@@ -146,6 +146,10 @@ local function member(row: any)
 		on_press = function(point: any)
 			actions.open_member_profile(row.id, point.x, point.y)
 		end,
+		context_menu = function(point: any)
+			actions.member_menu(row.id, point.x, point.y)
+			return nil
+		end,
 		avatar { src = row.avatar, size = AVATAR, status = row.status, cutout = theme.color.background_secondary },
 		ui.column {
 			min_w = 0,
