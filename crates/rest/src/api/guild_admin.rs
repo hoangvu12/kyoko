@@ -80,8 +80,17 @@ impl RestClient {
 		self.send(request).await
 	}
 
-	pub async fn guild_bans(&self, guild_id: Snowflake) -> Result<Value> {
-		let request = Request::get(format!("/guilds/{guild_id}/bans")).query(&[("limit", "1000")]);
+	pub async fn guild_bans(
+		&self,
+		guild_id: Snowflake,
+		after: Option<Snowflake>,
+		limit: u32,
+	) -> Result<Value> {
+		let mut request =
+			Request::get(format!("/guilds/{guild_id}/bans")).query(&[("limit", limit.to_string())]);
+		if let Some(after) = after {
+			request = request.query(&[("after", after.to_string())]);
+		}
 		self.send(request).await
 	}
 
@@ -122,9 +131,10 @@ impl RestClient {
 		guild_id: Snowflake,
 		user_id: Snowflake,
 		changes: Value,
+		reason: Option<&str>,
 	) -> Result<Value> {
-		self.send(Request::patch(format!("/guilds/{guild_id}/members/{user_id}")).json(&changes))
-			.await
+		let request = Request::patch(format!("/guilds/{guild_id}/members/{user_id}")).json(&changes);
+		self.send(with_reason(request, reason)).await
 	}
 
 	pub async fn modify_current_member(&self, guild_id: Snowflake, changes: Value) -> Result<Value> {

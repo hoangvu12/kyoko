@@ -17,6 +17,7 @@ mod kept;
 mod layout;
 mod locks;
 mod members;
+mod moderation;
 mod reads;
 mod safety;
 mod search;

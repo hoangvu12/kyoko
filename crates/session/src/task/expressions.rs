@@ -5,6 +5,7 @@ use rest::UploadFile;
 use serde::Serialize;
 use state::{EmojiRef, Loaded, RECENT_CAP};
 
+use super::guild_writes::{Call, Write};
 use super::{Command, Core};
 use crate::persist::{self, Job};
 
@@ -160,11 +161,13 @@ impl Core {
 						bytes: file_png_or_apng.into(),
 						content_type: STICKER_CONTENT_TYPE.to_owned(),
 					};
-					self.spawn_action("create sticker", move |rest| async move {
-						rest.create_guild_sticker(guild_id, &name, &description, &tags, file)
-							.await
-							.map(drop)
-					});
+					let call = Call::CreateSticker {
+						name,
+						description,
+						tags,
+						file,
+					};
+					self.queue_guild_write(guild_id, Write::new("create sticker", call));
 				}
 			}
 			Command::EditSticker {
@@ -175,24 +178,21 @@ impl Core {
 				tags,
 			} => {
 				if self.may_manage_expressions(guild_id) {
-					self.spawn_action("edit sticker", move |rest| async move {
-						rest.edit_guild_sticker(
-							guild_id,
-							sticker_id,
-							name.as_deref(),
-							description.as_deref(),
-							tags.as_deref(),
-						)
-						.await
-						.map(drop)
-					});
+					let call = Call::EditSticker {
+						id: sticker_id,
+						name,
+						description,
+						tags,
+					};
+					self.queue_guild_write(guild_id, Write::new("edit sticker", call));
 				}
 			}
 			Command::DeleteSticker { guild_id, sticker_id } => {
 				if self.may_manage_expressions(guild_id) {
-					self.spawn_action("delete sticker", move |rest| async move {
-						rest.delete_guild_sticker(guild_id, sticker_id).await
-					});
+					self.queue_guild_write(
+						guild_id,
+						Write::new("delete sticker", Call::DeleteSticker(sticker_id)),
+					);
 				}
 			}
 			Command::EditEmoji {
@@ -202,11 +202,10 @@ impl Core {
 				roles,
 			} => {
 				if self.may_manage_expressions(guild_id) {
-					self.spawn_action("edit emoji", move |rest| async move {
-						rest.edit_guild_emoji(guild_id, id, Some(&name), Some(&roles))
-							.await
-							.map(drop)
-					});
+					self.queue_guild_write(
+						guild_id,
+						Write::new("edit emoji", Call::EditEmoji { id, name, roles }),
+					);
 				}
 			}
 			Command::LoadStickerPacks => self.spawn_load("sticker packs", move |rest| async move {

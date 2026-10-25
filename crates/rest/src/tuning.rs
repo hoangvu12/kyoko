@@ -21,6 +21,7 @@ pub struct RestTuning {
 	pub settings_gap: Duration,
 	pub collapse_gap: Duration,
 	pub search_delay: Duration,
+	pub guild_write_gap: Duration,
 }
 
 impl Default for RestTuning {
@@ -45,6 +46,7 @@ impl Default for RestTuning {
 			settings_gap: Duration::from_secs(10),
 			collapse_gap: Duration::from_secs(2),
 			search_delay: Duration::from_millis(300),
+			guild_write_gap: Duration::from_millis(500),
 		}
 	}
 }

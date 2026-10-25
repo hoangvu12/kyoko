@@ -42,8 +42,8 @@ pub use expressions::{
 pub use guild::GuildState;
 pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{
-	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, ConnectedAccount, InviteInfo, InvitePreview,
-	Loaded, ProfileBadge, UserProfile, audit_action_label,
+	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, BanList, ConnectedAccount, InviteInfo,
+	InvitePreview, Loaded, ProfileBadge, UserProfile, audit_action_label,
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};

@@ -326,6 +326,9 @@ pub enum Command {
 	LoadBans {
 		guild_id: Snowflake,
 	},
+	LoadMoreBans {
+		guild_id: Snowflake,
+	},
 	LoadInvites {
 		guild_id: Snowflake,
 	},
@@ -352,6 +355,7 @@ pub enum Command {
 		guild_id: Snowflake,
 		user_id: Snowflake,
 		until: Option<DateTime<Utc>>,
+		reason: Option<String>,
 	},
 	SetNickname {
 		guild_id: Snowflake,

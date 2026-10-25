@@ -81,6 +81,8 @@ pub enum Loaded {
 	Bans {
 		guild_id: Snowflake,
 		raw: Value,
+		append: bool,
+		limit: u32,
 	},
 	ReactionUsers {
 		message_id: Snowflake,
@@ -197,6 +199,12 @@ pub struct BanEntry {
 	pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BanList {
+	pub entries: Vec<BanEntry>,
+	pub has_more: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthSession {
 	pub id_hash: String,
@@ -229,7 +237,7 @@ pub(crate) struct Lazy {
 	pub(crate) invite_previews: HashMap<String, InvitePreview>,
 	pub(crate) guild_invites: HashMap<Snowflake, Vec<InviteInfo>>,
 	pub(crate) audit_logs: HashMap<Snowflake, AuditLog>,
-	pub(crate) bans: HashMap<Snowflake, Vec<BanEntry>>,
+	pub(crate) bans: HashMap<Snowflake, BanList>,
 	pub(crate) auth_sessions: Option<Vec<AuthSession>>,
 	pub(crate) community: crate::community::Community,
 	pub(crate) reaction_users: HashMap<(Snowflake, String), Vec<User>>,
@@ -568,10 +576,17 @@ impl State {
 				log.entries.extend(parsed);
 				changes.loaded.insert(*guild_id);
 			}
-			Loaded::Bans { guild_id, raw } => {
+			Loaded::Bans {
+				guild_id,
+				raw,
+				append,
+				limit,
+			} => {
 				let bans = LenientVec::<RawBan>::deserialize(raw).unwrap_or_default();
-				let entries = bans
+				let page = bans.len();
+				let entries: Vec<BanEntry> = bans
 					.into_iter()
+					.filter(|ban| ban.user.id != Snowflake::default())
 					.map(|ban| {
 						intern_user(&mut self.users, &ban.user);
 						BanEntry {
@@ -584,7 +599,12 @@ impl State {
 						}
 					})
 					.collect();
-				self.lazy.bans.insert(*guild_id, entries);
+				let list = self.lazy.bans.entry(*guild_id).or_default();
+				if !*append {
+					list.entries.clear();
+				}
+				list.entries.extend(entries);
+				list.has_more = page >= *limit as usize;
 				changes.loaded.insert(*guild_id);
 			}
 			Loaded::ReactionUsers {
@@ -776,7 +796,23 @@ impl State {
 	}
 
 	pub fn bans(&self, guild_id: Snowflake) -> &[BanEntry] {
-		self.lazy.bans.get(&guild_id).map_or(&[][..], Vec::as_slice)
+		self.lazy
+			.bans
+			.get(&guild_id)
+			.map_or(&[][..], |list| list.entries.as_slice())
+	}
+
+	pub fn ban_list(&self, guild_id: Snowflake) -> Option<&BanList> {
+		self.lazy.bans.get(&guild_id)
+	}
+
+	pub(crate) fn ban_revoked(&mut self, guild_id: Snowflake, user_id: Snowflake) -> Changes {
+		let mut changes = Changes::default();
+		if let Some(list) = self.lazy.bans.get_mut(&guild_id) {
+			list.entries.retain(|ban| ban.user.id != user_id);
+			changes.loaded.insert(guild_id);
+		}
+		changes
 	}
 
 	pub fn reaction_users(&self, message_id: Snowflake, emoji: &str) -> Option<&[User]> {

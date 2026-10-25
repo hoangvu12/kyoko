@@ -233,8 +233,12 @@ pub async fn audit_log(
 		.map(Json)
 }
 
-pub async fn bans(State(shared): Mock, Path(id): Path<u64>) -> ApiResult {
-	shared.bans_json(id).map(Json)
+pub async fn bans(
+	State(shared): Mock,
+	Path(id): Path<u64>,
+	Query(page): Query<crate::admin::BanPage>,
+) -> ApiResult {
+	shared.bans_json(id, page).map(Json)
 }
 
 pub async fn active_threads(State(shared): Mock, Path(id): Path<u64>) -> ApiResult {

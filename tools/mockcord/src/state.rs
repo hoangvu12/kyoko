@@ -142,7 +142,7 @@ impl Store {
 				.map(|guild| (guild.id, guild.emojis.clone()))
 				.collect(),
 			removed_members: HashMap::new(),
-			bans: HashMap::new(),
+			bans: crate::admin::seed_bans(fixtures),
 			member_edits: HashMap::new(),
 			invites: BTreeMap::new(),
 			created_guilds: HashMap::new(),

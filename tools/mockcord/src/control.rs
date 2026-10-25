@@ -145,4 +145,12 @@ impl Control {
 	pub fn reset_ready(&self) {
 		self.shared.scenario.set_ready(None);
 	}
+
+	pub fn ban_users(&self, guild_id: u64, user_ids: &[u64]) {
+		self.shared.ban_users(guild_id, user_ids);
+	}
+
+	pub fn add_audit_entries(&self, guild_id: u64, count: usize) {
+		self.shared.add_audit_entries(guild_id, count);
+	}
 }

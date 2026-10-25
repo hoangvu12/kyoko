@@ -115,6 +115,42 @@ impl State {
 		}
 	}
 
+	pub fn top_role_position(&self, guild_id: Snowflake, user_id: Snowflake) -> i64 {
+		let Some(guild) = self.guilds.get(&guild_id) else {
+			return 0;
+		};
+		guild
+			.members
+			.get(&user_id)
+			.map_or(&[][..], |member| member.roles.as_slice())
+			.iter()
+			.filter_map(|role_id| guild.roles.get(role_id))
+			.map(|role| role.position)
+			.max()
+			.unwrap_or(0)
+	}
+
+	pub fn outranks(&self, guild_id: Snowflake, actor: Snowflake, target: Snowflake) -> bool {
+		let Some(guild) = self.guilds.get(&guild_id) else {
+			return false;
+		};
+		if actor == target || guild.owner_id == Some(target) {
+			return false;
+		}
+		guild.owner_id == Some(actor)
+			|| self.top_role_position(guild_id, actor) > self.top_role_position(guild_id, target)
+	}
+
+	pub fn role_below(&self, guild_id: Snowflake, actor: Snowflake, role_id: Snowflake) -> bool {
+		let Some(guild) = self.guilds.get(&guild_id) else {
+			return false;
+		};
+		let Some(role) = guild.roles.get(&role_id) else {
+			return false;
+		};
+		guild.owner_id == Some(actor) || role.position < self.top_role_position(guild_id, actor)
+	}
+
 	pub fn my_permissions(&self, channel_id: Snowflake) -> Permissions {
 		let Some(me) = self.current_user_id() else {
 			return Permissions::empty();

@@ -586,6 +586,7 @@ impl State {
 				});
 				changes.rejected = true;
 			}
+			LocalEvent::BanRevoked { guild_id, user_id } => return self.ban_revoked(*guild_id, *user_id),
 			LocalEvent::DeletesQueued(batch) => self.queue_deletes(batch, &mut changes),
 			LocalEvent::DeleteProgressed {
 				batch,

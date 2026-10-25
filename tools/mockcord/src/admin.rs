@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::{DateTime, Duration, Utc};
 use protocol::{
@@ -17,7 +17,9 @@ use crate::ready::is_thread;
 use crate::state::{Shared, Store};
 
 const AUDIT_PAGE: usize = 50;
+const MAX_BAN_PAGE: usize = 1000;
 const SEED_AUDIT_ENTRIES: i64 = 3;
+const SEED_BAN_REASONS: [Option<&str>; 3] = [Some("Spam links in every channel"), None, Some("Raid account")];
 const MINUTE_MS: i64 = 60_000;
 const ACTION_CHANNEL_CREATE: i64 = 10;
 const ACTION_CHANNEL_UPDATE: i64 = 11;
@@ -37,14 +39,34 @@ const ACTION_PIN: i64 = 74;
 const ACTION_UNPIN: i64 = 75;
 const ACTION_BULK_DELETE: i64 = 73;
 
+pub fn seed_bans(fixtures: &Fixtures) -> HashMap<u64, BTreeMap<u64, Option<String>>> {
+	fixtures
+		.guilds
+		.first()
+		.map(|guild| {
+			let banned = fixtures
+				.users
+				.keys()
+				.copied()
+				.filter(|id| *id != CURRENT_USER_ID && guild.member(*id).is_none())
+				.zip(SEED_BAN_REASONS)
+				.map(|(id, reason)| (id, reason.map(str::to_owned)))
+				.collect();
+			(guild.id, banned)
+		})
+		.into_iter()
+		.collect()
+}
+
 pub fn seed_audit(fixtures: &Fixtures) -> HashMap<u64, Vec<Value>> {
 	let anchor_ms = fixtures.anchor.timestamp_millis();
+	let bans = seed_bans(fixtures);
 	fixtures
 		.guilds
 		.iter()
 		.map(|guild| {
 			let actor = guild.properties.owner_id.map_or(CURRENT_USER_ID, Snowflake::get);
-			let entries = (0..SEED_AUDIT_ENTRIES)
+			let mut entries: Vec<Value> = (0..SEED_AUDIT_ENTRIES)
 				.map(|step| {
 					let (action, name) = match step {
 						0 => (ACTION_CHANNEL_CREATE, "announcements"),
@@ -61,9 +83,47 @@ pub fn seed_audit(fixtures: &Fixtures) -> HashMap<u64, Vec<Value>> {
 					})
 				})
 				.collect();
+			let banned = bans.get(&guild.id).into_iter().flatten();
+			for (step, (user_id, reason)) in (SEED_AUDIT_ENTRIES..).zip(banned) {
+				entries.push(json!({
+					"id": snowflake_at(anchor_ms - (step + 1) * 60 * MINUTE_MS, 0).to_string(),
+					"user_id": actor.to_string(),
+					"target_id": user_id.to_string(),
+					"action_type": ACTION_BAN,
+					"changes": [],
+					"reason": reason,
+				}));
+			}
 			(guild.id, entries)
 		})
 		.collect()
+}
+
+fn listed_user(fixtures: &Fixtures, user_id: u64) -> Value {
+	fixtures.users.get(&user_id).map_or_else(
+		|| {
+			json!({
+				"id": user_id.to_string(),
+				"username": format!("banned{user_id}"),
+				"global_name": null,
+				"avatar": null,
+				"discriminator": "0",
+			})
+		},
+		to_json,
+	)
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct BanPage {
+	#[serde(default = "default_ban_page")]
+	pub limit: usize,
+	pub after: Option<u64>,
+	pub before: Option<u64>,
+}
+
+fn default_ban_page() -> usize {
+	MAX_BAN_PAGE
 }
 
 impl Store {
@@ -750,7 +810,7 @@ impl Shared {
 		Ok(())
 	}
 
-	pub fn bans_json(&self, guild_id: u64) -> Result<Value, ApiError> {
+	pub fn bans_json(&self, guild_id: u64, page: BanPage) -> Result<Value, ApiError> {
 		let store = self.store.lock();
 		self.live_guild(&store, guild_id)?;
 		let bans: Vec<Value> = store
@@ -758,11 +818,35 @@ impl Shared {
 			.get(&guild_id)
 			.into_iter()
 			.flatten()
-			.map(|(user_id, reason)| {
-				json!({ "user": self.fixtures.users.get(user_id).map_or(Value::Null, to_json), "reason": reason })
-			})
+			.filter(|(user_id, _)| page.after.is_none_or(|after| **user_id > after))
+			.filter(|(user_id, _)| page.before.is_none_or(|before| **user_id < before))
+			.take(page.limit.clamp(1, MAX_BAN_PAGE))
+			.map(
+				|(user_id, reason)| json!({ "user": listed_user(&self.fixtures, *user_id), "reason": reason }),
+			)
 			.collect();
 		Ok(Value::Array(bans))
+	}
+
+	pub fn ban_users(&self, guild_id: u64, user_ids: &[u64]) {
+		let mut store = self.store.lock();
+		let bans = store.bans.entry(guild_id).or_default();
+		for user_id in user_ids {
+			bans.insert(*user_id, None);
+		}
+	}
+
+	pub fn add_audit_entries(&self, guild_id: u64, count: usize) {
+		let mut store = self.store.lock();
+		for _ in 0..count {
+			store.push_audit(
+				guild_id,
+				ACTION_CHANNEL_UPDATE,
+				None,
+				json!([{ "key": "topic", "new_value": "filler" }]),
+				None,
+			);
+		}
 	}
 
 	pub fn audit_log_json(

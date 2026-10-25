@@ -44,10 +44,12 @@ mod community;
 mod deletes;
 mod expressions;
 mod failures;
+mod guild_writes;
 mod interactions;
 mod layout;
 mod locks;
 mod member_requests;
+mod moderation;
 mod outbox;
 mod profiles;
 mod reactions;
@@ -129,6 +131,10 @@ pub(crate) enum Internal {
 	},
 	LayoutSaved(bool),
 	CollapseSaved(bool),
+	GuildWritten {
+		guild_id: Snowflake,
+		outcome: rest::Result<()>,
+	},
 	StatusSaved(Option<String>),
 	Profile {
 		user_id: Snowflake,
@@ -199,6 +205,7 @@ pub(crate) struct Core {
 	acks: reads::Acks,
 	layout: layout::LayoutWriter,
 	collapse: collapse::CollapseWriter,
+	guild_writes: guild_writes::GuildWrites,
 	searcher: search::Searcher,
 	viewing: bool,
 	manual_unread: HashSet<Snowflake>,
@@ -276,6 +283,7 @@ impl Core {
 			acks: reads::Acks::new(&parts.tuning),
 			layout: layout::LayoutWriter::new(&parts.tuning),
 			collapse: collapse::CollapseWriter::new(&parts.tuning),
+			guild_writes: guild_writes::GuildWrites::new(&parts.tuning),
 			searcher: search::Searcher::new(&parts.tuning),
 			viewing: true,
 			manual_unread: HashSet::new(),
@@ -650,6 +658,7 @@ impl Core {
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
 			Internal::LayoutSaved(saved) => self.on_layout_saved(saved),
 			Internal::CollapseSaved(saved) => self.on_collapse_saved(saved),
+			Internal::GuildWritten { guild_id, outcome } => self.on_guild_written(guild_id, outcome),
 			Internal::StatusSaved(failure) => self.on_status_saved(failure),
 			Internal::Profile {
 				user_id,
@@ -1138,6 +1147,7 @@ impl Core {
 			self.backfill.deadline(),
 			self.layout.deadline(),
 			self.collapse.deadline(),
+			self.guild_writes.deadline(),
 			self.status.deadline(),
 			self.status_deadline(),
 			self.searcher.deadline(),
@@ -1158,6 +1168,9 @@ impl Core {
 		}
 		if self.collapse.deadline().is_some_and(|due| due <= now) {
 			self.flush_collapse();
+		}
+		if self.guild_writes.deadline().is_some_and(|due| due <= now) {
+			self.flush_guild_writes();
 		}
 		if self.status.deadline().is_some_and(|due| due <= now) {
 			self.flush_status();

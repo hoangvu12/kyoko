@@ -119,6 +119,10 @@ pub enum LocalEvent {
 	CommandRejected {
 		reason: String,
 	},
+	BanRevoked {
+		guild_id: Snowflake,
+		user_id: Snowflake,
+	},
 	DeletesQueued(DeleteBatch),
 	DeleteProgressed {
 		batch: u64,
