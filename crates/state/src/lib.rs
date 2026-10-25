@@ -42,7 +42,8 @@ pub use permissions::DM_PERMISSIONS;
 pub use references::{BackfillNeeds, Referenced, ReplyTarget, reply_reference};
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};
 pub use state::{
-	ConnectionStatus, DisconnectReason, Rejection, Selection, SessionInfo, SharedState, State, TYPING_TIMEOUT,
+	ConnectionStatus, DisconnectReason, Rejection, SecretStorage, Selection, SessionInfo, SharedState, State,
+	TYPING_TIMEOUT,
 };
 pub use threads::ForumPost;
 pub use versions::CacheVersions;

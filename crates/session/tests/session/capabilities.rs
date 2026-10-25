@@ -181,12 +181,12 @@ async fn signing_out_after_a_refresh_leaves_no_token_behind() {
 	running.session().send(Command::Logout);
 	let store = running.store();
 	running
-		.eventually("sign-out to remove the account", || {
+		.eventually("sign-out to remove the account and its tokens", || {
 			store.accounts.list().is_empty()
+				&& store.tokens.load().ok().flatten().is_none()
+				&& store.accounts.token_for(user_id).ok().flatten().is_none()
 		})
 		.await;
-	assert!(store.tokens.load().ok().flatten().is_none());
-	assert!(store.accounts.token_for(user_id).ok().flatten().is_none());
 	running.stop().await;
 }
 

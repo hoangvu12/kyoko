@@ -165,8 +165,10 @@ fn main() -> Result<()> {
 		let _entered = runtime.enter();
 		media_service(&identity, backend.loopback_port, media_dir)?
 	};
+	let retention = session::Retention::for_settings(&store.settings.read().storage);
 	let session = Session::start(SessionConfig {
 		identity,
+		retention,
 		build_source: backend.build_source,
 		store: Arc::new(store),
 		rest_base: backend.rest_base,

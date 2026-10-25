@@ -97,6 +97,7 @@ impl Session {
 			token,
 			remember_account: config.remember_account,
 			tuning: config.rest,
+			retention: config.retention,
 			startup: Startup {
 				gateway: gateway_start,
 				gateway_config,

@@ -4,7 +4,7 @@ use chacha20poly1305::{AeadInOut, KeyInit, XChaCha20Poly1305, XNonce};
 use zeroize::Zeroizing;
 
 use crate::error::{Result, StoreError};
-use crate::token::SecretSlot;
+use crate::secrets::{SecretSlot, Secrets};
 
 const MAGIC: &[u8; 4] = b"OXC1";
 const NONCE_LEN: usize = 24;
@@ -62,21 +62,40 @@ pub(crate) fn is_sealed(bytes: &[u8]) -> bool {
 	bytes.starts_with(MAGIC)
 }
 
-pub(crate) fn load_or_create_key(file_path: PathBuf, plaintext: bool) -> Result<Zeroizing<[u8; KEY_LEN]>> {
-	let slot = SecretSlot::new(KEYRING_USER, file_path);
-	let stored = slot.load(plaintext).unwrap_or_else(|error| {
-		tracing::warn!(%error, "could not read the cache key");
-		None
-	});
+pub(crate) enum CacheKey {
+	Stored(Zeroizing<[u8; KEY_LEN]>),
+	Ephemeral(Zeroizing<[u8; KEY_LEN]>),
+}
+
+pub(crate) fn cache_key_slot(file_path: PathBuf) -> SecretSlot {
+	SecretSlot::new(KEYRING_USER, file_path)
+}
+
+pub(crate) fn load_or_create_key(slot: &SecretSlot, secrets: &Secrets) -> CacheKey {
+	let stored = match slot.load(secrets) {
+		Ok(stored) => stored,
+		Err(error) => {
+			tracing::warn!(%error, "could not read the cache key, keeping the cache in memory");
+			return CacheKey::Ephemeral(random_key());
+		}
+	};
 	if let Some(encoded) = stored {
-		let encoded = Zeroizing::new(encoded);
 		let mut key = Zeroizing::new([0u8; KEY_LEN]);
 		if hex::decode_to_slice(encoded.trim(), key.as_mut()).is_ok() {
-			return Ok(key);
+			return CacheKey::Stored(key);
 		}
 		tracing::warn!("stored cache key is malformed, creating a new one");
 	}
-	let key = Zeroizing::new(rand::random::<[u8; KEY_LEN]>());
-	slot.save(&Zeroizing::new(hex::encode(key.as_ref())), plaintext)?;
-	Ok(key)
+	let key = random_key();
+	match slot.save(secrets, &Zeroizing::new(hex::encode(key.as_ref()))) {
+		Ok(_) => CacheKey::Stored(key),
+		Err(error) => {
+			tracing::warn!(%error, "could not save the cache key, keeping the cache in memory");
+			CacheKey::Ephemeral(key)
+		}
+	}
+}
+
+fn random_key() -> Zeroizing<[u8; KEY_LEN]> {
+	Zeroizing::new(rand::random::<[u8; KEY_LEN]>())
 }

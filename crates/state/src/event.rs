@@ -7,7 +7,7 @@ use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::loaded::Loaded;
 use crate::locks::{RiskyReason, RiskyTarget};
 use crate::messages::{SendFailure, Viewport};
-use crate::state::ConnectionStatus;
+use crate::state::{ConnectionStatus, SecretStorage};
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
 
@@ -67,6 +67,7 @@ pub enum LocalEvent {
 	},
 	Connection(ConnectionStatus),
 	LatencyMeasured(Duration),
+	SecretStorage(SecretStorage),
 	VoiceConnection {
 		status: VoiceStatus,
 		channel_id: Snowflake,

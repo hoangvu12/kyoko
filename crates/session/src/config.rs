@@ -25,5 +25,6 @@ pub struct SessionConfig {
 	pub gateway: GatewayTuning,
 	pub rest: RestTuning,
 	pub caches: CacheLimits,
+	pub retention: store::Retention,
 	pub remember_account: bool,
 }

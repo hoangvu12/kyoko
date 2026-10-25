@@ -16,6 +16,7 @@ impl Core {
 		let store = self.store.clone();
 		let token = self.token.clone();
 		let signed_in = self.signed_in.clone();
+		let internal = self.internal.clone();
 		self.runtime.spawn_blocking(move || {
 			let signed_in = signed_in.lock();
 			if !*signed_in {
@@ -28,6 +29,7 @@ impl Core {
 			if let Err(error) = saved {
 				tracing::warn!(%error, "account was not saved");
 			}
+			let _ = internal.send(Internal::SecretHealth(store.secret_health()));
 		});
 	}
 
@@ -41,6 +43,7 @@ impl Core {
 		let store = self.store.clone();
 		let token = self.token.clone();
 		let signed_in = self.signed_in.clone();
+		let internal = self.internal.clone();
 		self.runtime.spawn_blocking(move || {
 			let signed_in = signed_in.lock();
 			if !*signed_in {
@@ -49,16 +52,8 @@ impl Core {
 			if let Err(error) = store.tokens.save(token.as_str()) {
 				tracing::warn!(%error, "refreshed token was not saved");
 			}
+			let _ = internal.send(Internal::SecretHealth(store.secret_health()));
 		});
-	}
-
-	pub(super) fn forget_account(&self) {
-		let Some(user_id) = self.state.read().current_user_id() else {
-			return;
-		};
-		if let Err(error) = self.store.accounts.remove(user_id) {
-			tracing::warn!(%error, "account was not removed");
-		}
 	}
 
 	pub(super) fn select_new_guild(&mut self, guild_id: Snowflake) {

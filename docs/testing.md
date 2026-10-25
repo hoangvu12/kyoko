@@ -27,7 +27,7 @@ let running = Running::start("unique-name").await;
 let running = Running::start_with(Options::new("unique-name").hooks(hooks)).await;
 ```
 
-`Running` starts mockcord on a random loopback port and opens a store in a scratch directory under the temp dir, named after the test and the process id. It sets the plaintext-token setting so the mock token never reaches Credential Manager, then starts a `Session` pointed at mockcord's REST and gateway URLs. Test names must be unique within the binary. Always finish with `running.stop().await`, which shuts the session down, stops mockcord and removes the scratch directory.
+`Running` starts mockcord on a random loopback port and opens a store in a scratch directory under the temp dir, named after the test and the process id. The store gets a `store::MemoryKeyring` instead of Credential Manager, so secrets take the production keyring path without touching the real one. It then starts a `Session` pointed at mockcord's REST and gateway URLs. Test names must be unique within the binary. Always finish with `running.stop().await`, which shuts the session down, stops mockcord and removes the scratch directory.
 
 `Options` sets recording on and pins the fixture anchor (see "Determinism"). Its builders:
 
@@ -37,6 +37,10 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `members(n)` sets mockcord's members per guild, for member lists longer than a few buckets.
 - `caches(CacheLimits { .. })` shrinks the cache limits (see `docs/caches.md`), so tests reach them with a few channels and pages.
 - `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
+- `plaintext_secrets(true)` turns on the plaintext storage setting before the store opens (see `docs/storage.md`).
+- `keyring(Arc<MemoryKeyring>)` passes a keyring the test prepared, for example with a seeded cache key or `set_failing(true)` / `set_failing_writes(true)` to simulate Credential Manager errors. `running.keyring()` returns it at any time.
+- `retention(Retention { .. })` shrinks the pruning limits and interval, so pruning runs within a test.
+- `seed(|paths| ..)` writes files into the scratch directory before the store opens, for example media cache entries through `media::DiskCache`.
 - `rest(RestTuning { .. })` sets the REST pacing gaps and breaker timings (see `docs/rest.md`). Tests that don't measure pacing can zero the gaps.
 - `buckets(limit, window)` sets mockcord's rate-limit headers: every route allows `limit` requests per `window` (5 per 2 s by default, `MockConfig::bucket_limit` and `bucket_window`). mockcord reports the headers but does not enforce them.
 - `prepare(|mock| ..)` runs against mockcord's `Control` before the session starts, for example `transform_ready` for the very first READY.
@@ -47,7 +51,8 @@ Never sleep for a fixed time. Wait on an observable event:
 
 - `running.until("what", |state| ...)` re-checks the predicate every time the session publishes changes, and panics with the description after `STEP_TIMEOUT` (15 s).
 - `running.until_wire("what", |recording| Some(..))` re-checks every time mockcord records traffic, and returns the first `Some`.
-- `running.restart()` shuts the session down and starts a new one on the same store and mockcord, for behaviour that must survive a restart. `running.restart_after(|mock| ..)` runs the closure while no session is connected, for changes the next launch must catch up on.
+- `running.restart()` shuts the session down and starts a new one on the same store and mockcord, for behaviour that must survive a restart. `running.restart_after(|mock| ..)` runs the closure while no session is connected, for changes the next launch must catch up on. `running.restart_with_retention(..)` restarts with new pruning limits, for start-up pruning of what the first session cached.
+- `running.scratch()` is the scratch root, to check that no file holds a secret.
 - `running.connected()` waits for READY and a live connection. `running.identified_connection()` returns the id of the connection that sent the first IDENTIFY. `running.open_text_channel()` selects the first guild text channel and waits for its history to load.
 - `running.eventually("what", || ...)` polls a condition every 10 ms until `STEP_TIMEOUT`. Use it only for effects that publish no state change, such as a token reaching `running.store()` or a hook recording a call.
 - `state.session().connection` holds the `ConnectionStatus` (see `docs/gateway.md`). Wait on it to see reconnect attempts, their `retry_in`, and stop reasons.

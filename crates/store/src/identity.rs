@@ -3,6 +3,7 @@ use crate::error::Result;
 
 const INSTALLATION_ID_KEY: &str = "client.installation_id";
 const COOKIE_JAR_KEY: &str = "client.cookie_jar";
+pub(crate) const DEVICE_KEYS: [&str; 2] = [INSTALLATION_ID_KEY, COOKIE_JAR_KEY];
 
 impl Store {
 	pub fn installation_id(&self) -> Option<String> {

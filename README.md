@@ -79,7 +79,7 @@ kyoko --mock
 | Settings | `%APPDATA%\hoangvu12\Kyoko\config` |
 | Media cache | `%LOCALAPPDATA%\hoangvu12\Kyoko\cache` |
 
-To remove everything, delete those folders and the `kyoko` entries from Windows Credential Manager. Signing out in the app removes the saved token.
+To remove everything, delete those folders and the `kyoko` entries from Windows Credential Manager. Signing out in the app removes the saved token, the account and the cached messages and media.
 
 ## Build from source
 

@@ -6,9 +6,11 @@ use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
 use protocol::Opcode;
 use protocol::{ChannelType, Snowflake, Token};
-use session::{CacheLimits, Command, GatewayTuning, RestTuning, Session, SessionConfig, SessionHooks};
+use session::{
+	CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig, SessionHooks,
+};
 use state::State;
-use store::{Paths, Settings, Store};
+use store::{MemoryKeyring, Paths, Settings, Store};
 use tokio::sync::Notify;
 use tokio::time::{Instant, timeout_at};
 use url::Url;
@@ -19,6 +21,7 @@ pub const LOCALE: &str = "en-US";
 const FIXTURE_ANCHOR_MS: i64 = 1_767_225_600_000;
 
 type Prepare = Box<dyn FnOnce(&Control)>;
+type Seed = Box<dyn FnOnce(&Paths)>;
 
 pub struct Options {
 	name: &'static str,
@@ -28,7 +31,11 @@ pub struct Options {
 	rest: RestTuning,
 	caches: CacheLimits,
 	prepare: Option<Prepare>,
+	seed: Option<Seed>,
 	remember_account: bool,
+	plaintext_secrets: bool,
+	retention: Retention,
+	keyring: Arc<MemoryKeyring>,
 }
 
 impl Options {
@@ -45,8 +52,32 @@ impl Options {
 			rest: RestTuning::default(),
 			caches: CacheLimits::default(),
 			prepare: None,
+			seed: None,
 			remember_account: true,
+			plaintext_secrets: false,
+			retention: Retention::default(),
+			keyring: Arc::new(MemoryKeyring::new()),
 		}
+	}
+
+	pub fn plaintext_secrets(mut self, plaintext: bool) -> Self {
+		self.plaintext_secrets = plaintext;
+		self
+	}
+
+	pub fn retention(mut self, retention: Retention) -> Self {
+		self.retention = retention;
+		self
+	}
+
+	pub fn keyring(mut self, keyring: Arc<MemoryKeyring>) -> Self {
+		self.keyring = keyring;
+		self
+	}
+
+	pub fn seed(mut self, seed: impl FnOnce(&Paths) + 'static) -> Self {
+		self.seed = Some(Box::new(seed));
+		self
 	}
 
 	pub fn remember_account(mut self, remember: bool) -> Self {
@@ -120,6 +151,9 @@ impl Running {
 		let scratch =
 			std::env::temp_dir().join(format!("kyoko-session-{}-{}", options.name, std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
+		if let Some(seed) = options.seed {
+			seed(&Paths::at(&scratch).expect("scratch paths"));
+		}
 		let wake = Arc::new(Notify::new());
 		let launch = Launch {
 			hooks: options.hooks,
@@ -127,6 +161,9 @@ impl Running {
 			rest: options.rest,
 			caches: options.caches,
 			remember_account: options.remember_account,
+			plaintext_secrets: options.plaintext_secrets,
+			retention: options.retention,
+			keyring: options.keyring,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
 		Running {
@@ -150,6 +187,11 @@ impl Running {
 		let (session, store) = open_session(&self.server, &self.scratch, &self.wake, &self.launch);
 		self.session = Some(session);
 		self.store = store;
+	}
+
+	pub async fn restart_with_retention(&mut self, retention: Retention) {
+		self.launch.retention = retention;
+		self.restart().await;
 	}
 
 	async fn shutdown_session(&mut self) {
@@ -190,6 +232,14 @@ impl Running {
 
 	pub fn store(&self) -> &Store {
 		&self.store
+	}
+
+	pub fn keyring(&self) -> &MemoryKeyring {
+		&self.launch.keyring
+	}
+
+	pub fn scratch(&self) -> &Path {
+		&self.scratch
 	}
 
 	pub async fn eventually(&self, what: &str, done: impl Fn() -> bool) {
@@ -295,6 +345,9 @@ struct Launch {
 	rest: RestTuning,
 	caches: CacheLimits,
 	remember_account: bool,
+	plaintext_secrets: bool,
+	retention: Retention,
+	keyring: Arc<MemoryKeyring>,
 }
 
 fn open_session(
@@ -305,9 +358,9 @@ fn open_session(
 ) -> (Session, Arc<Store>) {
 	let paths = Paths::at(scratch).expect("scratch paths");
 	let mut settings = Settings::load(&paths);
-	settings.storage.plaintext_token = true;
+	settings.storage.plaintext_token = launch.plaintext_secrets;
 	settings.save(&paths).expect("settings save");
-	let store = Arc::new(Store::open(paths).expect("store opens"));
+	let store = Arc::new(Store::open_with(paths, launch.keyring.clone()).expect("store opens"));
 	let notifier = wake.clone();
 	let session = Session::start(SessionConfig {
 		identity: session::client_identity(&store),
@@ -322,6 +375,7 @@ fn open_session(
 		gateway: launch.gateway,
 		rest: launch.rest,
 		caches: launch.caches,
+		retention: launch.retention,
 		remember_account: launch.remember_account,
 	})
 	.expect("session starts");

@@ -35,3 +35,4 @@ indexmap.workspace = true
 
 [dev-dependencies]
 mockcord.workspace = true
+media.workspace = true

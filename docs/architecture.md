@@ -52,7 +52,7 @@ Every enum that Discord may extend has an `Unknown(i64)` or `Unknown(String)` va
 
 ## Security boundaries
 
-- Token: `Token` newtype, not `Clone`, not `Debug` printable, zeroized on drop, stored via `keyring`. Plaintext fallback only behind the explicit `storage.plaintext_token` setting.
+- Token: `Token` newtype, not `Clone`, not `Debug` printable, zeroized on drop, stored via `keyring`. Plaintext only behind the explicit `storage.plaintext_token` setting, never as a fallback. Secrets, pruning and sign-out: `docs/storage.md`.
 - Network: HTTPS only. Redirects drop the Authorization header. Response bodies are capped.
 - Hooks: whatever implements `SessionHooks` is untrusted. A failing hook never stops the session.
 

@@ -3476,6 +3476,7 @@ dependencies = [
  "hex",
  "indexmap",
  "kyoko-gateway",
+ "kyoko-media",
  "kyoko-protocol",
  "kyoko-rest",
  "kyoko-state",

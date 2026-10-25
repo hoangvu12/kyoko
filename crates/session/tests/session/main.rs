@@ -10,5 +10,6 @@ mod locks;
 mod members;
 mod reads;
 mod safety;
+mod storage;
 mod versions;
 mod wire;

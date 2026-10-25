@@ -35,6 +35,14 @@ pub struct SessionInfo {
 	pub connected: bool,
 	pub connection: ConnectionStatus,
 	pub latency: Option<Duration>,
+	pub secrets: SecretStorage,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SecretStorage {
+	pub plaintext: bool,
+	pub keyring_error: Option<String>,
+	pub cache_in_memory: bool,
 }
 
 impl SessionInfo {
@@ -495,6 +503,10 @@ impl State {
 			LocalEvent::LatencyMeasured(latency) => {
 				self.session.latency = Some(*latency);
 				changes.session = true;
+			}
+			LocalEvent::SecretStorage(secrets) => {
+				changes.session = self.session.secrets != *secrets;
+				self.session.secrets = secrets.clone();
 			}
 			LocalEvent::VoiceConnection {
 				status,

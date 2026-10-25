@@ -76,6 +76,10 @@ impl Paths {
 		self.config.join("cache-key")
 	}
 
+	pub fn media_cache_dir(&self) -> PathBuf {
+		self.cache.join("media")
+	}
+
 	pub fn plugins_dir(&self) -> PathBuf {
 		self.data.join("plugins")
 	}

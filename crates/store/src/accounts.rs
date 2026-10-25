@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 use protocol::Snowflake;
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::atomic::write_atomic;
 use crate::error::Result;
-use crate::token::{SecretSlot, TokenBackend};
+use crate::secrets::{SecretSlot, Secrets, TokenBackend};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -30,23 +30,19 @@ struct AccountIndex {
 pub struct AccountStore {
 	index_path: PathBuf,
 	tokens_dir: PathBuf,
-	plaintext: AtomicBool,
+	secrets: Arc<Secrets>,
 	index: Mutex<AccountIndex>,
 }
 
 impl AccountStore {
-	pub fn new(index_path: PathBuf, tokens_dir: PathBuf, plaintext: bool) -> Self {
+	pub(crate) fn new(index_path: PathBuf, tokens_dir: PathBuf, secrets: Arc<Secrets>) -> Self {
 		let index = load_index(&index_path);
 		Self {
 			index_path,
 			tokens_dir,
-			plaintext: AtomicBool::new(plaintext),
+			secrets,
 			index: Mutex::new(index),
 		}
-	}
-
-	pub fn set_plaintext(&self, plaintext: bool) {
-		self.plaintext.store(plaintext, Ordering::Relaxed);
 	}
 
 	pub fn list(&self) -> Vec<Account> {
@@ -64,10 +60,7 @@ impl AccountStore {
 		avatar: Option<&str>,
 		token: &str,
 	) -> Result<TokenBackend> {
-		fs::create_dir_all(&self.tokens_dir)?;
-		let backend = self
-			.slot(user_id)
-			.save(token, self.plaintext.load(Ordering::Relaxed))?;
+		let backend = self.slot(user_id).save(&self.secrets, token)?;
 		let account = Account {
 			user_id,
 			username: username.to_owned(),
@@ -83,17 +76,25 @@ impl AccountStore {
 	}
 
 	pub fn token_for(&self, user_id: Snowflake) -> Result<Option<String>> {
-		self.slot(user_id).load(self.plaintext.load(Ordering::Relaxed))
+		Ok(self
+			.slot(user_id)
+			.load(&self.secrets)?
+			.map(|token| token.as_str().to_owned()))
+	}
+
+	pub fn forget_token(&self, user_id: Snowflake, token: &str) -> Result<bool> {
+		self.slot(user_id).clear_if(&self.secrets, token)
 	}
 
 	pub fn remove(&self, user_id: Snowflake) -> Result<()> {
-		self.slot(user_id).clear();
+		let cleared = self.slot(user_id).clear(&self.secrets);
 		let mut index = self.index.lock();
 		index.accounts.retain(|account| account.user_id != user_id);
 		if index.current == Some(user_id) {
 			index.current = None;
 		}
-		self.write(&index)
+		self.write(&index)?;
+		cleared
 	}
 
 	pub fn set_current(&self, user_id: Snowflake) -> Result<()> {
@@ -104,6 +105,13 @@ impl AccountStore {
 		}
 		index.current = Some(user_id);
 		self.write(&index)
+	}
+
+	pub(crate) fn slots(&self) -> Vec<SecretSlot> {
+		self.list()
+			.into_iter()
+			.map(|account| self.slot(account.user_id))
+			.collect()
 	}
 
 	fn slot(&self, user_id: Snowflake) -> SecretSlot {

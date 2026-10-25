@@ -44,6 +44,7 @@ mod failures;
 mod locks;
 mod member_requests;
 mod reads;
+mod storage;
 mod subscriptions;
 mod themes;
 
@@ -96,6 +97,7 @@ pub(crate) enum Internal {
 	},
 	ThemeCatalogChanged,
 	AccountSwitch(Snowflake),
+	SecretHealth(store::SecretHealth),
 	DeleteProgressed {
 		batch: u64,
 		message_id: Snowflake,
@@ -123,6 +125,7 @@ pub(crate) struct CoreParts {
 	pub(crate) token: Arc<Token>,
 	pub(crate) remember_account: bool,
 	pub(crate) tuning: RestTuning,
+	pub(crate) retention: store::Retention,
 	pub(crate) startup: Startup,
 }
 
@@ -156,6 +159,8 @@ pub(crate) struct Core {
 	token: Arc<Token>,
 	remember_account: bool,
 	signed_in: Arc<Mutex<bool>>,
+	sign_out: Option<storage::SignOut>,
+	retention: store::Retention,
 	account_saved: bool,
 	select_created_guild: bool,
 	startup: Option<Startup>,
@@ -229,6 +234,8 @@ impl Core {
 			token: parts.token,
 			remember_account: parts.remember_account,
 			signed_in: Arc::new(Mutex::new(true)),
+			sign_out: None,
+			retention: parts.retention,
 			account_saved: !parts.remember_account,
 			select_created_guild: false,
 			startup: Some(parts.startup),
@@ -249,6 +256,7 @@ impl Core {
 		mut commands: mpsc::Receiver<Command>,
 		mut internal: mpsc::UnboundedReceiver<Internal>,
 	) {
+		self.publish_secret_health(self.store.secret_health());
 		let store = self.store.clone();
 		let cached = tokio::task::spawn_blocking(move || persist::load_cache(&store));
 		let startup = self.startup.take();
@@ -267,6 +275,7 @@ impl Core {
 			self.store.clone(),
 		));
 		self.restore_recents().await;
+		let pruner = self.start_pruning();
 		let mut gateway_open = true;
 		let rest_stopped = self.rest.stopped();
 		tokio::pin!(rest_stopped);
@@ -314,10 +323,14 @@ impl Core {
 			self.persist.submit(Job::ForgetVersions);
 		}
 		cookie_saver.abort();
+		pruner.abort();
 		let identity = self.rest.identity().clone();
 		let store = self.store.clone();
 		let _ = tokio::task::spawn_blocking(move || identity::save_cookies(&identity, &store)).await;
+		let sign_out = self.sign_out;
+		let store = self.store.clone();
 		self.persist.close().await;
+		storage::finish_sign_out(store, sign_out).await;
 	}
 
 	fn start_gateway(&mut self, mut startup: Startup) {
@@ -369,6 +382,7 @@ impl Core {
 	fn on_token_rejected(&mut self) {
 		tracing::warn!("the token was rejected, signing out");
 		self.gateway.shutdown();
+		self.forget_rejected_token();
 		self.apply_local(LocalEvent::Connection(ConnectionStatus::Disconnected(
 			DisconnectReason::AuthenticationFailed,
 		)));
@@ -578,6 +592,7 @@ impl Core {
 				..Changes::default()
 			}),
 			Internal::AccountSwitch(user_id) => self.apply_local(LocalEvent::AccountSwitchRequested(user_id)),
+			Internal::SecretHealth(health) => self.publish_secret_health(health),
 			Internal::DeleteProgressed {
 				batch,
 				message_id,
@@ -743,13 +758,7 @@ impl Core {
 			}
 			Command::Reconnect => self.gateway.reconnect(),
 			Command::Logout => {
-				let mut signed_in = self.signed_in.lock();
-				*signed_in = false;
-				self.store.tokens.clear();
-				self.forget_account();
-				drop(signed_in);
-				persist::clear_cache(&self.store);
-				self.rest.clear_token();
+				self.begin_sign_out();
 				return false;
 			}
 			Command::Shutdown => return false,

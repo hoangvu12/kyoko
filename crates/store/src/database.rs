@@ -69,6 +69,13 @@ pub struct ReadState {
 	pub last_viewed: Option<i64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessageLimits {
+	pub per_channel: u32,
+	pub total: u32,
+	pub max_age: Duration,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaEntry {
 	pub path: String,
@@ -89,6 +96,10 @@ fn now_millis() -> i64 {
 impl Database {
 	pub fn open(path: &Path, key: &[u8; 32]) -> Result<Self> {
 		Self::configure(Connection::open(path)?, Sealer::new(key))
+	}
+
+	pub fn open_in_memory(key: &[u8; 32]) -> Result<Self> {
+		Self::configure(Connection::open_in_memory()?, Sealer::new(key))
 	}
 
 	fn configure(mut conn: Connection, sealer: Sealer) -> Result<Self> {
@@ -362,6 +373,62 @@ impl Database {
 		}
 		tx.commit()?;
 		Ok(evicted_paths)
+	}
+
+	pub fn prune_messages(&self, limits: MessageLimits) -> Result<usize> {
+		let cutoff =
+			now_millis().saturating_sub(i64::try_from(limits.max_age.as_millis()).unwrap_or(i64::MAX));
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		let mut pruned = tx.execute("DELETE FROM messages WHERE updated_at < ?1", [cutoff])?;
+		pruned += tx.execute(
+			"DELETE FROM messages WHERE id IN (
+				SELECT id FROM (
+					SELECT id, ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY id DESC) AS rank
+					FROM messages
+				) WHERE rank > ?1
+			)",
+			[limits.per_channel],
+		)?;
+		pruned += tx.execute(
+			"DELETE FROM messages WHERE id IN (
+				SELECT id FROM messages ORDER BY updated_at DESC, id DESC LIMIT -1 OFFSET ?1
+			)",
+			[limits.total],
+		)?;
+		tx.commit()?;
+		Ok(pruned)
+	}
+
+	pub fn wipe_account_data(&self, kept_keys: &[&str]) -> Result<()> {
+		let mut conn = self.conn.lock();
+		let tx = conn.transaction()?;
+		let tables = tx
+			.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")?
+			.query_map([], |row| row.get::<_, String>(0))?
+			.collect::<rusqlite::Result<Vec<_>>>()?;
+		for table in tables {
+			let quoted = table.replace('"', "\"\"");
+			if table == "kv" {
+				let mut statement = tx.prepare("SELECT key FROM kv")?;
+				let keys = statement
+					.query_map([], |row| row.get::<_, String>(0))?
+					.collect::<rusqlite::Result<Vec<_>>>()?;
+				drop(statement);
+				let mut delete = tx.prepare("DELETE FROM kv WHERE key = ?1")?;
+				for key in keys
+					.iter()
+					.filter(|key| key.as_str() != CANARY_KEY && !kept_keys.contains(&key.as_str()))
+				{
+					delete.execute([key])?;
+				}
+			} else {
+				tx.execute(&format!("DELETE FROM \"{quoted}\""), [])?;
+			}
+		}
+		tx.commit()?;
+		conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE)")?;
+		Ok(())
 	}
 
 	pub fn vacuum_if_over(&self, limit_bytes: u64) -> Result<bool> {

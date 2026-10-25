@@ -220,18 +220,6 @@ fn cached_read_state(stored: &ReadState) -> protocol::ReadState {
 	}
 }
 
-pub(crate) fn clear_cache(store: &Store) {
-	let cleared = store
-		.db
-		.kv_set(READY_KEY, &[])
-		.and_then(|()| store.db.kv_delete(READ_STATE_VERSION_KEY))
-		.and_then(|()| store.db.kv_delete(GUILD_SETTINGS_KEY))
-		.and_then(|()| store.db.replace_read_states(&[]));
-	if let Err(error) = cleared {
-		tracing::warn!(%error, "could not clear the cached session snapshot");
-	}
-}
-
 pub(crate) fn load_cache(store: &Store) -> Option<Ready> {
 	let mut ready = load_ready(store)?;
 	let entries: Vec<protocol::ReadState> = load_read_states(store).iter().map(cached_read_state).collect();
