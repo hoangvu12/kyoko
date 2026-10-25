@@ -46,7 +46,18 @@ const TEXT_REPLACE: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 3] = [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE];
+const ONE_PING_PER_DM: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/one-ping-per-dm/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/one-ping-per-dm/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 4] = [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE, ONE_PING_PER_DM];
 
 pub fn packages() -> Vec<Package> {
 	PACKAGES

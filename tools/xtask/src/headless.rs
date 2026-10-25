@@ -48,6 +48,9 @@ const TYPO_FIXED: &str = "headless typo: the cat";
 const TYPO_EDITED: &str = "headless typo: teh dog";
 const TYPO_EDIT_FIXED: &str = "headless typo: the dog";
 const TYPING_QUIET: Duration = Duration::from_millis(500);
+const ONE_PING_PER_DM: &str = "one-ping-per-dm";
+const PING_TEXT: &str = "headless ping";
+const ALERT_QUIET: Duration = Duration::from_millis(500);
 const BROKEN_HOOK_TEXT: &str = "headless hook fails";
 const BROKEN_MANIFEST: &str = "id = \"headless-broken\"
 name = \"Headless Broken\"
@@ -172,7 +175,13 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		&json!([{ "find": "teh", "replace": "the", "only_if": "headless typo" }]),
 	)
 	.map_err(|error| anyhow::anyhow!("the TextReplace rules were refused: {error}"))?;
-	for id in [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE, BROKEN_PLUGIN] {
+	for id in [
+		CLEAR_URLS,
+		SILENT_TYPING,
+		TEXT_REPLACE,
+		ONE_PING_PER_DM,
+		BROKEN_PLUGIN,
+	] {
 		let declared = host
 			.snapshot()
 			.into_iter()
@@ -270,6 +279,63 @@ impl Harness {
 			.context("sent message vanished from the cache")
 	}
 
+	async fn receive(
+		&self,
+		server: &Server,
+		channel_id: Snowflake,
+		author: u64,
+		content: &str,
+	) -> Result<Snowflake> {
+		let id = server
+			.control()
+			.post_message(channel_id.0, author, content)
+			.map(Snowflake)
+			.context("the mock refused to post a direct message")?;
+		self.until("the direct message to arrive", |state| {
+			state
+				.channel(channel_id)
+				.is_some_and(|channel| channel.last_message_id >= Some(id))
+		})
+		.await?;
+		Ok(id)
+	}
+
+	async fn pings_once(&self, server: &Server) -> Result<()> {
+		let (dm_id, author) =
+			quiet_direct_message(&self.state.read(), server).context("no direct message that can notify")?;
+		self.session.take_alerts();
+		let mut last = None;
+		for step in 0..3 {
+			last = Some(
+				self.receive(server, dm_id, author, &format!("{PING_TEXT} {step}"))
+					.await?,
+			);
+		}
+		tokio::time::sleep(ALERT_QUIET).await;
+		let pinged = self.session.take_alerts().len();
+		ensure!(
+			pinged == 1,
+			"OnePingPerDM let {pinged} of three direct messages notify"
+		);
+		let message_id = last.context("no direct message was posted")?;
+		self.session.send(Command::AckChannel {
+			channel_id: dm_id,
+			message_id,
+		});
+		self.until("the direct message to be read", |state| {
+			state
+				.read_state(dm_id)
+				.is_some_and(|read| read.last_message_id >= Some(message_id))
+		})
+		.await?;
+		self.receive(server, dm_id, author, &format!("{PING_TEXT} after reading"))
+			.await?;
+		self.wait("a notification once the direct message was read", || {
+			!self.session.take_alerts().is_empty()
+		})
+		.await
+	}
+
 	async fn stop(self) -> Result<()> {
 		tokio::task::spawn_blocking(move || self.session.shutdown())
 			.await
@@ -285,6 +351,28 @@ fn first_text_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
 			.find(|channel| channel.kind == ChannelType::GuildText)
 			.map(|channel| (guild.id, channel.id))
 	})
+}
+
+fn quiet_direct_message(state: &State, server: &Server) -> Option<(Snowflake, u64)> {
+	let overridden: Vec<Snowflake> = state
+		.guild_settings(None)
+		.map(|settings| {
+			settings
+				.channel_overrides
+				.iter()
+				.map(|over| over.channel_id)
+				.collect()
+		})
+		.unwrap_or_default();
+	let blocked: Vec<Snowflake> = state.blocked().iter().map(|row| row.user_id).collect();
+	state
+		.private_channels()
+		.filter(|channel| channel.kind == ChannelType::Dm && !overridden.contains(&channel.id))
+		.find_map(|channel| {
+			let author = channel.recipient_ids.first()?;
+			(!blocked.contains(author) && server.fixtures().users.contains_key(&author.0))
+				.then_some((channel.id, author.0))
+		})
 }
 
 fn scratch_dir() -> Result<std::path::PathBuf> {
@@ -490,6 +578,7 @@ async fn scenario(
 			})
 		})
 		.await?;
+	harness.pings_once(server).await?;
 
 	if args.chaos {
 		let session_id = harness.state.read().session().session_id.clone();

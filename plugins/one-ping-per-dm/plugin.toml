@@ -1,0 +1,26 @@
+id = "one-ping-per-dm"
+name = "OnePingPerDM"
+version = "1.0.0"
+api = 1
+description = "Repeated direct messages ping you once, with one notification and one sound, until you read them."
+authors = ["Kyoko"]
+permissions = ["hook:notify", "read:dms", "read:read_state"]
+
+[[settings]]
+key = "channels"
+type = "select"
+label = "Limit"
+description = "Which conversations ping only once until read. Unread counts and badges are not changed."
+default = "all"
+options = [
+	{ value = "all", label = "All direct messages" },
+	{ value = "direct", label = "One-on-one direct messages only" },
+	{ value = "group", label = "Group DMs only" },
+]
+
+[[settings]]
+key = "servers"
+type = "boolean"
+label = "Also limit server channels"
+description = "Mentions and other server notifications also ping once per channel until you read it."
+default = false

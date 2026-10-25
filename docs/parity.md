@@ -330,7 +330,7 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `settings-plugins` | 45 | Default selection, then open settings on Plugins. Oxidcord lists no plugins on a fresh data directory; kyoko lists its bundled ClearURLs, disabled. | yes |
+| `settings-plugins` | 45 | Default selection, then open settings on Plugins. Oxidcord lists no plugins on a fresh data directory; kyoko lists its bundled plugins (ClearURLs, OnePingPerDM, SilentTyping, TextReplace), disabled. | yes |
 
 ### 46 TextReplace
 

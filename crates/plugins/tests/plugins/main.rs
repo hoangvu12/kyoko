@@ -6,6 +6,7 @@ mod clear_urls;
 mod deadlines;
 mod events;
 mod gestures;
+mod one_ping_per_dm;
 mod permissions;
 mod silent_typing;
 mod storage;

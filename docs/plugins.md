@@ -151,7 +151,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `before_send(message)` | `hook:send` | before a typed message is sent, once per send | `{ channel_id, guild_id?, content }` | a string to replace the text, or `nil` | 250 ms |
 | `before_edit(message)` | `hook:edit` | before an edit is sent | `{ channel_id, guild_id?, message_id, content }` | as `before_send` | 250 ms |
 | `allow_typing(channel)` | `hook:typing` | before each typing indicator (at most one per 9 s per channel) | `{ channel_id, guild_id? }` | `false` vetoes; anything else allows | 100 ms |
-| `allow_notification(message)` | `hook:notify` | after kyoko's own notification rules, before the burst limit | `{ id, channel_id, guild_id?, author_id, author_name, content }` | `false` silences; anything else allows | 100 ms |
+| `allow_notification(message)` | `hook:notify` | after kyoko's own notification rules and the burst limit, for each OS notification and its sound about to be shown (never for in-window toasts) | `{ id, channel_id, guild_id?, author_id, author_name, content }` | `false` silences; anything else allows | 100 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting or one of its slot buttons | the key, and `{ source = "settings" }` or `{ source = "slot", slot = "composer.buttons" }` | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
@@ -159,6 +159,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 - Text hooks chain in plugin id order: each sees the previous plugin's output. A replacement that is empty, longer than 4000 characters or equal to the input counts as no change. A rewritten send or edit is recorded as altered by the last plugin that changed it (`State::altered_by`); an edit no plugin changed clears the mark. There is no "cancel" in v1: the spec asks for rewriting only.
 - Vetoes stop at the first plugin that returns `false`.
 - A failing or overrunning hook counts as a strike (below) and the session goes on with the unmodified value; a veto hook that fails allows.
+- `allow_notification` is asked only about alerts the burst limit would show: the session reserves the alert's place first and a veto gives it back, so a plugin that remembers what it allowed is never told about an alert the user did not get. Calls for separate messages may run in either order. Silencing a notification changes nothing else: unread counts, mention badges and the tray badge stay as they are. `guild_id` is filled from state when the gateway leaves it out.
 
 ### Events
 
@@ -166,7 +167,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 
 | `type` | Fields | Scope |
 |---|---|---|
-| `ready` | `user_id` | none |
+| `ready` | `user_id`, after each live READY (a new connection or another account; not a resume) | none |
 | `message_create` | `channel_id`, `guild_id?`, `message` (as `allow_notification`'s) | `read:messages` (+ `read:dms` without `guild_id`) |
 | `message_update` | `id`, `channel_id`, `guild_id?`, `content?` | as above |
 | `message_delete` | `id`, `channel_id`, `guild_id?` | as above |
@@ -189,7 +190,7 @@ Events queue per plugin (at most 256; more are dropped and logged) and are deliv
 | `kyoko.storage.get(key)`, `set(key, value)`, `delete(key)`, `keys()` | `storage` | values are nil, booleans, numbers, text and tables (16 levels deep); setting `nil` deletes |
 | `kyoko.state.current_user()`, `user(id)` | `read:users` | `{ id, username, display_name, bot }` or `nil` |
 | `kyoko.state.guilds()` | `read:guilds` | `{ { id, name } }` |
-| `kyoko.state.channel(id)` | `read:guilds` (+ `read:dms` for DMs) | `{ id, guild_id?, name, type, parent_id? }` or `nil` |
+| `kyoko.state.channel(id)` | `read:guilds` for server channels, `read:dms` for DMs and group DMs (either one to call it) | `{ id, guild_id?, name, type, parent_id? }` or `nil`; `nil` too for a channel the plugin may not read |
 | `kyoko.state.read_state(channel_id)` | `read:read_state` | `{ channel_id, last_message_id?, mention_count }` or `nil` |
 | `kyoko.actions.mark_all_read()`, `mark_guild_read(guild_id)` | `action:mark_read` | nothing; raises if refused |
 | `require("./name")` | | a module file of the same package, loaded once |
@@ -311,6 +312,16 @@ A slot inside the timeline cannot be a zgx contribution, because the Rust timeli
 
 `plugins/silent-typing/` (`hook:typing`, `ui:composer.buttons`, ships disabled). Its `allow_typing` vetoes every typing indicator while the "Hide that I'm typing" setting (`silent`, on by default) is on, so no `POST /channels/{id}/typing` reaches Discord. Its UI half puts a keyboard button in the composer's button row: Lucide's `keyboard-off` in `danger` while silent ("Disable Silent Typing"), `keyboard` otherwise ("Enable Silent Typing"); a click sets `silent` through `plugin.silent-typing.set`. "Show the composer button" (`button`) hides it. The session asks the veto at most once per 9 s per channel, so after switching it off the next indicator goes out within 9 s of the last one it held back.
 
+## OnePingPerDM
+
+`plugins/one-ping-per-dm/` (`hook:notify`, `read:dms`, `read:read_state`, ships disabled). After one notification in a conversation, its `allow_notification` silences the next ones there, both the Windows notification and its sound, until the conversation has been read past the message that notified: you opened it while the window had focus, marked it read, or read it on another device. Read state is the source of truth; the plugin only keeps, in memory, the id of the last message that notified per channel, and clears it when a different account signs in (`ready`). Unread counts, mention badges and the tray badge are untouched.
+
+- "Limit" (`channels`): all direct messages (default), one-on-one DMs only, or group DMs only. Telling them apart reads the channel's type with `kyoko.state.channel`; a channel kyoko does not know counts as neither.
+- "Also limit server channels" (`servers`, off): server notifications (mentions, or every message where a server is set to notify for all) ping once per channel until read, too.
+- A notification held back by the burst limit is never seen by the plugin, so it does not count as the one ping.
+
+Vencord's OnePingPerDM is the behaviour reference (its choice of which DMs count); no code is shared. Vencord also has switches to let mentions and `@everyone` inside DMs through; they are left out, since a mention in a DM is already a DM notification.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -324,6 +335,6 @@ While writing it, run `cargo run -p kyoko -- --mock --plugins-dir plugins` and e
 
 Behaviour tests drive a session against an in-process mockcord with the plugin host as its hooks: `crates/plugins/tests/plugins/` (it reuses the session harness, `crates/session/tests/session/harness.rs`). `support::write_plugin` writes a test plugin into a scratch development folder, `support::start` starts the host and a session, `support::approve` approves what the manifest asks for. Observe behaviour through the session seam: the echoed message text, `State`, and mockcord's recorded traffic (`recording().requests_to(...)`). A handy trick for observing a plugin's internals is a `before_send` that appends what it saw to the message.
 
-What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock) and a failing plugin against the mock.
+What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read) and a failing plugin against the mock.
 
 UI halves are covered headless in `apps/desktop/src/ui/scripts/plugins.rs`, part of the load check: `the_interface_loads_and_builds_every_screen` mounts a probe plugin in every placed slot; `a_plugin_shows_only_in_the_slots_it_was_granted` (its settings value, its action naming only a granted slot); `a_broken_or_overreaching_plugin_interface_leaves_the_shell_building` (a syntax error, an error while loading, an error while building, and reaching for an app value, another plugin's value, the network and an app action, beside a working plugin); `the_silent_typing_button_switches_its_setting_and_unmounts_with_the_plugin` (the real `PluginsView` and host: a click without a gesture does nothing, a click with one switches `silent`, the button follows `button`, disabling unmounts it and enabling mounts it again). The `composer-silent-typing` capture clicks the real button in a window.

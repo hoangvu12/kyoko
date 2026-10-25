@@ -51,7 +51,9 @@ impl SessionHooks for PluginHost {
 	}
 
 	fn allow_notification(&self, message: &Message) -> Result<bool> {
-		Ok(self.allow(Hook::Notify, Call::AllowNotification(MessageView::of(message))))
+		let mut view = MessageView::of(message);
+		view.guild_id = view.guild_id.or_else(|| self.guild_of(message.channel_id));
+		Ok(self.allow(Hook::Notify, Call::AllowNotification(view)))
 	}
 
 	fn on_dispatch(&self, event: &DispatchEvent) -> Result<()> {

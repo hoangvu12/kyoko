@@ -215,8 +215,8 @@ fn rules_of(lab: &Rc<RefCell<Lab>>) -> serde_json::Value {
 
 #[test]
 fn the_rules_editor_adds_edits_and_removes_rows() {
-	let plugins_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
-	let lab = Lab::new("text-replace", &[plugins_dir]);
+	let plugin_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/text-replace");
+	let lab = Lab::new("text-replace", &[plugin_dir]);
 	lab.host.scan();
 	let shown = lab
 		.host

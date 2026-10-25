@@ -53,8 +53,12 @@ pub fn config(root: &Path, limits: Limits, bundled: bool) -> HostConfig {
 }
 
 pub async fn start(name: &'static str, root: PathBuf, limits: Limits, bundled: bool) -> Lab {
+	start_with(Options::new(name), root, limits, bundled).await
+}
+
+pub async fn start_with(options: Options, root: PathBuf, limits: Limits, bundled: bool) -> Lab {
 	let host = PluginHost::new(config(&root, limits, bundled));
-	let running = Running::start_with(Options::new(name).hooks(Arc::new(host.clone()))).await;
+	let running = Running::start_with(options.hooks(Arc::new(host.clone()))).await;
 	host.attach(running.session().state().clone(), running.session().commander());
 	Lab { root, host, running }
 }

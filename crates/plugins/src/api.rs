@@ -237,14 +237,19 @@ fn state_table(lua: &Lua, context: &Rc<Context>) -> mlua::Result<Table> {
 	table.set(
 		"channel",
 		lua.create_function(move |lua, channel_id: String| {
-			require(&shared, "kyoko.state.channel", Permission::Read(Scope::Guilds))?;
-			let channel_id = snowflake(&channel_id)?;
+			let guilds = shared.allows(&Permission::Read(Scope::Guilds));
 			let dms = shared.allows(&Permission::Read(Scope::DirectMessages));
+			if !guilds && !dms {
+				return Err(denied("kyoko.state.channel", &Permission::Read(Scope::Guilds)));
+			}
+			let channel_id = snowflake(&channel_id)?;
 			let found = with_state(&shared, |state| {
 				state
 					.channel(channel_id)
 					.filter(|channel| {
-						dms || channel.guild_id.is_some() || state.channel_guild(channel.id).is_some()
+						let in_guild =
+							channel.guild_id.is_some() || state.channel_guild(channel.id).is_some();
+						if in_guild { guilds } else { dms }
 					})
 					.map(|channel| channel_record(lua, channel))
 					.transpose()
