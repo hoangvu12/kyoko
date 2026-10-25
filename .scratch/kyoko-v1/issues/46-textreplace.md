@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A before-edit hook exists alongside before-send
 - [ ] Rules are configured in the plugin's settings
