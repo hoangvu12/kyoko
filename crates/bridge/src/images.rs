@@ -1,8 +1,11 @@
-use media::cdn::{self, ProxyFormat, ProxySize, Quality};
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+use media::cdn::{self, ProxyFormat, ProxySize, Quality, StickerFormat};
 use media::{ImageRequest, MediaFetcher, Origin, Shape, SizeHint, Variant};
 use protocol::fingerprint::Fingerprint;
-use protocol::{Attachment, Snowflake, User};
+use protocol::{Attachment, EmbedMedia, Snowflake, StickerItem, User};
 use session::Command;
+use url::Url;
 
 const ANIMATED_ATTACHMENT: u64 = 1 << 5;
 const GIF: &str = "image/gif";
@@ -13,7 +16,7 @@ pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> m
 		.user_agent(fingerprint.user_agent())
 		.headers(fingerprint.image_headers());
 	if let Some(port) = loopback_port {
-		builder = builder.allow_loopback_http(port);
+		builder = builder.only_loopback(port);
 	}
 	builder.build()
 }
@@ -143,4 +146,74 @@ pub fn refresh_command(origin: Origin) -> Command {
 		channel_id: Snowflake(origin.channel_id),
 		message_id: Snowflake(origin.message_id),
 	}
+}
+
+pub fn local_media(url: &str, mock_origin: Option<&str>) -> String {
+	let Some(origin) = mock_origin else {
+		return url.to_owned();
+	};
+	let (Ok(parsed), Ok(home)) = (Url::parse(url), Url::parse(origin)) else {
+		return url.to_owned();
+	};
+	if parsed.host_str() == home.host_str() {
+		return url.to_owned();
+	}
+	let mut hasher = DefaultHasher::new();
+	parsed.path().hash(&mut hasher);
+	format!(
+		"{}/media/{:016x}.png",
+		origin.trim_end_matches('/'),
+		hasher.finish()
+	)
+}
+
+fn is_gif_url(url: &str, content_type: Option<&str>) -> bool {
+	content_type == Some(GIF)
+		|| Url::parse(url).is_ok_and(|parsed| parsed.path().to_ascii_lowercase().ends_with(".gif"))
+}
+
+pub fn embed_request(media: &EmbedMedia, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
+	let url = media.proxy_url.as_deref().or(media.url.as_deref())?;
+	let width = cdn::device_pixels(box_points.0, scale);
+	let height = cdn::device_pixels(box_points.1, scale);
+	let url = if cdn::is_media_proxy(url) {
+		let gif = is_gif_url(url, media.content_type.as_deref());
+		cdn::proxy_sized(
+			url,
+			ProxySize {
+				width,
+				height,
+				format: (!gif).then_some(ProxyFormat::Webp),
+				animated: false,
+			},
+		)
+	} else {
+		url.to_owned()
+	};
+	Some(ImageRequest::new(
+		url,
+		Variant::new(SizeHint::new(width, height), Shape::Square),
+	))
+}
+
+pub fn embed_icon_request(url: &str, points: f64, scale: f64) -> ImageRequest {
+	let pixels = cdn::device_pixels(points, scale);
+	ImageRequest::new(url, Variant::new(SizeHint::square(pixels), Shape::Circle))
+}
+
+pub fn sticker_request(sticker: &StickerItem, points: f64, scale: f64) -> Option<ImageRequest> {
+	let format = StickerFormat::from(i64::from(sticker.format_type?));
+	let url = cdn::sticker_url(sticker.id.0, format)?;
+	let pixels = cdn::device_pixels(points, scale);
+	Some(ImageRequest::new(
+		url,
+		Variant::new(SizeHint::square(pixels), Shape::Square),
+	))
+}
+
+pub fn is_video(attachment: &Attachment) -> bool {
+	attachment
+		.content_type
+		.as_deref()
+		.is_some_and(|kind| kind.starts_with("video/"))
 }

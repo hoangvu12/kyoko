@@ -59,6 +59,11 @@ impl MediaFetcherBuilder {
 		self
 	}
 
+	pub fn only_loopback(mut self, port: u16) -> Self {
+		self.hosts.clear();
+		self.allow_loopback_http(port)
+	}
+
 	pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
 		self.user_agent = user_agent.into();
 		self

@@ -6,6 +6,7 @@ use protocol::{Message, MessageType, Snowflake};
 use session::Command;
 use state::{Changes, MessageRow, MessageView, RenderedMessage, State};
 
+use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
 use crate::sidebar::ChannelKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,8 +42,13 @@ pub struct MessageEntry {
 	pub failed: bool,
 	pub deleted: bool,
 	pub bot: bool,
+	pub mine: bool,
 	pub message: Arc<Message>,
 	pub rendered: Option<Arc<RenderedMessage>>,
+	pub body: Arc<Body>,
+	pub names: Arc<Names>,
+	pub reply: Option<ReplyPreview>,
+	pub system: Option<SystemLine>,
 }
 
 impl PartialEq for MessageEntry {
@@ -59,8 +65,13 @@ impl PartialEq for MessageEntry {
 			&& self.failed == other.failed
 			&& self.deleted == other.deleted
 			&& self.bot == other.bot
+			&& self.mine == other.mine
 			&& (Arc::ptr_eq(&self.message, &other.message) || self.message == other.message)
 			&& same_rendered(&self.rendered, &other.rendered)
+			&& (Arc::ptr_eq(&self.body, &other.body) || self.body == other.body)
+			&& self.names == other.names
+			&& self.reply == other.reply
+			&& self.system == other.system
 	}
 }
 
@@ -74,15 +85,19 @@ fn same_rendered(left: &Option<Arc<RenderedMessage>>, right: &Option<Arc<Rendere
 
 impl MessageEntry {
 	pub fn is_plain(&self) -> bool {
-		matches!(
-			self.kind,
-			MessageType::Default
-				| MessageType::Reply
-				| MessageType::ChatInputCommand
-				| MessageType::ContextMenuCommand
-				| MessageType::PollResult
-		)
+		is_plain(self.kind)
 	}
+}
+
+fn is_plain(kind: MessageType) -> bool {
+	matches!(
+		kind,
+		MessageType::Default
+			| MessageType::Reply
+			| MessageType::ChatInputCommand
+			| MessageType::ContextMenuCommand
+			| MessageType::PollResult
+	)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -173,12 +188,15 @@ pub struct OpenChannel {
 	pub channel_id: Snowflake,
 }
 
+type Parsed = (Arc<Message>, Option<Arc<RenderedMessage>>, Arc<Body>);
+
 #[derive(Debug, Default)]
 pub struct Timeline {
 	open: Option<OpenChannel>,
 	rows: Vec<TimelineRow>,
 	detached: bool,
 	pending: Delta,
+	bodies: HashMap<Snowflake, Parsed>,
 }
 
 impl Timeline {
@@ -221,7 +239,8 @@ impl Timeline {
 			return None;
 		}
 		self.open = Some(channel);
-		self.rows = rows(state, channel_id);
+		self.bodies.clear();
+		self.rows = self.project(state, channel);
 		self.detached = detached(state, channel_id);
 		self.record_reset();
 		Some(Command::SelectChannel { guild_id, channel_id })
@@ -230,6 +249,7 @@ impl Timeline {
 	pub fn close(&mut self) -> bool {
 		let was_open = self.open.take().is_some();
 		let had_rows = !std::mem::take(&mut self.rows).is_empty();
+		self.bodies.clear();
 		self.detached = false;
 		if was_open || had_rows {
 			self.record_reset();
@@ -244,14 +264,16 @@ impl Timeline {
 		if state.channel(open.channel_id).is_none() {
 			return self.close();
 		}
+		let guild = open.guild_id.unwrap_or_default();
 		if !changes.messages.contains(open.channel_id)
-			&& !changes.members.contains(open.guild_id.unwrap_or_default())
+			&& !changes.members.contains(guild)
+			&& !changes.channel_lists.contains(guild)
 			&& !changes.current_user
 		{
 			return false;
 		}
 		self.detached = detached(state, open.channel_id);
-		let fresh = rows(state, open.channel_id);
+		let fresh = self.project(state, open);
 		if fresh == self.rows {
 			return false;
 		}
@@ -275,36 +297,64 @@ fn detached(state: &State, channel_id: Snowflake) -> bool {
 		.is_some_and(|cache| cache.is_detached())
 }
 
-fn rows(state: &State, channel_id: Snowflake) -> Vec<TimelineRow> {
-	state
-		.channel_rows(channel_id)
-		.into_iter()
-		.map(|row| match row {
-			MessageRow::Loading => TimelineRow {
-				key: RowKey::Loading,
-				row: Row::Loading,
-			},
-			MessageRow::HistoryStart => TimelineRow {
-				key: RowKey::Start,
-				row: Row::Start,
-			},
-			MessageRow::DaySeparator(day) => TimelineRow {
-				key: RowKey::Day(day),
-				row: Row::Day(day),
-			},
-			MessageRow::UnreadMarker => TimelineRow {
-				key: RowKey::Unread,
-				row: Row::Unread,
-			},
-			MessageRow::Message(view) => {
-				let entry = entry(*view);
-				TimelineRow {
-					key: message_key(&entry),
-					row: Row::Message(Box::new(entry)),
+impl Timeline {
+	fn project(&mut self, state: &State, open: OpenChannel) -> Vec<TimelineRow> {
+		let mut bodies = HashMap::with_capacity(self.bodies.len());
+		let rows = state
+			.channel_rows(open.channel_id)
+			.into_iter()
+			.filter_map(|row| match row {
+				MessageRow::Message(view) => {
+					let body = self.body_of(&view);
+					bodies.insert(
+						view.message.id,
+						(view.message.clone(), view.rendered.clone(), body.clone()),
+					);
+					let entry = entry(state, open.guild_id, *view, body);
+					Some(TimelineRow {
+						key: message_key(&entry),
+						row: Row::Message(Box::new(entry)),
+					})
 				}
+				other => marker_row(other),
+			})
+			.collect();
+		self.bodies = bodies;
+		rows
+	}
+
+	fn body_of(&self, view: &MessageView) -> Arc<Body> {
+		match self.bodies.get(&view.message.id) {
+			Some((message, rendered, body))
+				if Arc::ptr_eq(message, &view.message) && same_rendered(rendered, &view.rendered) =>
+			{
+				body.clone()
 			}
-		})
-		.collect()
+			_ => Arc::new(Body::parse(&view.message, view.rendered.as_deref())),
+		}
+	}
+}
+
+fn marker_row(row: MessageRow) -> Option<TimelineRow> {
+	Some(match row {
+		MessageRow::Loading => TimelineRow {
+			key: RowKey::Loading,
+			row: Row::Loading,
+		},
+		MessageRow::HistoryStart => TimelineRow {
+			key: RowKey::Start,
+			row: Row::Start,
+		},
+		MessageRow::DaySeparator(day) => TimelineRow {
+			key: RowKey::Day(day),
+			row: Row::Day(day),
+		},
+		MessageRow::UnreadMarker => TimelineRow {
+			key: RowKey::Unread,
+			row: Row::Unread,
+		},
+		MessageRow::Message(_) => return None,
+	})
 }
 
 fn message_key(entry: &MessageEntry) -> RowKey {
@@ -314,9 +364,23 @@ fn message_key(entry: &MessageEntry) -> RowKey {
 	}
 }
 
-fn entry(view: MessageView) -> MessageEntry {
+fn entry(state: &State, guild_id: Option<Snowflake>, view: MessageView, body: Arc<Body>) -> MessageEntry {
 	let message = view.message;
+	let names = Names::of(state, guild_id, &message, body.documents());
+	let reply = ReplyPreview::of(state, guild_id, &message);
+	let system = (!is_plain(message.kind)).then(|| {
+		let target = message
+			.mentions
+			.first()
+			.map(|user| person_name(state, guild_id, user))
+			.unwrap_or_default();
+		system_line(message.kind, &view.author_display, &target, &message.content)
+	});
 	MessageEntry {
+		body,
+		names: Arc::new(names),
+		reply,
+		system,
 		id: message.id,
 		author: view.author_display,
 		author_color: view.author_color,
@@ -329,6 +393,7 @@ fn entry(view: MessageView) -> MessageEntry {
 		failed: view.failure.is_some(),
 		deleted: view.deleted.is_some(),
 		bot: message.author.bot == Some(true),
+		mine: state.current_user_id() == Some(message.author.id),
 		rendered: view.rendered,
 		message,
 	}
