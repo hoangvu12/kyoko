@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 (Spike B: live messages, WebP avatar and findings)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] PNG, JPEG, GIF, WebP and animated WebP decode in Rust and reach zgx as host images
 - [ ] A byte-budgeted LRU bounds decoded images. Animations pause offscreen and honour the animation setting
