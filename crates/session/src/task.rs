@@ -119,6 +119,7 @@ pub(crate) enum Internal {
 	},
 	ThemeCatalogChanged,
 	Alert(Alert),
+	AlertVetoed(StdInstant),
 	AccountSwitch(Snowflake),
 	SecretHealth(store::SecretHealth),
 	DeleteProgressed {
@@ -463,6 +464,11 @@ impl Core {
 					identity::save_installation_id(self.rest.identity(), &self.store, &self.runtime, id);
 				}
 				self.apply(Event::Ready(&ready));
+				let event = DispatchEvent::Ready(ready);
+				guarded(&self.hooks, "on_dispatch", |hooks| hooks.on_dispatch(&event));
+				let DispatchEvent::Ready(ready) = event else {
+					return;
+				};
 				self.remember_account();
 				self.lazy_connected();
 				self.persist.submit(Job::Ready(ready));
@@ -653,7 +659,8 @@ impl Core {
 				id: message_id,
 				by: altered_by,
 			}),
-			Internal::Alert(alert) => self.raise_alert(alert),
+			Internal::Alert(alert) => self.push_alert(alert),
+			Internal::AlertVetoed(reserved) => self.release_alert(reserved),
 			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
 				theme_catalog: true,
 				..Changes::default()

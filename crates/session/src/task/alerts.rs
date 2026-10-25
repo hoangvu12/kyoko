@@ -33,8 +33,13 @@ impl Core {
 				message: Arc::new(message.clone()),
 			}
 		};
+		let reserved = Instant::now();
+		if !self.pacing.allow(reserved) {
+			tracing::debug!("a notification was held back by the burst limit");
+			return;
+		}
 		if self.hooks.is_none() {
-			self.raise_alert(alert);
+			self.push_alert(alert);
 			return;
 		}
 		let hooks = self.hooks.clone();
@@ -46,21 +51,23 @@ impl Core {
 			})
 			.await
 			.unwrap_or(true);
-			if allowed {
-				let _ = internal.send(Internal::Alert(alert));
-			}
+			let _ = internal.send(if allowed {
+				Internal::Alert(alert)
+			} else {
+				Internal::AlertVetoed(reserved)
+			});
 		});
 	}
 
-	pub(super) fn raise_alert(&mut self, alert: Alert) {
-		if !self.pacing.allow(Instant::now()) {
-			tracing::debug!("a notification was held back by the burst limit");
-			return;
-		}
+	pub(super) fn push_alert(&mut self, alert: Alert) {
 		self.alerts.push(alert);
 		self.notifier.push(Changes {
 			alerts: true,
 			..Changes::default()
 		});
+	}
+
+	pub(super) fn release_alert(&mut self, reserved: Instant) {
+		self.pacing.release(reserved);
 	}
 }

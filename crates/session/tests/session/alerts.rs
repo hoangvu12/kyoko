@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -331,6 +332,56 @@ async fn a_plugin_hook_can_veto_an_alert() {
 	assert_eq!(
 		scene.only(&running, &seen).await,
 		vec![(AlertKind::DirectMessage, "this one may ring".to_owned())]
+	);
+	running.stop().await;
+}
+
+struct SlowVeto {
+	asked: AtomicUsize,
+}
+
+impl SessionHooks for SlowVeto {
+	fn name(&self) -> &str {
+		"test.slow-veto"
+	}
+
+	fn allow_notification(&self, message: &Message) -> Result<bool> {
+		self.asked.fetch_add(1, Ordering::SeqCst);
+		std::thread::sleep(Duration::from_millis(100));
+		Ok(message.content != QUIET)
+	}
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_hook_hears_only_alerts_the_burst_limit_would_show() {
+	let hook = Arc::new(SlowVeto {
+		asked: AtomicUsize::new(0),
+	});
+	let running = Running::start_with(Options::new("alerts-reserve").hooks(hook.clone())).await;
+	let scene = scene(&running).await;
+	let seen = Seen::new();
+	for _ in 0..3 {
+		scene.post_dm(&running, QUIET).await;
+	}
+	tokio::time::sleep(SETTLE).await;
+	for step in 0..5 {
+		scene.post_dm(&running, &format!("ring {step}")).await;
+	}
+	tokio::time::sleep(SETTLE).await;
+	seen.collect(&running);
+	let mut shown = seen.contents();
+	shown.sort_by(|left, right| left.1.cmp(&right.1));
+	assert_eq!(
+		shown,
+		(0..3)
+			.map(|step| (AlertKind::DirectMessage, format!("ring {step}")))
+			.collect::<Vec<_>>(),
+		"vetoed alerts give their place back"
+	);
+	assert_eq!(
+		hook.asked.load(Ordering::SeqCst),
+		6,
+		"alerts past the burst limit never reach the hook"
 	);
 	running.stop().await;
 }

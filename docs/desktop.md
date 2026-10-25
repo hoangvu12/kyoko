@@ -18,8 +18,10 @@ The session (`crates/session/src/task/alerts.rs`) applies that to every live `ME
 
 - your status is Do Not Disturb (`Command::SetStatus`);
 - the message is in the selected channel while viewing (`Command::SetViewing(true)`, the default, which the desktop keeps in step with window focus);
-- the `allow_notification` hook returns false (run on a blocking worker; a failing hook allows);
-- the burst limit is spent: `SessionConfig::alerts` (`AlertPacing`), three alerts per ten seconds by default.
+- the burst limit is spent: `SessionConfig::alerts` (`AlertPacing`), three alerts per ten seconds by default;
+- the `allow_notification` hook returns false (run on a blocking worker; a failing hook allows).
+
+The burst limit is checked first and reserves a place, so the hook only hears of alerts that would show; a veto gives the place back. Hook calls for separate messages run side by side, so their alerts can reach the queue out of order. The sound plays with the toast, so a vetoed alert is silent too; unread counts, badges and the tray are never affected by the hook.
 
 Accepted alerts queue (at most 16) behind `Session::take_alerts()`, and `Changes::alerts` wakes the UI. The desktop formats them with `bridge::toast_text` (author, `#channel, Guild` or group name; mentions, channels, roles and custom emoji made readable; 200 characters) and posts a toast on a worker thread.
 

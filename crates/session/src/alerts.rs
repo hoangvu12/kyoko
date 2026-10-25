@@ -80,4 +80,10 @@ impl Pacing {
 		self.shown.push_back(now);
 		true
 	}
+
+	pub(crate) fn release(&mut self, at: Instant) {
+		if let Some(index) = self.shown.iter().position(|shown| *shown == at) {
+			self.shown.remove(index);
+		}
+	}
 }

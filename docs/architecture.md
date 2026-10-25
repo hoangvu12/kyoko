@@ -30,8 +30,8 @@ The session has no plugin runtime; `plugins::PluginHost` implements this interfa
 
 - `before_send(channel_id, content)` and `before_edit(channel_id, message_id, content)` may return a `Rewrite` (the replacement text and, optionally, who rewrote it). A rewritten send or edit is shown as altered by the rewrite's `by`, or `name()` without one; an edit sent unchanged clears the mark.
 - `allow_typing(channel_id)` can veto the typing indicator.
-- `allow_notification(message)` filters the session's notification alerts (`docs/desktop.md`). It is also exposed as `Session::should_notify`.
-- `on_dispatch(event)` observes every gateway dispatch after it is applied to state. It runs on the session task, so implementations must return quickly and queue any real work.
+- `allow_notification(message)` filters the session's notification alerts, only those the burst limit would show (`docs/desktop.md`). It is also exposed as `Session::should_notify`.
+- `on_dispatch(event)` observes every gateway dispatch after it is applied to state, a live READY included. It runs on the session task, so implementations must return quickly and queue any real work.
 
 Text hooks run on a blocking worker. Each call is wrapped in `catch_unwind`; an error or panic is logged with the hook name only, never the message content, and the session continues with the unmodified value.
 
