@@ -17,6 +17,7 @@ type NoContent = Result<StatusCode, ApiError>;
 
 const AUDIT_REASON: &str = "x-audit-log-reason";
 const DEFAULT_REACTION_LIMIT: usize = 25;
+const THREAD_SEARCH_LIMIT: usize = 25;
 const PRELOADED_SETTINGS: u32 = 1;
 
 fn audit_reason(headers: &HeaderMap) -> Option<String> {
@@ -233,6 +234,24 @@ pub async fn archived_threads(State(shared): Mock, Path(id): Path<u64>) -> ApiRe
 				.as_ref()
 				.is_some_and(|metadata| metadata.archived)
 	})))
+}
+
+pub async fn search_threads(
+	State(shared): Mock,
+	Path(id): Path<u64>,
+	Query(params): Query<HashMap<String, String>>,
+) -> ApiResult {
+	let archived = params.get("archived").and_then(|value| value.parse().ok());
+	let offset = params
+		.get("offset")
+		.and_then(|value| value.parse().ok())
+		.unwrap_or(0);
+	let limit = params
+		.get("limit")
+		.and_then(|value| value.parse().ok())
+		.unwrap_or(THREAD_SEARCH_LIMIT)
+		.min(THREAD_SEARCH_LIMIT);
+	Ok(Json(shared.thread_search_json(id, archived, offset, limit)))
 }
 
 pub async fn modify_guild(State(shared): Mock, Path(id): Path<u64>, Json(body): Json<Value>) -> ApiResult {

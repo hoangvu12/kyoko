@@ -21,5 +21,6 @@ mod safety;
 mod search;
 mod status;
 mod storage;
+mod threads;
 mod versions;
 mod wire;

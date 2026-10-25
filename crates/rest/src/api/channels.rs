@@ -1,5 +1,5 @@
 use protocol::rest::{AttachmentDescriptor, CreateMessage, EditMessage, MessagesQuery};
-use protocol::{Channel, LenientVec, Message, Snowflake, ThreadMember, User};
+use protocol::{Channel, DecodeError, LenientVec, Message, Snowflake, ThreadMember, User};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -10,6 +10,8 @@ use crate::error::{RestError, Result};
 use crate::request::{Request, UploadFile, encode_component};
 
 const PUBLIC_THREAD: i64 = 11;
+const PINS_PAGE: u8 = 50;
+pub const THREAD_PAGE: u32 = 25;
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchQuery {
@@ -36,6 +38,43 @@ pub struct ThreadList {
 	pub threads: LenientVec<Channel>,
 	pub members: LenientVec<ThreadMember>,
 	pub has_more: bool,
+	pub first_messages: LenientVec<Message>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ThreadSearchReply {
+	Found(ThreadList),
+	Indexing { retry_after: Option<f64> },
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ThreadSearch {
+	pub archived: Option<bool>,
+	pub offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct Pin {
+	message: Message,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct PinList {
+	items: LenientVec<Pin>,
+}
+
+fn thread_pairs(query: &ThreadSearch) -> Vec<(&'static str, String)> {
+	let mut pairs = Vec::new();
+	if let Some(archived) = query.archived {
+		pairs.push(("archived", archived.to_string()));
+	}
+	pairs.push(("sort_by", "last_message_time".to_owned()));
+	pairs.push(("sort_order", "desc".to_owned()));
+	pairs.push(("limit", THREAD_PAGE.to_string()));
+	pairs.push(("tag_setting", "match_some".to_owned()));
+	pairs.push(("offset", query.offset.to_string()));
+	pairs
 }
 
 fn messages_pairs(query: &MessagesQuery) -> Vec<(&'static str, String)> {
@@ -155,18 +194,22 @@ impl RestClient {
 	}
 
 	pub async fn pin_message(&self, channel_id: Snowflake, id: Snowflake) -> Result<()> {
-		self.send_empty(Request::put(format!("/channels/{channel_id}/pins/{id}")))
+		self.send_empty(Request::put(format!("/channels/{channel_id}/messages/pins/{id}")))
 			.await
 	}
 
 	pub async fn unpin_message(&self, channel_id: Snowflake, id: Snowflake) -> Result<()> {
-		self.send_empty(Request::delete(format!("/channels/{channel_id}/pins/{id}")))
-			.await
+		self.send_empty(Request::delete(format!(
+			"/channels/{channel_id}/messages/pins/{id}"
+		)))
+		.await
 	}
 
-	pub async fn pins(&self, channel_id: Snowflake) -> Result<LenientVec<Message>> {
-		self.send(Request::get(format!("/channels/{channel_id}/pins")))
-			.await
+	pub async fn pins(&self, channel_id: Snowflake) -> Result<Vec<Message>> {
+		let request = Request::get(format!("/channels/{channel_id}/messages/pins"))
+			.query(&[("limit", PINS_PAGE.to_string())]);
+		let list: PinList = self.send(request).await?;
+		Ok(list.items.into_vec().into_iter().map(|pin| pin.message).collect())
 	}
 
 	pub async fn trigger_typing(&self, channel_id: Snowflake) -> Result<()> {
@@ -264,25 +307,23 @@ impl RestClient {
 		Ok(SearchReply::Found(value))
 	}
 
-	pub async fn threads_active(&self, guild_id: Snowflake) -> Result<ThreadList> {
-		self.send(Request::get(format!("/guilds/{guild_id}/threads/active")))
-			.await
-	}
-
-	pub async fn threads_archived(
+	pub async fn search_threads(
 		&self,
 		channel_id: Snowflake,
-		before: Option<&str>,
-		limit: Option<u8>,
-	) -> Result<ThreadList> {
-		let mut request = Request::get(format!("/channels/{channel_id}/threads/archived/public"));
-		if let Some(before) = before {
-			request = request.query(&[("before", before.to_owned())]);
+		query: ThreadSearch,
+	) -> Result<ThreadSearchReply> {
+		let request =
+			Request::get(format!("/channels/{channel_id}/threads/search")).query(&thread_pairs(&query));
+		let (status, body) = self.execute_with_status(request).await?;
+		if status == StatusCode::ACCEPTED {
+			let value: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+			return Ok(ThreadSearchReply::Indexing {
+				retry_after: value["retry_after"].as_f64(),
+			});
 		}
-		if let Some(limit) = limit {
-			request = request.query(&[("limit", limit.to_string())]);
-		}
-		self.send(request).await
+		let list = serde_json::from_slice(&body)
+			.map_err(|error| RestError::Decode(DecodeError::new("ThreadList", error)))?;
+		Ok(ThreadSearchReply::Found(list))
 	}
 
 	pub async fn start_thread(
@@ -347,19 +388,9 @@ impl RestClient {
 }
 
 impl RestClient {
-	pub async fn create_forum_post(
-		&self,
-		channel_id: Snowflake,
-		body: Value,
-		files: Vec<UploadFile>,
-	) -> Result<Channel> {
-		let path = format!("/channels/{channel_id}/threads");
-		let request = if files.is_empty() {
-			Request::post(path).json(&body)
-		} else {
-			Request::post(path).multipart(files, &body)
-		};
-		self.send(request).await
+	pub async fn create_forum_post(&self, channel_id: Snowflake, body: Value) -> Result<Channel> {
+		self.send(Request::post(format!("/channels/{channel_id}/threads")).json(&body))
+			.await
 	}
 
 	pub async fn vote_poll(

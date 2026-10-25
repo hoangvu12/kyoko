@@ -860,15 +860,21 @@ impl Core {
 				.open(guild_id, Some(channel_id), Instant::now()),
 			None => self.subscriptions.leave_guilds(),
 		}
-		let (has_messages, has_draft) = {
+		let (has_messages, has_draft, forum) = {
 			let state = self.state.read();
 			(
 				state
 					.messages(channel_id)
 					.is_some_and(|cache| !cache.ordered.is_empty()),
 				state.draft(channel_id).is_some(),
+				state.channel(channel_id).is_some_and(|channel| {
+					matches!(channel.kind, ChannelType::GuildForum | ChannelType::GuildMedia)
+				}),
 			)
 		};
+		if forum {
+			return;
+		}
 		if !has_messages {
 			self.load_initial(channel_id);
 		}

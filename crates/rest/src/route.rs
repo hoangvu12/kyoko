@@ -20,12 +20,13 @@ impl RouteKey {
 	}
 
 	pub fn is_message_send(&self) -> bool {
+		let Some(path) = self.key.strip_prefix("POST /") else {
+			return false;
+		};
 		self.major.starts_with("channels/")
-			&& self
-				.key
-				.strip_prefix("POST /")
-				.and_then(|path| path.strip_suffix("/messages"))
-				== Some(self.major.as_str())
+			&& ["/messages", "/threads", "/messages/{id}/threads"]
+				.iter()
+				.any(|suffix| path.strip_suffix(suffix) == Some(self.major.as_str()))
 	}
 
 	pub fn is_interaction(&self) -> bool {

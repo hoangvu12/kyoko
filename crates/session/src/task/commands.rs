@@ -1,16 +1,22 @@
 use protocol::{CreateMessage, MessageReference, MessageReferenceKind, Permissions, Snowflake, StatusKind};
-use rest::UploadFile;
-use rest::api::image_data_uri;
+use std::time::Duration;
+
+use rest::RestClient;
+use rest::api::{ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
 use serde_json::{Value, json};
 use state::Loaded;
 
 use super::actions::{mute_config, object, some, timestamp};
+use super::outbox::ForumPost;
 use super::{Command, Core};
 
 const PNG: &str = "image/png";
-const DEFAULT_ARCHIVE_MINUTES: u32 = 1440;
+const DEFAULT_ARCHIVE_MINUTES: i64 = 4320;
 const REACTION_PAGE: u8 = 100;
-const ARCHIVED_PAGE: u8 = 50;
+const INDEX_TRIES: usize = 5;
+const INDEX_WAIT_SECONDS: f64 = 2.;
+const INDEX_WAIT_MIN: f64 = 0.3;
+const INDEX_WAIT_MAX: f64 = 15.;
 
 fn sessions_or_empty(result: rest::Result<Value>) -> Value {
 	result.unwrap_or_else(|error| {
@@ -23,22 +29,24 @@ fn png(bytes: &[u8]) -> Value {
 	Value::String(image_data_uri(PNG, bytes))
 }
 
-fn forum_body(name: String, content: String, tags: Vec<Snowflake>, files: &[UploadFile]) -> Value {
-	let attachments: Vec<Value> = files
-		.iter()
-		.enumerate()
-		.map(|(index, file)| json!({ "id": index, "filename": file.name }))
-		.collect();
-	let mut message = json!({ "content": content });
-	if !attachments.is_empty() {
-		message["attachments"] = Value::Array(attachments);
+async fn search_threads(
+	rest: &RestClient,
+	channel_id: Snowflake,
+	query: ThreadSearch,
+) -> rest::Result<ThreadList> {
+	for _ in 0..INDEX_TRIES {
+		match rest.search_threads(channel_id, query).await? {
+			ThreadSearchReply::Found(list) => return Ok(list),
+			ThreadSearchReply::Indexing { retry_after } => {
+				let wait = retry_after
+					.unwrap_or(INDEX_WAIT_SECONDS)
+					.clamp(INDEX_WAIT_MIN, INDEX_WAIT_MAX);
+				tokio::time::sleep(Duration::from_secs_f64(wait)).await;
+			}
+		}
 	}
-	json!({
-		"name": name,
-		"auto_archive_duration": DEFAULT_ARCHIVE_MINUTES,
-		"applied_tags": tags,
-		"message": message,
-	})
+	tracing::warn!("the thread index was still not ready");
+	Ok(ThreadList::default())
 }
 
 impl Core {
@@ -49,7 +57,7 @@ impl Core {
 			| Command::LeaveThread { .. }
 			| Command::ArchiveThread { .. }
 			| Command::LoadArchivedThreads { .. }
-			| Command::LoadActiveThreads { .. }
+			| Command::LoadForumPosts { .. }
 			| Command::CreateForumPost { .. }
 			| Command::LoadPins { .. }
 			| Command::PinMessage { .. }
@@ -140,40 +148,55 @@ impl Core {
 						.map(drop)
 				});
 			}
-			Command::LoadArchivedThreads { channel_id } => {
-				let before = {
+			Command::LoadArchivedThreads { channel_id, more } => {
+				let offset = {
 					let state = self.state.read();
-					state
-						.archived_threads_has_more(channel_id)
-						.then(|| {
-							state
-								.archived_threads(channel_id)
-								.last()
-								.and_then(|thread| thread.thread_metadata.as_ref()?.archive_timestamp)
-								.map(timestamp)
-						})
-						.flatten()
+					if more && !state.archived_threads_has_more(channel_id) {
+						return;
+					}
+					if more {
+						state.archived_threads(channel_id).len() as u32
+					} else {
+						0
+					}
 				};
 				self.spawn_load("archived threads", move |rest| async move {
-					let list = rest
-						.threads_archived(channel_id, before.as_deref(), Some(ARCHIVED_PAGE))
-						.await?;
+					let query = ThreadSearch {
+						archived: Some(true),
+						offset,
+					};
+					let list = search_threads(&rest, channel_id, query).await?;
 					Ok(Loaded::ArchivedThreads {
 						channel_id,
 						threads: list.threads.into_vec(),
 						members: list.members.into_vec(),
 						has_more: list.has_more,
-						append: before.is_some(),
+						append: offset > 0,
 					})
 				});
 			}
-			Command::LoadActiveThreads { guild_id } => {
-				self.spawn_load("active threads", move |rest| async move {
-					let list = rest.threads_active(guild_id).await?;
-					Ok(Loaded::ActiveThreads {
-						guild_id,
+			Command::LoadForumPosts { channel_id, more } => {
+				let offset = {
+					let state = self.state.read();
+					match state.forum_page(channel_id) {
+						Some((_, false)) if more => return,
+						Some((loaded, _)) if more => loaded as u32,
+						_ => 0,
+					}
+				};
+				self.spawn_load("forum posts", move |rest| async move {
+					let query = ThreadSearch {
+						archived: None,
+						offset,
+					};
+					let list = search_threads(&rest, channel_id, query).await?;
+					Ok(Loaded::ForumPosts {
+						channel_id,
 						threads: list.threads.into_vec(),
 						members: list.members.into_vec(),
+						starters: list.first_messages.into_vec(),
+						has_more: list.has_more,
+						append: offset > 0,
 					})
 				});
 			}
@@ -185,9 +208,19 @@ impl Core {
 				files,
 			} => {
 				if self.channel_allows(channel_id, Permissions::SEND_MESSAGES, "Send Messages") {
-					let body = forum_body(name, content, tags, &files);
-					self.spawn_open("create post", move |rest| async move {
-						rest.create_forum_post(channel_id, body, files).await
+					let auto_archive_minutes = self
+						.state
+						.read()
+						.channel(channel_id)
+						.and_then(|forum| forum.default_auto_archive_duration)
+						.unwrap_or(DEFAULT_ARCHIVE_MINUTES);
+					self.post_forum(ForumPost {
+						channel_id,
+						name,
+						content,
+						tags,
+						files,
+						auto_archive_minutes,
 					});
 				}
 			}
@@ -299,10 +332,7 @@ impl Core {
 	pub(super) fn load_pins(&self, channel_id: Snowflake) {
 		self.spawn_load("pins", move |rest| async move {
 			let messages = rest.pins(channel_id).await?;
-			Ok(Loaded::Pins {
-				channel_id,
-				messages: messages.into_vec(),
-			})
+			Ok(Loaded::Pins { channel_id, messages })
 		});
 	}
 

@@ -55,8 +55,11 @@ fn forum_post(thread: &Channel) -> ForumPost {
 
 impl State {
 	pub fn forum_starter(&self, post_id: Snowflake) -> Option<&Arc<Message>> {
-		let cache = self.messages.get(&post_id)?;
-		cache.by_id.get(&post_id).or_else(|| cache.ordered.first())
+		let cached = self
+			.messages
+			.get(&post_id)
+			.and_then(|cache| cache.by_id.get(&post_id));
+		cached.or_else(|| self.lazy.starters.get(&post_id))
 	}
 
 	pub fn forum_posts(&self, channel_id: Snowflake) -> Vec<ForumPost> {

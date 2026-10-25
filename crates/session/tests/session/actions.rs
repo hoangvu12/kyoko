@@ -105,7 +105,7 @@ async fn pinning_and_unpinning_reach_the_channel_and_echo_back() {
 		})
 		.await;
 	let recording = running.mock().recording();
-	let route = format!("/channels/{channel_id}/pins/{message_id}");
+	let route = format!("/channels/{channel_id}/messages/pins/{message_id}");
 	assert_eq!(count(&recording, "PUT", &route), 1, "one pin request");
 	assert_eq!(count(&recording, "DELETE", &route), 1, "one unpin request");
 	running.stop().await;
@@ -153,7 +153,7 @@ async fn pins_and_new_reactions_without_permission_never_reach_rest() {
 		})
 		.await;
 	let recording = running.mock().recording();
-	assert_eq!(count(&recording, "PUT", "/channels/*/pins/*"), 0);
+	assert_eq!(count(&recording, "PUT", "/channels/*/messages/pins/*"), 0);
 	assert_eq!(
 		count(&recording, "PUT", "/channels/*/messages/*/reactions/*/@me"),
 		0

@@ -28,10 +28,13 @@ pub enum Loaded {
 		has_more: bool,
 		append: bool,
 	},
-	ActiveThreads {
-		guild_id: Snowflake,
+	ForumPosts {
+		channel_id: Snowflake,
 		threads: Vec<Channel>,
 		members: Vec<ThreadMember>,
+		starters: Vec<Message>,
+		has_more: bool,
+		append: bool,
 	},
 	Profile {
 		user_id: Snowflake,
@@ -188,9 +191,17 @@ pub(crate) struct ArchivedThreads {
 }
 
 #[derive(Debug, Default)]
+pub(crate) struct ForumPage {
+	pub(crate) loaded: usize,
+	pub(crate) has_more: bool,
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct Lazy {
 	pub(crate) pins: HashMap<Snowflake, Vec<Arc<Message>>>,
 	pub(crate) archived: HashMap<Snowflake, ArchivedThreads>,
+	pub(crate) forums: HashMap<Snowflake, ForumPage>,
+	pub(crate) starters: HashMap<Snowflake, Arc<Message>>,
 	pub(crate) profiles: Recent<Snowflake, UserProfile>,
 	pub(crate) invites_created: HashMap<Snowflake, InviteInfo>,
 	pub(crate) invite_previews: HashMap<String, InvitePreview>,
@@ -422,13 +433,33 @@ impl State {
 				entry.has_more = *has_more;
 				changes.loaded.insert(*channel_id);
 			}
-			Loaded::ActiveThreads {
-				guild_id,
+			Loaded::ForumPosts {
+				channel_id,
 				threads,
 				members,
+				starters,
+				has_more,
+				append,
 			} => {
-				self.store_threads(Some(*guild_id), threads, members, &mut changes);
-				changes.loaded.insert(*guild_id);
+				let guild_id = self.channel_guild(*channel_id);
+				let ids = self.store_threads(guild_id, threads, members, &mut changes);
+				if !*append {
+					self.lazy.starters.clear();
+				}
+				for starter in starters {
+					self.ingest_message_people(guild_id, starter);
+					self.lazy
+						.starters
+						.insert(starter.channel_id, Arc::new(starter.clone()));
+				}
+				let page = self.lazy.forums.entry(*channel_id).or_default();
+				page.loaded = if *append {
+					page.loaded + ids.len()
+				} else {
+					ids.len()
+				};
+				page.has_more = *has_more;
+				changes.loaded.insert(*channel_id);
 			}
 			Loaded::Profile { user_id, raw } => {
 				if let Some(profile) = self.parse_profile(raw) {
@@ -668,6 +699,13 @@ impl State {
 			return Vec::new();
 		};
 		archived.ids.iter().filter_map(|id| self.channel(*id)).collect()
+	}
+
+	pub fn forum_page(&self, channel_id: Snowflake) -> Option<(usize, bool)> {
+		self.lazy
+			.forums
+			.get(&channel_id)
+			.map(|page| (page.loaded, page.has_more))
 	}
 
 	pub fn archived_threads_has_more(&self, channel_id: Snowflake) -> bool {

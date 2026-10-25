@@ -1008,6 +1008,54 @@ impl Shared {
 		Ok(())
 	}
 
+	pub fn thread_search_json(
+		&self,
+		parent_id: u64,
+		archived: Option<bool>,
+		offset: usize,
+		limit: usize,
+	) -> Value {
+		let store = self.store.lock();
+		let mut threads: Vec<&Channel> = store
+			.channels
+			.values()
+			.filter(|channel| is_thread(channel.kind) && channel.parent_id.map(|id| id.0) == Some(parent_id))
+			.filter(|channel| {
+				let closed = channel
+					.thread_metadata
+					.as_ref()
+					.is_some_and(|metadata| metadata.archived);
+				archived.is_none_or(|wanted| wanted == closed)
+			})
+			.collect();
+		threads.sort_by_key(|channel| std::cmp::Reverse(channel.last_message_id.unwrap_or(channel.id)));
+		let total = threads.len();
+		let page: Vec<&Channel> = threads.into_iter().skip(offset).take(limit).collect();
+		let members: Vec<Value> = page
+			.iter()
+			.filter(|thread| store.joined_threads.contains(&thread.id.0))
+			.map(|thread| {
+				json!({
+					"id": thread.id.to_string(),
+					"user_id": CURRENT_USER_ID.to_string(),
+					"join_timestamp": now_iso(),
+					"flags": 0,
+				})
+			})
+			.collect();
+		let first_messages: Vec<Value> = page
+			.iter()
+			.filter_map(|thread| store.messages.get(&thread.id.0)?.values().next().cloned())
+			.collect();
+		json!({
+			"threads": page.iter().map(|thread| store.thread_json(thread)).collect::<Vec<_>>(),
+			"members": members,
+			"has_more": offset + page.len() < total,
+			"total_results": total,
+			"first_messages": first_messages,
+		})
+	}
+
 	pub fn threads_json(&self, filter: impl Fn(&Channel) -> bool) -> Value {
 		let store = self.store.lock();
 		let mut threads: Vec<&Channel> = store

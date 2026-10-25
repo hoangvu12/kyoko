@@ -237,6 +237,24 @@ pub async fn pins(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> Api
 	Ok(Json(Value::Array(pinned)))
 }
 
+pub async fn message_pins(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
+	let store = shared.store.lock();
+	require_channel(&store, id)?;
+	let items: Vec<Value> = store
+		.messages
+		.get(&id)
+		.map(|messages| {
+			messages
+				.values()
+				.rev()
+				.filter(|message| message["pinned"].as_bool() == Some(true))
+				.map(|message| json!({ "pinned_at": message["timestamp"], "message": message }))
+				.collect()
+		})
+		.unwrap_or_default();
+	Ok(Json(json!({ "items": items, "has_more": false })))
+}
+
 pub async fn typing(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> Result<StatusCode, ApiError> {
 	shared.typing(id, CURRENT_USER_ID)?;
 	Ok(StatusCode::NO_CONTENT)
@@ -410,7 +428,11 @@ pub async fn create_thread(
 ) -> ApiResult {
 	let (body, files) = read_body(request).await?;
 	let starter = match body.get("message") {
-		Some(message) => Some(draft_from_json(message.clone(), files)?),
+		Some(message) => {
+			let mut draft = draft_from_json(message.clone(), files)?;
+			super::interactions::claim_uploads(&shared, &mut draft)?;
+			Some(draft)
+		}
 		None => None,
 	};
 	shared

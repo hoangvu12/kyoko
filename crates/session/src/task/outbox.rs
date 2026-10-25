@@ -1,13 +1,15 @@
 use std::collections::VecDeque;
 
 use protocol::rest::{AllowedMentions, AttachmentDescriptor};
-use protocol::{CreateMessage, Message, MessageReference, Nonce, Snowflake, StickerItem};
+use protocol::{Channel, CreateMessage, Message, MessageReference, Nonce, Snowflake, StickerItem};
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
+use serde_json::{Value, json};
 use state::{LocalEvent, MAX_ATTACHMENTS, SendFailure};
 
 use crate::hooks::{Hooks, Rewrite, guarded_blocking};
 
+use super::actions::failure_reason;
 use super::{Core, Internal, failures};
 
 const KEPT_FAILURES: usize = 16;
@@ -21,6 +23,16 @@ pub(crate) struct Outgoing {
 	pub(crate) ping_reply: bool,
 	pub(crate) files: Vec<UploadFile>,
 	pub(crate) stickers: Vec<StickerItem>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ForumPost {
+	pub(crate) channel_id: Snowflake,
+	pub(crate) name: String,
+	pub(crate) content: String,
+	pub(crate) tags: Vec<Snowflake>,
+	pub(crate) files: Vec<UploadFile>,
+	pub(crate) auto_archive_minutes: i64,
 }
 
 #[derive(Default)]
@@ -68,12 +80,11 @@ fn create_body(nonce: &Nonce, outgoing: &Outgoing) -> CreateMessage {
 	}
 }
 
-async fn upload_and_send(
+async fn uploaded(
 	rest: &RestClient,
-	mut body: CreateMessage,
 	files: &[UploadFile],
 	channel_id: Snowflake,
-) -> Result<Message, RestError> {
+) -> Result<Vec<AttachmentDescriptor>, RestError> {
 	let requests: Vec<UploadSlotRequest> = files
 		.iter()
 		.enumerate()
@@ -99,8 +110,51 @@ async fn upload_and_send(
 			..AttachmentDescriptor::default()
 		});
 	}
-	body.attachments = attachments;
+	Ok(attachments)
+}
+
+async fn upload_and_send(
+	rest: &RestClient,
+	mut body: CreateMessage,
+	files: &[UploadFile],
+	channel_id: Snowflake,
+) -> Result<Message, RestError> {
+	body.attachments = uploaded(rest, files, channel_id).await?;
 	rest.create_message(channel_id, body).await
+}
+
+fn post_body(post: &ForumPost, content: String, attachments: Vec<AttachmentDescriptor>) -> Value {
+	let mut message = json!({ "content": content });
+	if !attachments.is_empty() {
+		message["attachments"] = json!(attachments);
+	}
+	json!({
+		"name": post.name,
+		"auto_archive_duration": post.auto_archive_minutes,
+		"applied_tags": post.tags,
+		"message": message,
+	})
+}
+
+async fn create_post(rest: &RestClient, hooks: &Hooks, post: ForumPost) -> Result<Channel, RestError> {
+	let channel_id = post.channel_id;
+	let original = post.content.clone();
+	let content = match hooks {
+		Some(_) => guarded_blocking(hooks, "before_send", move |hooks| {
+			hooks.before_send(channel_id, &original)
+		})
+		.await
+		.flatten()
+		.map_or_else(|| post.content.clone(), |rewrite| rewrite.content),
+		None => post.content.clone(),
+	};
+	let attachments = if post.files.is_empty() {
+		Vec::new()
+	} else {
+		uploaded(rest, &post.files, channel_id).await?
+	};
+	rest.create_forum_post(channel_id, post_body(&post, content, attachments))
+		.await
 }
 
 pub(crate) fn too_large(files: &[UploadFile], limit: u64) -> Option<String> {
@@ -204,6 +258,33 @@ impl Core {
 				tracing::warn!(%error, "message was not sent");
 				let failure = failures::send_failure(&error);
 				let _ = internal.send(Internal::SendFailed(nonce, failure, Box::new(outgoing)));
+			}
+		});
+	}
+
+	pub(super) fn post_forum(&mut self, post: ForumPost) {
+		if post.name.trim().is_empty() || (post.content.trim().is_empty() && post.files.is_empty()) {
+			self.reject("A post needs a title and a message");
+			return;
+		}
+		let limit = self.state.read().upload_limit(post.channel_id);
+		if let Some(reason) = too_large(&post.files, limit) {
+			self.reject(reason);
+			return;
+		}
+		self.remember_message_emoji(&post.content);
+		let rest = self.rest.clone();
+		let hooks = self.hooks.clone();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			match create_post(&rest, &hooks, post).await {
+				Ok(thread) => {
+					let _ = internal.send(Internal::ThreadOpened(Box::new(thread)));
+				}
+				Err(error) => {
+					tracing::warn!(%error, "forum post was not created");
+					let _ = internal.send(Internal::Rejected(failure_reason("Create post", &error)));
+				}
 			}
 		});
 	}

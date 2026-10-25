@@ -150,9 +150,11 @@ pub enum Command {
 	},
 	LoadArchivedThreads {
 		channel_id: Snowflake,
+		more: bool,
 	},
-	LoadActiveThreads {
-		guild_id: Snowflake,
+	LoadForumPosts {
+		channel_id: Snowflake,
+		more: bool,
 	},
 	CreateForumPost {
 		channel_id: Snowflake,

@@ -123,6 +123,11 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			get(channels::list_messages).post(channels::create_message),
 		)
 		.route("/channels/{id}/messages/search", get(channels::search_messages))
+		.route("/channels/{id}/messages/pins", get(channels::message_pins))
+		.route(
+			"/channels/{id}/messages/pins/{mid}",
+			put(admin::pin).delete(admin::unpin),
+		)
 		.route("/channels/{id}/messages/bulk-delete", post(admin::bulk_delete))
 		.route(
 			"/channels/{id}/messages/{mid}",
@@ -178,6 +183,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/channels/{id}/call/ring", post(channels::call_signal))
 		.route("/channels/{id}/call/stop-ringing", post(channels::call_signal))
 		.route("/channels/{id}/threads", post(channels::create_thread))
+		.route("/channels/{id}/threads/search", get(admin::search_threads))
 		.route(
 			"/channels/{id}/threads/archived/public",
 			get(admin::archived_threads),
