@@ -195,6 +195,7 @@ async fn the_tree_follows_categories_positions_and_threads() {
 	assert_eq!(named(sidebar, "announcements").icon, "megaphone");
 	assert_eq!(named(sidebar, "help-forum").icon, "forum");
 	assert!(!named(sidebar, "help-forum").kind.opens_timeline());
+	assert!(named(sidebar, "help-forum").kind.opens());
 	assert!(named(sidebar, "Lounge").kind.opens_timeline());
 	running.stop().await;
 }

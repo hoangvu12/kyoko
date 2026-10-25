@@ -19,6 +19,7 @@ mod sidebar;
 mod sign_in;
 mod sticker_picker;
 mod switcher;
+mod threads;
 mod timeline;
 
 pub use actions::{
@@ -86,6 +87,12 @@ pub use sticker_picker::{
 pub use switcher::{
 	Leading, MAX_RECENT, MAX_RESULTS, QuickSwitcher, RECENT_TARGETS, RecentTargets, Shown, SwitcherCategory,
 	SwitcherEntry, SwitcherTarget, fuzzy_score, switcher_entries,
+};
+pub use threads::{
+	ARCHIVE_CHOICES, DEFAULT_ARCHIVE_CHOICE, FORUM_EXCERPT, ForumCard, ForumSort, NewPostForm, PIN_SNIPPET,
+	PinEntry, THREAD_NAME_LIMIT, TagChip, ThreadEntry, ThreadHeader, ThreadTab, can_create_threads,
+	default_sort, forum_cards, forum_tags, is_forum, is_thread, messages_label, new_post_form, pin_entries,
+	replies_label, starter_preview, thread_header, thread_list, thread_parent, trimmed_name,
 };
 pub use timeline::{
 	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, detached_entry,

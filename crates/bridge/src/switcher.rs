@@ -275,10 +275,7 @@ impl QuickSwitcher {
 }
 
 fn opens(kind: ChannelType) -> bool {
-	!matches!(
-		kind,
-		ChannelType::GuildForum | ChannelType::GuildMedia | ChannelType::GuildCategory
-	)
+	kind != ChannelType::GuildCategory
 }
 
 pub fn switcher_entries(state: &State) -> Vec<SwitcherEntry> {

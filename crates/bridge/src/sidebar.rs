@@ -49,6 +49,10 @@ impl ChannelKind {
 			Self::Text | Self::Announcement | Self::Voice | Self::Stage | Self::Thread
 		)
 	}
+
+	pub fn opens(self) -> bool {
+		self.opens_timeline() || self == Self::Forum
+	}
 }
 
 pub fn channel_icon(kind: ChannelType) -> &'static str {

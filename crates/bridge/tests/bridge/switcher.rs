@@ -2,7 +2,7 @@ use bridge::{
 	Leading, MAX_RESULTS, QuickSwitcher, RecentTargets, SwitcherCategory, SwitcherEntry, SwitcherTarget,
 	fuzzy_score, switcher_entries,
 };
-use protocol::{ChannelType, Snowflake};
+use protocol::Snowflake;
 
 use crate::harness::Running;
 
@@ -222,9 +222,7 @@ async fn every_server_channel_and_conversation_can_be_reached_by_name() {
 							channel_id: row.id,
 						}
 				});
-				let reachable =
-					!row.locked && !matches!(row.kind, ChannelType::GuildForum | ChannelType::GuildMedia);
-				assert_eq!(listed, reachable, "{} ({:?})", row.name, row.kind);
+				assert_eq!(listed, !row.locked, "{} ({:?})", row.name, row.kind);
 			}
 		}
 		for row in state.dm_rows() {

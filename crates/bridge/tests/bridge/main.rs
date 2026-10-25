@@ -15,4 +15,5 @@ mod settings;
 mod sidebar;
 mod sign_in;
 mod switcher;
+mod threads;
 mod timeline;
