@@ -19,6 +19,8 @@ pub enum Opening {
 pub enum Screen {
 	FirstChannel,
 	RailFolders,
+	Composer,
+	ComposerReply,
 	LoginTos,
 	LoginToken,
 	SidebarCollapsed,
@@ -33,6 +35,8 @@ impl Screen {
 		match name {
 			"app-frame" | "server-rail" | "channel-sidebar" | "timeline" => Some(Screen::FirstChannel),
 			"server-rail-folder" => Some(Screen::RailFolders),
+			"composer" => Some(Screen::Composer),
+			"composer-reply" => Some(Screen::ComposerReply),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
@@ -51,7 +55,9 @@ impl Screen {
 			| Screen::NewestImage
 			| Screen::Showcase(_)
 			| Screen::DmSidebar
-			| Screen::DmGroup => Some(Opening::First),
+			| Screen::DmGroup
+			| Screen::Composer
+			| Screen::ComposerReply => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

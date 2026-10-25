@@ -139,7 +139,16 @@ impl TimelineView {
 	}
 
 	pub fn resize(&self, width: f32, height: f32) {
+		let (_, viewport) = self.viewport();
+		let before = self.size.with_untracked(|size| size.1);
+		let following = self.runtime.untracked(|| {
+			let offset = self.offset.with_untracked(|offset| *offset);
+			scroll::at_bottom(&Measured(&self.heights), offset, viewport)
+		});
 		self.size.set((width, height));
+		if following && height != before {
+			self.offset.set(f32::MAX);
+		}
 	}
 
 	pub fn set_scale(&self, scale: f64) {

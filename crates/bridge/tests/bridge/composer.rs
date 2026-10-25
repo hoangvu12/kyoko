@@ -19,7 +19,6 @@ async fn opened(name: &str) -> (Running, Composer, Snowflake) {
 		.view
 		.sidebar
 		.channels()
-		.iter()
 		.find(|channel| channel.kind == ChannelKind::Text)
 		.map(|channel| channel.id)
 		.expect("a text channel");

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::path::PathBuf;
 
 use arboard::{Clipboard, ImageData};
 
@@ -26,6 +27,10 @@ pub fn read_image() -> Result<Option<RgbaImage>> {
 		height: image.height,
 		bytes: image.bytes.into_owned(),
 	}))
+}
+
+pub fn read_files() -> Result<Vec<PathBuf>> {
+	Ok(missing_as_none(Clipboard::new()?.get().file_list())?.unwrap_or_default())
 }
 
 pub fn write_image(image: &RgbaImage) -> Result<()> {

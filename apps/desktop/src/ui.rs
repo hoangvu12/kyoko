@@ -1,4 +1,5 @@
 mod home;
+mod composer;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -121,6 +122,8 @@ pub fn run(
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			cx.tasks.spawn(link.clone().follow_sign_in());
+			cx.tasks.spawn(link.clone().follow_composer_files());
+			cx.tasks.spawn(link.clone().tick_composer());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -138,6 +141,8 @@ pub fn run(
 				.then(|| Integration::install(cx, &host, &link, desktop));
 			let slot = link.window.slot.clone();
 			let transcript = link.timeline_view.view();
+			let dropped = Rc::downgrade(&link);
+			let hovered = Rc::downgrade(&link);
 			cx.on_closed(move || {
 				frame::wake_until_loop_ends();
 				if let Some(integration) = integration {
@@ -151,7 +156,24 @@ pub fn run(
 					.w_full()
 					.h_full()
 					.child(host.view())
-					.child(timeline_slot(slot, transcript)),
+					.child(timeline_slot(slot, transcript))
+					.on_event(move |event| {
+						let hovering = match event.event {
+							zgx::input::InputEvent::FileHover { .. } => true,
+							zgx::input::InputEvent::FileHoverCancelled
+							| zgx::input::InputEvent::FilesDrop { .. }
+							| zgx::input::InputEvent::FilesDropRejected { .. } => false,
+							_ => return,
+						};
+						if let Some(link) = hovered.upgrade() {
+							link.files_hovering(hovering);
+						}
+					})
+					.on_files_drop(move |paths, _| {
+						if let Some(link) = dropped.upgrade() {
+							link.files_dropped(paths);
+						}
+					}),
 			);
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
@@ -224,6 +246,7 @@ pub(crate) struct Link {
 	reported_slot: Cell<Slot>,
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
+	composer: composer::ComposerView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -262,6 +285,7 @@ impl Link {
 				store: messages.store,
 			},
 		);
+		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -281,6 +305,7 @@ impl Link {
 			reported_slot: Cell::new(Slot::default()),
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
+			composer,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -300,6 +325,7 @@ impl Link {
 		Link::install_sign_in(host, &link);
 		sidebar::install_actions(host, &link);
 		dm_sidebar::install_actions(host, &link);
+		Link::install_composer(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -516,6 +542,12 @@ impl Link {
 				self.drive_home(capture.screen);
 				self.until_settled(&capture, true).await;
 			}
+			capture::Screen::Composer | capture::Screen::ComposerReply => {
+				self.drive_composer(&capture.screen);
+				while !self.composer_settled(&capture.screen) && started.elapsed() < capture::LIMIT {
+					zgx::timer::sleep(capture::POLL).await;
+				}
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -655,6 +687,7 @@ impl Link {
 			if dms {
 				self.publish_dms(&state);
 			}
+			self.composer_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -806,10 +839,12 @@ impl Link {
 			);
 			self.timeline_view.apply(&timeline, &delta, &name);
 		}
+		self.composer_apply(state, &Changes::default());
 	}
 
 	fn refresh_visible(&self) {
 		let mut names: Vec<String> = self.luau_visible.borrow().clone();
+		names.extend(self.composer.images());
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
 		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());

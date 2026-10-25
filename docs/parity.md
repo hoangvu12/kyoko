@@ -114,8 +114,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `composer` | 27 | Default selection, then type a one-line draft into the composer. | no |
-| `composer-reply` | 27 | Default selection, then reply to the newest message from someone else. | no |
+| `composer` | 27 | Default selection, then type a one-line draft into the composer. | yes |
+| `composer-reply` | 27 | Default selection, then reply to the newest message from someone else. | yes |
 
 ### 28 Message actions and context menus
 

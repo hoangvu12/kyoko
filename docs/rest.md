@@ -146,4 +146,18 @@ A failed message send stays pending with `PendingMessage::failure` (and `Message
 - `Network`
 - `Other(status)`
 
-The session never re-sends a failed message on its own.
+The session never re-sends a failed message on its own. It keeps the last 16 failed sends (text, reply, ping choice and files) so the user can ask for them again: `Command::RetryMessage { channel_id, nonce }` drops the failed pending message and sends a new one (the lock check runs again), `Command::DiscardMessage { channel_id, nonce }` drops it. The composer shows the reason with Retry and Delete (`bridge::failure_text`); a captcha says to finish in the official client.
+
+## Sending, replies and uploads
+
+`Command::SendMessage { channel_id, content, reply_to, ping_reply, files }` sends what the user wrote. A reply carries `message_reference` with `fail_if_not_exists: false`. With the ping turned off it also carries `allowed_mentions: {"parse": ["users", "roles", "everyone"], "replied_user": false}`, as the web client sends; with it on, `allowed_mentions` is left out. A send resets the typing throttle for the channel, so the next keystroke posts typing again.
+
+Files go the web client's way: `POST /channels/{id}/attachments` with `{"files": [{id, filename, file_size, is_clip}]}` returns an upload slot per file, each file is `PUT` to its `upload_url` (`RestClient::upload`, a separate HTTP client that never sends the token, cookies or the super properties, and only to https or loopback), then the message is posted as JSON with `attachments: [{id, filename, uploaded_filename}]`. A file over `State::upload_limit(channel)` (10 MB, 50 MB for Nitro Basic or Classic, 500 MB for Nitro, or the server's boost level: 50 MB at level 2, 100 MB at level 3), or more than 10 files, is refused with `CommandRejected` before any request. `State::message_limit()` is 2000 characters, 4000 with Nitro.
+
+Edits that fail publish `CommandRejected` ("Edit: ...").
+
+## Application commands
+
+`Command::LoadApplicationCommands { channel_id }` fetches the command index the web client uses: `GET /guilds/{id}/application-command-index` in a server, `GET /channels/{id}/application-command-index` in a DM, merged with `GET /users/@me/application-command-index` (user-installed apps). It is fetched once per server or DM per session (again after 60 s if it failed) and kept as `State::command_index(channel_id)` (`Changes::commands`). The composer asks for it when the user types `/` at the start of a message.
+
+`Command::RunApplicationCommand { channel_id, command_id, options }` posts `POST /interactions` as `multipart/form-data` with a `payload_json` part: `type: 2`, `application_id`, `guild_id` (in a server), `channel_id`, the gateway `session_id`, a fresh `nonce`, `analytics_location: "slash_ui"` and `data` (`version`, `id`, `name`, `type: 1`, `options`, `application_command` as the index gave it, `attachments: []`). Interactions are paced like sends and a 429 is not retried. A REST failure, or an `INTERACTION_FAILURE` for the nonce, publishes `CommandRejected`. Only chat-input commands the user typed and submitted run; option autocomplete (interaction type 4) and file options are not supported yet. Locked channels hold commands as they hold sends.

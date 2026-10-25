@@ -99,4 +99,65 @@ function M.sign_out()
 	return ui.action("login.sign_out")
 end
 
+function M.composer_changed(text: string, caret: number)
+	ui.call_sync("composer.changed", { text = text, caret = caret })
+end
+
+function M.composer_key(event: any, text: string): boolean
+	return ui.call_sync("composer.key", {
+		key = event.key,
+		shift = event.shift,
+		cmd = event.cmd,
+		text = text,
+	}) == true
+end
+
+function M.composer_choose(index: number, text: string)
+	ui.invoke("composer.choose", { index = index, text = text })
+end
+
+function M.composer_add_files(paths: { string })
+	ui.invoke("composer.add_files", paths)
+end
+
+function M.composer_remove_file(id: string)
+	ui.invoke("composer.remove_file", id)
+end
+
+function M.composer_cancel_reply()
+	ui.invoke("composer.cancel_reply")
+end
+
+function M.composer_toggle_ping()
+	ui.invoke("composer.toggle_ping")
+end
+
+function M.composer_cancel_edit()
+	ui.invoke("composer.cancel_edit")
+end
+
+function M.composer_confirm()
+	ui.invoke("composer.confirm")
+end
+
+function M.composer_retry(nonce: string)
+	ui.invoke("composer.retry", nonce)
+end
+
+function M.composer_discard(nonce: string)
+	ui.invoke("composer.discard", nonce)
+end
+
+function M.composer_dismiss()
+	ui.invoke("composer.dismiss")
+end
+
+function M.composer_start_reply(message_id: string)
+	ui.invoke("composer.start_reply", message_id)
+end
+
+function M.composer_start_edit(message_id: string)
+	ui.invoke("composer.start_edit", message_id)
+end
+
 return M

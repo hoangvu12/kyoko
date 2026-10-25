@@ -97,17 +97,6 @@ pub fn failure_text(failure: &SendFailure) -> String {
 	}
 }
 
-pub fn file_size(bytes: u64) -> String {
-	let bytes = bytes as f64;
-	if bytes >= MIB {
-		format!("{:.2} MB", bytes / MIB)
-	} else if bytes >= 1024.0 {
-		format!("{:.2} KB", bytes / 1024.0)
-	} else {
-		format!("{bytes} bytes")
-	}
-}
-
 impl Composer {
 	pub fn channel(&self) -> Option<Snowflake> {
 		self.channel_id
@@ -177,6 +166,19 @@ impl Composer {
 		Some((draft, caret))
 	}
 
+	pub fn restored(&mut self, state: &State, text: &str, caret: usize) {
+		self.update_query(state, text, caret);
+	}
+
+	fn update_query(&mut self, state: &State, text: &str, caret: usize) {
+		self.query = query_at(text, caret);
+		self.selected = 0;
+		self.suggestions = match (&self.query, self.channel_id) {
+			(Some(query), Some(channel_id)) => suggestions(state, self.guild_id, channel_id, query),
+			_ => Vec::new(),
+		};
+	}
+
 	pub fn changed(&mut self, state: &State, text: &str, caret: usize) -> Vec<Command> {
 		self.dirty = true;
 		let Some(channel_id) = self.channel_id else {
@@ -186,12 +188,7 @@ impl Composer {
 		if !text.is_empty() && self.editing.is_none() {
 			commands.push(Command::Typing { channel_id });
 		}
-		self.query = query_at(text, caret);
-		self.selected = 0;
-		self.suggestions = match &self.query {
-			Some(query) => suggestions(state, self.guild_id, channel_id, query),
-			None => Vec::new(),
-		};
+		self.update_query(state, text, caret);
 		match &self.query {
 			Some(query) if query.trigger == Trigger::Command && state.command_index(channel_id).is_none() => {
 				commands.push(Command::LoadApplicationCommands { channel_id });
@@ -351,6 +348,7 @@ impl Composer {
 		self.next_file += 1;
 		let id = self.next_file;
 		self.files.push(Attachment { id, file });
+		self.refusal = None;
 		Ok(id)
 	}
 

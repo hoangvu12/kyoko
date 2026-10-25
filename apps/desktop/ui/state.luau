@@ -68,6 +68,11 @@ export type DmRow = {
 	unread: boolean,
 	mentions: number,
 }
+export type ComposerReplace = { serial: number, text: string, caret: number }
+export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
+export type ComposerFile = { id: string, name: string, size: string, image: string }
+export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string }
+export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
 
 local M = {}
 
@@ -118,6 +123,22 @@ M.timeline = {
 	channel_id = ui.shared("timeline.channel_id", ""),
 	channel_name = ui.shared("timeline.channel_name", ""),
 	channel_topic = ui.shared("timeline.channel_topic", ""),
+}
+
+M.composer = {
+	open = ui.shared("composer.open", false),
+	placeholder = ui.shared("composer.placeholder", ""),
+	replace = ui.shared("composer.replace", { serial = 0, text = "", caret = 0 } :: ComposerReplace),
+	focus = ui.shared("composer.focus", 0),
+	reply = ui.shared("composer.reply", { active = false } :: ComposerReply),
+	editing = ui.shared("composer.editing", false),
+	files = ui.shared("composer.files", {} :: { ComposerFile }),
+	suggestions = ui.shared("composer.suggestions", {} :: { ComposerSuggestion }),
+	selected = ui.shared("composer.selected", 1),
+	typing = ui.shared("composer.typing", ""),
+	notice = ui.shared("composer.notice", { kind = "" } :: ComposerNotice),
+	drop_hover = ui.shared("composer.drop_hover", false),
+	limit = ui.shared("composer.limit", 2000),
 }
 
 M.user = {
