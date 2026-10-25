@@ -2,6 +2,9 @@
 
 mod capture;
 mod churn;
+mod integration;
+mod notify;
+mod tray;
 mod ui;
 
 use std::path::PathBuf;
@@ -13,6 +16,7 @@ use anyhow::{Context as _, Result, bail};
 use bridge::{Inbox, changes_notifier};
 use capture::{Capture, Opening, Screen};
 use clap::Parser;
+use integration::{APP_ID, Desktop, MOCK_APP_ID};
 use media::{Gallery, Limits, MediaService, Playback};
 use mockcord::{MockConfig, Server};
 use protocol::Token;
@@ -60,6 +64,12 @@ struct Cli {
 	chatter: Option<u64>,
 	#[arg(
 		long,
+		value_name = "SECONDS",
+		help = "Send the user a direct message or a mention every few seconds, used with --mock"
+	)]
+	pings: Option<u64>,
+	#[arg(
+		long,
 		help = "Open the most recently active text channel once the guilds arrive"
 	)]
 	open_busiest: bool,
@@ -93,6 +103,13 @@ struct Cli {
 		help = "Store settings and cache under this directory instead of a scratch one"
 	)]
 	data_dir: Option<PathBuf>,
+	#[arg(long, help = "Start hidden in the tray, as a launch at sign-in does")]
+	background: bool,
+	#[arg(
+		value_name = "LINK",
+		help = "discord:// or kyoko:// links to open, handed to a running kyoko if there is one"
+	)]
+	links: Vec<String>,
 	#[arg(
 		long,
 		value_name = "FILTER",
@@ -174,6 +191,19 @@ fn main() -> Result<ExitCode> {
 		bail!("--capture-screen needs --mock or --mock-server");
 	}
 	init_tracing(&cli.log);
+	tracing::debug!(links = cli.links.len(), "launch links");
+	let persistent = capture.is_none() && (!mocked || cli.data_dir.is_some());
+	let app_id = match (mocked, persistent) {
+		(_, false) => None,
+		(false, true) => Some(APP_ID),
+		(true, true) => Some(MOCK_APP_ID),
+	};
+	if let Some(id) = app_id
+		&& platform::instance::is_running(id)
+	{
+		tracing::info!("kyoko is already running, handing this launch to it");
+		return ui::hand_over(id).map(|()| ExitCode::SUCCESS);
+	}
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.thread_name("kyoko-worker")
@@ -205,6 +235,16 @@ fn main() -> Result<ExitCode> {
 		}
 		_ => None,
 	};
+	let pings = match (&server, cli.pings) {
+		(Some(server), Some(seconds)) => {
+			Some(runtime.spawn(churn::pings(server.clone(), Duration::from_secs(seconds.max(1)))))
+		}
+		_ => None,
+	};
+	if persistent {
+		integration::apply_startup_settings(&store.settings.read());
+	}
+	notify::register(APP_ID, &cache_dir);
 	let inbox: Inbox<Changes> = Inbox::new();
 	let identity = session::client_identity(&store);
 	let gallery = gallery(
@@ -216,11 +256,12 @@ fn main() -> Result<ExitCode> {
 	)?;
 	let reduced_motion = store.settings.read().accessibility.reduced_motion;
 	let retention = session::Retention::for_settings(&store.settings.read().storage);
+	let store = Arc::new(store);
 	let session = Session::start(SessionConfig {
 		identity,
 		retention,
 		build_source: backend.build_source,
-		store: Arc::new(store),
+		store: store.clone(),
 		rest_base: backend.rest_base,
 		gateway_url: backend.gateway_url,
 		token: backend.token,
@@ -230,6 +271,7 @@ fn main() -> Result<ExitCode> {
 		gateway: Default::default(),
 		rest: Default::default(),
 		caches: Default::default(),
+		alerts: Default::default(),
 		remember_account: backend.remember_account,
 	})
 	.context("start the session")?;
@@ -255,13 +297,20 @@ fn main() -> Result<ExitCode> {
 		},
 		opening,
 		capture,
+		Desktop {
+			store,
+			requests: Inbox::new(),
+			app_id,
+			toast_id: APP_ID,
+			background: cli.background,
+		},
 		{
 			let scratch = scratch.clone();
 			move || scratch.remove()
 		},
 	);
 	tracing::debug!("window loop ended");
-	for task in [churn, chatter].into_iter().flatten() {
+	for task in [churn, chatter, pings].into_iter().flatten() {
 		task.abort();
 	}
 	if let Some(server) = server {

@@ -20,6 +20,7 @@ pub struct Settings {
 	pub keybinds: KeybindSettings,
 	pub window: WindowSettings,
 	pub startup: StartupSettings,
+	pub integration: IntegrationSettings,
 	pub first_run_acknowledged: bool,
 	pub plugins: PluginSettings,
 	pub developer: DeveloperSettings,
@@ -136,6 +137,7 @@ pub struct KeybindSettings {
 	pub push_to_talk: Option<String>,
 	pub toggle_mute: Option<String>,
 	pub toggle_deafen: Option<String>,
+	pub toggle_window: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -153,6 +155,12 @@ pub struct WindowSettings {
 #[serde(default)]
 pub struct StartupSettings {
 	pub open_on_login: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IntegrationSettings {
+	pub discord_links: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -206,6 +214,7 @@ impl Default for Settings {
 			keybinds: KeybindSettings::default(),
 			window: WindowSettings::default(),
 			startup: StartupSettings::default(),
+			integration: IntegrationSettings::default(),
 			first_run_acknowledged: false,
 			plugins: PluginSettings::default(),
 			developer: DeveloperSettings::default(),

@@ -14,7 +14,7 @@ crates/media        image fetching, decoding and the budgeted gallery of host im
 crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes
 crates/bridge       core to UI bridge without a UI dependency: the Changes inbox and the projections the UI publishes
 crates/login        token, QR and web login
-crates/platform     Windows tray, notifications, single instance, hotkeys, clipboard
+crates/platform     Windows tray, notifications, hotkeys, clipboard, autostart, URL scheme (docs/desktop.md)
 tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
 tools/xtask         test, headless-run, theme catalog tooling, release notes
 ```
@@ -29,7 +29,7 @@ The session has no plugin runtime. `SessionConfig::hooks` takes an optional `Arc
 
 - `before_send(channel_id, content)` and `before_edit(channel_id, message_id, content)` may return replacement text. A rewritten send is shown as altered by `name()`.
 - `allow_typing(channel_id)` can veto the typing indicator.
-- `allow_notification(message)` is exposed as `Session::should_notify` for the UI to ask before it raises a notification.
+- `allow_notification(message)` filters the session's notification alerts (`docs/desktop.md`). It is also exposed as `Session::should_notify`.
 - `on_dispatch(event)` observes every gateway dispatch after it is applied to state. It runs on the session task, so implementations must return quickly and queue any real work.
 
 Text hooks run on a blocking worker. Each call is wrapped in `catch_unwind`; an error or panic is logged with the hook name only, never the message content, and the session continues with the unmodified value.
@@ -60,8 +60,8 @@ Every enum that Discord may extend has an `Unknown(i64)` or `Unknown(String)` va
 
 `crates/platform` has no UI framework dependency and targets Windows only. Each module wraps one OS integration behind a plain API.
 
-- `tray-icon` on Windows needs the UI thread's event loop to pump window messages. The desktop app must create the `Tray` on the UI thread after the event loop exists, and keep it alive for the process lifetime. The `Receiver<TrayEvent>` can be drained from any thread.
+- `tray-icon` on Windows needs the UI thread's event loop to pump window messages. The desktop app creates the `Tray` inside zgx's run closure, on the UI thread, and keeps it until the window closes. Its events arrive through a callback on that thread.
 - `Hotkeys` has the same rule: create it on the UI thread.
-- `Tray` and `Hotkeys` install process-global event handlers, so each can be created once per process.
-- `single_instance::acquire` returns `AlreadyRunning` when another instance holds the lock. The second launch should call `notify_existing` with its CLI args (deep link) and exit.
-- On Windows, toasts need an AppUserModelID: call `notifications::set_app_user_model_id` at startup and pass the same id as `Notification::app_id`.
+- `Tray` and `Hotkeys` install process-global event handlers, so only one of each can exist at a time.
+- Single instance and deep links are zgx's: `Application::application_id` claims a named pipe and sets the process AppUserModelID. `instance::is_running` probes that pipe so a second launch can hand over before it starts a session.
+- Notifications, clipboard, autostart and the URL scheme work from any thread.

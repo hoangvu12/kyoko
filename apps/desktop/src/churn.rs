@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mockcord::Server;
-use protocol::Snowflake;
+use protocol::{ChannelType, Snowflake};
 use state::SharedState;
 
 const GUILD_EVERY: u64 = 3;
@@ -46,6 +46,39 @@ pub async fn chatter(server: Arc<Server>, state: SharedState, every: Duration) {
 			.is_some()
 		{
 			tracing::info!(step, "mock server posted a message into the open channel");
+		}
+	}
+}
+
+pub async fn pings(server: Arc<Server>, every: Duration) {
+	let fixtures = server.fixtures();
+	let direct = fixtures.private_channel_ids.first().copied().map(Snowflake);
+	let mention = fixtures.guilds.first().and_then(|guild| {
+		fixtures
+			.channels
+			.values()
+			.find(|channel| {
+				channel.guild_id == Some(Snowflake(guild.id)) && channel.kind == ChannelType::GuildText
+			})
+			.map(|channel| channel.id)
+	});
+	let me = fixtures.current_user.id;
+	let mut ticker = tokio::time::interval(every);
+	ticker.tick().await;
+	let mut step = 0u64;
+	loop {
+		ticker.tick().await;
+		step += 1;
+		let (channel, content) = if step % 2 == 1 {
+			(direct, format!("Direct ping {step}"))
+		} else {
+			(mention, format!("<@{}> mention ping {step}", me.0))
+		};
+		let Some(channel) = channel else {
+			continue;
+		};
+		if server.post_message(channel, &content).is_some() {
+			tracing::info!(step, "mock server pinged the user");
 		}
 	}
 }

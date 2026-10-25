@@ -8,6 +8,7 @@ use anyhow::{Result, anyhow};
 use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, MessageEntry, OpenChannel, Sidebar, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
+use session::Alert;
 use session::{Command, Session};
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
 use zgx::image::ImageData;
@@ -16,6 +17,7 @@ use zgx_desktop::{Application, WindowInfo, WindowOptions};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::capture::{self, Capture, Opening};
+use crate::integration::{Desktop, Integration};
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
@@ -23,6 +25,8 @@ const INITIALS: usize = 3;
 const AVATAR_POINTS: f64 = 32.;
 const WIDTH: f64 = 1100.;
 const HEIGHT: f64 = 720.;
+
+type Observer = Box<dyn Fn(&Changes)>;
 
 pub struct Images {
 	pub gallery: Gallery,
@@ -36,6 +40,7 @@ pub fn run(
 	images: Images,
 	opening: Option<Opening>,
 	capture: Option<Capture>,
+	desktop: Desktop,
 	after_close: impl Fn() + 'static,
 ) -> Result<()> {
 	let script = ui_dir().join("app.luau");
@@ -43,7 +48,14 @@ pub fn run(
 		Some(_) => (capture::WIDTH, capture::HEIGHT),
 		None => (WIDTH, HEIGHT),
 	};
-	Application::new()
+	let mut application = Application::new();
+	if let Some(id) = desktop.app_id {
+		application = application
+			.application_id(id)
+			.map_err(|error| anyhow!("the application id was refused: {error}"))?
+			.on_application_event(desktop.on_application_event());
+	}
+	application
 		.window(WindowOptions {
 			title: "Kyoko".into(),
 			width,
@@ -72,13 +84,27 @@ pub fn run(
 			if cfg!(debug_assertions) {
 				cx.tasks.spawn(host.watch(RELOAD_EVERY));
 			}
+			let integration = capture
+				.is_none()
+				.then(|| Integration::install(cx, &host, &link, desktop));
 			cx.on_closed(move || {
+				if let Some(integration) = integration {
+					integration.shutdown();
+				}
 				link.shutdown();
 				after_close();
 			});
 			cx.render(host.view());
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
+}
+
+pub fn hand_over(app_id: &str) -> Result<()> {
+	Application::new()
+		.application_id(app_id)
+		.map_err(|error| anyhow!("the application id was refused: {error}"))?
+		.run(|_| {})
+		.map_err(|error| anyhow!("the running kyoko did not answer: {error}"))
 }
 
 fn ui_dir() -> PathBuf {
@@ -92,7 +118,7 @@ struct Window {
 	info: WindowInfo,
 }
 
-struct Link {
+pub(crate) struct Link {
 	window: Window,
 	host: ScriptHost,
 	session: RefCell<Option<Session>>,
@@ -115,6 +141,7 @@ struct Link {
 	messages: Shared,
 	avatar_ready: Shared,
 	avatar_name: Shared,
+	observer: RefCell<Option<Observer>>,
 }
 
 impl Link {
@@ -155,6 +182,7 @@ impl Link {
 			messages: host.shared("messages", Value::List(Rc::new([]))),
 			avatar_ready: host.shared("avatar_ready", false),
 			avatar_name: host.shared("avatar", ""),
+			observer: RefCell::new(None),
 		});
 		let actions = Rc::downgrade(&link);
 		host.action("select_guild", move |argument| {
@@ -234,7 +262,33 @@ impl Link {
 		}
 	}
 
+	pub(crate) fn observe(&self, observer: impl Fn(&Changes) + 'static) {
+		*self.observer.borrow_mut() = Some(Box::new(observer));
+	}
+
+	pub(crate) fn gallery(&self) -> &Gallery {
+		&self.images.gallery
+	}
+
+	pub(crate) fn take_alerts(&self) -> Vec<Alert> {
+		self.session
+			.borrow()
+			.as_ref()
+			.map(Session::take_alerts)
+			.unwrap_or_default()
+	}
+
+	pub(crate) fn open(&self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
+		if let Some(guild_id) = guild_id {
+			self.select_guild(guild_id);
+			self.select_channel(channel_id);
+		}
+	}
+
 	fn apply(&self, changes: &Changes) {
+		if let Some(observer) = self.observer.borrow().as_ref() {
+			observer(changes);
+		}
 		let opened = self.publish(changes);
 		if let Some((opening, open)) = opened {
 			if let Some(guild_id) = open.guild_id {
@@ -402,14 +456,14 @@ impl Link {
 		})
 	}
 
-	fn state(&self) -> Option<state::SharedState> {
+	pub(crate) fn state(&self) -> Option<state::SharedState> {
 		self.session
 			.borrow()
 			.as_ref()
 			.map(|session| session.state().clone())
 	}
 
-	fn send(&self, command: Command) {
+	pub(crate) fn send(&self, command: Command) {
 		if let Some(session) = self.session.borrow().as_ref() {
 			session.send(command);
 		}
