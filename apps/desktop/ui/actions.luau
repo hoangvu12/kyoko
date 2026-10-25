@@ -158,6 +158,8 @@ end
 
 function M.composer_start_edit(message_id: string)
 	ui.invoke("composer.start_edit", message_id)
+end
+
 function M.member_scroll(offset: number, height: number, member: number, group: number)
 	ui.call_sync("members.scroll", { offset = offset, height = height, member = member, group = group })
 end
