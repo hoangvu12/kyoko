@@ -5,8 +5,10 @@ mod composer;
 mod deep_link;
 mod dm_list;
 mod emoji_picker;
+mod gif_picker;
 mod images;
 mod inbox;
+mod lightbox;
 mod member_list;
 mod message;
 mod profile;
@@ -15,6 +17,7 @@ mod search;
 mod settings;
 mod sidebar;
 mod sign_in;
+mod sticker_picker;
 mod switcher;
 mod timeline;
 
@@ -33,7 +36,11 @@ pub use deep_link::{DeepLink, parse_deep_link};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,
-	category_title, toned,
+	category_title, custom_markup, toned,
+};
+pub use gif_picker::{
+	GIF_SEARCH_DELAY, GIF_SUGGESTION_CHIPS, GifSearch, GifTile, GifView, gif_masonry, gif_motion, gif_still,
+	gif_tile_height, is_video_url,
 };
 pub use images::{
 	attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request, embed_request,
@@ -41,6 +48,7 @@ pub use images::{
 	sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
+pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
 pub use member_list::{
 	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
 	MemberRowKind, OpenMembers, SEARCH_GROUP, layout_of,
@@ -72,6 +80,9 @@ pub use sidebar::{
 	SidebarSection, VoiceMember, VoiceVideo, channel_icon,
 };
 pub use sign_in::{Checked, Failure, Flow, Gate, Remember, Screen, SignOut, StartSession, Status, Verified};
+pub use sticker_picker::{
+	StickerCell, StickerPicker, StickerSection, StickerSectionIcon, StickerSectionKey, sticker_item,
+};
 pub use switcher::{
 	Leading, MAX_RECENT, MAX_RESULTS, QuickSwitcher, RECENT_TARGETS, RecentTargets, Shown, SwitcherCategory,
 	SwitcherEntry, SwitcherTarget, fuzzy_score, switcher_entries,

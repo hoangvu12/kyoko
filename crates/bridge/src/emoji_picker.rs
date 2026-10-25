@@ -57,6 +57,7 @@ pub struct CustomEmoji {
 pub struct EmojiCell {
 	pub key: String,
 	pub reaction: String,
+	pub markup: String,
 	pub glyph: Option<String>,
 	pub custom: Option<CustomEmoji>,
 	pub label: String,
@@ -108,10 +109,16 @@ pub fn toned(glyph: &str, tone: usize) -> String {
 	out
 }
 
+pub fn custom_markup(name: &str, id: Snowflake, animated: bool) -> String {
+	let prefix = if animated { "a" } else { "" };
+	format!("<{prefix}:{name}:{id}>")
+}
+
 fn custom_cell(emoji: &CatalogEmoji, guild_name: &str) -> EmojiCell {
 	EmojiCell {
 		key: format!("custom:{}", emoji.id),
 		reaction: format!("{}:{}", emoji.name, emoji.id),
+		markup: custom_markup(&emoji.name, emoji.id, emoji.animated),
 		glyph: None,
 		custom: Some(CustomEmoji {
 			id: emoji.id,
@@ -132,6 +139,7 @@ fn unicode_cell(glyph: &str, name: &str, toneable: bool, tone: usize) -> EmojiCe
 	EmojiCell {
 		key: format!("unicode:{shown}"),
 		reaction: shown.clone(),
+		markup: shown.clone(),
 		glyph: Some(shown),
 		custom: None,
 		label: format!(":{name}:"),
@@ -266,6 +274,7 @@ impl EmojiPicker {
 					found.unwrap_or_else(|| EmojiCell {
 						key: format!("custom:{id}"),
 						reaction: format!("{}:{id}", recent.name),
+						markup: custom_markup(&recent.name, id, recent.animated),
 						glyph: None,
 						custom: Some(CustomEmoji {
 							id,

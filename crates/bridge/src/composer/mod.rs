@@ -4,10 +4,13 @@ mod suggest;
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
-use protocol::{Nonce, Snowflake};
+use protocol::{Gif, Nonce, Snowflake};
 use rest::UploadFile;
 use session::Command;
 use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
+
+use crate::emoji_picker::EmojiCell;
+use crate::sticker_picker::StickerCell;
 
 pub use slash::{Slash, parse_slash};
 pub use suggest::{
@@ -405,6 +408,13 @@ impl Composer {
 			reason: lock.reason,
 		}];
 		match self.held.take() {
+			Some(held @ (Command::SendGif { .. } | Command::SendSticker { .. })) => {
+				commands.push(held);
+				Outcome {
+					commands,
+					replace: None,
+				}
+			}
 			Some(held) => {
 				commands.push(held);
 				self.reply = None;
@@ -496,6 +506,71 @@ impl Composer {
 				content: String::new(),
 			},
 		])
+	}
+
+	pub fn pick_emoji(&mut self, text: &str, caret: usize, cell: &EmojiCell) -> Option<(String, usize)> {
+		if cell.locked || self.channel_id.is_none() {
+			return None;
+		}
+		let mut at = caret.min(text.len());
+		while !text.is_char_boundary(at) {
+			at -= 1;
+		}
+		let mut inserted = String::with_capacity(text.len() + cell.markup.len());
+		inserted.push_str(&text[..at]);
+		inserted.push_str(&cell.markup);
+		inserted.push_str(&text[at..]);
+		self.dirty = true;
+		Some((inserted, at + cell.markup.len()))
+	}
+
+	pub fn pick_gif(&mut self, state: &State, gif: Gif, usage: Option<&str>, now: DateTime<Utc>) -> Outcome {
+		let Some(channel_id) = self.channel_id else {
+			return Outcome::default();
+		};
+		let mut outcome = self.expression(
+			state,
+			Command::SendGif {
+				channel_id,
+				gif: gif.clone(),
+			},
+			now,
+		);
+		if let Some(query) = usage
+			&& !outcome.commands.is_empty()
+		{
+			outcome.commands.insert(
+				0,
+				Command::SelectGif {
+					id: gif.id,
+					query: query.to_owned(),
+				},
+			);
+		}
+		outcome
+	}
+
+	pub fn pick_sticker(&mut self, state: &State, cell: &StickerCell, now: DateTime<Utc>) -> Outcome {
+		let Some(channel_id) = self.channel_id.filter(|_| !cell.locked) else {
+			return Outcome::default();
+		};
+		self.expression(
+			state,
+			Command::SendSticker {
+				channel_id,
+				sticker_id: cell.sticker.id,
+			},
+			now,
+		)
+	}
+
+	fn expression(&mut self, state: &State, command: Command, now: DateTime<Utc>) -> Outcome {
+		self.refusal = None;
+		if self.lock(state, now).is_some() {
+			self.held = Some(command);
+			return Outcome::default();
+		}
+		Outcome::command(command)
 	}
 
 	fn message(&self, channel_id: Snowflake, content: &str) -> Command {

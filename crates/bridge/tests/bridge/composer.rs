@@ -482,3 +482,33 @@ async fn a_server_gate_points_to_the_official_client_without_a_confirm() {
 	);
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_picked_sticker_waits_for_the_lock_and_keeps_the_draft() {
+	let (mut running, _, _) = opened("composer-sticker-lock").await;
+	let guild_id = running.view.sidebar.selected().expect("a selected guild");
+	let channel_id = quiet_channel(&mut running, guild_id).await;
+	let state = running.session().state().clone();
+	let mut composer = Composer::default();
+	composer.open(&state.read(), Some(guild_id), Some(channel_id));
+	let picker = bridge::StickerPicker::of(&state.read(), Some(guild_id), channel_id);
+	let cell = picker.sections()[0].stickers[0].clone();
+	let held = composer.pick_sticker(&state.read(), &cell, Utc::now());
+	assert!(held.commands.is_empty(), "a locked channel holds the sticker");
+	let confirmed = composer.confirm_lock(&state.read(), Utc::now());
+	assert_eq!(
+		confirmed.replace, None,
+		"releasing a sticker leaves the draft alone"
+	);
+	match confirmed.commands.as_slice() {
+		[
+			Command::ConfirmRisky { reason, .. },
+			Command::SendSticker { sticker_id, .. },
+		] => {
+			assert_eq!(*reason, RiskyReason::EmptyChannel);
+			assert_eq!(*sticker_id, cell.sticker.id);
+		}
+		other => panic!("expected a confirmation and the held sticker, got {other:?}"),
+	}
+	running.stop().await;
+}

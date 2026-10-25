@@ -557,3 +557,42 @@ async fn the_original_resolution_setting_fetches_the_original_attachment() {
 	assert_eq!(fetched[1].param("format"), None);
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_lightbox_shows_the_original_attachment_fitted_to_the_window() {
+	let mut running = Running::start("media-lightbox").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let channel_id = open_first_channel(&mut running).await;
+	let (message_id, attachment) =
+		posted_attachment(&mut running, channel_id, "lightbox.png", Signature::Fresh).await;
+	let inline = bridge::attachment_request(
+		&attachment,
+		channel_id,
+		message_id,
+		(550., 350.),
+		1.,
+		media::cdn::Quality::Fitted,
+	)
+	.expect("a png is an image");
+	images.ready(inline).await;
+	let image = bridge::LightboxImage::attachment(&attachment, channel_id, message_id).expect("an image");
+	let window = (1280., 800.);
+	let request = bridge::lightbox_request(&image, window, 1.5).expect("a lightbox request");
+	assert_eq!(
+		Some(request.url.as_str()),
+		attachment.url.as_deref(),
+		"the lightbox asks for the original, not the media proxy"
+	);
+	let (width, height) = bridge::lightbox_box(&image, window);
+	assert!(width <= 1280. * bridge::LIGHTBOX_SHARE && height <= 800. * bridge::LIGHTBOX_SHARE);
+	images.ready(request).await;
+	let fetched = media_requests(&running, "/cdn/attachments/");
+	assert_eq!(fetched.len(), 2);
+	assert!(
+		fetched[0].param("width").is_some(),
+		"the timeline asks for a fitted copy"
+	);
+	assert_eq!(fetched[1].param("width"), None, "the original has no proxy size");
+	assert_eq!(fetched[1].param("format"), None);
+	running.stop().await;
+}
