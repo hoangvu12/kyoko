@@ -298,7 +298,6 @@ async fn a_row_updates_when_its_reply_target_and_mention_resolve() {
 		.view
 		.sidebar
 		.channels()
-		.iter()
 		.find(|channel| channel.kind == bridge::ChannelKind::Text)
 		.map(|channel| channel.id)
 		.expect("a text channel");
