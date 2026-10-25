@@ -35,7 +35,16 @@ pub fn test() -> Result<()> {
 		"-p",
 		"kyoko-plugins",
 	])?;
-	cargo(&["test", "-p", "kyoko", "--bin", "kyoko", "ui::scripts"])
+	cargo(&[
+		"test",
+		"-p",
+		"kyoko",
+		"--bin",
+		"kyoko",
+		"--",
+		"ui::scripts",
+		"ui::root",
+	])
 }
 
 pub fn check_all() -> Result<()> {

@@ -7,6 +7,8 @@ mod message_actions;
 mod plugins;
 mod profiles;
 #[cfg(test)]
+mod root;
+#[cfg(test)]
 mod scripts;
 mod search;
 mod settings;
@@ -206,62 +208,63 @@ pub fn run(
 				after_close();
 			});
 			cx.render(
-				overlay()
-					.w_full()
-					.h_full()
-					.child(host.view())
-					.child(timeline_slot(slot, transcript, forum_shown))
-					.child(thread_view)
-					.child(profiles)
-					.child(switcher)
-					.child(thread_layer)
-					.child(community)
-					.child(expressions)
-					.child(lightbox)
-					.on_event(move |event| {
-						if event.phase == zgx::input::EventPhase::Capture {
-							if matches!(
-								event.event,
-								zgx::input::InputEvent::PointerDown { .. }
-									| zgx::input::InputEvent::KeyDown { .. }
-							) && let Some(link) = pressed.upgrade()
-							{
-								link.plugin_input();
-							}
-							return;
-						}
-						if let zgx::input::InputEvent::KeyDown {
-							key: zgx::input::Key::Escape,
-							..
-						} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
+				layered(
+					host.view(),
+					[
+						timeline_slot(slot, transcript, forum_shown),
+						thread_view,
+						profiles,
+						switcher,
+						thread_layer,
+						community,
+						expressions,
+						lightbox,
+					],
+				)
+				.on_event(move |event| {
+					if event.phase == zgx::input::EventPhase::Capture {
+						if matches!(
+							event.event,
+							zgx::input::InputEvent::PointerDown { .. }
+								| zgx::input::InputEvent::KeyDown { .. }
+						) && let Some(link) = pressed.upgrade()
 						{
-							event.stop_propagation();
-							return;
+							link.plugin_input();
 						}
-						if is_switcher_key(&event.event) {
-							if let Some(link) = keys.upgrade() {
-								link.open_switcher();
-							}
-							event.prevent_default();
-							event.stop_propagation();
-							return;
+						return;
+					}
+					if let zgx::input::InputEvent::KeyDown {
+						key: zgx::input::Key::Escape,
+						..
+					} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
+					{
+						event.stop_propagation();
+						return;
+					}
+					if is_switcher_key(&event.event) {
+						if let Some(link) = keys.upgrade() {
+							link.open_switcher();
 						}
-						let hovering = match event.event {
-							zgx::input::InputEvent::FileHover { .. } => true,
-							zgx::input::InputEvent::FileHoverCancelled
-							| zgx::input::InputEvent::FilesDrop { .. }
-							| zgx::input::InputEvent::FilesDropRejected { .. } => false,
-							_ => return,
-						};
-						if let Some(link) = hovered.upgrade() {
-							link.files_hovering(hovering);
-						}
-					})
-					.on_files_drop(move |paths, _| {
-						if let Some(link) = dropped.upgrade() {
-							link.files_dropped(paths);
-						}
-					}),
+						event.prevent_default();
+						event.stop_propagation();
+						return;
+					}
+					let hovering = match event.event {
+						zgx::input::InputEvent::FileHover { .. } => true,
+						zgx::input::InputEvent::FileHoverCancelled
+						| zgx::input::InputEvent::FilesDrop { .. }
+						| zgx::input::InputEvent::FilesDropRejected { .. } => false,
+						_ => return,
+					};
+					if let Some(link) = hovered.upgrade() {
+						link.files_hovering(hovering);
+					}
+				})
+				.on_files_drop(move |paths, _| {
+					if let Some(link) = dropped.upgrade() {
+						link.files_dropped(paths);
+					}
+				}),
 			);
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))
@@ -273,6 +276,14 @@ pub fn hand_over(app_id: &str) -> Result<()> {
 		.map_err(|error| anyhow!("the application id was refused: {error}"))?
 		.run(|_| {})
 		.map_err(|error| anyhow!("the running kyoko did not answer: {error}"))
+}
+
+fn layered(luau: View, layers: impl IntoIterator<Item = View>) -> View {
+	layers
+		.into_iter()
+		.fold(overlay().w_full().h_full().child(luau), |root, layer| {
+			root.child(div().absolute().left(0.).top(0.).w(0.).h(0.).child(layer))
+		})
 }
 
 fn timeline_slot(slot: Signal<Slot>, transcript: View, hidden: Signal<bool>) -> View {

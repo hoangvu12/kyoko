@@ -10,7 +10,7 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
-const WIDE: (f32, f32) = (1280., 800.);
+pub(super) const WIDE: (f32, f32) = (1280., 800.);
 
 #[test]
 fn every_script_compiles() {
@@ -548,7 +548,7 @@ fn settings_account() -> serde_json::Value {
 	})
 }
 
-fn shows(app: &mut TestApp, screen: &str, marker: &str, values: &[(&str, serde_json::Value)]) {
+pub(super) fn shows(app: &mut TestApp, screen: &str, marker: &str, values: &[(&str, serde_json::Value)]) {
 	for (key, value) in values {
 		let value = Value::from_json(&value.to_string()).unwrap_or(Value::Nil);
 		app.host.shared(key, Value::Nil).set(value);
@@ -591,7 +591,7 @@ fn files_with(dir: &Path, extension: &str) -> Vec<PathBuf> {
 	found
 }
 
-fn host_names() -> BTreeSet<String> {
+pub(super) fn host_names() -> BTreeSet<String> {
 	let sources = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
 	files_with(&sources, "rs")
 		.iter()
@@ -613,7 +613,7 @@ fn is_host_name(text: &str) -> bool {
 		.is_some_and(|(area, name)| part(area) && part(name))
 }
 
-fn rail_items() -> serde_json::Value {
+pub(super) fn rail_items() -> serde_json::Value {
 	let guild = |id: &str, name: &str, unread: bool, mentions: u32| {
 		json!({
 			"kind": "guild", "key": format!("g{id}"), "id": id, "name": name,
@@ -643,7 +643,7 @@ fn dm_rows() -> serde_json::Value {
 	])
 }
 
-fn sidebar_rows() -> serde_json::Value {
+pub(super) fn sidebar_rows() -> serde_json::Value {
 	let channel = |id: &str, kind: &str, icon: &str, name: &str, voice: serde_json::Value| {
 		json!({
 			"kind": "channel", "key": format!("h{id}"), "id": id, "type": kind, "icon": icon, "name": name,
@@ -667,7 +667,7 @@ fn sidebar_rows() -> serde_json::Value {
 	])
 }
 
-fn member_window() -> serde_json::Value {
+pub(super) fn member_window() -> serde_json::Value {
 	json!({
 		"first": 0,
 		"rows": [
