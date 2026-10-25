@@ -4,7 +4,7 @@
 
 **Blocked by:** 12 (Bounded state caches), 15 (Store hardening)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Deleted messages are kept in place with a deleted flag instead of being removed
 - [ ] Previous versions of edited messages are kept
