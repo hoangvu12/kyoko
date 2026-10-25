@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use gateway::{Gateway, GatewayConfig, GatewayHandle};
+use gateway::{Gateway, GatewayConfig, GatewayHandle, PropertiesSource};
 use protocol::{Message, Token};
 use rest::{RestClient, RestConfig};
 use state::{SharedState, State};
@@ -78,8 +78,11 @@ impl Session {
 		});
 		rest.set_token(Token::new(config.token.as_str()));
 		let token = Arc::new(Token::new(config.token.as_str()));
-		let mut gateway_config =
-			GatewayConfig::new(config.token, config.identity.fingerprint().properties().clone());
+		let identity = config.identity.clone();
+		let mut gateway_config = GatewayConfig::new(
+			config.token,
+			PropertiesSource::new(move || identity.identify_properties()),
+		);
 		gateway_config.gateway_url = config.gateway_url;
 		gateway_config.tuning = config.gateway;
 		let (gateway_start, gateway_started) = oneshot::channel();

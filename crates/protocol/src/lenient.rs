@@ -338,6 +338,14 @@ pub fn timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Da
 	deserializer.deserialize_any(TimestampVisitor)
 }
 
+pub fn optional_int<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<i64>, D::Error> {
+	Ok(match serde_json::Value::deserialize(deserializer)? {
+		serde_json::Value::Number(number) => number.as_i64(),
+		serde_json::Value::String(text) => text.parse().ok(),
+		_ => None,
+	})
+}
+
 pub fn present<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
 	IgnoredAny::deserialize(deserializer).map(|_| true)
 }

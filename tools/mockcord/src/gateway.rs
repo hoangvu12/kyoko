@@ -207,6 +207,11 @@ impl Connection {
 				connection: self.link_id,
 				op: payload.op,
 				data: data.clone(),
+				raw: payload
+					.d
+					.as_deref()
+					.map(|raw| raw.get().to_owned())
+					.unwrap_or_default(),
 				at: Instant::now(),
 			});
 		}

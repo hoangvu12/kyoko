@@ -338,7 +338,6 @@ impl Core {
 	}
 
 	fn start_gateway(&mut self, mut startup: Startup) {
-		startup.gateway_config.identify = self.rest.identity().fingerprint().properties().clone();
 		let state = self.state.clone();
 		startup.gateway_config.client_state = ClientStateSource::new(move || state.read().client_state());
 		let _ = startup.gateway.send(startup.gateway_config);

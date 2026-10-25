@@ -177,8 +177,9 @@ impl Session {
 			Ok(url) => url,
 			Err(error) => return Ok(Ended::fatal(None, error.to_string(), error)),
 		};
+		let properties = self.config.properties.current();
 		let opened = tokio::select! {
-			opened = transport::connect(&url, &self.config.identify) => opened,
+			opened = transport::connect(&url, &properties) => opened,
 			_ = stopped(&mut self.shutdown) => return Err(Shutdown),
 		};
 		let socket = match opened {

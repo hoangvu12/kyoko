@@ -80,30 +80,51 @@ impl fmt::Debug for ClientStateSource {
 	}
 }
 
+#[derive(Clone)]
+pub struct PropertiesSource(Arc<dyn Fn() -> IdentifyProperties + Send + Sync>);
+
+impl PropertiesSource {
+	pub fn new(current: impl Fn() -> IdentifyProperties + Send + Sync + 'static) -> Self {
+		Self(Arc::new(current))
+	}
+
+	pub fn fixed(properties: IdentifyProperties) -> Self {
+		Self::new(move || properties.clone())
+	}
+
+	pub fn current(&self) -> IdentifyProperties {
+		(self.0)()
+	}
+}
+
+impl fmt::Debug for PropertiesSource {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		formatter.write_str("PropertiesSource")
+	}
+}
+
 #[derive(Debug)]
 pub struct GatewayConfig {
 	pub token: Token,
 	pub gateway_url: String,
-	pub identify: IdentifyProperties,
+	pub properties: PropertiesSource,
 	pub capabilities: u64,
 	pub initial_status: String,
-	pub large_threshold: u32,
 	pub tuning: GatewayTuning,
 	pub client_state: ClientStateSource,
 }
 
 impl GatewayConfig {
 	pub const DEFAULT_GATEWAY_URL: &'static str = "wss://gateway.discord.gg";
-	pub const DEFAULT_LARGE_THRESHOLD: u32 = 250;
+	pub const INITIAL_STATUS: &'static str = "unknown";
 
-	pub fn new(token: Token, identify: IdentifyProperties) -> Self {
+	pub fn new(token: Token, properties: PropertiesSource) -> Self {
 		Self {
 			token,
 			gateway_url: Self::DEFAULT_GATEWAY_URL.to_owned(),
-			identify,
+			properties,
 			capabilities: ADVERTISED_CAPABILITIES,
-			initial_status: "online".to_owned(),
-			large_threshold: Self::DEFAULT_LARGE_THRESHOLD,
+			initial_status: Self::INITIAL_STATUS.to_owned(),
 			tuning: GatewayTuning::default(),
 			client_state: ClientStateSource::default(),
 		}

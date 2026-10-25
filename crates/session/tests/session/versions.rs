@@ -78,7 +78,7 @@ async fn read_state_versions_are_persisted_and_sent_on_the_next_launch() {
 	let fresh = client_state_of_launch(&running, 0).await;
 	assert_eq!(
 		fresh,
-		json!({ "guild_versions": {} }),
+		json!({ "guild_versions": {}, "api_code_version": 0 }),
 		"a fresh store claims no cache"
 	);
 	running.connected().await;

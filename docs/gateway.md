@@ -33,7 +33,11 @@ IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the 
 
 Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead, which kyoko applies (see `docs/client-state.md`).
 
-IDENTIFY's `client_state` comes from the persisted read-state and guild-settings versions; `docs/client-state.md` covers what is sent and how partial READY containers merge.
+IDENTIFY's `client_state` comes from the persisted read-state and guild-settings versions plus READY's `api_code_version`; `docs/client-state.md` covers what is sent and how partial READY containers merge.
+
+## IDENTIFY
+
+`frames::identify` builds the payload in the web client's key order: `token`, `properties`, `compress`, `presence`, `capabilities`, `client_state`. There is no `large_threshold`. `presence` is `{"activities":[],"status":"unknown","since":0,"afk":false}` (`GatewayConfig::INITIAL_STATUS`). `properties` comes from `GatewayConfig::properties`, a `PropertiesSource` that the gateway reads on every connect and every IDENTIFY. `docs/fingerprint.md` covers the property set.
 
 ## Refreshed token
 

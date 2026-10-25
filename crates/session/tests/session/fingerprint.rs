@@ -1,17 +1,35 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use mockcord::{DEVICE_COOKIE, MockConfig, Recording, RestRequest, device_cookie_value, installation_id};
+use mockcord::{
+	API_CODE_VERSION, DEVICE_COOKIE, GatewayFrame, MockConfig, Recording, RestRequest, device_cookie_value,
+	installation_id,
+};
 use parking_lot::Mutex;
-use protocol::fingerprint::{API_VERSION, CHROME_MAJOR};
+use protocol::fingerprint::{
+	API_VERSION, CHROME_MAJOR, Clock, HEARTBEAT_SESSION_LIFETIME, LAUNCH_SIGNATURE_MOD_BITS,
+};
 use protocol::{Opcode, Snowflake};
-use serde_json::Value;
+use serde_json::{Value, json};
 use session::Command;
 
 use crate::harness::{LOCALE, Options, Running};
 
-const PROPERTY_FIELDS: [&str; 18] = [
+const IDENTIFY_FIELDS: [&str; 6] = [
+	"token",
+	"properties",
+	"compress",
+	"presence",
+	"capabilities",
+	"client_state",
+];
+const PRESENCE_FIELDS: [&str; 4] = ["activities", "status", "since", "afk"];
+const CHROME_156_BRANDS: &str =
+	"\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"";
+const NEWER_API_CODE_VERSION: i64 = 7;
+const PROPERTY_FIELDS: [&str; 19] = [
 	"os",
 	"browser",
 	"device",
@@ -28,6 +46,7 @@ const PROPERTY_FIELDS: [&str; 18] = [
 	"client_event_source",
 	"has_client_mods",
 	"client_launch_id",
+	"launch_signature",
 	"client_app_state",
 	"client_heartbeat_session_id",
 ];
@@ -47,6 +66,45 @@ fn identify_properties(recording: &Recording) -> Vec<Value> {
 		.frames_with(Opcode::Identify)
 		.map(|frame| frame.data["properties"].clone())
 		.collect()
+}
+
+fn identifies(recording: &Recording) -> Vec<GatewayFrame> {
+	recording.frames_with(Opcode::Identify).cloned().collect()
+}
+
+async fn nth_identify(running: &Running, index: usize) -> GatewayFrame {
+	running
+		.until_wire("the expected IDENTIFY", |recording| {
+			identifies(recording).get(index).cloned()
+		})
+		.await
+}
+
+fn without_installation_id(properties: &Value) -> Value {
+	let mut shared = properties.clone();
+	if let Some(fields) = shared.as_object_mut() {
+		fields.remove("installation_id");
+	}
+	shared
+}
+
+fn manual_clock() -> (Clock, Arc<Mutex<Duration>>) {
+	let start = Instant::now();
+	let elapsed = Arc::new(Mutex::new(Duration::ZERO));
+	let reading = elapsed.clone();
+	(Clock::new(move || start + *reading.lock()), elapsed)
+}
+
+async fn message_request(running: &Running, channel_id: Snowflake, content: &str) -> RestRequest {
+	running.send_and_wait(channel_id, content, content).await;
+	let path = format!("/channels/{channel_id}/messages");
+	running
+		.mock()
+		.recording()
+		.requests_to("POST", &path)
+		.find(|request| request.json().is_some_and(|body| body["content"] == content))
+		.cloned()
+		.expect("the message request was recorded")
 }
 
 fn device_cookie(request: &RestRequest) -> Option<String> {
@@ -69,19 +127,14 @@ async fn identify_and_rest_present_one_web_client_identity() {
 	let running = Running::start("fingerprint-identity").await;
 	running.open_text_channel().await;
 	let recording = running.mock().recording();
-	let identifies = identify_properties(&recording);
-	assert_eq!(identifies.len(), 1);
-	let properties = &identifies[0];
-	let mut fields: Vec<&str> = properties
-		.as_object()
-		.expect("properties are an object")
-		.keys()
-		.map(String::as_str)
-		.collect();
-	fields.sort_unstable();
-	let mut expected = PROPERTY_FIELDS.to_vec();
-	expected.sort_unstable();
-	assert_eq!(fields, expected);
+	let frames = identifies(&recording);
+	assert_eq!(frames.len(), 1);
+	let properties = &frames[0].data["properties"];
+	assert_eq!(
+		frames[0].keys(&["properties"]),
+		PROPERTY_FIELDS,
+		"the web client's property order, no installation id before one is known"
+	);
 	let major = CHROME_MAJOR.to_string();
 	let user_agent = properties["browser_user_agent"].as_str().expect("user agent");
 	assert!(user_agent.starts_with("Mozilla/5.0 ("));
@@ -196,11 +249,10 @@ async fn rest_requests_carry_the_web_client_header_set() {
 				.is_some_and(|zone| !zone.is_empty()),
 			"{what} carries the timezone"
 		);
-		assert!(
-			request
-				.header("sec-ch-ua")
-				.is_some_and(|brands| brands.contains(&format!("\"Google Chrome\";v=\"{CHROME_MAJOR}\""))),
-			"{what}"
+		assert_eq!(
+			request.header("sec-ch-ua"),
+			Some(CHROME_156_BRANDS),
+			"{what}: Chrome's brand list for major {CHROME_MAJOR}"
 		);
 		assert!(request.header("referer").is_some(), "{what}");
 		if request.method != "GET" {
@@ -263,5 +315,126 @@ async fn cookies_and_installation_id_survive_a_restart() {
 	let identifies = identify_properties(&recording);
 	assert_eq!(identifies.len(), 2);
 	assert_ne!(identifies[1]["client_launch_id"], first_launch);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn identify_follows_the_web_client_shape() {
+	let running = Running::start("fingerprint-identify-shape").await;
+	let identify = nth_identify(&running, 0).await;
+	assert_eq!(identify.keys(&[]), IDENTIFY_FIELDS);
+	assert!(identify.data.get("large_threshold").is_none());
+	assert_eq!(identify.data["compress"], false);
+	assert_eq!(identify.keys(&["presence"]), PRESENCE_FIELDS);
+	assert_eq!(
+		identify.data["presence"],
+		json!({ "activities": [], "status": "unknown", "since": 0, "afk": false })
+	);
+	assert_eq!(
+		identify.data["client_state"],
+		json!({ "guild_versions": {}, "api_code_version": 0 })
+	);
+	let signature = identify.data["properties"]["launch_signature"]
+		.as_str()
+		.expect("a launch signature");
+	assert_eq!(signature.len(), 36);
+	let bits = u128::from_str_radix(&signature.replace('-', ""), 16).expect("the launch signature is a uuid");
+	assert_eq!(bits & LAUNCH_SIGNATURE_MOD_BITS, 0);
+	assert_eq!(identify.data["properties"]["has_client_mods"], false);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn identify_echoes_the_installation_id_and_api_code_version() {
+	let mut running = Running::start("fingerprint-identify-echo").await;
+	running.connected().await;
+	let expected_installation = installation_id(MOCK_SEED);
+	running
+		.eventually("the installation id to be adopted", || {
+			running.store().installation_id().as_deref() == Some(expected_installation.as_str())
+		})
+		.await;
+	running.mock().close_gateway(4009);
+	let reidentify = nth_identify(&running, 1).await;
+	assert_eq!(
+		reidentify.data["client_state"]["api_code_version"],
+		API_CODE_VERSION
+	);
+	assert_eq!(
+		reidentify.data["properties"]["installation_id"],
+		expected_installation.as_str()
+	);
+	let mut fields = PROPERTY_FIELDS.to_vec();
+	fields.push("installation_id");
+	assert_eq!(reidentify.keys(&["properties"]), fields);
+	running.connected().await;
+
+	running
+		.restart_after(|mock| {
+			mock.transform_ready(|_, ready| {
+				ready["api_code_version"] = Value::from(NEWER_API_CODE_VERSION);
+			});
+		})
+		.await;
+	let next_launch = nth_identify(&running, 2).await;
+	assert_eq!(
+		next_launch.data["client_state"]["api_code_version"], API_CODE_VERSION,
+		"the last READY's value survives the restart"
+	);
+	assert_eq!(
+		next_launch.data["properties"]["installation_id"],
+		expected_installation.as_str()
+	);
+	let channel_id = running.open_text_channel().await;
+	let request = message_request(&running, channel_id, "after the restart").await;
+	let header = super_properties(&request);
+	assert!(header.get("installation_id").is_none());
+	assert_eq!(header, without_installation_id(&next_launch.data["properties"]));
+	assert_eq!(
+		request.header("x-installation-id"),
+		Some(expected_installation.as_str())
+	);
+
+	running.restart().await;
+	let third_launch = nth_identify(&running, 3).await;
+	assert_eq!(
+		third_launch.data["client_state"]["api_code_version"],
+		NEWER_API_CODE_VERSION
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn heartbeat_session_id_rotates_every_thirty_minutes() {
+	let (clock, elapsed) = manual_clock();
+	let running = Running::start_with(Options::new("fingerprint-heartbeat").clock(clock)).await;
+	let channel_id = running.open_text_channel().await;
+	let first = nth_identify(&running, 0).await.data["properties"].clone();
+	let first_session = first["client_heartbeat_session_id"].clone();
+
+	*elapsed.lock() = HEARTBEAT_SESSION_LIFETIME - Duration::from_secs(1);
+	let before = super_properties(&message_request(&running, channel_id, "just before").await);
+	assert_eq!(before, first, "the same identity until the session expires");
+
+	*elapsed.lock() = HEARTBEAT_SESSION_LIFETIME;
+	let after = super_properties(&message_request(&running, channel_id, "just after").await);
+	let second_session = after["client_heartbeat_session_id"].clone();
+	assert_ne!(second_session, first_session);
+	assert_eq!(second_session.as_str().map(str::len), Some(36));
+	assert_eq!(after["client_launch_id"], first["client_launch_id"]);
+	assert_eq!(after["launch_signature"], first["launch_signature"]);
+
+	running.mock().close_gateway(4009);
+	let reidentify = nth_identify(&running, 1).await;
+	assert_eq!(
+		reidentify.data["properties"]["client_heartbeat_session_id"], second_session,
+		"gateway and REST share the rotated id"
+	);
+	assert_eq!(without_installation_id(&reidentify.data["properties"]), after);
+
+	*elapsed.lock() = HEARTBEAT_SESSION_LIFETIME * 2 + Duration::from_secs(1);
+	let third = super_properties(&message_request(&running, channel_id, "an hour later").await);
+	assert_ne!(third["client_heartbeat_session_id"], second_session);
+	assert_ne!(third["client_heartbeat_session_id"], first_session);
 	running.stop().await;
 }

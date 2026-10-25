@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use protocol::Fingerprint;
+use protocol::fingerprint::Clock;
 use rest::api::build;
 use rest::{ClientIdentity, CookieJar};
 use store::Store;
@@ -10,6 +11,10 @@ use url::Url;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn client_identity(store: &Store) -> ClientIdentity {
+	client_identity_with_clock(store, Clock::system())
+}
+
+pub fn client_identity_with_clock(store: &Store, clock: Clock) -> ClientIdentity {
 	let (locale, build_number) = {
 		let settings = store.settings.read();
 		(settings.locale.clone(), settings.client.build_number)
@@ -17,10 +22,11 @@ pub fn client_identity(store: &Store) -> ClientIdentity {
 	let cookies = store
 		.cookie_jar()
 		.map_or_else(CookieJar::default, |saved| CookieJar::load(&saved));
-	ClientIdentity::new(
+	ClientIdentity::with_clock(
 		Fingerprint::web_client(&locale, build_number),
 		store.installation_id(),
 		cookies,
+		clock,
 	)
 }
 

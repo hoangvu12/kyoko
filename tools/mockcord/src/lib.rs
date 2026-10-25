@@ -27,6 +27,7 @@ pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, Signature};
 pub use config::MockConfig;
 pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};
+pub use ready::API_CODE_VERSION;
 pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,
 };

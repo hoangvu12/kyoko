@@ -7,7 +7,9 @@ mod outbox;
 mod session;
 mod transport;
 
-pub use config::{ADVERTISED_CAPABILITIES, Backoff, ClientStateSource, GatewayConfig, GatewayTuning};
+pub use config::{
+	ADVERTISED_CAPABILITIES, Backoff, ClientStateSource, GatewayConfig, GatewayTuning, PropertiesSource,
+};
 pub use error::{AUTHENTICATION_FAILED, FATAL_CLOSE_CODES, GatewayError, SendError};
 pub use event::GatewayEvent;
 pub use handle::{Gateway, GatewayHandle, MemberLookup, MemberRequest};

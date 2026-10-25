@@ -14,6 +14,7 @@ use crate::state::{Shared, Store, Versions};
 use crate::web::installation_id;
 
 pub const DEFAULT_API_VERSION: i64 = 9;
+pub const API_CODE_VERSION: i64 = 1;
 const MOCK_FOLDER_ID: i64 = 1_001;
 const MOCK_FOLDER_COLOR: i64 = 0x6666ff;
 const GUILD_EVENT_READ_STATE: i64 = 1;
@@ -267,6 +268,7 @@ pub fn build(
 		}],
 		"merged_members": merged_members(fixtures, &store),
 		"analytics_token": "x",
+		"api_code_version": API_CODE_VERSION,
 		"apex_experiments": { "installation": installation_id(shared.config.seed) },
 		"user_settings_proto": null,
 		"user_settings": {

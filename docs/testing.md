@@ -44,6 +44,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `rest(RestTuning { .. })` sets the REST pacing gaps and breaker timings (see `docs/rest.md`). Tests that don't measure pacing can zero the gaps.
 - `buckets(limit, window)` sets mockcord's rate-limit headers: every route allows `limit` requests per `window` (5 per 2 s by default, `MockConfig::bucket_limit` and `bucket_window`). mockcord reports the headers but does not enforce them.
 - `prepare(|mock| ..)` runs against mockcord's `Control` before the session starts, for example `transform_ready` for the very first READY.
+- `clock(Clock)` gives the client identity a `protocol::fingerprint::Clock`, kept across restarts. Build one from a shared offset (`Clock::new(move || start + *elapsed.lock())`) and move the offset to age the heartbeat session id without waiting.
 
 ## Waiting
 
@@ -67,7 +68,7 @@ Wait on the effect you are about to assert. For example, wait for a RESUME frame
 
 - `requests`: every REST request under `/api/v<N>`, with fields `method`, `version`, `path` (without the `/api/vN` prefix), `query`, the full `headers`, the raw `body`, the response `status`, `injected`, and an arrival `at` (`std::time::Instant`). Helpers: `header(name)` (case-insensitive), `json()`, `is(method, pattern)`.
 - `connections`: every gateway WebSocket upgrade, with its `query` and handshake `headers`.
-- `frames`: every frame the client sent, as `connection`, `op`, decoded `data` and `at`. `opcode()` maps to `protocol::Opcode`.
+- `frames`: every frame the client sent, as `connection`, `op`, decoded `data`, the `raw` JSON text of `d`, and `at`. `opcode()` maps to `protocol::Opcode`. `data` sorts object keys, so assert key order with `keys(path)`, which lists the keys of the object at `path` in `raw` in wire order (`keys(&[])` for `d` itself, `keys(&["properties"])` for IDENTIFY's properties).
 - `closes`: close frames the client sent, with the code.
 - `media`: every request under `/cdn/`, the mock CDN, with `path`, `query`, `headers`, `status` and `at`. Helpers: `header(name)`, `param(name)`, `url()`. `Recording::media_to(prefix)` filters by path prefix.
 
@@ -111,7 +112,7 @@ mockcord also stands in for the parts of the web client's identity that Discord 
 
 - `/app` and `/assets/*.js` serve a page whose sentry script carries `MockConfig::build_number`. The harness points the session's build-number discovery at `Server::app_url()`, so no test reaches discord.com.
 - Every API response sets a `__dcfduid` cookie (`device_cookie_value(seed)`) until the client sends it back.
-- READY carries `apex_experiments.installation` (`installation_id(seed)`).
+- READY carries `apex_experiments.installation` (`installation_id(seed)`) and `api_code_version` (`API_CODE_VERSION`).
 
 ## Tokens and capabilities
 

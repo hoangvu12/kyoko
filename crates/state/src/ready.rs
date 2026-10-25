@@ -35,6 +35,7 @@ impl State {
 			self.store_relationship(relationship);
 		}
 		self.apply_versioned(&ready.read_state, &ready.user_guild_settings, kept);
+		self.adopt_api_code_version(ready.api_code_version);
 		if let Some(settings) = &ready.user_settings {
 			self.apply_user_settings(settings);
 		}

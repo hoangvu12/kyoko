@@ -15,19 +15,18 @@ struct Outgoing<'a, T: Serialize> {
 #[derive(Serialize)]
 struct IdentifyData<'a> {
 	token: &'a Token,
-	capabilities: u64,
-	properties: &'a IdentifyProperties,
-	presence: Presence<'a>,
+	properties: IdentifyProperties,
 	compress: bool,
-	large_threshold: u32,
+	presence: Presence<'a>,
+	capabilities: u64,
 	client_state: ClientState,
 }
 
 #[derive(Serialize)]
 struct Presence<'a> {
-	status: &'a str,
-	since: Option<u64>,
 	activities: [Value; 0],
+	status: &'a str,
+	since: u64,
 	afk: bool,
 }
 
@@ -47,16 +46,15 @@ pub(crate) fn identify(config: &GatewayConfig) -> Result<String, GatewayError> {
 		Opcode::Identify,
 		&IdentifyData {
 			token: &config.token,
-			capabilities: config.capabilities,
-			properties: &config.identify,
+			properties: config.properties.current(),
+			compress: false,
 			presence: Presence {
-				status: &config.initial_status,
-				since: None,
 				activities: [],
+				status: &config.initial_status,
+				since: 0,
 				afk: false,
 			},
-			compress: false,
-			large_threshold: config.large_threshold,
+			capabilities: config.capabilities,
 			client_state: config.client_state.current(),
 		},
 	)

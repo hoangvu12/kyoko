@@ -8,10 +8,12 @@ The gateway asks a `gateway::ClientStateSource` for `protocol::ClientState` each
 
 | Store | `client_state` |
 |---|---|
-| Fresh, or no trusted version | `{"guild_versions":{}}` |
-| Warm | `{"guild_versions":{},"read_state_version":N,"user_guild_settings_version":M}` |
+| Fresh, or no trusted version | `{"guild_versions":{},"api_code_version":0}` |
+| Warm | `{"guild_versions":{},"read_state_version":N,"user_guild_settings_version":M,"api_code_version":A}` |
 
-Each version is sent only when kyoko holds the matching data. The rest are left out on purpose:
+`api_code_version` is always sent. It echoes the `api_code_version` of the last READY that carried one, and is `0`, the docs' fresh-client value, before kyoko has seen one. READY's value is decoded leniently: anything other than an integer or a decimal string counts as absent, and an absent value keeps the previous one. It is part of `State::versions()` as `api_code` and is persisted inside the READY snapshot (kv `session.ready`), so the next launch's first IDENTIFY carries it. It describes Discord's API, not cached data, so forgetting the versions at shutdown leaves it alone. Sign-out clears it with the snapshot.
+
+Each of the other versions is sent only when kyoko holds the matching data. The rest are left out on purpose:
 
 - `guild_versions` stays `{}`. Every READY replaces guilds and channels, and kyoko can't merge a guild that Discord sends as partial.
 - `highest_last_message_id` and `private_channels_version` are left out. Kyoko doesn't keep the DM list current between READYs: late DMs and DM updates aren't persisted, so it would claim DMs it doesn't have.

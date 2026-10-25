@@ -1,10 +1,14 @@
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use axum::http::HeaderMap;
 use parking_lot::Mutex;
 use protocol::Opcode;
+use serde::Deserialize;
+use serde::de::{Deserializer, MapAccess, Visitor};
 use serde_json::Value;
+use serde_json::value::RawValue;
 use tokio::sync::watch;
 
 use crate::scenario::path_matches;
@@ -86,6 +90,7 @@ pub struct GatewayFrame {
 	pub connection: u64,
 	pub op: i64,
 	pub data: Value,
+	pub raw: String,
 	pub at: Instant,
 }
 
@@ -93,6 +98,52 @@ impl GatewayFrame {
 	pub fn opcode(&self) -> Opcode {
 		Opcode::from(self.op)
 	}
+
+	pub fn keys(&self, path: &[&str]) -> Vec<String> {
+		let mut raw = self.raw.clone();
+		for segment in path {
+			let Some(nested) = ordered_fields(&raw)
+				.into_iter()
+				.find_map(|(name, value)| (name == *segment).then_some(value))
+			else {
+				return Vec::new();
+			};
+			raw = nested;
+		}
+		ordered_fields(&raw).into_iter().map(|(name, _)| name).collect()
+	}
+}
+
+struct OrderedFields(Vec<(String, String)>);
+
+impl<'de> Deserialize<'de> for OrderedFields {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		deserializer.deserialize_map(OrderedFieldsVisitor)
+	}
+}
+
+struct OrderedFieldsVisitor;
+
+impl<'de> Visitor<'de> for OrderedFieldsVisitor {
+	type Value = OrderedFields;
+
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		formatter.write_str("a json object")
+	}
+
+	fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<OrderedFields, A::Error> {
+		let mut fields = Vec::new();
+		while let Some((name, value)) = map.next_entry::<String, Box<RawValue>>()? {
+			fields.push((name, value.get().to_owned()));
+		}
+		Ok(OrderedFields(fields))
+	}
+}
+
+fn ordered_fields(raw: &str) -> Vec<(String, String)> {
+	serde_json::from_str::<OrderedFields>(raw)
+		.map(|fields| fields.0)
+		.unwrap_or_default()
 }
 
 #[derive(Debug, Clone)]

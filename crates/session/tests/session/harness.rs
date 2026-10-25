@@ -5,6 +5,7 @@ use std::time::Duration;
 use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
 use protocol::Opcode;
+use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
 use session::{
 	CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig, SessionHooks,
@@ -36,6 +37,7 @@ pub struct Options {
 	plaintext_secrets: bool,
 	retention: Retention,
 	keyring: Arc<MemoryKeyring>,
+	clock: Clock,
 }
 
 impl Options {
@@ -57,7 +59,13 @@ impl Options {
 			plaintext_secrets: false,
 			retention: Retention::default(),
 			keyring: Arc::new(MemoryKeyring::new()),
+			clock: Clock::system(),
 		}
+	}
+
+	pub fn clock(mut self, clock: Clock) -> Self {
+		self.clock = clock;
+		self
 	}
 
 	pub fn plaintext_secrets(mut self, plaintext: bool) -> Self {
@@ -164,6 +172,7 @@ impl Running {
 			plaintext_secrets: options.plaintext_secrets,
 			retention: options.retention,
 			keyring: options.keyring,
+			clock: options.clock,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
 		Running {
@@ -348,6 +357,7 @@ struct Launch {
 	plaintext_secrets: bool,
 	retention: Retention,
 	keyring: Arc<MemoryKeyring>,
+	clock: Clock,
 }
 
 fn open_session(
@@ -365,7 +375,7 @@ fn open_session(
 	let store = Arc::new(Store::open_with(paths, launch.keyring.clone()).expect("store opens"));
 	let notifier = wake.clone();
 	let session = Session::start(SessionConfig {
-		identity: session::client_identity(&store),
+		identity: session::client_identity_with_clock(&store, launch.clock.clone()),
 		build_source: Some(Url::parse(&server.app_url()).expect("app url")),
 		store: store.clone(),
 		rest_base: Url::parse(server.rest_base_url()).expect("rest url"),

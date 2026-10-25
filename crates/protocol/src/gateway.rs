@@ -84,8 +84,6 @@ pub struct Identify {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub compress: Option<bool>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub large_threshold: Option<u32>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub presence: Option<Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub capabilities: Option<u64>,
@@ -101,6 +99,7 @@ pub struct ClientState {
 	pub read_state_version: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub user_guild_settings_version: Option<u64>,
+	pub api_code_version: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,6 +127,8 @@ pub struct Ready {
 	pub user_settings_proto: Option<String>,
 	pub user_settings: Option<Value>,
 	pub apex_experiments: Value,
+	#[serde(deserialize_with = "crate::lenient::optional_int")]
+	pub api_code_version: Option<i64>,
 }
 
 #[derive(Deserialize)]

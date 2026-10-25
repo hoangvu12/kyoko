@@ -12,6 +12,7 @@ use crate::state::State;
 pub struct CacheVersions {
 	pub read_state: Option<u64>,
 	pub user_guild_settings: Option<u64>,
+	pub api_code: Option<i64>,
 }
 
 impl CacheVersions {
@@ -19,6 +20,7 @@ impl CacheVersions {
 		ClientState {
 			read_state_version: self.read_state,
 			user_guild_settings_version: self.user_guild_settings,
+			api_code_version: self.api_code.unwrap_or_default(),
 			..ClientState::default()
 		}
 	}
@@ -105,6 +107,12 @@ impl State {
 			self.store_guild_settings(settings);
 		}
 		self.versions.user_guild_settings = user_guild_settings.version;
+	}
+
+	pub(crate) fn adopt_api_code_version(&mut self, version: Option<i64>) {
+		if version.is_some() {
+			self.versions.api_code = version;
+		}
 	}
 
 	pub(crate) fn accepts_ack(&mut self, ack: &MessageAck) -> bool {

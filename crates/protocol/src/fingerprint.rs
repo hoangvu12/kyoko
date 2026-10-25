@@ -1,3 +1,7 @@
+use std::fmt;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
@@ -5,7 +9,7 @@ use serde_json::Value;
 
 use crate::snowflake::Snowflake;
 
-pub const CHROME_MAJOR: u32 = 152;
+pub const CHROME_MAJOR: u32 = 156;
 pub const FALLBACK_BUILD_NUMBER: u64 = 649389;
 pub const API_VERSION: u32 = 9;
 pub const WEB_ORIGIN: &str = "https://discord.com";
@@ -14,6 +18,23 @@ pub const HOME_REFERER: &str = "https://discord.com/channels/@me";
 pub const MAX_INSTALLATION_ID_LEN: usize = 128;
 pub const IMAGE_ACCEPT: &str = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 pub const IMAGE_REFERER: &str = "https://discord.com/";
+pub const HEARTBEAT_SESSION_LIFETIME: Duration = Duration::from_secs(30 * 60);
+pub const LAUNCH_SIGNATURE_MOD_BITS: u128 = (1 << 119)
+	| (1 << 108)
+	| (1 << 100)
+	| (1 << 91)
+	| (1 << 84)
+	| (1 << 75)
+	| (1 << 61)
+	| (1 << 55)
+	| (1 << 48)
+	| (1 << 38)
+	| (1 << 24)
+	| (1 << 11);
+
+const GREASE_CHARACTERS: [char; 11] = [' ', '(', ':', '-', '.', '/', ')', ';', '=', '?', '_'];
+const GREASE_VERSIONS: [&str; 3] = ["8", "99", "24"];
+const BRAND_ORDERS: [[usize; 3]; 6] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -34,14 +55,61 @@ pub struct IdentifyProperties {
 	pub client_event_source: Value,
 	pub has_client_mods: bool,
 	pub client_launch_id: String,
+	pub launch_signature: String,
 	pub client_app_state: String,
 	pub client_heartbeat_session_id: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub installation_id: Option<String>,
 }
 
 impl IdentifyProperties {
 	pub fn user_agent(&self) -> &str {
 		&self.browser_user_agent
 	}
+
+	pub fn super_properties(&self) -> Self {
+		Self {
+			installation_id: None,
+			..self.clone()
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct Clock(Arc<dyn Fn() -> Instant + Send + Sync>);
+
+impl Clock {
+	pub fn system() -> Self {
+		Self::new(Instant::now)
+	}
+
+	pub fn new(now: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
+		Self(Arc::new(now))
+	}
+
+	pub fn now(&self) -> Instant {
+		(self.0)()
+	}
+}
+
+impl Default for Clock {
+	fn default() -> Self {
+		Self::system()
+	}
+}
+
+impl fmt::Debug for Clock {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		formatter.write_str("Clock")
+	}
+}
+
+pub fn heartbeat_session_expired(started: Instant, now: Instant) -> bool {
+	now.saturating_duration_since(started) >= HEARTBEAT_SESSION_LIFETIME
+}
+
+pub fn launch_signature() -> String {
+	uuid::Uuid::from_u128(uuid::Uuid::new_v4().as_u128() & !LAUNCH_SIGNATURE_MOD_BITS).to_string()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,8 +138,10 @@ impl Fingerprint {
 				client_event_source: Value::Null,
 				has_client_mods: false,
 				client_launch_id: uuid::Uuid::new_v4().to_string(),
+				launch_signature: launch_signature(),
 				client_app_state: "focused".to_owned(),
 				client_heartbeat_session_id: uuid::Uuid::new_v4().to_string(),
+				installation_id: None,
 			},
 			timezone: iana_time_zone::get_timezone()
 				.ok()
@@ -103,8 +173,23 @@ impl Fingerprint {
 		self.properties.client_build_number = build_number;
 	}
 
+	pub fn heartbeat_session_id(&self) -> &str {
+		&self.properties.client_heartbeat_session_id
+	}
+
+	pub fn renew_heartbeat_session(&mut self) {
+		self.properties.client_heartbeat_session_id = uuid::Uuid::new_v4().to_string();
+	}
+
+	pub fn identify_properties(&self, installation_id: Option<&str>) -> IdentifyProperties {
+		IdentifyProperties {
+			installation_id: installation_id.map(str::to_owned),
+			..self.properties.clone()
+		}
+	}
+
 	pub fn super_properties(&self) -> String {
-		STANDARD.encode(serde_json::to_vec(&self.properties).unwrap_or_default())
+		STANDARD.encode(serde_json::to_vec(&self.properties.super_properties()).unwrap_or_default())
 	}
 
 	pub fn accept_language(&self) -> String {
@@ -148,9 +233,32 @@ pub fn accept_language(locale: &str) -> String {
 }
 
 pub fn sec_ch_ua() -> String {
-	format!(
-		"\"Chromium\";v=\"{CHROME_MAJOR}\", \"Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"{CHROME_MAJOR}\""
-	)
+	brand_list(CHROME_MAJOR)
+		.iter()
+		.map(|(brand, version)| format!("\"{brand}\";v=\"{version}\""))
+		.collect::<Vec<_>>()
+		.join(", ")
+}
+
+fn brand_list(major: u32) -> [(String, String); 3] {
+	let seed = major as usize;
+	let grease_brand = format!(
+		"Not{}A{}Brand",
+		GREASE_CHARACTERS[seed % GREASE_CHARACTERS.len()],
+		GREASE_CHARACTERS[(seed + 1) % GREASE_CHARACTERS.len()]
+	);
+	let grease_version = GREASE_VERSIONS[seed % GREASE_VERSIONS.len()].to_owned();
+	let generated = [
+		(grease_brand, grease_version),
+		("Chromium".to_owned(), major.to_string()),
+		("Google Chrome".to_owned(), major.to_string()),
+	];
+	let order = BRAND_ORDERS[seed % BRAND_ORDERS.len()];
+	let mut shuffled: [(String, String); 3] = Default::default();
+	for (brand, position) in generated.into_iter().zip(order) {
+		shuffled[position] = brand;
+	}
+	shuffled
 }
 
 pub fn sec_ch_ua_platform() -> &'static str {
