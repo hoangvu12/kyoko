@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The token lives only in Windows Credential Manager. Plaintext storage needs an explicit setting and shows a warning
 - [ ] A keyring error never silently falls back to a plaintext file
