@@ -1,14 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod capture;
 mod churn;
 mod ui;
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use bridge::{Inbox, changes_notifier};
+use capture::{Capture, Opening, Screen};
 use clap::Parser;
 use media::{Gallery, Limits, MediaService, Playback};
 use mockcord::{MockConfig, Server};
@@ -60,6 +63,30 @@ struct Cli {
 		help = "Open the most recently active text channel once the guilds arrive"
 	)]
 	open_busiest: bool,
+	#[arg(
+		long,
+		value_name = "URL",
+		hide = true,
+		conflicts_with = "mock",
+		help = "Use a mock Discord server already running at this origin"
+	)]
+	mock_server: Option<Url>,
+	#[arg(
+		long,
+		value_name = "NAME",
+		hide = true,
+		requires = "capture_ready",
+		help = "Drive the window to a parity screen and signal when it settles, used by cargo xtask parity"
+	)]
+	capture_screen: Option<String>,
+	#[arg(
+		long,
+		value_name = "PATH",
+		hide = true,
+		requires = "capture_screen",
+		help = "File to write once the capture screen has settled"
+	)]
+	capture_ready: Option<PathBuf>,
 	#[arg(
 		long,
 		value_name = "PATH",
@@ -126,15 +153,33 @@ impl Drop for ScratchDir {
 	}
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<ExitCode> {
 	let cli = Cli::parse();
+	let capture = match (&cli.capture_screen, &cli.capture_ready) {
+		(Some(name), Some(ready)) => match Screen::named(name) {
+			Some(screen) => Some(Capture {
+				name: name.clone(),
+				screen,
+				ready: ready.clone(),
+			}),
+			None => {
+				eprintln!("kyoko: no capture steps for {name} yet");
+				return Ok(ExitCode::from(capture::UNKNOWN_SCREEN));
+			}
+		},
+		_ => None,
+	};
+	let mocked = cli.mock || cli.mock_server.is_some();
+	if capture.is_some() && !mocked {
+		bail!("--capture-screen needs --mock or --mock-server");
+	}
 	init_tracing(&cli.log);
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
+	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), mocked)?;
 	let server = if cli.mock {
 		Some(Arc::new(
 			runtime
@@ -149,9 +194,10 @@ fn main() -> Result<()> {
 	} else {
 		None
 	};
-	let backend = match &server {
-		Some(server) => mock_backend(server)?,
-		None => discord_backend()?,
+	let backend = match (&server, &cli.mock_server) {
+		(Some(server), _) => mock_backend(server)?,
+		(None, Some(origin)) => external_mock_backend(origin)?,
+		(None, None) => discord_backend()?,
 	};
 	let churn = match (&server, cli.churn) {
 		(Some(server), Some(seconds)) => {
@@ -195,6 +241,10 @@ fn main() -> Result<()> {
 		))),
 		_ => None,
 	};
+	let opening = match &capture {
+		Some(capture) => Some(capture.screen.opening()),
+		None => cli.open_busiest.then_some(Opening::Busiest),
+	};
 	let outcome = ui::run(
 		session,
 		inbox,
@@ -203,7 +253,8 @@ fn main() -> Result<()> {
 			cdn: backend.cdn,
 			reduced_motion,
 		},
-		cli.open_busiest,
+		opening,
+		capture,
 		{
 			let scratch = scratch.clone();
 			move || scratch.remove()
@@ -221,7 +272,7 @@ fn main() -> Result<()> {
 		});
 	}
 	scratch.remove();
-	outcome
+	outcome.map(|()| ExitCode::SUCCESS)
 }
 
 fn mock_backend(server: &Server) -> Result<Backend> {
@@ -233,6 +284,23 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		remember_account: true,
 		cdn: server.cdn_url(),
 		loopback_port: Some(server.address().port()),
+	})
+}
+
+fn external_mock_backend(origin: &Url) -> Result<Backend> {
+	let host = origin.host_str().context("the mock server url has no host")?;
+	let port = origin
+		.port_or_known_default()
+		.context("the mock server url has no port")?;
+	let base = format!("http://{host}:{port}");
+	Ok(Backend {
+		rest_base: Url::parse(&format!("{base}/api/v9")).context("mock rest url")?,
+		gateway_url: format!("ws://{host}:{port}/gateway"),
+		token: Token::new(MockConfig::default().token),
+		build_source: None,
+		remember_account: true,
+		cdn: format!("{base}/cdn"),
+		loopback_port: Some(port),
 	})
 }
 

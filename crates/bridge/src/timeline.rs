@@ -128,20 +128,10 @@ pub fn busiest_channel(state: &State) -> Option<OpenChannel> {
 		.guild_summaries()
 		.into_iter()
 		.flat_map(|guild| {
-			state
-				.guild_channel_tree(guild.id)
-				.into_iter()
-				.flat_map(|node| node.children)
-				.filter(|row| !row.locked)
-				.filter(|row| {
-					matches!(
-						ChannelKind::of(row.kind),
-						ChannelKind::Text | ChannelKind::Announcement
-					)
-				})
-				.filter_map(|row| {
-					let last = state.channel(row.id)?.last_message_id?;
-					Some((last, guild.id, row.id))
+			openable_channels(state, guild.id)
+				.filter_map(|channel_id| {
+					let last = state.channel(channel_id)?.last_message_id?;
+					Some((last, guild.id, channel_id))
 				})
 				.collect::<Vec<_>>()
 		})
@@ -150,4 +140,28 @@ pub fn busiest_channel(state: &State) -> Option<OpenChannel> {
 			guild_id: Some(guild_id),
 			channel_id,
 		})
+}
+
+pub fn first_channel(state: &State) -> Option<OpenChannel> {
+	let guild_id = state.guild_summaries().first()?.id;
+	let channel_id = openable_channels(state, guild_id).next()?;
+	Some(OpenChannel {
+		guild_id: Some(guild_id),
+		channel_id,
+	})
+}
+
+fn openable_channels(state: &State, guild_id: Snowflake) -> impl Iterator<Item = Snowflake> {
+	state
+		.guild_channel_tree(guild_id)
+		.into_iter()
+		.flat_map(|node| node.children)
+		.filter(|row| !row.locked)
+		.filter(|row| {
+			matches!(
+				ChannelKind::of(row.kind),
+				ChannelKind::Text | ChannelKind::Announcement
+			)
+		})
+		.map(|row| row.id)
 }

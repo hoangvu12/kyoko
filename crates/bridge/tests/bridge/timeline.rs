@@ -149,3 +149,22 @@ async fn the_busiest_channel_is_the_one_with_the_newest_message() {
 	assert_eq!(busiest.guild_id, Some(guild));
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_first_channel_is_the_top_text_channel_of_the_top_guild() {
+	let running = Running::start("timeline-first").await;
+	let guild = running.view.sidebar.guilds().first().expect("a guild").id;
+	assert_eq!(running.view.sidebar.selected(), Some(guild));
+	let expected = running
+		.view
+		.sidebar
+		.channels()
+		.iter()
+		.find(|channel| matches!(channel.kind, ChannelKind::Text | ChannelKind::Announcement))
+		.map(|channel| channel.id)
+		.expect("the top guild has a text channel");
+	let first = bridge::first_channel(&running.session().state().read()).expect("a first channel");
+	assert_eq!(first.guild_id, Some(guild));
+	assert_eq!(first.channel_id, expected);
+	running.stop().await;
+}

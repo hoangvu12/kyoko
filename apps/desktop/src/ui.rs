@@ -15,10 +15,14 @@ use zgx::reactive::Runtime;
 use zgx_desktop::{Application, WindowInfo, WindowOptions};
 use zgx_script::{ScriptHost, Shared, Value};
 
+use crate::capture::{self, Capture, Opening};
+
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const INITIALS: usize = 3;
 const AVATAR_POINTS: f64 = 32.;
+const WIDTH: f64 = 1100.;
+const HEIGHT: f64 = 720.;
 
 pub struct Images {
 	pub gallery: Gallery,
@@ -30,15 +34,20 @@ pub fn run(
 	session: Session,
 	inbox: Inbox<Changes>,
 	images: Images,
-	open_busiest: bool,
+	opening: Option<Opening>,
+	capture: Option<Capture>,
 	after_close: impl Fn() + 'static,
 ) -> Result<()> {
 	let script = ui_dir().join("app.luau");
+	let (width, height) = match capture {
+		Some(_) => (capture::WIDTH, capture::HEIGHT),
+		None => (WIDTH, HEIGHT),
+	};
 	Application::new()
 		.window(WindowOptions {
 			title: "Kyoko".into(),
-			width: 1100.,
-			height: 720.,
+			width,
+			height,
 			min_size: Some((640., 420.)),
 			..Default::default()
 		})
@@ -49,9 +58,12 @@ pub fn run(
 				info: cx.window_info.clone(),
 			};
 			let link = Link::install(&host, window, session, inbox.clone(), images);
-			link.open_busiest.set(open_busiest);
+			link.opening.set(opening);
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
+			if let Some(capture) = capture.clone() {
+				cx.tasks.spawn(link.clone().signal_when_settled(capture));
+			}
 			let pictures = link.clone();
 			cx.tasks.spawn(async move { pictures.show_images().await });
 			if let Err(error) = host.reload() {
@@ -89,7 +101,8 @@ struct Link {
 	image_wakes: Inbox<()>,
 	avatar: RefCell<Option<ImageName>>,
 	avatar_requested_at: Cell<Option<Instant>>,
-	open_busiest: Cell<bool>,
+	avatar_shown: Cell<bool>,
+	opening: Cell<Option<Opening>>,
 	sidebar: RefCell<Sidebar>,
 	timeline: RefCell<Timeline>,
 	guilds: Shared,
@@ -128,7 +141,8 @@ impl Link {
 			image_wakes,
 			avatar: RefCell::new(None),
 			avatar_requested_at: Cell::new(None),
-			open_busiest: Cell::new(false),
+			avatar_shown: Cell::new(false),
+			opening: Cell::new(None),
 			sidebar: RefCell::new(Sidebar::default()),
 			timeline: RefCell::new(Timeline::default()),
 			guilds: host.shared("guilds", Value::List(Rc::new([]))),
@@ -201,6 +215,7 @@ impl Link {
 		let Some(requested) = self.avatar_requested_at.take() else {
 			return;
 		};
+		self.avatar_shown.set(true);
 		self.avatar_ready.set(true.into());
 		tracing::info!(
 			elapsed_ms = requested.elapsed().as_millis() as u64,
@@ -220,21 +235,44 @@ impl Link {
 	}
 
 	fn apply(&self, changes: &Changes) {
-		let busiest = self.publish(changes);
-		if let Some(open) = busiest {
+		let opened = self.publish(changes);
+		if let Some((opening, open)) = opened {
 			if let Some(guild_id) = open.guild_id {
 				self.select_guild(guild_id);
 			}
 			self.select_channel(open.channel_id);
 			tracing::info!(
+				?opening,
 				guilds = self.sidebar.borrow().guilds().len(),
 				channels = self.sidebar.borrow().channels().len(),
-				"opened the most recently active text channel"
+				"opened a channel on launch"
 			);
 		}
 	}
 
-	fn publish(&self, changes: &Changes) -> Option<OpenChannel> {
+	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
+		let started = Instant::now();
+		while !self.settled() {
+			if started.elapsed() >= capture::LIMIT {
+				tracing::warn!(screen = %capture.name, "the capture screen did not settle in time");
+				break;
+			}
+			zgx::timer::sleep(capture::POLL).await;
+		}
+		zgx::timer::sleep(capture::SETTLE).await;
+		match capture::signal_ready(&capture.ready) {
+			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),
+			Err(error) => tracing::warn!(%error, "could not signal the capture screen"),
+		}
+	}
+
+	fn settled(&self) -> bool {
+		self.opening.get().is_none()
+			&& !self.timeline.borrow().messages().is_empty()
+			&& self.avatar_shown.get()
+	}
+
+	fn publish(&self, changes: &Changes) -> Option<(Opening, OpenChannel)> {
 		let state = self.state()?;
 		let state = state.read();
 		let newest = self.timeline.borrow().messages().last().map(|message| message.id);
@@ -271,12 +309,16 @@ impl Link {
 				.count();
 			tracing::debug!(shown = timeline.messages().len(), appended, "timeline published");
 		}
-		let ready = self.open_busiest.get() && !self.sidebar.borrow().guilds().is_empty();
-		if !ready {
+		let opening = self.opening.get()?;
+		if self.sidebar.borrow().guilds().is_empty() {
 			return None;
 		}
-		self.open_busiest.set(false);
-		bridge::busiest_channel(&state)
+		self.opening.set(None);
+		let open = match opening {
+			Opening::Busiest => bridge::busiest_channel(&state),
+			Opening::First => bridge::first_channel(&state),
+		};
+		open.map(|open| (opening, open))
 	}
 
 	fn open_guild(&self) -> Option<Snowflake> {

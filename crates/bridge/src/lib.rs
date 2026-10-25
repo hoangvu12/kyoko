@@ -9,4 +9,4 @@ pub use images::{
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use sidebar::{ChannelEntry, ChannelKind, GuildEntry, Refresh, Sidebar};
-pub use timeline::{MessageEntry, OpenChannel, Timeline, WINDOW, busiest_channel};
+pub use timeline::{MessageEntry, OpenChannel, Timeline, WINDOW, busiest_channel, first_channel};
