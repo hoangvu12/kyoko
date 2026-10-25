@@ -5,7 +5,7 @@ use std::rc::Rc;
 use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon};
 use chrono::NaiveDate;
 use media::cdn::Quality;
-use protocol::{MessageFlags, Snowflake};
+use protocol::{MessageFlags, MessageType, Snowflake};
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
@@ -134,7 +134,7 @@ pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal
 		Row::Unread => unread_marker(),
 		Row::Message(entry) if entry.is_plain() && entry.grouped => follow_up(entry, env, hovered, bump),
 		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env, hovered, bump),
-		Row::Message(entry) => system_row(entry),
+		Row::Message(entry) => system_row(entry, env),
 	}
 }
 
@@ -281,7 +281,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<Vi
 		out.extend(attachments::embeds(entry, env, bump));
 	}
 	out.extend(attachments::stickers(entry, env));
-	out.extend(extras::thread_chip(entry));
+	out.extend(extras::thread_chip(entry, env));
 	out.extend(extras::poll(entry, env, bump));
 	out.extend(extras::reactions(entry, env));
 	out
@@ -454,12 +454,23 @@ fn system_icon(icon_kind: SystemIcon) -> (&'static str, &'static str) {
 	}
 }
 
-fn system_row(entry: &MessageEntry) -> View {
+fn created_thread(entry: &MessageEntry) -> Option<Snowflake> {
+	(entry.kind == MessageType::ThreadCreated)
+		.then(|| entry.message.message_reference.as_ref()?.channel_id)
+		.flatten()
+}
+
+fn system_row(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
 	let Some(line) = entry.system.as_ref() else {
 		return div();
 	};
 	let (glyph, color) = system_icon(line.icon);
+	let actions = env.actions.clone();
 	row()
+		.when_some(created_thread(entry), move |row, thread_id| {
+			row.cursor(Cursor::Pointer)
+				.on_click(move || actions.open_thread(thread_id))
+		})
 		.relative()
 		.w_full()
 		.items_baseline()

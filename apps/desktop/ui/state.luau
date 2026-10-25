@@ -131,6 +131,31 @@ export type SearchPanel = {
 	busy: boolean,
 	more: boolean,
 }
+export type ThreadPanel = {
+	open: boolean,
+	id: string,
+	name: string,
+	members: number,
+	archived: boolean,
+	joined: boolean,
+	can_manage: boolean,
+}
+export type ForumView = { open: boolean, id: string, sort: string, gallery: boolean }
+export type ForumTag = { key: string, id: string, label: string, active: boolean }
+export type ForumBadge = { key: string, label: string, moderated: boolean }
+export type ForumCard = {
+	key: string,
+	id: string,
+	title: string,
+	excerpt: string,
+	tags: { ForumBadge },
+	author: string,
+	avatar: string,
+	replies: string,
+	activity: string,
+	pinned: boolean,
+	archived: boolean,
+}
 
 local M = {}
 
@@ -250,6 +275,42 @@ M.plugins = {
 	list = ui.shared("plugins.list", {} :: { Plugin }),
 	notice = ui.shared("plugins.notice", nil :: PluginNotice?),
 	folder = ui.shared("plugins.folder", ""),
+}
+
+M.timeline.channel_icon = ui.shared("timeline.channel_icon", "hash")
+
+M.thread_composer = {
+	open = ui.shared("thread_composer.open", false),
+	placeholder = ui.shared("thread_composer.placeholder", ""),
+	replace = ui.shared("thread_composer.replace", { serial = 0, text = "", caret = 0 } :: ComposerReplace),
+	focus = ui.shared("thread_composer.focus", 0),
+	reply = ui.shared("thread_composer.reply", { active = false } :: ComposerReply),
+	editing = ui.shared("thread_composer.editing", false),
+	files = ui.shared("thread_composer.files", {} :: { ComposerFile }),
+	suggestions = ui.shared("thread_composer.suggestions", {} :: { ComposerSuggestion }),
+	selected = ui.shared("thread_composer.selected", 1),
+	typing = ui.shared("thread_composer.typing", ""),
+	notice = ui.shared("thread_composer.notice", { kind = "" } :: ComposerNotice),
+	drop_hover = ui.shared("thread_composer.drop_hover", false),
+	limit = ui.shared("thread_composer.limit", 2000),
+}
+
+M.threads = {
+	panel = ui.shared("threads.panel", {
+		open = false,
+		id = "",
+		name = "",
+		members = 0,
+		archived = false,
+		joined = true,
+		can_manage = false,
+	} :: ThreadPanel),
+}
+
+M.forum = {
+	view = ui.shared("forum.view", { open = false, id = "", sort = "Recently Active", gallery = false } :: ForumView),
+	tags = ui.shared("forum.tags", {} :: { ForumTag }),
+	cards = ui.shared("forum.cards", {} :: { ForumCard }),
 }
 
 return M

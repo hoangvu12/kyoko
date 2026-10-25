@@ -58,6 +58,14 @@ icon_files!(
 	"gif",
 	"sticker",
 	"external_link",
+	"archive",
+	"unarchive",
+	"members",
+	"attach",
+	"plus",
+	"chevron_down",
+	"list_layout",
+	"grid_layout",
 );
 
 thread_local! {

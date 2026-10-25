@@ -134,11 +134,13 @@ return function()
 			min_w = 0,
 			items = "center",
 			gap = theme.size.space_8,
-			ui.show(
-				direct,
-				icon { name = "at_sign", size = TITLE_ICON, color = theme.color.text_muted },
-				icon { name = "hash", size = TITLE_ICON, color = theme.color.text_muted }
-			),
+			icon {
+				name = function()
+					return state.timeline.channel_icon:get()
+				end,
+				size = TITLE_ICON,
+				color = theme.color.text_muted,
+			},
 			ui.text {
 				function()
 					return state.timeline.channel_name:get()
@@ -156,11 +158,25 @@ return function()
 			shrink = 0,
 			items = "center",
 			gap = theme.size.space_16,
-			ui.show(guild, icon_button { name = "thread", tooltip = "Threads" }),
+			ui.show(guild, icon_button {
+				name = "thread",
+				id = "top_bar_threads",
+				tooltip = "Threads",
+				on_press = function(point: any)
+					actions.open_threads(point.x, point.y)
+				end,
+			}),
 			ui.show(direct, icon_button { name = "phone", tooltip = "Start Voice Call" }),
 			ui.show(direct, icon_button { name = "video", tooltip = "Start Video Call" }),
 			ui.show(guild, icon_button { name = "bell", tooltip = "Notification Settings" }),
-			icon_button { name = "pin", tooltip = "Pinned Messages" },
+			icon_button {
+				name = "pin",
+				id = "top_bar_pins",
+				tooltip = "Pinned Messages",
+				on_press = function(point: any)
+					actions.open_pins(point.x, point.y)
+				end,
+			},
 			ui.show(guild, icon_button {
 				name = "members",
 				tooltip = "Member List",

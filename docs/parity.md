@@ -161,13 +161,13 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `threads-list` | 33 | Default selection, then open the channel's thread list from the top bar at (871, 46). | no |
-| `thread-panel` | 33 | Default selection, then open the channel's first thread beside it and wait for its history. | no |
-| `thread-create` | 33 | Default selection, then open the create-thread dialog for the channel. | no |
-| `pins` | 33 | Default selection, then open the pinned messages from the top bar at (958, 46). | no |
-| `forum` | 33 | Open the first guild's forum channel. | no |
-| `forum-post` | 33 | As `forum`, then open its first post and wait for its history. | no |
-| `forum-post-create` | 33 | As `forum`, then open the new-post dialog. | no |
+| `threads-list` | 33 | Default selection, then open the channel's thread list from the top bar at (871, 46). | yes |
+| `thread-panel` | 33 | Default selection, then open the channel's first thread beside it and wait for its history. | yes |
+| `thread-create` | 33 | Default selection, then open the create-thread dialog for the channel. | yes |
+| `pins` | 33 | Default selection, then open the pinned messages from the top bar at (958, 46). | yes |
+| `forum` | 33 | Open the first guild's forum channel. | yes |
+| `forum-post` | 33 | As `forum`, then open its first post and wait for its history. | yes |
+| `forum-post-create` | 33 | As `forum`, then open the new-post dialog. | yes |
 
 ### 34 Friends
 

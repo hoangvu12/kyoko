@@ -89,6 +89,8 @@ pub struct MessageActions {
 	jump: Hook<Snowflake>,
 	reveal: Hook<(Snowflake, MessageAction)>,
 	profile: Hook<(Snowflake, (f32, f32))>,
+	open_thread: Hook<Snowflake>,
+	create_thread: Hook<(Snowflake, Snowflake)>,
 	emoji: Source<EmojiPicker>,
 	pointer: Cell<(f32, f32)>,
 	origin: Cell<(f32, f32)>,
@@ -127,6 +129,8 @@ impl MessageActions {
 			jump: RefCell::new(None),
 			reveal: RefCell::new(None),
 			profile: RefCell::new(None),
+			open_thread: RefCell::new(None),
+			create_thread: RefCell::new(None),
 			emoji: RefCell::new(None),
 			pointer: Cell::new((0., 0.)),
 			origin: Cell::new((0., 0.)),
@@ -149,6 +153,30 @@ impl MessageActions {
 
 	pub fn on_profile(&self, hook: impl Fn((Snowflake, (f32, f32))) + 'static) {
 		*self.profile.borrow_mut() = Some(Box::new(hook));
+	}
+
+	pub fn on_open_thread(&self, hook: impl Fn(Snowflake) + 'static) {
+		*self.open_thread.borrow_mut() = Some(Box::new(hook));
+	}
+
+	pub fn on_create_thread(&self, hook: impl Fn((Snowflake, Snowflake)) + 'static) {
+		*self.create_thread.borrow_mut() = Some(Box::new(hook));
+	}
+
+	pub fn confirm_unpin(&self, channel_id: Snowflake, message_id: Snowflake) {
+		self.acted_at.set(Some(Instant::now()));
+		self.dialogs.ask(Confirm::Pin {
+			channel_id,
+			message_id,
+			pin: false,
+		});
+	}
+
+	pub fn open_thread(&self, thread_id: Snowflake) {
+		match self.open_thread.borrow().as_ref() {
+			Some(open) => open(thread_id),
+			None => tracing::debug!(%thread_id, "no thread hook"),
+		}
 	}
 
 	pub fn on_emoji_catalog(&self, source: impl Fn() -> Option<EmojiPicker> + 'static) {
@@ -326,7 +354,10 @@ impl MessageActions {
 			MessageAction::CopyLink => copy(&bridge::message_link(access.guild_id, channel_id, message_id)),
 			MessageAction::CopyId => copy(&message_id.to_string()),
 			MessageAction::Forward => tracing::debug!("forwarding opens from ticket 35"),
-			MessageAction::CreateThread => tracing::debug!("threads are created from ticket 33"),
+			MessageAction::CreateThread => match self.create_thread.borrow().as_ref() {
+				Some(create) => create((channel_id, message_id)),
+				None => tracing::debug!("no thread creation hook"),
+			},
 			MessageAction::Pin | MessageAction::Unpin => {
 				self.acted_at.set(Some(Instant::now()));
 				self.dialogs.ask(Confirm::Pin {
@@ -692,6 +723,7 @@ fn needs_open_channel(action: MessageAction) -> bool {
 			| MessageAction::Select
 			| MessageAction::Deselect
 			| MessageAction::DeleteSelected
+			| MessageAction::CreateThread
 	)
 }
 

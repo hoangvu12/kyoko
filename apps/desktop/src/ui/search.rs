@@ -320,8 +320,7 @@ impl Link {
 		let Some(hit) = self.hit(message_id) else {
 			return;
 		};
-		let open = self.timeline.borrow().open();
-		if open.map(|open| open.channel_id) != Some(hit.channel_id) {
+		if self.view_showing(hit.channel_id).is_none() {
 			match hit.guild_id {
 				Some(guild_id) => self.open(Some(guild_id), hit.channel_id),
 				None => self.select_dm(hit.channel_id),
@@ -330,13 +329,13 @@ impl Link {
 				self.publish_actions(&shared.read(), &Changes::default());
 			}
 		}
-		if self.timeline.borrow().open().map(|open| open.channel_id) != Some(hit.channel_id) {
+		let Some(view) = self.view_showing(hit.channel_id) else {
 			tracing::debug!("the channel of the search result cannot be opened");
 			return;
-		}
+		};
 		match then {
-			Some(action) => self.timeline_view.jump_then(message_id, action),
-			None => self.timeline_view.jump_to(message_id),
+			Some(action) => view.jump_then(message_id, action),
+			None => view.jump_to(message_id),
 		}
 	}
 

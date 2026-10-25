@@ -3,6 +3,7 @@ local icon = require("./icon")
 
 export type Props = {
 	name: string | () -> string,
+	id: string?,
 	tooltip: any?,
 	icon_size: number?,
 	hit_size: number?,
@@ -10,6 +11,7 @@ export type Props = {
 	danger: (() -> boolean)?,
 	filled_hover: boolean?,
 	on_click: any?,
+	on_press: any?,
 }
 
 return ui.component(function(props: Props)
@@ -21,6 +23,7 @@ return ui.component(function(props: Props)
 		return if props.danger then props.danger() else false
 	end
 	return ui.button {
+		id = props.id,
 		w = props.hit_size or 28,
 		h = props.hit_size or 28,
 		shrink = 0,
@@ -38,6 +41,7 @@ return ui.component(function(props: Props)
 			hovered:set(inside)
 		end,
 		on_click = props.on_click,
+		on_press = props.on_press,
 		icon {
 			name = props.name,
 			size = props.icon_size or 20,

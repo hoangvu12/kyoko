@@ -147,6 +147,49 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"a thread beside its channel",
+		"Join bug triage to take part in the conversation.",
+		&[
+			("threads.panel", thread_panel(true)),
+			("thread_composer.open", json!(true)),
+			("thread_composer.placeholder", json!("Message #bug triage")),
+		],
+	);
+	shows(
+		&mut app,
+		"a forum with its posts",
+		"crash on startup",
+		&[
+			("threads.panel", thread_panel(false)),
+			("timeline.channel_icon", json!("forum")),
+			(
+				"forum.view",
+				json!({ "open": true, "id": "30", "sort": "Recently Active", "gallery": false }),
+			),
+			("forum.tags", forum_tags()),
+			("forum.cards", forum_cards()),
+		],
+	);
+	shows(
+		&mut app,
+		"a forum in gallery view",
+		"how do i theme the sidebar",
+		&[(
+			"forum.view",
+			json!({ "open": true, "id": "30", "sort": "Date Posted", "gallery": true }),
+		)],
+	);
+	shows(
+		&mut app,
+		"the channel after the forum closes",
+		"Playing Chess",
+		&[(
+			"forum.view",
+			json!({ "open": false, "id": "", "sort": "Recently Active", "gallery": false }),
+		)],
+	);
+	shows(
+		&mut app,
 		"a home page",
 		"Coming in a later version.",
 		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],
@@ -300,6 +343,37 @@ fn setting_values(typing_animation: bool) -> serde_json::Value {
 			.map(|(key, value)| (key.to_owned(), value))
 			.collect(),
 	)
+}
+
+fn thread_panel(open: bool) -> serde_json::Value {
+	json!({
+		"open": open, "id": "40", "name": "bug triage", "members": 3, "archived": false,
+		"joined": false, "can_manage": true,
+	})
+}
+
+fn forum_tags() -> serde_json::Value {
+	json!([
+		{ "key": "1", "id": "1", "label": "\u{1f41b} bug", "active": false },
+		{ "key": "2", "id": "2", "label": "\u{2705} solved", "active": true },
+	])
+}
+
+fn forum_cards() -> serde_json::Value {
+	json!([
+		{
+			"key": "41", "id": "41", "title": "crash on startup", "excerpt": "that screenshot is hilarious",
+			"tags": [{ "key": "1", "label": "\u{1f41b} bug", "moderated": false }], "author": "ada",
+			"avatar": "", "replies": "14 replies", "activity": "Today at 9:41 AM", "pinned": true,
+			"archived": false,
+		},
+		{
+			"key": "42", "id": "42", "title": "how do i theme the sidebar", "excerpt": "",
+			"tags": [{ "key": "2", "label": "\u{2705} solved", "moderated": true }], "author": "grace",
+			"avatar": "", "replies": "1 reply", "activity": "Yesterday at 6:02 PM", "pinned": false,
+			"archived": true,
+		},
+	])
 }
 
 fn search_hits() -> serde_json::Value {

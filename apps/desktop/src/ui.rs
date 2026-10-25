@@ -10,6 +10,7 @@ mod scripts;
 mod search;
 mod settings;
 mod sign_in;
+mod threads;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -155,7 +156,11 @@ pub fn run(
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			cx.tasks.spawn(link.clone().follow_sign_in());
-			cx.tasks.spawn(link.clone().follow_composer_files());
+			cx.tasks
+				.spawn(link.clone().follow_composer_files(composer::Pane::Main));
+			cx.tasks
+				.spawn(link.clone().follow_composer_files(composer::Pane::Thread));
+			cx.tasks.spawn(link.clone().follow_post_files());
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
 			cx.tasks.spawn(link.clone().follow_gif_search());
@@ -177,6 +182,9 @@ pub fn run(
 				.then(|| Integration::install(cx, &host, &link, desktop));
 			let slot = link.window.slot.clone();
 			let transcript = link.timeline_view.view();
+			let forum_shown = link.threads.forum_shown();
+			let thread_view = threads::thread_slot(slot.clone(), link.threads.slot(), link.threads.view());
+			let thread_layer = link.threads.layer_view();
 			let profiles = link.profile.view();
 			let lightbox = link.timeline_view.lightbox_view();
 			let expressions = link.expressions.view();
@@ -199,9 +207,11 @@ pub fn run(
 					.w_full()
 					.h_full()
 					.child(host.view())
-					.child(timeline_slot(slot, transcript))
+					.child(timeline_slot(slot, transcript, forum_shown))
+					.child(thread_view)
 					.child(profiles)
 					.child(switcher)
+					.child(thread_layer)
 					.child(expressions)
 					.child(lightbox)
 					.on_event(move |event| {
@@ -261,9 +271,9 @@ pub fn hand_over(app_id: &str) -> Result<()> {
 		.map_err(|error| anyhow!("the running kyoko did not answer: {error}"))
 }
 
-fn timeline_slot(slot: Signal<Slot>, transcript: View) -> View {
+fn timeline_slot(slot: Signal<Slot>, transcript: View, hidden: Signal<bool>) -> View {
 	div().child(transcript).reactive_style(move || {
-		let slot = slot.get();
+		let slot = if hidden.get() { Slot::default() } else { slot.get() };
 		Styles::new()
 			.absolute()
 			.left(slot.x)
@@ -341,6 +351,7 @@ pub(crate) struct Link {
 	pending_dm: Cell<Option<Snowflake>>,
 	composer: composer::ComposerView,
 	expressions: expressions::Expressions,
+	threads: threads::ThreadPane,
 	settings: settings::SettingsView,
 	finder: search::Finder,
 	plugins: plugins::PluginsView,
@@ -380,13 +391,29 @@ impl Link {
 				gallery: images.gallery.clone(),
 				cdn: images.cdn.clone(),
 				mock_origin: images.mock_origin.clone(),
+				code_font: messages.code_font.clone(),
+				prefs: images.prefs,
+				store: messages.store.clone(),
+				developer_mode: messages.developer_mode,
+				pictures: None,
+			},
+		);
+		let thread_pane = threads::ThreadPane::new(
+			host,
+			&window.runtime,
+			sign_in.runtime.clone(),
+			Setup {
+				gallery: images.gallery.clone(),
+				cdn: images.cdn.clone(),
+				mock_origin: images.mock_origin.clone(),
 				code_font: messages.code_font,
 				prefs: images.prefs,
 				store: messages.store,
 				developer_mode: messages.developer_mode,
+				pictures: Some(timeline_view.pictures()),
 			},
 		);
-		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
+		let composer = composer::ComposerView::install(host, sign_in.runtime.clone(), &composer::MAIN);
 		let profile = ProfileLayer::new(&window.runtime, timeline_view.pictures());
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
@@ -419,6 +446,7 @@ impl Link {
 			pending_dm: Cell::new(None),
 			composer,
 			expressions,
+			threads: thread_pane,
 			settings,
 			finder,
 			plugins,
@@ -450,6 +478,7 @@ impl Link {
 		Link::install_plugins(host, &link);
 		Link::install_profiles(host, &link);
 		Link::install_search(host, &link);
+		Link::install_threads(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -514,10 +543,12 @@ impl Link {
 		});
 		let actions = Rc::downgrade(link);
 		host.function("frame.slot", move |argument| {
-			if let (Some(link), Some((name, slot))) = (actions.upgrade(), slot(&argument))
-				&& name == TIMELINE_SLOT
-			{
-				link.place_slot(slot);
+			if let (Some(link), Some((name, slot))) = (actions.upgrade(), slot(&argument)) {
+				match name {
+					TIMELINE_SLOT => link.place_slot(slot),
+					threads::THREAD_SLOT => link.place_thread_slot(slot),
+					_ => {}
+				}
 			}
 			Value::Nil
 		});
@@ -643,6 +674,7 @@ impl Link {
 		self.watch_session(changes);
 		let opened = self.publish(changes);
 		self.follow_friend(changes);
+		self.follow_threads();
 		if let Some((opening, open)) = opened {
 			if let Some(guild_id) = open.guild_id {
 				self.select_guild(guild_id);
@@ -714,6 +746,13 @@ impl Link {
 				self.drive_expressions(tab);
 				self.until_capture(|link| link.expressions_settled(tab)).await;
 			}
+			capture::Screen::ThreadsList
+			| capture::Screen::ThreadPanel
+			| capture::Screen::ThreadCreate
+			| capture::Screen::Pins
+			| capture::Screen::Forum
+			| capture::Screen::ForumPost
+			| capture::Screen::ForumPostCreate => self.drive_threads(capture.screen).await,
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -883,6 +922,7 @@ impl Link {
 			self.settings_apply(&state, changes);
 			self.publish_profiles(&state, changes);
 			self.search_apply(&state, changes);
+			self.threads_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -924,6 +964,9 @@ impl Link {
 	}
 
 	pub(crate) fn select_channel(&self, channel_id: Snowflake) {
+		if self.route_channel(channel_id) {
+			return;
+		}
 		let Some(shared) = self.state() else {
 			return;
 		};
@@ -1005,7 +1048,9 @@ impl Link {
 
 	fn publish_timeline(&self, state: &State) {
 		let timeline = self.timeline.borrow();
-		let open = timeline.open();
+		self.sync_threads(timeline.open());
+		let open = self.top_channel(timeline.open());
+		self.publish_channel_icon(state, open);
 		self.remember_open(open);
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
@@ -1051,6 +1096,7 @@ impl Link {
 		names.extend(self.settings_images());
 		names.extend(self.profile_images());
 		names.extend(self.search_images());
+		names.extend(self.thread_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

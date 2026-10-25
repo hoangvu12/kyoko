@@ -99,12 +99,16 @@ function M.sign_out()
 	return ui.action("login.sign_out")
 end
 
-function M.composer_changed(text: string, caret: number)
-	ui.call_sync("composer.changed", { text = text, caret = caret })
+local function area_of(area: string?): string
+	return area or "composer"
 end
 
-function M.composer_key(event: any, text: string): boolean
-	return ui.call_sync("composer.key", {
+function M.composer_changed(text: string, caret: number, area: string?)
+	ui.call_sync(area_of(area) .. ".changed", { text = text, caret = caret })
+end
+
+function M.composer_key(event: any, text: string, area: string?): boolean
+	return ui.call_sync(area_of(area) .. ".key", {
 		key = event.key,
 		shift = event.shift,
 		cmd = event.cmd,
@@ -112,44 +116,44 @@ function M.composer_key(event: any, text: string): boolean
 	}) == true
 end
 
-function M.composer_choose(index: number, text: string)
-	ui.invoke("composer.choose", { index = index, text = text })
+function M.composer_choose(index: number, text: string, area: string?)
+	ui.invoke(area_of(area) .. ".choose", { index = index, text = text })
 end
 
-function M.composer_add_files(paths: { string })
-	ui.invoke("composer.add_files", paths)
+function M.composer_add_files(paths: { string }, area: string?)
+	ui.invoke(area_of(area) .. ".add_files", paths)
 end
 
-function M.composer_remove_file(id: string)
-	ui.invoke("composer.remove_file", id)
+function M.composer_remove_file(id: string, area: string?)
+	ui.invoke(area_of(area) .. ".remove_file", id)
 end
 
-function M.composer_cancel_reply()
-	ui.invoke("composer.cancel_reply")
+function M.composer_cancel_reply(area: string?)
+	ui.invoke(area_of(area) .. ".cancel_reply")
 end
 
-function M.composer_toggle_ping()
-	ui.invoke("composer.toggle_ping")
+function M.composer_toggle_ping(area: string?)
+	ui.invoke(area_of(area) .. ".toggle_ping")
 end
 
-function M.composer_cancel_edit()
-	ui.invoke("composer.cancel_edit")
+function M.composer_cancel_edit(area: string?)
+	ui.invoke(area_of(area) .. ".cancel_edit")
 end
 
-function M.composer_confirm()
-	ui.invoke("composer.confirm")
+function M.composer_confirm(area: string?)
+	ui.invoke(area_of(area) .. ".confirm")
 end
 
-function M.composer_retry(nonce: string)
-	ui.invoke("composer.retry", nonce)
+function M.composer_retry(nonce: string, area: string?)
+	ui.invoke(area_of(area) .. ".retry", nonce)
 end
 
-function M.composer_discard(nonce: string)
-	ui.invoke("composer.discard", nonce)
+function M.composer_discard(nonce: string, area: string?)
+	ui.invoke(area_of(area) .. ".discard", nonce)
 end
 
-function M.composer_dismiss()
-	ui.invoke("composer.dismiss")
+function M.composer_dismiss(area: string?)
+	ui.invoke(area_of(area) .. ".dismiss")
 end
 
 function M.composer_picker(tab: string, toolbar: any)
@@ -222,6 +226,54 @@ end
 
 function M.plugin_action(name: string, argument: any?)
 	ui.invoke("plugins." .. name, argument)
+end
+
+function M.open_threads(x: number, y: number)
+	ui.invoke("threads.open_list", { x = x, y = y })
+end
+
+function M.open_pins(x: number, y: number)
+	ui.invoke("threads.open_pins", { x = x, y = y })
+end
+
+function M.close_thread()
+	ui.invoke("threads.close")
+end
+
+function M.join_thread(id: string)
+	ui.invoke("threads.join", id)
+end
+
+function M.leave_thread(id: string)
+	ui.invoke("threads.leave", id)
+end
+
+function M.archive_thread(id: string, archived: boolean)
+	ui.invoke("threads.archive", { id = id, archived = archived })
+end
+
+function M.forum_new_post()
+	ui.invoke("forum.new_post")
+end
+
+function M.forum_open_post(id: string)
+	ui.invoke("forum.open_post", id)
+end
+
+function M.forum_toggle_tag(id: string)
+	ui.invoke("forum.toggle_tag", id)
+end
+
+function M.forum_sort(index: number)
+	ui.invoke("forum.sort", index)
+end
+
+function M.forum_layout(gallery: boolean)
+	ui.invoke("forum.layout", gallery)
+end
+
+function M.forum_more()
+	ui.invoke("forum.more")
 end
 
 return M

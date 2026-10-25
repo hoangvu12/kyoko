@@ -31,7 +31,7 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `settings_gap` | 10 s | between two server-order saves |
 | `collapse_gap` | 2 s | between two saves of collapsed categories |
 
-A message send is `POST /channels/<id>/messages`. The defaults sit between how fast a person acts and what Discord tolerates:
+A message send is `POST /channels/<id>/messages`, and creating a thread or a forum post (`POST /channels/<id>/threads` and `POST /channels/<id>/messages/<message>/threads`) counts as one. The defaults sit between how fast a person acts and what Discord tolerates:
 
 - 250 ms matches Discord's own reaction limit (about one per 250 ms). It stays below what a person notices when clicking reactions or deleting messages.
 - Concord spaces mutations 500 ms apart and sends 100 ms apart. kyoko makes sends the strictest lane instead. Nobody sends two messages within half a second, and Discord's per-channel message bucket is about 5 per 5 s.
@@ -163,6 +163,16 @@ Edits that fail publish `CommandRejected` ("Edit: ...").
 GIF search uses Discord's own endpoints with the web client's parameters, in its order: `GET /gifs/trending?provider=tenor&locale=<l>&media_format=mp4` (categories and the featured GIF), `GET /gifs/search?q=<q>&media_format=mp4&provider=tenor&locale=<l>` and `GET /gifs/suggest?q=<q>&provider=tenor&limit=5&locale=<l>`, as `Command::LoadGifTrending`, `SearchGifs` and `SuggestGifs`. They are API requests, so they carry the session as every other. Results are kept in `State` per query (`gif_trending`, `gif_search`, `gif_suggestions`, the last 20 queries). The picker debounces typing (see "Expression pickers" in `docs/ui.md`). `POST /gifs/select` (`SelectGif`) is only sent when the user turned GIF usage sharing on.
 
 `Command::SendGif` sends the GIF's `url` as the message text and `Command::SendSticker` sends a message with `sticker_ids: [id]` and no text; both go through the same outbox as `SendMessage`: the lock check, a nonce, a pending message (a sticker's shows the sticker), the send pacing and the failed-send handling, so Retry sends the sticker again. Server stickers come from READY and GUILD_CREATE (`guild.stickers`) and GUILD_STICKERS_UPDATE; the standard packs from `GET /sticker-packs` (`LoadStickerPacks`), asked once when the sticker tab first shows.
+
+## Threads, forums and pins
+
+- Active threads come from the gateway (the threads in READY's guilds, THREAD_CREATE, THREAD_UPDATE, THREAD_DELETE and THREAD_LIST_SYNC for subscribed channels); kyoko never asks `GET /guilds/{id}/threads/active`, which user accounts cannot use. Following is THREAD_MEMBER_UPDATE and THREAD_MEMBERS_UPDATE.
+- `Command::LoadArchivedThreads { channel_id, more }` and `Command::LoadForumPosts { channel_id, more }` use the web client's thread search, `GET /channels/{id}/threads/search` with `sort_by=last_message_time`, `sort_order=desc`, `limit=25`, `tag_setting=match_some` and `offset` (the threads loaded so far when `more`, nothing more is asked once `has_more` is false). Archived threads add `archived=true`; forum posts leave `archived` out, so one page holds active and archived posts, and its `first_messages` become each post's starter (`State::forum_starter`) without a message request per post. A 202 (index not ready) is asked again after its `retry_after` (2 s without one, kept between 0.3 and 15 s), up to 5 times. A GET, so never paced; it goes through the buckets and the breaker.
+- `Command::LoadPins` is `GET /channels/{id}/messages/pins?limit=50` (the web client's route; `items[].message`), and pinning and unpinning are `PUT` and `DELETE /channels/{id}/messages/pins/{message}`. CHANNEL_PINS_UPDATE reloads a pin list that was loaded.
+- `Command::CreateThread` is `POST /channels/{id}/messages/{message}/threads` with `name` and `auto_archive_duration`, or `POST /channels/{id}/threads` with `type: 11` as well. It needs Create Public Threads, is held by the channel's safety lock, and is paced as a message send. Discord answers with the thread, which the session stores and selects; the first message in it is an ordinary `SendMessage`.
+- `Command::CreateForumPost` goes the way of a send (`task/outbox.rs`): Send Messages, the safety lock, the upload limits, the `before_send` hook for the text, files through the attachment slots and the upload client, then `POST /channels/{forum}/threads` as JSON with `name`, `auto_archive_duration` (the forum's default, 3 days without one), `applied_tags` and `message: { content, attachments: [{ id, filename, uploaded_filename }] }`. It is paced as a message send. The new post is stored and selected; a failure is a `CommandRejected` ("Create post: ...").
+- `Command::JoinThread` and `Command::LeaveThread` are `PUT` and `DELETE /channels/{id}/thread-members/@me`; joining is held by the thread's safety lock. `Command::ArchiveThread` is `PATCH /channels/{id}` with `archived`.
+- Selecting a forum subscribes the guild and sets the referer, but loads no message history or draft: a forum has none.
 
 ## Application commands
 

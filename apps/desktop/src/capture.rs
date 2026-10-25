@@ -15,6 +15,8 @@ pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
 pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
+pub const TOP_BAR_THREADS: (f32, f32) = (871., 46.);
+pub const TOP_BAR_PINS: (f32, f32) = (958., 46.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -49,6 +51,13 @@ pub enum Screen {
 	Search,
 	Lightbox,
 	Picker(Tab),
+	ThreadsList,
+	ThreadPanel,
+	ThreadCreate,
+	Pins,
+	Forum,
+	ForumPost,
+	ForumPostCreate,
 }
 
 impl Screen {
@@ -79,6 +88,13 @@ impl Screen {
 			"emoji-picker" => Some(Screen::Picker(Tab::Emoji)),
 			"gif-picker" => Some(Screen::Picker(Tab::Gif)),
 			"sticker-picker" => Some(Screen::Picker(Tab::Sticker)),
+			"threads-list" => Some(Screen::ThreadsList),
+			"thread-panel" => Some(Screen::ThreadPanel),
+			"thread-create" => Some(Screen::ThreadCreate),
+			"pins" => Some(Screen::Pins),
+			"forum" => Some(Screen::Forum),
+			"forum-post" => Some(Screen::ForumPost),
+			"forum-post-create" => Some(Screen::ForumPostCreate),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
@@ -109,7 +125,14 @@ impl Screen {
 			| Screen::QuickSwitcher
 			| Screen::Search
 			| Screen::Lightbox
-			| Screen::Picker(_) => Some(Opening::First),
+			| Screen::Picker(_)
+			| Screen::ThreadsList
+			| Screen::ThreadPanel
+			| Screen::ThreadCreate
+			| Screen::Pins
+			| Screen::Forum
+			| Screen::ForumPost
+			| Screen::ForumPostCreate => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

@@ -61,6 +61,7 @@ pub struct Setup {
 	pub prefs: Prefs,
 	pub store: Option<Arc<store::Store>>,
 	pub developer_mode: bool,
+	pub pictures: Option<Rc<Pictures>>,
 }
 
 struct Measured<'a>(&'a VariableHeights);
@@ -107,12 +108,14 @@ pub struct TimelineView {
 
 impl TimelineView {
 	pub fn new(runtime: &Runtime, setup: Setup) -> Rc<Self> {
-		let pictures = Rc::new(Pictures::new(
-			runtime.clone(),
-			setup.gallery,
-			setup.cdn,
-			setup.mock_origin,
-		));
+		let pictures = setup.pictures.clone().unwrap_or_else(|| {
+			Rc::new(Pictures::new(
+				runtime.clone(),
+				setup.gallery,
+				setup.cdn,
+				setup.mock_origin,
+			))
+		});
 		pictures.set_quality(setup.prefs.quality);
 		let commands: Rc<Sender> = Rc::default();
 		let links = Rc::new(Links::new(runtime, setup.store));
@@ -219,6 +222,14 @@ impl TimelineView {
 		self.actions.on_profile(profile);
 	}
 
+	pub fn on_open_thread(&self, open: impl Fn(Snowflake) + 'static) {
+		self.actions.on_open_thread(open);
+	}
+
+	pub fn on_create_thread(&self, create: impl Fn((Snowflake, Snowflake)) + 'static) {
+		self.actions.on_create_thread(create);
+	}
+
 	pub fn on_emoji_catalog(&self, source: impl Fn() -> Option<EmojiPicker> + 'static) {
 		self.actions.on_emoji_catalog(source);
 	}
@@ -250,6 +261,10 @@ impl TimelineView {
 		if fresh.is_some() && (shown == fresh || !dismissed) {
 			self.actions.progress.set(progress);
 		}
+	}
+
+	pub fn confirm_unpin(&self, channel_id: Snowflake, message_id: Snowflake) {
+		self.actions.confirm_unpin(channel_id, message_id);
 	}
 
 	pub fn rejected(&self, reason: &str) {

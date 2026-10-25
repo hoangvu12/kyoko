@@ -14,6 +14,7 @@ mod rail;
 mod sidebar;
 mod switcher;
 mod theme;
+mod threads;
 mod timeline;
 mod tray;
 mod ui;
