@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The rail, folders and indicators match oxidcord in the parity captures
 - [ ] Reordering servers and folders persists to Discord

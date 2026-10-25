@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame), 15 (Store hardening)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The login screen and its ToS notice match oxidcord in the parity captures
 - [ ] A pasted token is validated and stored in Credential Manager, and the app moves on to the main view

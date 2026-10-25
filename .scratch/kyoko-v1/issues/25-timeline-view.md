@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The timeline uses measured rows keyed by message id
 - [ ] It stays at the end while the user is at the bottom
