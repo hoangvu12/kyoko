@@ -168,6 +168,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/media/{name}", get(media::media))
 		.route("/cdn/avatars/{user_id}/{file}", get(cdn::avatar))
 		.route("/cdn/emojis/{file}", get(cdn::emoji))
+		.route("/cdn/embed/avatars/{file}", get(cdn::default_avatar))
 		.route(
 			"/cdn/attachments/{channel_id}/{attachment_id}/{file}",
 			get(cdn::attachment),

@@ -226,6 +226,13 @@ pub async fn avatar(
 	sized(&format!("{user_id}/{hash}"), hash, kind, &query)
 }
 
+pub async fn default_avatar(Path(file): Path<String>, Query(query): Query<SizedQuery>) -> Response {
+	let Some((index, kind)) = split_file(&file) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	sized(&format!("embed/{index}"), index, kind, &query)
+}
+
 pub async fn emoji(Path(file): Path<String>, Query(query): Query<SizedQuery>) -> Response {
 	let Some((id, kind)) = split_file(&file) else {
 		return StatusCode::NOT_FOUND.into_response();

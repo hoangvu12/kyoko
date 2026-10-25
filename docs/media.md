@@ -14,7 +14,7 @@ Images, avatars, emoji and stickers are fetched, decoded and cached in Rust (`cr
 - `Gallery::set_hovered(name)`, `set_playback(Playback)` and `set_reduced_motion(bool)` drive animation. Luau reports hover with `ui.call_sync("media_hover", name)` and the system's reduced-motion preference with `ui.call_sync("media_reduced_motion", ui.prefers.reduced_motion:get())`.
 - `Gallery::status(name)` and `stats()` are for tests and diagnostics.
 
-Request builders for what kyoko shows live in `bridge`: `avatar_request`, `guild_icon_request`, `emoji_request` and `attachment_request`. `bridge::media_fetcher` builds the fetcher from the fingerprint.
+Request builders for what kyoko shows live in `bridge`: `avatar_request`, `guild_icon_request`, `emoji_request` and `attachment_request`. `avatar_request` falls back to the default avatar (`<cdn>/embed/avatars/<n>.png`) for a user without an avatar hash, as the web client does; mockcord serves those too. `bridge::media_fetcher` builds the fetcher from the fingerprint.
 
 ## Memory
 

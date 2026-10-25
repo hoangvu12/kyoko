@@ -34,10 +34,13 @@ pub fn avatar_request(
 	scale: f64,
 	animate: bool,
 ) -> Option<ImageRequest> {
-	let hash = user.avatar.as_deref()?;
 	let pixels = device_pixels(points, scale);
+	let url = match user.avatar.as_deref() {
+		Some(hash) => cdn::avatar_url(cdn, user.id.0, hash, pixels, animate),
+		None => cdn::default_avatar_url(cdn, user.id.0, user.discriminator.as_deref()),
+	};
 	Some(ImageRequest::new(
-		cdn::avatar_url(cdn, user.id.0, hash, pixels, animate),
+		url,
 		Variant::new(SizeHint::square(pixels), Shape::Circle),
 	))
 }

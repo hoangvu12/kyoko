@@ -107,12 +107,12 @@ pub fn still_avatar_url(cdn: &str, user_id: u64, hash: &str, size: u32) -> Strin
 	avatar_url(cdn, user_id, hash, size, false)
 }
 
-pub fn default_avatar_url(user_id: u64, legacy_discriminator: Option<&str>) -> String {
+pub fn default_avatar_url(cdn: &str, user_id: u64, legacy_discriminator: Option<&str>) -> String {
 	let index = match legacy_discriminator.and_then(|value| value.parse::<u32>().ok()) {
 		Some(discriminator) if discriminator != 0 => u64::from(discriminator % LEGACY_DEFAULT_AVATAR_BUCKETS),
 		_ => (user_id >> SNOWFLAKE_TIMESTAMP_SHIFT) % DEFAULT_AVATAR_BUCKETS,
 	};
-	format!("{CDN}/embed/avatars/{index}.png")
+	format!("{}/embed/avatars/{index}.png", cdn.trim_end_matches('/'))
 }
 
 pub fn guild_icon_url(cdn: &str, guild_id: u64, hash: &str, size: u32, animate: bool) -> String {
