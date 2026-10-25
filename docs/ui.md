@@ -24,6 +24,20 @@ apps/desktop/ui/
 
 A screen or component is one module that returns a function building its node. Use `ui.component` only when the piece needs per-instance state (`ui.use_state`), as `components/icon_button.luau` does for hover. Modules require what they use: `require("../theme")`, `require("../state")`, `require("../actions")`, `require("@components/icon")`. In debug builds the host reloads the scripts when a file changes, so Luau work needs no rebuild. Rebuild Rust only for host changes.
 
+### The load check
+
+`cargo xtask test` and `cargo test --workspace` check the scripts headless, with no window and no network, in under a second once built (`src/ui/scripts.rs`). Run it alone with `cargo test -p kyoko --bin kyoko ui::scripts`.
+
+- `every_script_compiles`: every `.luau` under `ui/` must parse. A syntax error fails with the file and line (`actions.luau:6: Expected 'end' ...`).
+- `the_interface_loads_and_builds_every_screen`: `app.luau` loads in zgx's `testing::TestApp` with the real theme installed and a stub action and function for every `"area.name"` string literal in `src/`, then builds the terms notice, the token form, the DMs, a server with its channels and members, and a home page from sample shared values. Each screen must show its marker text. A missing `require`, an unregistered host name or a runtime error fails it with the script's traceback and the screen it was building.
+
+To stay loadable, a new module must:
+
+1. Parse, and require only modules that exist (`./`, `../`, `@components/`, `@shell/`).
+2. Call the host only through names Rust registers with a string literal (`host.action("area.name", ...)`, or a literal list it loops over); a name built at runtime is not stubbed.
+3. Build without error when every shared value is at its `state.luau` default, since the check starts from those.
+4. If it is a new screen or region, get sample shared values and a marker text in `scripts.rs`, so the check builds it too.
+
 ## Shell regions
 
 `shell/frame.luau` lays the window out exactly as oxidcord's `Shell::render` does. Sizes come from the theme (`theme.size.*`), which holds oxidcord's values.
