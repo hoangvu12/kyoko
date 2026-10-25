@@ -192,7 +192,7 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 ### Settings, appearance and performance
 
 83. As a user, I want kyoko to look exactly like oxidcord, including its themes, so that I get the design I chose.
-84. As a user, I want to switch and install themes from a theme catalog, so that I can change the look.
+84. As a user, I want to switch themes and add them from a local file or a link, as Vencord does, so that I can change the look.
 85. As a user, I want to import the colours of a Vencord or BetterDiscord theme, so that I can bring my palette across even though CSS layout tweaks can't apply.
 86. As a user, I want settings for image quality (including original resolution), animation playback, reduced motion and the typing animation, so that I control looks against performance.
 87. As a user, I want a setting to skip the "you're leaving Discord" warning on links, so that trusted links open directly.
@@ -477,7 +477,7 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 - **Themes:**
   - zgx theme data with kyoko's token set
   - an importer that takes only colour variables from Vencord/BetterDiscord CSS
-  - The theme catalog keeps oxidcord's signed-catalog model with kyoko's own key.
+  - Themes come from the bundled set, from local files in the themes folder, or from links the user adds, as Vencord's local and online themes do. A theme is a kyoko `theme.json` or a Vencord/BetterDiscord `.css` file whose colour variables are imported. No signing key and no catalog server (decided 2026-10-26: themes carry no code, so a signature adds nothing over HTTPS and validation).
 
 ### Milestones
 
