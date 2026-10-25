@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Session test harness on mockcord)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Rate-limit buckets are learned from response headers. A 429 honours retry_after and the global flag
 - [ ] Mutations are spaced out, and message sends have their own pacing
