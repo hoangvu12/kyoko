@@ -69,6 +69,10 @@ impl SidebarView {
 		self.sidebar.borrow_mut().select(state, guild_id)
 	}
 
+	pub(crate) fn show_home(&self, state: &State) -> bool {
+		self.sidebar.borrow_mut().show_home(state)
+	}
+
 	pub(crate) fn set_open(&self, channel_id: Option<Snowflake>) -> bool {
 		self.sidebar.borrow_mut().set_open(channel_id)
 	}

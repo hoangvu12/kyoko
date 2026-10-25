@@ -24,6 +24,8 @@ pub enum Screen {
 	SidebarCollapsed,
 	NewestImage,
 	Showcase(&'static str),
+	DmSidebar,
+	DmGroup,
 }
 
 impl Screen {
@@ -35,6 +37,8 @@ impl Screen {
 			"login-token" => Some(Screen::LoginToken),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
 			"timeline-media" => Some(Screen::NewestImage),
+			"dm-sidebar" => Some(Screen::DmSidebar),
+			"dm-group" => Some(Screen::DmGroup),
 			other => mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase),
 		}
 	}
@@ -45,9 +49,15 @@ impl Screen {
 			| Screen::RailFolders
 			| Screen::SidebarCollapsed
 			| Screen::NewestImage
-			| Screen::Showcase(_) => Some(Opening::First),
+			| Screen::Showcase(_)
+			| Screen::DmSidebar
+			| Screen::DmGroup => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
+	}
+
+	pub fn is_home(self) -> bool {
+		matches!(self, Screen::DmSidebar | Screen::DmGroup)
 	}
 
 	pub fn is_login(self) -> bool {

@@ -4,6 +4,7 @@ mod caches;
 mod capabilities;
 mod collapse;
 mod deletes;
+mod dms;
 mod fingerprint;
 mod gateway;
 mod harness;

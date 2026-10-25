@@ -36,6 +36,22 @@ function M.sidebar_action(name: string, id: string?)
 	ui.invoke("sidebar." .. name, id or "")
 end
 
+function M.select_dm(id: string)
+	return ui.action("dms.select", id)
+end
+
+function M.close_dm(id: string)
+	ui.invoke("dms.close", id)
+end
+
+function M.show_home_page(page: string)
+	return ui.action("home.show_page", page)
+end
+
+function M.dm_action(name: string)
+	return ui.action("dms." .. name)
+end
+
 function M.minimize_window()
 	return ui.action("window.minimize")
 end

@@ -57,6 +57,17 @@ export type GuildHeader = {
 	can_manage_channels: boolean,
 	can_open_settings: boolean,
 }
+export type DmRow = {
+	key: string,
+	id: string,
+	name: string,
+	avatar: string,
+	status: string,
+	group: boolean,
+	members: number,
+	unread: boolean,
+	mentions: number,
+}
 
 local M = {}
 
@@ -92,6 +103,15 @@ M.sidebar = {
 		can_manage_channels = false,
 		can_open_settings = false,
 	} :: GuildHeader),
+}
+
+M.dms = {
+	rows = ui.shared("dms.rows", {} :: { DmRow }),
+	requests = ui.shared("dms.requests", 0),
+}
+
+M.home = {
+	page = ui.shared("home.page", ""),
 }
 
 M.timeline = {

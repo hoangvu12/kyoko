@@ -194,6 +194,8 @@ impl Link {
 			self.rail_icons.borrow_mut().clear();
 			self.sidebar.reset();
 			self.sidebar_avatars.borrow_mut().clear();
+			self.dms.reset();
+			self.dm_avatars.borrow_mut().clear();
 			for value in [
 				&self.open_channel,
 				&self.channel_name,

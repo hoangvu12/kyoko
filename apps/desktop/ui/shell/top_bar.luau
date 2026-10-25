@@ -2,11 +2,14 @@ local theme = require("../theme")
 local state = require("../state")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
+local status_dot = require("@components/status_dot")
 
 local SEARCH_WIDTH = 144
 local SEARCH_HEIGHT = 24
 local TITLE_ICON = 24
 local SEARCH_ICON = 16
+local STATUS_DOT = 10
+local STATUSES = { "online", "idle", "dnd", "offline" }
 
 local query = ui.state("query", "")
 
@@ -31,6 +34,40 @@ local function topic()
 			color = theme.color.text_muted,
 		},
 	})
+end
+
+local function direct(): boolean
+	return state.sidebar.guild_id:get() == ""
+end
+
+local function guild(): boolean
+	return not direct()
+end
+
+local function direct_status(): string
+	local open = state.timeline.channel_id:get()
+	if not direct() or open == "" then
+		return ""
+	end
+	for _, row in state.dms.rows:get() do
+		if row.id == open then
+			return if row.group then "offline" else row.status
+		end
+	end
+	return ""
+end
+
+local function status()
+	local dots = {}
+	for _, name in STATUSES do
+		table.insert(
+			dots,
+			ui.show(function()
+				return direct_status() == name
+			end, status_dot { status = name, size = STATUS_DOT, cutout = theme.color.background_primary })
+		)
+	end
+	return ui.row { shrink = 0, items = "center", table.unpack(dots) }
 end
 
 local function search()
@@ -77,7 +114,11 @@ return function()
 			min_w = 0,
 			items = "center",
 			gap = theme.size.space_8,
-			icon { name = "hash", size = TITLE_ICON, color = theme.color.text_muted },
+			ui.show(
+				direct,
+				icon { name = "at_sign", size = TITLE_ICON, color = theme.color.text_muted },
+				icon { name = "hash", size = TITLE_ICON, color = theme.color.text_muted }
+			),
 			ui.text {
 				function()
 					return state.timeline.channel_name:get()
@@ -88,23 +129,26 @@ return function()
 				weight = theme.weight.semibold,
 				color = theme.color.header_primary,
 			},
+			status(),
 			topic(),
 		},
 		ui.row {
 			shrink = 0,
 			items = "center",
 			gap = theme.size.space_16,
-			icon_button { name = "thread", tooltip = "Threads" },
-			icon_button { name = "bell", tooltip = "Notification Settings" },
+			ui.show(guild, icon_button { name = "thread", tooltip = "Threads" }),
+			ui.show(direct, icon_button { name = "phone", tooltip = "Start Voice Call" }),
+			ui.show(direct, icon_button { name = "video", tooltip = "Start Video Call" }),
+			ui.show(guild, icon_button { name = "bell", tooltip = "Notification Settings" }),
 			icon_button { name = "pin", tooltip = "Pinned Messages" },
-			icon_button {
+			ui.show(guild, icon_button {
 				name = "members",
 				tooltip = "Member List",
 				active = function()
 					return state.shell.members_visible:get()
 				end,
 				on_click = ui.toggle(state.shell.members_visible),
-			},
+			}),
 			search(),
 			icon_button { name = "inbox", tooltip = "Inbox" },
 			icon_button { name = "help", tooltip = "Help" },

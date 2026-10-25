@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local mention_badge = require("@components/mention_badge")
+local dm_sidebar = require("./dm_sidebar")
 
 local MENU_WIDTH = 224
 local CHEVRON = 18
@@ -451,8 +452,12 @@ local function sidebar_row(row: state.SidebarRow)
 	return channel { row = row }
 end
 
+local function home(): boolean
+	return state.sidebar.guild_id:get() == ""
+end
+
 return function()
-	return ui.column {
+	return ui.show(home, dm_sidebar(), ui.column {
 		w_full = true,
 		grow = 1,
 		min_h = 0,
@@ -467,5 +472,5 @@ return function()
 				pb = theme.size.space_16,
 			}),
 		},
-	}
+	})
 end

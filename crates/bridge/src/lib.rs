@@ -1,6 +1,7 @@
 mod alerts;
 mod clock;
 mod deep_link;
+mod dm_list;
 mod images;
 mod inbox;
 mod message;
@@ -12,6 +13,7 @@ mod timeline;
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
 pub use deep_link::{DeepLink, parse_deep_link};
+pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use images::{
 	attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request, embed_request,
 	emoji_request, guild_icon_request, is_image, is_video, local_media, media_fetcher, refresh_command,

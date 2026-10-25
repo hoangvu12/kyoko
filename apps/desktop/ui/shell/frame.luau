@@ -10,6 +10,7 @@ local composer = require("./composer")
 local member_list = require("./member_list")
 local login = require("./login")
 local storage_notice = require("./storage_notice")
+local home_page = require("./home_page")
 
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
@@ -48,6 +49,7 @@ return function()
 				user_panel(),
 			}),
 			ui.column {
+				relative = true,
 				grow = 1,
 				min_w = 0,
 				h_full = true,
@@ -65,9 +67,12 @@ return function()
 						composer(),
 					},
 					ui.show(function()
-						return members_room() and state.shell.members_visible:get()
+						return members_room()
+							and state.shell.members_visible:get()
+							and state.sidebar.guild_id:get() ~= ""
 					end, member_list()),
 				},
+				home_page(),
 			},
 		},
 	}

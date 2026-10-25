@@ -1,4 +1,5 @@
 mod deep_links;
+mod dms;
 mod harness;
 mod media;
 mod message;

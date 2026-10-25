@@ -172,6 +172,7 @@ pub struct Refresh {
 
 #[derive(Debug, Default)]
 pub struct Sidebar {
+	home: bool,
 	selected: Option<Snowflake>,
 	open: Option<Snowflake>,
 	guilds: Vec<GuildEntry>,
@@ -209,6 +210,10 @@ impl Sidebar {
 		self.selected
 	}
 
+	pub fn is_home(&self) -> bool {
+		self.home
+	}
+
 	pub fn open_channel(&self) -> Option<Snowflake> {
 		self.open
 	}
@@ -219,10 +224,13 @@ impl Sidebar {
 		if listing {
 			refresh.guilds = replace(&mut self.guilds, guild_entries(state));
 		}
-		let selected = self
-			.selected
-			.filter(|id| state.guild(*id).is_some())
-			.or_else(|| self.guilds.first().map(|guild| guild.id));
+		let selected = if self.home {
+			None
+		} else {
+			self.selected
+				.filter(|id| state.guild(*id).is_some())
+				.or_else(|| self.guilds.first().map(|guild| guild.id))
+		};
 		if selected != self.selected {
 			self.selected = selected;
 			refresh.selected = true;
@@ -238,10 +246,22 @@ impl Sidebar {
 		if state.guild(guild_id).is_none() || self.selected == Some(guild_id) {
 			return None;
 		}
+		self.home = false;
 		self.selected = Some(guild_id);
 		self.open = None;
 		self.refresh_channels(state);
 		Some(Command::SubscribeGuild { guild_id })
+	}
+
+	pub fn show_home(&mut self, state: &State) -> bool {
+		if self.home {
+			return false;
+		}
+		self.home = true;
+		self.selected = None;
+		self.open = None;
+		self.refresh_channels(state);
+		true
 	}
 
 	pub fn set_open(&mut self, channel_id: Option<Snowflake>) -> bool {

@@ -1,3 +1,4 @@
+mod home;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -23,6 +24,7 @@ use zgx_desktop::{Application, Titlebar, WindowHandle, WindowInfo, WindowOptions
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::capture::{self, Capture, Opening};
+use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::rail::{self, Icons, RailView};
@@ -217,6 +219,9 @@ pub(crate) struct Link {
 	opening: Cell<Option<Opening>>,
 	sidebar: SidebarView,
 	sidebar_avatars: RefCell<Vec<String>>,
+	dms: DmSidebarView,
+	dm_avatars: RefCell<Vec<String>>,
+	reported_slot: Cell<Slot>,
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
 	luau_visible: RefCell<Vec<String>>,
@@ -271,6 +276,9 @@ impl Link {
 			opening: Cell::new(None),
 			sidebar: SidebarView::new(host),
 			sidebar_avatars: RefCell::new(Vec::new()),
+			dms: DmSidebarView::new(host),
+			dm_avatars: RefCell::new(Vec::new()),
+			reported_slot: Cell::new(Slot::default()),
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
 			luau_visible: RefCell::new(Vec::new()),
@@ -291,6 +299,7 @@ impl Link {
 		rail::install_actions(host, &link);
 		Link::install_sign_in(host, &link);
 		sidebar::install_actions(host, &link);
+		dm_sidebar::install_actions(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -357,8 +366,7 @@ impl Link {
 			if let (Some(link), Some((name, slot))) = (actions.upgrade(), slot(&argument))
 				&& name == TIMELINE_SLOT
 			{
-				link.window.slot.set(slot);
-				link.timeline_view.resize(slot.width, slot.height);
+				link.place_slot(slot);
 			}
 			Value::Nil
 		});
@@ -464,9 +472,12 @@ impl Link {
 	}
 
 	pub(crate) fn open(&self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
-		if let Some(guild_id) = guild_id {
-			self.select_guild(guild_id);
-			self.select_channel(channel_id);
+		match guild_id {
+			Some(guild_id) => {
+				self.select_guild(guild_id);
+				self.select_channel(channel_id);
+			}
+			None => self.select_dm(channel_id),
 		}
 	}
 
@@ -492,13 +503,10 @@ impl Link {
 
 	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
 		self.drive_capture(capture.screen);
-		let started = Instant::now();
-		while !self.settled(capture.screen) {
-			if started.elapsed() >= capture::LIMIT {
-				tracing::warn!(screen = %capture.name, "the capture screen did not settle in time");
-				break;
-			}
-			zgx::timer::sleep(capture::POLL).await;
+		self.until_settled(&capture, false).await;
+		if capture.screen.is_home() {
+			self.drive_home(capture.screen);
+			self.until_settled(&capture, true).await;
 		}
 		match &capture.screen {
 			capture::Screen::RailFolders => self.rail.open_all(),
@@ -514,6 +522,17 @@ impl Link {
 		match capture::signal_ready(&capture.ready) {
 			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),
 			Err(error) => tracing::warn!(%error, "could not signal the capture screen"),
+		}
+	}
+
+	async fn until_settled(&self, capture: &Capture, home: bool) {
+		let started = Instant::now();
+		while !self.settled(capture.screen) || (home && !self.home_settled()) {
+			if started.elapsed() >= capture::LIMIT {
+				tracing::warn!(screen = %capture.name, "the capture screen did not settle in time");
+				break;
+			}
+			zgx::timer::sleep(capture::POLL).await;
 		}
 	}
 
@@ -595,6 +614,7 @@ impl Link {
 			.borrow()
 			.iter()
 			.chain(self.sidebar_avatars.borrow().iter())
+			.chain(self.dm_avatars.borrow().iter())
 			.all(|name| shown.contains(name))
 	}
 
@@ -602,6 +622,7 @@ impl Link {
 		let state = self.state()?;
 		let state = state.read();
 		let refresh = self.sidebar.apply(&state, changes);
+		let dms = self.dms.apply(&state, changes);
 		let moved = refresh.selected && self.open_guild() != self.sidebar.sidebar().selected();
 		let messages = if moved {
 			self.timeline.borrow_mut().close()
@@ -631,6 +652,9 @@ impl Link {
 			if messages || moved {
 				self.publish_timeline(&state);
 			}
+			if dms {
+				self.publish_dms(&state);
+			}
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -653,6 +677,7 @@ impl Link {
 			return;
 		};
 		self.rail.reveal(guild_id);
+		self.leave_home_page();
 		let command = {
 			let state = shared.read();
 			let command = self.sidebar.select(&state, guild_id);
@@ -759,10 +784,10 @@ impl Link {
 			self.publish_selection(state);
 		}
 		let channel = open.and_then(|open| state.channel(open.channel_id));
-		let name = channel
-			.and_then(|channel| channel.name.as_deref())
+		let name = open
+			.map(|open| self.channel_title(state, open))
 			.unwrap_or_default();
-		self.channel_name.set(name.into());
+		self.channel_name.set(name.as_str().into());
 		let topic = channel
 			.and_then(|channel| channel.topic.as_deref())
 			.unwrap_or_default();
@@ -779,7 +804,7 @@ impl Link {
 				rows = timeline.rows().len(),
 				"timeline rows published"
 			);
-			self.timeline_view.apply(&timeline, &delta, name);
+			self.timeline_view.apply(&timeline, &delta, &name);
 		}
 	}
 
@@ -788,6 +813,7 @@ impl Link {
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
 		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());
+		names.extend(self.dm_avatars.borrow().iter().cloned());
 		names.extend(
 			self.timeline_view
 				.visible_images()

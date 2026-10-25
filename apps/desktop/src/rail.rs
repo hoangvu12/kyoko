@@ -179,8 +179,11 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			drop_on(&link, &argument);
 		}
 	});
-	host.action("rail.select_home", |_| {
-		tracing::debug!("home has no direct messages view yet");
+	let actions = Rc::downgrade(link);
+	host.action("rail.select_home", move |_| {
+		if let Some(link) = actions.upgrade() {
+			link.select_home();
+		}
 	});
 	host.action("rail.add_server", |_| {
 		tracing::debug!("adding a server is not built yet");
