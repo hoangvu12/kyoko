@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use plugins::{HostConfig, Limits, Permission, PluginHost};
 use protocol::Snowflake;
@@ -36,13 +37,18 @@ pub fn write_plugin(root: &Path, id: &str, permissions: &[&str], extra: &str, lo
 	dir
 }
 
+const LOAD_DEADLINE: Duration = Duration::from_secs(15);
+
 pub fn config(root: &Path, limits: Limits, bundled: bool) -> HostConfig {
 	HostConfig {
 		data_dir: Some(root.join("data")),
 		user_dir: None,
 		development_dirs: vec![root.join("dev")],
 		bundled,
-		limits,
+		limits: Limits {
+			load_deadline: LOAD_DEADLINE,
+			..limits
+		},
 	}
 }
 

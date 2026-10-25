@@ -15,6 +15,7 @@ use crate::ui::plugins::PluginsView;
 use crate::ui::{themes_dir, ui_dir};
 
 pub(super) const PROBE: &str = "slot-probe";
+const LOAD_DEADLINE: Duration = Duration::from_secs(15);
 pub(super) const PROBE_MARKERS: [&str; 3] = ["probe in composer", "probe in panel", "probe in rail"];
 pub(super) const ALL_SLOTS: [&str; 3] = ["ui:composer.buttons", "ui:panel.buttons", "ui:rail.buttons"];
 const PROBE_SETTINGS: &str = "[[settings]]\nkey = \"greeting\"\ntype = \"string\"\nlabel = \"Greeting\"\ndefault = \"hello from the probe\"\n";
@@ -95,7 +96,10 @@ impl Lab {
 			user_dir: None,
 			development_dirs,
 			bundled: false,
-			limits: Limits::default(),
+			limits: Limits {
+				load_deadline: LOAD_DEADLINE,
+				..Limits::default()
+			},
 		});
 		Lab {
 			root,

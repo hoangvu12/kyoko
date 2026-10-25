@@ -18,7 +18,7 @@ All session tests live in a single test binary, `crates/session/tests/session/`:
 - `harness.rs` holds `Running` and `Options`.
 - Each other file holds one behaviour area: `hooks.rs`, `wire.rs`, and so on. Add a file per ticket area and list it in `main.rs`.
 
-Plugin tests are a second binary, `crates/plugins/tests/plugins/`, that includes this harness by path (`docs/plugins.md`).
+Plugin tests are a second binary, `crates/plugins/tests/plugins/`, that includes this harness by path (`docs/plugins.md`). Their hosts load plugins with a 15 s `Limits::load_deadline` (`support::config`, and the plugin interface lab in `apps/desktop/src/ui/scripts/plugins.rs`), so a machine busy with other builds never fails a test on a slow load; the call deadlines stay as each test sets them, so overruns are still measured. Production keeps 1 s.
 
 Keeping everything in one binary means one link step and a shared harness without dead-code warnings. Every harness helper must be used by at least one test. Add helpers when a test needs them, not before.
 
