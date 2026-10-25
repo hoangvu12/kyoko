@@ -4,7 +4,7 @@
 
 **Blocked by:** 23 (Channel sidebar)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Community screens match oxidcord in the parity captures
 - [ ] Joining by invite, creating invites and forwarding messages work
