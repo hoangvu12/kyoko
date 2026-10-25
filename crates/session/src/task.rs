@@ -49,6 +49,7 @@ mod layout;
 mod locks;
 mod member_requests;
 mod outbox;
+mod reactions;
 mod reads;
 mod storage;
 mod subscriptions;
@@ -751,19 +752,12 @@ impl Core {
 				channel_id,
 				message_id,
 				emoji,
-			} => {
-				self.remember_reaction(&emoji);
-				self.spawn_rest("add reaction", move |rest| async move {
-					rest.add_reaction(channel_id, message_id, &emoji).await
-				});
-			}
+			} => self.add_reaction(channel_id, message_id, emoji),
 			Command::RemoveReaction {
 				channel_id,
 				message_id,
 				emoji,
-			} => self.spawn_rest("remove reaction", move |rest| async move {
-				rest.remove_own_reaction(channel_id, message_id, &emoji).await
-			}),
+			} => self.remove_reaction(channel_id, message_id, emoji),
 			Command::Typing { channel_id } => self.typing(channel_id),
 			Command::AckChannel {
 				channel_id,

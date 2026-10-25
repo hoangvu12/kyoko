@@ -1,8 +1,10 @@
+mod actions;
 mod alerts;
 mod clock;
 mod composer;
 mod deep_link;
 mod dm_list;
+mod emoji_picker;
 mod images;
 mod inbox;
 mod message;
@@ -11,6 +13,11 @@ mod sidebar;
 mod sign_in;
 mod timeline;
 
+pub use actions::{
+	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle, can_delete,
+	can_edit, can_reply, failure_text, has_actions, message_link, message_menu, reaction_allowed,
+	reaction_toggle, toolbar_actions,
+};
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
 pub use composer::{
@@ -19,6 +26,10 @@ pub use composer::{
 };
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
+pub use emoji_picker::{
+	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,
+	category_title, toned,
+};
 pub use images::{
 	attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request, embed_request,
 	emoji_request, guild_icon_request, is_image, is_video, local_media, media_fetcher, refresh_command,
