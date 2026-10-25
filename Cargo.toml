@@ -27,6 +27,7 @@ bridge = { path = "crates/bridge", package = "kyoko-bridge" }
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-script = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+mlua = { version = "0.12.2", features = ["luau"] }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }

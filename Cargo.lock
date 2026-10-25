@@ -3319,6 +3319,7 @@ dependencies = [
  "kyoko-session",
  "kyoko-state",
  "kyoko-store",
+ "mlua",
  "mockcord",
  "serde_json",
  "thiserror 2.0.21",

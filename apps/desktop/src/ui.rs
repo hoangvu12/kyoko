@@ -2,6 +2,8 @@ mod composer;
 mod home;
 mod members;
 mod message_actions;
+#[cfg(test)]
+mod scripts;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
