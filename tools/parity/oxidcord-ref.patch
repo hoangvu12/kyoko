@@ -1,0 +1,847 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index aa0bfe5..cc49352 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -7358,6 +7358,7 @@ dependencies = [
+ name = "oxidcord-ui"
+ version = "0.2.0-beta.1"
+ dependencies = [
++ "anyhow",
+  "base64 0.23.1",
+  "bytes",
+  "chrono",
+diff --git a/apps/desktop/src/main.rs b/apps/desktop/src/main.rs
+index e6f722f..da643cb 100644
+--- a/apps/desktop/src/main.rs
++++ b/apps/desktop/src/main.rs
+@@ -15,7 +15,7 @@ use session::{BrokerSink, PluginOptions, Session, SessionConfig, VoiceIo};
+ use store::{Paths, Store};
+ use tokio::runtime::Handle;
+ use tracing_subscriber::EnvFilter;
+-use ui::{AppFlags, LaunchConfig, StartSession};
++use ui::{AppFlags, Capture, LaunchConfig, StartSession};
+ use url::Url;
+ 
+ const BUILD_REFRESH_INTERVAL_SECS: i64 = 24 * 60 * 60;
+@@ -45,6 +45,30 @@ struct Cli {
+ 		help = "Make the mock server send messages and typing on its own, used with --mock"
+ 	)]
+ 	live_traffic: bool,
++	#[arg(
++		long,
++		value_name = "URL",
++		hide = true,
++		requires = "mock",
++		help = "Use a mock Discord server already running at this origin, used with --mock"
++	)]
++	mock_server: Option<Url>,
++	#[arg(
++		long,
++		value_name = "NAME",
++		hide = true,
++		requires_all = ["capture_ready", "mock"],
++		help = "Drive the window to a parity screen and signal when it settles"
++	)]
++	capture_screen: Option<String>,
++	#[arg(
++		long,
++		value_name = "PATH",
++		hide = true,
++		requires = "capture_screen",
++		help = "File to write once the capture screen has settled"
++	)]
++	capture_ready: Option<PathBuf>,
+ 	#[arg(long, hide = true, help = "Wait for the previous instance to exit")]
+ 	relaunch: bool,
+ 	#[arg(long, help = "Start without plugins")]
+@@ -156,7 +180,13 @@ fn main() -> anyhow::Result<()> {
+ 		.build()
+ 		.context("start async runtime")?;
+ 
+-	let mock = if cli.mock {
++	let capture = cli
++		.capture_screen
++		.clone()
++		.zip(cli.capture_ready.clone())
++		.map(|(screen, ready)| Capture { screen, ready });
++	let show_login = cli.login || capture.as_ref().is_some_and(Capture::wants_login);
++	let mock = if cli.mock && cli.mock_server.is_none() {
+ 		let server = runtime
+ 			.block_on(Server::start(MockConfig {
+ 				seed: cli.seed,
+@@ -169,7 +199,10 @@ fn main() -> anyhow::Result<()> {
+ 	} else {
+ 		None
+ 	};
+-	let endpoints = endpoints(mock.as_ref(), &store, cli.login)?;
++	let endpoints = match &cli.mock_server {
++		Some(origin) => external_mock(origin, show_login)?,
++		None => endpoints(mock.as_ref(), &store, show_login)?,
++	};
+ 	if !cli.mock {
+ 		refresh_client_identity(&runtime, &store);
+ 	}
+@@ -189,6 +222,7 @@ fn main() -> anyhow::Result<()> {
+ 		qr_config: qr_config(cli.mock),
+ 		web_login_helper: cli.web_login_helper,
+ 		activation: Some(incoming),
++		capture,
+ 		on_window_ready: Some(Box::new(move || {
+ 			if let Err(error) = updater::mark_start_ok(&data_dir) {
+ 				tracing::warn!(%error, "could not confirm the update start");
+@@ -241,6 +275,17 @@ fn endpoints(mock: Option<&Server>, store: &Store, show_login: bool) -> anyhow::
+ 	})
+ }
+ 
++fn external_mock(origin: &Url, show_login: bool) -> anyhow::Result<Endpoints> {
++	let host = origin.host_str().context("mock server host")?;
++	let port = origin.port_or_known_default().context("mock server port")?;
++	Ok(Endpoints {
++		rest_base: Url::parse(&format!("http://{host}:{port}/api/v10")).context("mock rest url")?,
++		gateway_url: format!("ws://{host}:{port}/gateway"),
++		token: (!show_login).then(|| MockConfig::default().token),
++		mock_origin: Some(Url::parse(&format!("http://{host}:{port}/")).context("mock origin")?),
++	})
++}
++
+ fn session_starter(store: &Arc<Store>, rest_base: Url, gateway_url: String, safe_mode: bool) -> StartSession {
+ 	let store = store.clone();
+ 	let (locale, build_number, chrome_version) = {
+diff --git a/crates/ui/Cargo.toml b/crates/ui/Cargo.toml
+index b4b48bc..7be7383 100644
+--- a/crates/ui/Cargo.toml
++++ b/crates/ui/Cargo.toml
+@@ -10,6 +10,7 @@ rust-version.workspace = true
+ name = "ui"
+ 
+ [dependencies]
++anyhow.workspace = true
+ gpui.workspace = true
+ gpui-platform.workspace = true
+ updater.workspace = true
+diff --git a/crates/ui/src/app.rs b/crates/ui/src/app.rs
+index e37092c..9915c66 100644
+--- a/crates/ui/src/app.rs
++++ b/crates/ui/src/app.rs
+@@ -25,7 +25,7 @@ use crate::desktop::{self, Desktop, DesktopEvent, TrayActive};
+ use crate::i18n::Localizer;
+ use crate::images::Images;
+ use crate::shell::{
+-	DataDir, LoginEvent, LoginOptions, LoginScreen, PluginStore, SettingsBackend, Shell, ShellEvent,
++	Capture, DataDir, LoginEvent, LoginOptions, LoginScreen, PluginStore, SettingsBackend, Shell, ShellEvent,
+ 	Textures, UpdateService, VideoTextures, VoiceHotkeys, set_reduced_motion,
+ };
+ use crate::theme::{SYSTEM_THEME, Theme};
+@@ -60,6 +60,7 @@ pub struct LaunchConfig {
+ 	pub qr_config: login::QrConfig,
+ 	pub web_login_helper: Option<PathBuf>,
+ 	pub activation: Option<Receiver<Vec<u8>>>,
++	pub capture: Option<Capture>,
+ 	pub on_window_ready: Option<Box<dyn FnOnce()>>,
+ }
+ 
+@@ -276,9 +277,26 @@ impl AppRoot {
+ 			Some(token) => root.open_session(&token, window, cx),
+ 			None => root.show_login(window, cx),
+ 		}
++		if let Some(capture) = config.capture {
++			crate::shell::capture::start(capture, window, cx);
++		}
+ 		root
+ 	}
+ 
++	pub(crate) fn shell(&self) -> Option<Entity<Shell>> {
++		match &self.screen {
++			Screen::Main(shell) => Some(shell.clone()),
++			Screen::Login(_) => None,
++		}
++	}
++
++	pub(crate) fn login(&self) -> Option<Entity<LoginScreen>> {
++		match &self.screen {
++			Screen::Login(login) => Some(login.clone()),
++			Screen::Main(_) => None,
++		}
++	}
++
+ 	pub(crate) fn add_account(window: &mut Window, cx: &mut App) {
+ 		let Some(root) = cx.try_global::<AppHandle>().and_then(|handle| handle.0.upgrade()) else {
+ 			return;
+diff --git a/crates/ui/src/lib.rs b/crates/ui/src/lib.rs
+index f355784..fd6acbb 100644
+--- a/crates/ui/src/lib.rs
++++ b/crates/ui/src/lib.rs
+@@ -15,5 +15,6 @@ pub mod theme;
+ pub mod zoom;
+ 
+ pub use app::{AppFlags, LaunchConfig, StartSession, run};
++pub use shell::Capture;
+ 
+ pub const APP_ID: &str = "dev.oxidcord.Oxidcord";
+diff --git a/crates/ui/src/shell/account/mod.rs b/crates/ui/src/shell/account/mod.rs
+index 3decd26..3bf6214 100644
+--- a/crates/ui/src/shell/account/mod.rs
++++ b/crates/ui/src/shell/account/mod.rs
+@@ -1,4 +1,4 @@
+-mod custom_status;
++pub mod custom_status;
+ mod full_profile;
+ mod groups;
+ pub mod pages;
+diff --git a/crates/ui/src/shell/capture.rs b/crates/ui/src/shell/capture.rs
+new file mode 100644
+index 0000000..ecb0c1e
+--- /dev/null
++++ b/crates/ui/src/shell/capture.rs
+@@ -0,0 +1,539 @@
++use std::path::PathBuf;
++use std::sync::Arc;
++use std::time::{Duration, Instant};
++
++use anyhow::{Context as _, anyhow, bail};
++use gpui::{
++	Anchor, AsyncWindowContext, Context, Entity, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
++	MouseUpEvent, PlatformInput, Pixels, Point, WeakEntity, Window, point, px,
++};
++use gpui_component::WindowExt as _;
++use gpui_component::notification::Notification;
++use protocol::{ChannelType, Message, Snowflake};
++use session::Command;
++
++use super::community::{ComposerSlot, PickerTarget};
++use super::friends::HomePage;
++use super::message::ImageTarget;
++use super::pickers::PickerTab;
++use super::server_settings::Page;
++use super::{Overlay, Shell};
++use crate::app::AppRoot;
++
++const POLL: Duration = Duration::from_millis(100);
++const SETTLE: Duration = Duration::from_millis(2000);
++const LIMIT: Duration = Duration::from_secs(30);
++const FAILED: i32 = 4;
++const LOGIN_PREFIX: &str = "login-";
++const SEARCH_QUERY: &str = "the";
++const DRAFT: &str = "Checking how the composer looks with a draft in it";
++const TOAST: &str = "You are sending messages too quickly.";
++
++const TOP_BAR_THREADS: (f32, f32) = (871., 46.);
++const TOP_BAR_PINS: (f32, f32) = (958., 46.);
++const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
++const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
++const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
++const LAST_MESSAGE: (f32, f32) = (640., 690.);
++
++pub struct Capture {
++	pub screen: String,
++	pub ready: PathBuf,
++}
++
++impl Capture {
++	pub fn wants_login(&self) -> bool {
++		self.screen.starts_with(LOGIN_PREFIX)
++	}
++}
++
++pub(crate) fn start(capture: Capture, window: &Window, cx: &mut Context<AppRoot>) {
++	cx.spawn_in(window, async move |root, cx| {
++		if let Err(error) = drive(&capture.screen, &root, cx).await {
++			tracing::error!(screen = %capture.screen, "capture steps failed: {error:#}");
++			std::process::exit(FAILED);
++		}
++		cx.background_executor().timer(SETTLE).await;
++		match std::fs::write(&capture.ready, std::process::id().to_string()) {
++			Ok(()) => tracing::info!(screen = %capture.screen, "capture screen ready"),
++			Err(error) => tracing::warn!(%error, "could not signal the capture screen"),
++		}
++	})
++	.detach();
++}
++
++async fn until<T>(
++	cx: &mut AsyncWindowContext,
++	what: &str,
++	mut probe: impl FnMut(&mut AsyncWindowContext) -> Option<T>,
++) -> anyhow::Result<T> {
++	let started = Instant::now();
++	loop {
++		if let Some(found) = probe(cx) {
++			return Ok(found);
++		}
++		if started.elapsed() >= LIMIT {
++			bail!("timed out waiting for {what}");
++		}
++		cx.background_executor().timer(POLL).await;
++	}
++}
++
++fn act<R>(
++	shell: &Entity<Shell>,
++	cx: &mut AsyncWindowContext,
++	step: impl FnOnce(&mut Shell, &mut Window, &mut Context<Shell>) -> anyhow::Result<R>,
++) -> anyhow::Result<R> {
++	shell.update_in(cx, step)?
++}
++
++fn at((x, y): (f32, f32)) -> Point<Pixels> {
++	point(px(x), px(y))
++}
++
++async fn drive(screen: &str, root: &WeakEntity<AppRoot>, cx: &mut AsyncWindowContext) -> anyhow::Result<()> {
++	if screen.starts_with(LOGIN_PREFIX) {
++		return drive_login(screen, root, cx).await;
++	}
++	let shell = until(cx, "the main view", |cx| {
++		root.read_with(cx, |root, _| root.shell()).ok().flatten()
++	})
++	.await?;
++	let first = until(cx, "the first channel", |cx| {
++		shell.read_with(cx, |shell, cx| shell.channel.filter(|channel| loaded(shell, *channel, cx)))
++	})
++	.await?;
++	match screen {
++		"app-frame" | "server-rail" | "channel-sidebar" | "timeline" | "member-list" | "user-panel" => {}
++		"server-rail-folder" => act(&shell, cx, |shell, _, cx| {
++			shell.rail.update(cx, |rail, cx| rail.open_all_folders(cx));
++			Ok(())
++		})?,
++		"channel-sidebar-collapsed" => act(&shell, cx, |shell, _, cx| {
++			let guild = shell.guild.context("no guild is open")?;
++			let category = first_category(shell, guild, cx).context("the guild has no category")?;
++			shell.send(
++				Command::ToggleCategory {
++					guild_id: guild,
++					category_id: category,
++				},
++				cx,
++			);
++			Ok(())
++		})?,
++		"dm-sidebar" => {
++			act(&shell, cx, |shell, window, cx| {
++				shell.show_home(window, cx);
++				Ok(())
++			})?;
++			opened_dm(&shell, cx).await?;
++		}
++		"dm-group" => {
++			let group = act(&shell, cx, |shell, _, cx| {
++				let group = shell
++					.data
++					.read(cx)
++					.state()
++					.dm_rows()
++					.into_iter()
++					.find(|row| row.recipients.len() > 1)
++					.map(|row| row.channel_id)
++					.context("no group DM in the fixtures")?;
++				shell.select(None, group, cx);
++				Ok(group)
++			})?;
++			opened(&shell, cx, group).await?;
++		}
++		"timeline-media" => act(&shell, cx, |shell, _, cx| {
++			let (message, _) = image_in(shell, first, cx).context("no image in the open channel")?;
++			shell.timeline.update(cx, |timeline, cx| timeline.jump_to(message, cx));
++			Ok(())
++		})?,
++		"message-hover" => hover(cx, at(LAST_MESSAGE))?,
++		"message-context-menu" => {
++			hover(cx, at(LAST_MESSAGE))?;
++			click(cx, at(LAST_MESSAGE), MouseButton::Right)?;
++		}
++		"composer" => act(&shell, cx, |shell, window, cx| {
++			shell
++				.composer
++				.update(cx, |composer, cx| composer.insert(DRAFT, window, cx));
++			Ok(())
++		})?,
++		"composer-reply" => act(&shell, cx, |shell, window, cx| {
++			let message = last_from_someone_else(shell, first, cx).context("no message to reply to")?;
++			shell.start_reply(message.id, window, cx);
++			Ok(())
++		})?,
++		"profile-popout" => act(&shell, cx, |shell, _, cx| {
++			let message = last_from_someone_else(shell, first, cx).context("no other author")?;
++			shell.open_profile(message.author.id, at(PROFILE_ANCHOR), Anchor::TopLeft, cx);
++			Ok(())
++		})?,
++		"full-profile" => act(&shell, cx, |shell, _, cx| {
++			let message = last_from_someone_else(shell, first, cx).context("no other author")?;
++			let guild = shell.guild;
++			shell
++				.account
++				.update(cx, |account, cx| account.open_full_profile(message.author.id, guild, cx));
++			Ok(())
++		})?,
++		"status-menu" => act(&shell, cx, |shell, _, cx| {
++			shell
++				.user_panel
++				.update(cx, |panel, cx| panel.toggle_menu(at(USER_PANEL_AVATAR), cx));
++			Ok(())
++		})?,
++		"custom-status" => act(&shell, cx, |shell, window, cx| {
++			super::account::custom_status::open(shell.data.clone(), window, cx);
++			Ok(())
++		})?,
++		"quick-switcher" => act(&shell, cx, |shell, window, cx| {
++			shell.open_quick_switcher(window, cx);
++			Ok(())
++		})?,
++		"search" => act(&shell, cx, |shell, _, cx| {
++			shell.run_search(SEARCH_QUERY.to_owned(), cx);
++			Ok(())
++		})?,
++		"lightbox" => act(&shell, cx, |shell, _, cx| {
++			let (_, target) = image_in(shell, first, cx).context("no image in the open channel")?;
++			shell.overlay = Some(Overlay::Lightbox(target));
++			cx.notify();
++			Ok(())
++		})?,
++		"emoji-picker" => picker(&shell, cx, PickerTab::Emoji)?,
++		"gif-picker" => picker(&shell, cx, PickerTab::Gif)?,
++		"sticker-picker" => picker(&shell, cx, PickerTab::Sticker)?,
++		"threads-list" => act(&shell, cx, |shell, window, cx| {
++			shell
++				.community
++				.update(cx, |community, cx| community.open_threads(at(TOP_BAR_THREADS), window, cx));
++			Ok(())
++		})?,
++		"pins" => act(&shell, cx, |shell, window, cx| {
++			shell
++				.community
++				.update(cx, |community, cx| community.open_pins(at(TOP_BAR_PINS), window, cx));
++			Ok(())
++		})?,
++		"thread-panel" => {
++			let thread = act(&shell, cx, |shell, _, cx| {
++				let thread = thread_of(shell, first, cx).context("the open channel has no thread")?;
++				shell
++					.community
++					.update(cx, |community, cx| community.open_thread(thread, cx));
++				Ok(thread)
++			})?;
++			until(cx, "the thread history", |cx| {
++				shell.read_with(cx, |shell, cx| loaded(shell, thread, cx).then_some(()))
++			})
++			.await?;
++		}
++		"thread-create" => act(&shell, cx, |shell, window, cx| {
++			super::threads::create::open(window, cx, shell.data.clone(), first, None);
++			Ok(())
++		})?,
++		"forum" | "forum-post" | "forum-post-create" => {
++			let forum = act(&shell, cx, |shell, _, cx| {
++				let guild = shell.guild.context("no guild is open")?;
++				let forum = forum_in(shell, guild, cx).context("the guild has no forum")?;
++				shell.select(Some(guild), forum, cx);
++				Ok(forum)
++			})?;
++			until(cx, "the forum to open", |cx| {
++				shell.read_with(cx, |shell, _| (shell.channel == Some(forum)).then_some(()))
++			})
++			.await?;
++			match screen {
++				"forum-post" => {
++					let post = act(&shell, cx, |shell, _, cx| {
++						let post = thread_of(shell, forum, cx).context("the forum has no post")?;
++						shell
++							.community
++							.update(cx, |community, cx| community.open_thread(post, cx));
++						Ok(post)
++					})?;
++					until(cx, "the post history", |cx| {
++						shell.read_with(cx, |shell, cx| loaded(shell, post, cx).then_some(()))
++					})
++					.await?;
++				}
++				"forum-post-create" => act(&shell, cx, |shell, window, cx| {
++					super::threads::post::open(window, cx, shell.data.clone(), forum);
++					Ok(())
++				})?,
++				_ => {}
++			}
++		}
++		"friends-online" | "friends-all" | "friends-pending" | "friends-blocked" | "friends-add" => {
++			act(&shell, cx, |shell, window, cx| {
++				shell.show_home(window, cx);
++				Ok(())
++			})?;
++			opened_dm(&shell, cx).await?;
++			let tab = format!("friends-tab-{}", &screen["friends-".len()..]);
++			act(&shell, cx, |shell, _, cx| {
++				shell.home_pages.show(HomePage::Friends, cx);
++				let shown = shell
++					.home_pages
++					.friends
++					.update(cx, |friends, cx| friends.show_tab(&tab, cx));
++				if shown { Ok(()) } else { Err(anyhow!("no friends tab {tab}")) }
++			})?;
++		}
++		"add-server" => act(&shell, cx, |_, window, cx| {
++			super::community::add_server::open(window, cx);
++			Ok(())
++		})?,
++		"forward" => act(&shell, cx, |shell, window, cx| {
++			let message = last_message(shell, first, cx).context("no message to forward")?;
++			shell
++				.community
++				.update(cx, |community, cx| community.open_forward(first, message.id, window, cx));
++			Ok(())
++		})?,
++		"guild-notifications" => act(&shell, cx, |shell, window, cx| {
++			let guild = shell.guild.context("no guild is open")?;
++			super::community::notify::open_guild_modal(window, cx, guild);
++			Ok(())
++		})?,
++		"moderation-nickname" | "moderation-timeout" | "moderation-kick" | "moderation-ban" => {
++			act(&shell, cx, |shell, window, cx| {
++				let guild = shell.guild.context("no guild is open")?;
++				let message = last_from_someone_else(shell, first, cx).context("no other member")?;
++				let user = message.author.id;
++				let name = shell.data.read(cx).state().display_name(Some(guild), user);
++				use super::moderation::dialogs;
++				match screen {
++					"moderation-nickname" => dialogs::open_nickname(window, cx, guild, user, name),
++					"moderation-timeout" => dialogs::open_timeout(window, cx, guild, user, name),
++					"moderation-kick" => dialogs::open_kick(window, cx, guild, user, name),
++					_ => dialogs::open_ban(window, cx, guild, user, name),
++				}
++				Ok(())
++			})?
++		}
++		"toast" => act(&shell, cx, |_, window, cx| {
++			window.push_notification(Notification::error(TOAST), cx);
++			Ok(())
++		})?,
++		"connection-offline" => act(&shell, cx, |shell, _, cx| {
++			shell
++				.timeline
++				.update(cx, |timeline, cx| timeline.set_connected(false, cx));
++			Ok(())
++		})?,
++		other if other.starts_with("server-settings-") => {
++			let page = server_settings_page(other).with_context(|| format!("unknown page {other}"))?;
++			act(&shell, cx, |shell, window, cx| {
++				let guild = shell.guild.context("no guild is open")?;
++				shell.community.update(cx, |community, cx| {
++					community.open_server_settings(guild, Some(page), window, cx)
++				});
++				Ok(())
++			})?
++		}
++		other if other.starts_with("settings-") => act(&shell, cx, |shell, window, cx| {
++			shell.open_settings(window, cx);
++			let settings = shell.settings.clone().context("settings did not open")?;
++			if settings.update(cx, |settings, cx| settings.show_named(other, window, cx)) {
++				Ok(())
++			} else {
++				Err(anyhow!("no settings page {other}"))
++			}
++		})?,
++		other => bail!("no capture steps for {other}"),
++	}
++	Ok(())
++}
++
++async fn drive_login(screen: &str, root: &WeakEntity<AppRoot>, cx: &mut AsyncWindowContext) -> anyhow::Result<()> {
++	let login = until(cx, "the login screen", |cx| {
++		root.read_with(cx, |root, _| root.login()).ok().flatten()
++	})
++	.await?;
++	match screen {
++		"login-tos" => Ok(()),
++		"login-token" => {
++			login.update(cx, |login, cx| login.acknowledge(cx));
++			Ok(())
++		}
++		other => bail!("no capture steps for {other}"),
++	}
++}
++
++fn picker(shell: &Entity<Shell>, cx: &mut AsyncWindowContext, tab: PickerTab) -> anyhow::Result<()> {
++	act(shell, cx, |shell, window, cx| {
++		shell.community.update(cx, |community, cx| {
++			community.open_picker(
++				tab,
++				PickerTarget::Composer(ComposerSlot::Main),
++				at(COMPOSER_PICKER),
++				window,
++				cx,
++			)
++		});
++		Ok(())
++	})
++}
++
++fn hover(cx: &mut AsyncWindowContext, position: Point<Pixels>) -> anyhow::Result<()> {
++	cx.update(|window, cx| {
++		window.dispatch_event(
++			PlatformInput::MouseMove(MouseMoveEvent {
++				position,
++				pressed_button: None,
++				modifiers: Modifiers::default(),
++			}),
++			cx,
++		);
++	})
++}
++
++fn click(cx: &mut AsyncWindowContext, position: Point<Pixels>, button: MouseButton) -> anyhow::Result<()> {
++	cx.update(|window, cx| {
++		window.dispatch_event(
++			PlatformInput::MouseDown(MouseDownEvent {
++				button,
++				position,
++				modifiers: Modifiers::default(),
++				click_count: 1,
++				first_mouse: false,
++			}),
++			cx,
++		);
++		window.dispatch_event(
++			PlatformInput::MouseUp(MouseUpEvent {
++				button,
++				position,
++				modifiers: Modifiers::default(),
++				click_count: 1,
++			}),
++			cx,
++		);
++	})
++}
++
++async fn opened(shell: &Entity<Shell>, cx: &mut AsyncWindowContext, channel: Snowflake) -> anyhow::Result<()> {
++	until(cx, "the channel to open", |cx| {
++		shell.read_with(cx, |shell, cx| {
++			(shell.channel == Some(channel) && loaded(shell, channel, cx)).then_some(())
++		})
++	})
++	.await
++}
++
++async fn opened_dm(shell: &Entity<Shell>, cx: &mut AsyncWindowContext) -> anyhow::Result<()> {
++	until(cx, "a direct message to open", |cx| {
++		shell.read_with(cx, |shell, cx| {
++			let channel = shell.channel.filter(|_| shell.guild.is_none())?;
++			loaded(shell, channel, cx).then_some(())
++		})
++	})
++	.await
++}
++
++fn loaded(shell: &Shell, channel: Snowflake, cx: &gpui::App) -> bool {
++	shell
++		.data
++		.read(cx)
++		.state()
++		.messages(channel)
++		.is_some_and(|cache| !cache.ordered.is_empty())
++}
++
++fn last_message(shell: &Shell, channel: Snowflake, cx: &gpui::App) -> Option<Arc<Message>> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state.messages(channel)?.ordered.last().cloned()
++}
++
++fn last_from_someone_else(shell: &Shell, channel: Snowflake, cx: &gpui::App) -> Option<Arc<Message>> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	let me = state.current_user_id();
++	state
++		.messages(channel)?
++		.ordered
++		.iter()
++		.rev()
++		.find(|message| Some(message.author.id) != me)
++		.cloned()
++}
++
++fn image_in(shell: &Shell, channel: Snowflake, cx: &gpui::App) -> Option<(Snowflake, ImageTarget)> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state.messages(channel)?.ordered.iter().rev().find_map(|message| {
++		let attachment = message.attachments.iter().find(|attachment| {
++			attachment
++				.content_type
++				.as_deref()
++				.is_some_and(|kind| kind.starts_with("image/"))
++				&& attachment.width.is_some()
++		})?;
++		let url = attachment
++			.url
++			.clone()
++			.or_else(|| attachment.proxy_url.clone())?;
++		Some((
++			message.id,
++			ImageTarget {
++				url,
++				name: attachment.filename.clone(),
++				width: attachment.width.unwrap_or(0).max(1) as u32,
++				height: attachment.height.unwrap_or(0).max(1) as u32,
++			},
++		))
++	})
++}
++
++fn first_category(shell: &Shell, guild: Snowflake, cx: &gpui::App) -> Option<Snowflake> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state
++		.guild_channel_tree(guild)
++		.into_iter()
++		.find_map(|node| node.category.map(|category| category.id))
++}
++
++fn forum_in(shell: &Shell, guild: Snowflake, cx: &gpui::App) -> Option<Snowflake> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	state
++		.guild_channel_tree(guild)
++		.into_iter()
++		.flat_map(|node| node.children)
++		.find(|row| !row.locked && row.kind == ChannelType::GuildForum)
++		.map(|row| row.id)
++}
++
++fn thread_of(shell: &Shell, parent: Snowflake, cx: &gpui::App) -> Option<Snowflake> {
++	let data = shell.data.read(cx);
++	let state = data.state();
++	let guild = state.channel_guild(parent)?;
++	let mut threads: Vec<Snowflake> = state
++		.guild(guild)?
++		.threads
++		.values()
++		.filter(|thread| thread.parent_id == Some(parent))
++		.map(|thread| thread.id)
++		.collect();
++	threads.sort();
++	threads.first().copied()
++}
++
++fn server_settings_page(screen: &str) -> Option<Page> {
++	Some(match screen.strip_prefix("server-settings-")? {
++		"overview" => Page::Overview,
++		"roles" => Page::Roles,
++		"emoji" => Page::Emoji,
++		"stickers" => Page::Stickers,
++		"members" => Page::Members,
++		"invites" => Page::Invites,
++		"bans" => Page::Bans,
++		"audit-log" => Page::AuditLog,
++		_ => return None,
++	})
++}
+diff --git a/crates/ui/src/shell/friends/mod.rs b/crates/ui/src/shell/friends/mod.rs
+index dda6b9b..63bea00 100644
+--- a/crates/ui/src/shell/friends/mod.rs
++++ b/crates/ui/src/shell/friends/mod.rs
+@@ -141,6 +141,17 @@ impl FriendsPage {
+ 		cx.notify();
+ 	}
+ 
++	pub fn show_tab(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
++		let found = Tab::LIST
++			.into_iter()
++			.chain([Tab::Add])
++			.find(|tab| tab.key() == key);
++		if let Some(tab) = found {
++			self.select(tab, cx);
++		}
++		found.is_some()
++	}
++
+ 	fn matches(&self, row: &RelationshipRow) -> bool {
+ 		self.filter.is_empty()
+ 			|| row.display.to_lowercase().contains(&self.filter)
+diff --git a/crates/ui/src/shell/login/mod.rs b/crates/ui/src/shell/login/mod.rs
+index cab9ffa..4aa63c4 100644
+--- a/crates/ui/src/shell/login/mod.rs
++++ b/crates/ui/src/shell/login/mod.rs
+@@ -96,7 +96,7 @@ impl LoginScreen {
+ 		screen
+ 	}
+ 
+-	fn acknowledge(&mut self, cx: &mut Context<Self>) {
++	pub(crate) fn acknowledge(&mut self, cx: &mut Context<Self>) {
+ 		self.acknowledged = true;
+ 		(self.backend.write)(&|settings| settings.first_run_acknowledged = true);
+ 		self.start_qr(cx);
+diff --git a/crates/ui/src/shell/mod.rs b/crates/ui/src/shell/mod.rs
+index 8c1bd65..a4baece 100644
+--- a/crates/ui/src/shell/mod.rs
++++ b/crates/ui/src/shell/mod.rs
+@@ -1,4 +1,5 @@
+ mod account;
++pub(crate) mod capture;
+ mod channel_sidebar;
+ mod community;
+ mod composer;
+@@ -71,6 +72,7 @@ use crate::model::{Status, status_of};
+ use crate::theme::{Theme, rem};
+ 
+ pub use self::account::DataDir;
++pub use self::capture::Capture;
+ pub use self::login::{LoginEvent, LoginOptions, LoginScreen};
+ pub use self::plugins::PluginStore;
+ pub use self::quick_switcher::{
+diff --git a/crates/ui/src/shell/server_rail.rs b/crates/ui/src/shell/server_rail.rs
+index 6e3fb06..7abf8c5 100644
+--- a/crates/ui/src/shell/server_rail.rs
++++ b/crates/ui/src/shell/server_rail.rs
+@@ -202,6 +202,19 @@ impl ServerRail {
+ 		}
+ 	}
+ 
++	pub fn open_all_folders(&mut self, cx: &mut Context<Self>) {
++		let folders: Vec<Id> = self
++			.entries
++			.iter()
++			.filter_map(|entry| match entry {
++				RailEntry::Folder(folder) => Some(folder.id),
++				_ => None,
++			})
++			.collect();
++		self.open_folders.extend(folders);
++		cx.notify();
++	}
++
+ 	fn toggle_folder(&mut self, id: Id, cx: &mut Context<Self>) {
+ 		if !self.open_folders.remove(&id) {
+ 			self.open_folders.insert(id);
+diff --git a/crates/ui/src/shell/settings.rs b/crates/ui/src/shell/settings.rs
+index 814a75c..1d0f5a5 100644
+--- a/crates/ui/src/shell/settings.rs
++++ b/crates/ui/src/shell/settings.rs
+@@ -250,6 +250,17 @@ impl SettingsWindow {
+ 		}
+ 	}
+ 
++	pub fn show_named(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
++		let found = SECTIONS
++			.iter()
++			.flat_map(|(_, pages)| pages.iter().copied())
++			.find(|page| page.key() == key);
++		if let Some(page) = found {
++			self.show_page(page, window, cx);
++		}
++		found.is_some()
++	}
++
+ 	pub fn show_voice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+ 		self.show_page(Page::VoiceVideo, window, cx);
+ 	}
+diff --git a/crates/ui/src/shell/user_panel.rs b/crates/ui/src/shell/user_panel.rs
+index f0ddf02..2196e15 100644
+--- a/crates/ui/src/shell/user_panel.rs
++++ b/crates/ui/src/shell/user_panel.rs
+@@ -82,7 +82,7 @@ pub struct UserPanel {
+ impl EventEmitter<UserPanelEvent> for UserPanel {}
+ 
+ impl UserPanel {
+-	fn toggle_menu(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
++	pub(crate) fn toggle_menu(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
+ 		if self.menu.take().is_some() {
+ 			self._menu_events = None;
+ 			cx.notify();
