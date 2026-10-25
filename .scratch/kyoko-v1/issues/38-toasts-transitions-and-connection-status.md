@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Toasts and transitions match oxidcord in the parity captures
 - [ ] The connection status shows live, reconnecting and offline states
