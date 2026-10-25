@@ -29,6 +29,7 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `bulk_ack_gap` | 2 s | between two `POST /read-states/ack-bulk` requests |
 | `settings_delay` | 1 s | quiet time after the last server-order change before it is saved |
 | `settings_gap` | 10 s | between two server-order saves |
+| `collapse_gap` | 2 s | between two saves of collapsed categories |
 
 A message send is `POST /channels/<id>/messages`. The defaults sit between how fast a person acts and what Discord tolerates:
 
@@ -62,6 +63,15 @@ The web client keeps the rail's order and folders in the preloaded settings prot
 - A change not yet sent when kyoko quits is lost; the next READY brings back the saved order.
 
 The settings-proto gateway capability (bit 9) is still not advertised: Discord sends `user_settings_proto` in READY and the update event without it, and the write path does not depend on it.
+
+## Collapsed categories
+
+A category's collapsed state is the `collapsed` flag of its channel override in the user guild settings, which is where the web client keeps it and where oxidcord reads it from. kyoko saves it there with `PATCH /users/@me/guilds/{guild_id}/settings` and `{"channel_overrides":{"<category_id>":{"collapsed":true}}}`.
+
+- `Command::ToggleCategory { guild_id, category_id }` collapses or expands the category locally at once and hands the new value to one writer (`crates/session/src/task/collapse.rs`). The write waits `settings_delay` (1 s) after the last toggle and carries every category of one guild changed since the last write, with its final value; writes are at least `collapse_gap` (2 s) apart, one guild per request, through the mutation lane. Toggling back and forth quickly is one request.
+- Discord dispatches USER_GUILD_SETTINGS_UPDATE with the merged overrides; the state applies it and the versioned container saved for the next start carries it (`docs/client-state.md`), so the collapse survives a restart. An update arriving while a newer toggle waits keeps the newer value on screen.
+- If the request fails, the categories it carried go back to their earlier state, unless a newer toggle for them is waiting, and the session reports a rejection.
+- A toggle not yet sent when kyoko quits is lost; the next READY brings back the saved state.
 
 ## Deleting messages
 

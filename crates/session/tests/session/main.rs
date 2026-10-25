@@ -2,6 +2,7 @@ mod alerts;
 mod backfill;
 mod caches;
 mod capabilities;
+mod collapse;
 mod deletes;
 mod fingerprint;
 mod gateway;

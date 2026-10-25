@@ -39,6 +39,7 @@ mod accounts;
 mod actions;
 mod alerts;
 mod backfill;
+mod collapse;
 mod commands;
 mod deletes;
 mod expressions;
@@ -116,6 +117,7 @@ pub(crate) enum Internal {
 		kept: persist::Kept,
 	},
 	LayoutSaved(bool),
+	CollapseSaved(bool),
 }
 
 pub(crate) struct CoreParts {
@@ -179,6 +181,7 @@ pub(crate) struct Core {
 	startup: Option<Startup>,
 	acks: reads::Acks,
 	layout: layout::LayoutWriter,
+	collapse: collapse::CollapseWriter,
 	viewing: bool,
 	manual_unread: HashSet<Snowflake>,
 	deletes: mpsc::UnboundedSender<deletes::DeleteJob>,
@@ -257,6 +260,7 @@ impl Core {
 			startup: Some(parts.startup),
 			acks: reads::Acks::new(&parts.tuning),
 			layout: layout::LayoutWriter::new(&parts.tuning),
+			collapse: collapse::CollapseWriter::new(&parts.tuning),
 			viewing: true,
 			manual_unread: HashSet::new(),
 			deletes,
@@ -519,6 +523,7 @@ impl Core {
 				self.persist_read_state(ack.channel_id);
 			}
 			DispatchEvent::UserGuildSettingsUpdate(_) => {
+				self.keep_intended_collapse();
 				let settings = self.state.read().guild_settings_cache();
 				self.persist.submit(Job::GuildSettings(settings));
 			}
@@ -629,6 +634,7 @@ impl Core {
 			}),
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
 			Internal::LayoutSaved(saved) => self.on_layout_saved(saved),
+			Internal::CollapseSaved(saved) => self.on_collapse_saved(saved),
 			Internal::Kept { channel_id, kept } => self.apply_local(LocalEvent::KeptRestored {
 				channel_id,
 				deleted: kept.deleted,
@@ -781,13 +787,10 @@ impl Core {
 				channel_id,
 				query,
 			} => self.search(guild_id, channel_id, query),
-			Command::ToggleCategory { category_id, .. } => {
-				let collapsed = !self.state.read().is_collapsed(category_id);
-				self.apply_local(LocalEvent::CategoryCollapsed {
-					channel_id: category_id,
-					collapsed,
-				});
-			}
+			Command::ToggleCategory {
+				guild_id,
+				category_id,
+			} => self.toggle_category(guild_id, category_id),
 			Command::SwitchAccount(user_id) => self.switch_account(user_id),
 			command @ (Command::ThemeCatalogRefresh { .. } | Command::ThemeInstall { .. }) => {
 				self.on_theme_command(command)
@@ -1209,6 +1212,7 @@ impl Core {
 			self.member_requests.deadline(),
 			self.backfill.deadline(),
 			self.layout.deadline(),
+			self.collapse.deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1223,6 +1227,9 @@ impl Core {
 		self.run_backfill(now);
 		if self.layout.deadline().is_some_and(|due| due <= now) {
 			self.flush_layout();
+		}
+		if self.collapse.deadline().is_some_and(|due| due <= now) {
+			self.flush_collapse();
 		}
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {

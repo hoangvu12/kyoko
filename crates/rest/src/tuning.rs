@@ -19,6 +19,7 @@ pub struct RestTuning {
 	pub backfill_cool_down: Duration,
 	pub settings_delay: Duration,
 	pub settings_gap: Duration,
+	pub collapse_gap: Duration,
 }
 
 impl Default for RestTuning {
@@ -41,6 +42,7 @@ impl Default for RestTuning {
 			backfill_cool_down: Duration::from_secs(300),
 			settings_delay: Duration::from_secs(1),
 			settings_gap: Duration::from_secs(10),
+			collapse_gap: Duration::from_secs(2),
 		}
 	}
 }
