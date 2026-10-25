@@ -3478,6 +3478,7 @@ dependencies = [
  "kyoko-store",
  "mockcord",
  "parking_lot",
+ "rand 0.9.5",
  "reqwest",
  "rustls",
  "serde",

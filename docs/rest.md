@@ -25,12 +25,37 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `mutation_gap` | 250 ms | between any two non-GET requests, sends included |
 | `send_gap` | 500 ms | between two message sends in any channels |
 | `channel_send_gap` | 1 s | between two message sends in one channel |
+| `delete_gap` | 1.2 s | between two message deletes in any channels |
+| `bulk_ack_gap` | 2 s | between two `POST /read-states/ack-bulk` requests |
 
 A message send is `POST /channels/<id>/messages`. The defaults sit between how fast a person acts and what Discord tolerates:
 
 - 250 ms matches Discord's own reaction limit (about one per 250 ms). It stays below what a person notices when clicking reactions or deleting messages.
 - Concord spaces mutations 500 ms apart and sends 100 ms apart. kyoko makes sends the strictest lane instead. Nobody sends two messages within half a second, and Discord's per-channel message bucket is about 5 per 5 s.
+- Deletes get their own, stricter lane. Deleting many messages is the pattern self-bot cleaners show, so kyoko never deletes faster than about one message per second, even when the user selects many at once. 1.2 s keeps a ten-message cleanup around ten seconds.
+- Mark server read and mark everything read send one bulk ack per 100 channels. 2 s between them spreads a large "mark all read" over a few seconds instead of a burst.
 - Pacing only ever delays. Nothing is dropped or merged, so a burst of user actions still completes, just at a human pace.
+
+## Read acks
+
+Every read receipt goes through one debouncer per channel in the session (`crates/session/src/task/reads.rs`). The local read state updates immediately, so badges clear at once. The REST ack waits.
+
+- A trigger schedules `POST /channels/<c>/messages/<m>/ack` with `{"token":null,"last_viewed":<days since the Discord epoch>}` after `ack_delay` (1.5 s) plus a random `ack_jitter` (up to 1 s). Another trigger for the same channel restarts the wait and raises the message id, so a burst gives one ack for the newest message. `ack_max_delay` (10 s) caps how long a busy channel can defer, so an open, busy channel sends at most about one ack every 10 s.
+- Triggers: opening a channel, a new message in the open channel, `Command::AckChannel` and `Command::MarkChannelRead`.
+- A new message only counts when the user is viewing the channel: it is the selected channel, the UI has not reported `Command::SetViewing(false)` (default: viewing), and the last `SetViewport` for it, if any, is at the bottom. Reporting viewing again, or scrolling back to the bottom, acks what arrived meanwhile.
+- `Command::MarkUnread` sends a manual ack at once and drops any pending ack for the channel. New messages in that channel are not acked again until the user opens it again.
+- `Command::MarkGuildRead` and `Command::MarkAllRead` send `POST /read-states/ack-bulk` (the web client's own endpoint for marking a server read) with up to 100 `{"channel_id","message_id","read_state_type":0}` entries each, paced by `bulk_ack_gap`. They cover channels with a read state that are behind or have mentions, skipping categories and channels without View Channel. Mark all read includes DMs.
+- Pending acks are not sent at shutdown. Discord keeps the older read position and the next READY brings it back.
+
+The 1.5 s delay follows how people read: a message is acked once it has had time to be seen, and a fast conversation coalesces. Concord debounces for 1 s.
+
+## Deleting messages
+
+`Command::DeleteMessage` and `Command::DeleteMessages` go through one queue (`crates/session/src/task/deletes.rs`) that sends single `DELETE /channels/<c>/messages/<m>` requests one after another, paced by `delete_gap`. kyoko never calls `POST /channels/<c>/messages/bulk-delete`: user accounts cannot use it.
+
+- Only the user's own messages (known from the cache) are queued, plus any message in a server channel where the user has Manage Messages. Others are marked `Refused` and the command reports a rejection.
+- Progress is in `State::deletions()`: each `DeleteBatch` lists its messages with a `DeleteStatus` of `Queued`, `Deleted`, `Refused`, `Failed(SendFailure)` or `Cancelled`. The last 16 batches are kept.
+- A 404 counts as deleted. Any other failure (403, 429, captcha, a suspended route, 401, network) stops the batch: that message is `Failed` and the rest are `Cancelled`, never sent.
 
 ## Stop on 401
 

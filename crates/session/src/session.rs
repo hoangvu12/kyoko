@@ -93,6 +93,7 @@ impl Session {
 			stats: stats.clone(),
 			token,
 			remember_account: config.remember_account,
+			tuning: config.rest,
 			startup: Startup {
 				gateway: gateway_start,
 				gateway_config,

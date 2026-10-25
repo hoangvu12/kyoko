@@ -1,7 +1,4 @@
-use protocol::{
-	CreateMessage, DispatchEvent, MessageAck, MessageReference, MessageReferenceKind, Permissions, Snowflake,
-	StatusKind,
-};
+use protocol::{CreateMessage, MessageReference, MessageReferenceKind, Permissions, Snowflake, StatusKind};
 use rest::UploadFile;
 use rest::api::image_data_uri;
 use serde_json::{Value, json};
@@ -13,8 +10,6 @@ use super::{Command, Core, CustomStatus, Internal};
 const PNG: &str = "image/png";
 const DEFAULT_ARCHIVE_MINUTES: u32 = 1440;
 const REACTION_PAGE: u8 = 100;
-const BULK_DELETE_LIMIT: usize = 100;
-const ACK_BULK_LIMIT: usize = 100;
 const ARCHIVED_PAGE: u8 = 50;
 
 fn sessions_or_empty(result: rest::Result<Value>) -> Value {
@@ -97,6 +92,7 @@ impl Core {
 			| Command::SetGuildNotifications { .. }
 			| Command::MarkGuildRead { .. }
 			| Command::MarkChannelRead { .. }
+			| Command::MarkAllRead
 			| Command::MarkUnread { .. }
 			| Command::UpdateUserSettings(_)
 			| Command::SetGuildLayout(_)
@@ -407,16 +403,8 @@ impl Core {
 				});
 			}
 			Command::MarkGuildRead { guild_id } => self.mark_guild_read(guild_id),
-			Command::MarkChannelRead { channel_id } => {
-				let latest = self
-					.state
-					.read()
-					.channel(channel_id)
-					.and_then(|channel| channel.last_message_id);
-				if let Some(message_id) = latest {
-					self.ack(channel_id, message_id);
-				}
-			}
+			Command::MarkChannelRead { channel_id } => self.mark_channel_read(channel_id),
+			Command::MarkAllRead => self.mark_all_read(),
 			Command::MarkUnread {
 				channel_id,
 				message_id,
@@ -517,59 +505,6 @@ impl Core {
 				});
 			}
 			_ => {}
-		}
-	}
-
-	fn mark_unread(&mut self, channel_id: Snowflake, message_id: Snowflake) {
-		let previous = self
-			.state
-			.read()
-			.messages(channel_id)
-			.and_then(|cache| {
-				let index = cache
-					.ordered
-					.iter()
-					.position(|message| message.id == message_id)?;
-				cache.ordered.get(index.checked_sub(1)?).map(|message| message.id)
-			})
-			.unwrap_or(Snowflake(message_id.0.saturating_sub(1)));
-		self.apply_dispatch(&DispatchEvent::MessageAck(MessageAck {
-			channel_id,
-			message_id: previous,
-			version: None,
-			mention_count: Some(0),
-		}));
-		self.persist_read_state(channel_id);
-		let body = json!({ "manual": true, "mention_count": 0 });
-		self.spawn_rest("mark unread", move |rest| async move {
-			rest.ack_message(channel_id, previous, body).await.map(drop)
-		});
-	}
-
-	fn mark_guild_read(&mut self, guild_id: Snowflake) {
-		let unread: Vec<(Snowflake, Snowflake)> = {
-			let state = self.state.read();
-			let Some(guild) = state.guild(guild_id) else {
-				return;
-			};
-			guild
-				.channels
-				.values()
-				.filter_map(|channel| {
-					let last = channel.last_message_id?;
-					let read = state
-						.read_state(channel.id)
-						.is_some_and(|read_state| read_state.last_message_id >= Some(last));
-					(!read).then_some((channel.id, last))
-				})
-				.collect()
-		};
-		for (channel_id, message_id) in &unread {
-			self.ack_local(*channel_id, *message_id);
-		}
-		for chunk in unread.chunks(ACK_BULK_LIMIT) {
-			let chunk = chunk.to_vec();
-			self.spawn_rest("ack guild", move |rest| async move { rest.ack_bulk(chunk).await });
 		}
 	}
 
@@ -890,16 +825,6 @@ impl Core {
 					self.spawn_action("remove role", move |rest| async move {
 						rest.remove_member_role(guild_id, user_id, role_id).await
 					});
-				}
-			}
-			Command::DeleteMessagesBulk { channel_id, ids } => {
-				if self.channel_allows(channel_id, Permissions::MANAGE_MESSAGES, "Manage Messages") {
-					for chunk in ids.chunks(BULK_DELETE_LIMIT) {
-						let chunk = chunk.to_vec();
-						self.spawn_action("delete messages", move |rest| async move {
-							rest.bulk_delete_messages(channel_id, &chunk).await
-						});
-					}
 				}
 			}
 			Command::MoveMember {

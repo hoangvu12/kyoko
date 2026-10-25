@@ -4,6 +4,8 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::time::{Instant, timeout_at};
 
+use crate::json::parse_id;
+use crate::ops::Draft;
 use crate::record::Recording;
 use crate::scenario::{HeartbeatAcks, Reply};
 use crate::state::Shared;
@@ -103,6 +105,15 @@ impl Control {
 
 	pub fn dispatch(&self, event: &str, data: &Value) {
 		self.shared.hub.broadcast(event, data);
+	}
+
+	pub fn post_message(&self, channel_id: u64, author_id: u64, content: &str) -> Option<u64> {
+		let author = self.shared.fixtures.users.get(&author_id)?;
+		let message = self
+			.shared
+			.post_message(channel_id, author, Draft::text(content))
+			.ok()?;
+		parse_id(&message["id"])
 	}
 
 	pub fn transform_ready(&self, transform: impl Fn(&Value, &mut Value) + Send + Sync + 'static) {

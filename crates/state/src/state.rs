@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 
 use crate::caps::{CacheLimits, Recent};
 use crate::changes::Changes;
+use crate::deletions::DeleteBatch;
 use crate::event::{Event, LoadDirection, LocalEvent};
 use crate::guild::GuildState;
 use crate::loaded::Lazy;
@@ -98,6 +99,7 @@ pub struct State {
 	pub(crate) streams: HashMap<String, StreamSummary>,
 	pub(crate) rejection: Option<Rejection>,
 	pub(crate) rejection_count: u64,
+	pub(crate) deletions: VecDeque<DeleteBatch>,
 	pub(crate) limits: CacheLimits,
 	pub(crate) warm: Vec<Snowflake>,
 }
@@ -554,6 +556,12 @@ impl State {
 				});
 				changes.rejected = true;
 			}
+			LocalEvent::DeletesQueued(batch) => self.queue_deletes(batch, &mut changes),
+			LocalEvent::DeleteProgressed {
+				batch,
+				message_id,
+				status,
+			} => self.delete_progressed(*batch, *message_id, status, &mut changes),
 		}
 		changes
 	}

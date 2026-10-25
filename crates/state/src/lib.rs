@@ -1,5 +1,6 @@
 mod caps;
 mod changes;
+mod deletions;
 mod dispatch;
 mod event;
 mod eviction;
@@ -21,6 +22,7 @@ mod voice;
 
 pub use caps::{CacheLimits, Recent};
 pub use changes::{Changes, IdSet};
+pub use deletions::{DeleteBatch, DeleteStatus};
 pub use event::{Event, LoadDirection, LocalEvent};
 pub use expressions::{
 	CatalogEmoji, EXPRESSIONS_KEY, EmojiCatalog, EmojiRef, GuildEmojis, RECENT_CAP, UnicodeSection,

@@ -27,6 +27,19 @@ impl RouteKey {
 				.and_then(|path| path.strip_suffix("/messages"))
 				== Some(self.major.as_str())
 	}
+
+	pub fn is_message_delete(&self) -> bool {
+		self.major.starts_with("channels/")
+			&& self
+				.key
+				.strip_prefix("DELETE /")
+				.and_then(|path| path.strip_suffix("/messages/{id}"))
+				== Some(self.major.as_str())
+	}
+
+	pub fn is_bulk_ack(&self) -> bool {
+		self.key == "POST /read-states/ack-bulk"
+	}
 }
 
 impl fmt::Display for RouteKey {

@@ -88,6 +88,7 @@ Gateway controls:
 - `fail_next_resume()` answers the next RESUME with op 9 `false`.
 - `invalidate_session(resumable)` sends op 9. With `false`, mockcord also ends the session, so the client can IDENTIFY again on the same socket. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
 - `set_heartbeat_acks(HeartbeatAcks::Prompt | Delayed(d) | Withheld)` controls op 11 replies.
+- `post_message(channel_id, author_id, content)` posts a message as any fixture user, stores it like a REST send and broadcasts MESSAGE_CREATE. It returns the new id. Use it for incoming messages and for the user's own messages without a send.
 - `dispatch(event, data)` sends a dispatch to every session, with sequence numbers, buffered for resume. Use it for late private channels and other events that arrive after READY.
 - `transform_ready(|identify, ready| ..)` edits READY before it is sent. It sees the IDENTIFY payload, so READY can depend on the advertised capabilities. `reset_ready()` removes it.
 

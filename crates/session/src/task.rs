@@ -13,11 +13,10 @@ use protocol::{
 	MessageReference, MessagesQuery, Nonce, Snowflake, StatusKind, Token, User,
 };
 use rest::api::SearchQuery;
-use rest::{RestClient, UploadFile};
-use serde_json::json;
+use rest::{RestClient, RestTuning, UploadFile};
 use state::{
-	Changes, ConnectionStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent, RenderedMessage,
-	SendFailure, SharedState, TYPING_TIMEOUT,
+	Changes, ConnectionStatus, DeleteStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent,
+	RenderedMessage, SendFailure, SharedState, TYPING_TIMEOUT,
 };
 use store::Store;
 use tokio::runtime::Handle;
@@ -36,8 +35,10 @@ use crate::search::SearchResults;
 mod accounts;
 mod actions;
 mod commands;
+mod deletes;
 mod expressions;
 mod failures;
+mod reads;
 mod themes;
 
 const PAGE_SIZE: u8 = 50;
@@ -91,6 +92,11 @@ pub(crate) enum Internal {
 	},
 	ThemeCatalogChanged,
 	AccountSwitch(Snowflake),
+	DeleteProgressed {
+		batch: u64,
+		message_id: Snowflake,
+		status: DeleteStatus,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -108,6 +114,7 @@ pub(crate) struct CoreParts {
 	pub(crate) locale: String,
 	pub(crate) token: Arc<Token>,
 	pub(crate) remember_account: bool,
+	pub(crate) tuning: RestTuning,
 	pub(crate) startup: Startup,
 }
 
@@ -145,6 +152,11 @@ pub(crate) struct Core {
 	account_saved: bool,
 	select_created_guild: bool,
 	startup: Option<Startup>,
+	acks: reads::Acks,
+	viewing: bool,
+	manual_unread: HashSet<Snowflake>,
+	deletes: mpsc::UnboundedSender<deletes::DeleteJob>,
+	delete_batches: u64,
 }
 
 fn page_query(
@@ -182,6 +194,7 @@ struct CustomStatus {
 impl Core {
 	pub(crate) fn new(parts: CoreParts) -> Self {
 		let persist = Persistor::spawn(parts.store.clone(), &parts.runtime);
+		let deletes = deletes::spawn_deleter(parts.rest.clone(), parts.internal.clone(), &parts.runtime);
 		Self {
 			state: parts.state,
 			rest: parts.rest,
@@ -210,6 +223,11 @@ impl Core {
 			account_saved: !parts.remember_account,
 			select_created_guild: false,
 			startup: Some(parts.startup),
+			acks: reads::Acks::new(&parts.tuning),
+			viewing: true,
+			manual_unread: HashSet::new(),
+			deletes,
+			delete_batches: 0,
 		}
 	}
 
@@ -233,6 +251,7 @@ impl Core {
 		loop {
 			let flush_at = self.notifier.deadline();
 			let expire_at = self.typing_expiry;
+			let ack_at = self.acks.deadline();
 			tokio::select! {
 				event = gateway_events.recv(), if gateway_open => match event {
 					Some(event) => self.on_gateway(event),
@@ -256,6 +275,9 @@ impl Core {
 				}
 				() = sleep_until(expire_at.unwrap_or_else(Instant::now)), if expire_at.is_some() => {
 					self.expire_typing();
+				}
+				() = sleep_until(ack_at.unwrap_or_else(Instant::now)), if ack_at.is_some() => {
+					self.flush_acks();
 				}
 			}
 		}
@@ -424,6 +446,7 @@ impl Core {
 					messages: vec![Arc::from(message)],
 				});
 				self.persist_read_state(channel_id);
+				self.read_if_viewing(channel_id);
 			}
 			DispatchEvent::MessageUpdate(update) => self.persist_cached_message(update.channel_id, update.id),
 			DispatchEvent::MessageReactionAdd(reaction) => {
@@ -524,6 +547,15 @@ impl Core {
 				..Changes::default()
 			}),
 			Internal::AccountSwitch(user_id) => self.apply_local(LocalEvent::AccountSwitchRequested(user_id)),
+			Internal::DeleteProgressed {
+				batch,
+				message_id,
+				status,
+			} => self.apply_local(LocalEvent::DeleteProgressed {
+				batch,
+				message_id,
+				status,
+			}),
 		}
 	}
 
@@ -573,7 +605,8 @@ impl Core {
 			Command::LoadOlder { channel_id } => self.load_older(channel_id),
 			Command::LoadNewer { channel_id } => self.load_newer(channel_id),
 			Command::SetViewport { channel_id, viewport } => {
-				self.apply_local(LocalEvent::ViewportChanged { channel_id, viewport })
+				self.apply_local(LocalEvent::ViewportChanged { channel_id, viewport });
+				self.read_if_viewing(channel_id);
 			}
 			Command::LoadAround {
 				channel_id,
@@ -598,9 +631,8 @@ impl Core {
 			Command::DeleteMessage {
 				channel_id,
 				message_id,
-			} => self.spawn_rest("delete message", move |rest| async move {
-				rest.delete_message(channel_id, message_id).await
-			}),
+			} => self.delete_messages(channel_id, vec![message_id]),
+			Command::DeleteMessages { channel_id, ids } => self.delete_messages(channel_id, ids),
 			Command::AddReaction {
 				channel_id,
 				message_id,
@@ -622,7 +654,8 @@ impl Core {
 			Command::AckChannel {
 				channel_id,
 				message_id,
-			} => self.ack(channel_id, message_id),
+			} => self.read_up_to(channel_id, message_id),
+			Command::SetViewing(viewing) => self.set_viewing(viewing),
 			Command::SetDraft { channel_id, content } => {
 				self.persist.submit(Job::Draft {
 					channel_id,
@@ -718,14 +751,7 @@ impl Core {
 		if !has_draft {
 			self.load_draft(channel_id);
 		}
-		let latest = self
-			.state
-			.read()
-			.channel(channel_id)
-			.and_then(|channel| channel.last_message_id);
-		if let Some(message_id) = latest {
-			self.ack(channel_id, message_id);
-		}
+		self.on_channel_opened(channel_id);
 	}
 
 	fn load_initial(&self, channel_id: Snowflake) {
@@ -1056,16 +1082,6 @@ impl Core {
 		}));
 		self.persist_read_state(channel_id);
 		true
-	}
-
-	pub(super) fn ack(&mut self, channel_id: Snowflake, message_id: Snowflake) {
-		if !self.ack_local(channel_id, message_id) {
-			return;
-		}
-		let body = json!({ "token": null, "last_viewed": ack_day() });
-		self.spawn_rest("ack", move |rest| async move {
-			rest.ack_message(channel_id, message_id, body).await.map(drop)
-		});
 	}
 
 	fn subscription_channel(&self, guild_id: Snowflake) -> Option<Snowflake> {

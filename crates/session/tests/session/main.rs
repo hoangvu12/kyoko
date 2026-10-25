@@ -1,8 +1,10 @@
 mod caches;
 mod capabilities;
+mod deletes;
 mod fingerprint;
 mod gateway;
 mod harness;
 mod hooks;
+mod reads;
 mod safety;
 mod wire;

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
 
+use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::loaded::Loaded;
 use crate::messages::{SendFailure, Viewport};
 use crate::state::ConnectionStatus;
@@ -109,6 +110,12 @@ pub enum LocalEvent {
 	Loaded(Box<Loaded>),
 	CommandRejected {
 		reason: String,
+	},
+	DeletesQueued(DeleteBatch),
+	DeleteProgressed {
+		batch: u64,
+		message_id: Snowflake,
+		status: DeleteStatus,
 	},
 }
 

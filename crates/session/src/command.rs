@@ -59,6 +59,7 @@ pub enum Command {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 	},
+	SetViewing(bool),
 	SetDraft {
 		channel_id: Snowflake,
 		content: String,
@@ -301,7 +302,7 @@ pub enum Command {
 		user_id: Snowflake,
 		role_id: Snowflake,
 	},
-	DeleteMessagesBulk {
+	DeleteMessages {
 		channel_id: Snowflake,
 		ids: Vec<Snowflake>,
 	},
@@ -353,6 +354,7 @@ pub enum Command {
 	MarkChannelRead {
 		channel_id: Snowflake,
 	},
+	MarkAllRead,
 	MarkUnread {
 		channel_id: Snowflake,
 		message_id: Snowflake,
