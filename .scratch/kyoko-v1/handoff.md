@@ -1,5 +1,30 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: moving to another machine (main `4c7338a` + this note)
+
+The second orchestrator (roboco chat `02ecdad4`) stopped every worker and pushed everything to GitHub when the user moved the work to another PC. The worker chats and lane worktrees below live on the old machine only; on the new machine, recreate the lanes from the pushed branches and start fresh workers.
+
+- Resolved since the section further down was written: 21, 23, 24, 26, 27, 28, 29. Read their `## Answer` sections; they carry the hand-off notes for later tickets.
+- New ticket 60 (Luau load check), added because a rebase silently broke `ui/actions.luau` and no check noticed. Until 60 lands: after every rebase, launch the app or run one parity capture to confirm the UI script loads.
+- In flight, all claimed on main, all unverified. Each branch sits on top of main, so `git log main..lane-x` shows its work:
+
+| Ticket | Branch on origin | State |
+|---|---|---|
+| 30 user panel, status, profiles | `lane-a` | `5f9a5ec` (status saved in the settings proto, profile cache) plus WIP `c0b3021` (Rust profile layer, half done, not built). The popout, full profile and custom status dialog are still to do; then route 28's `TimelineView::on_profile` and 29's `Link::open_member_profile` to one profile entry point. |
+| 37 settings pages | `lane-b` | `f04353c` "Add the settings and account pages": the worker said tests passed and it was finishing docs, then rebasing onto main with 29. Rebase, finish docs, run the full checks and parity (`settings-account`, `settings-appearance`). |
+| 60 Luau load check | `lane-c` | WIP `bc415c6` (`ui/scripts.rs`, an `xtask` check), not built. The worker had found that zgx-script exposes `testing::TestApp`, which mounts a `ScriptHost` without a window. |
+
+- To recreate a lane: `git worktree add ..\kyoko-lane-a lane-a` (after `git fetch`), and the same for b and c. Rebase each onto main before continuing, and squash or reword the WIP commits before merging.
+- Frontier after these: 31 (quick switcher and search; uses 28's `TimelineView::jump_to`), 32, 33, 35, 36, 38, 39, 41, 42, 43, then 45 once 37 lands (45 needs 27 and 37), then the plugin tickets.
+- Machine-specific items that don't travel: `KYOKO_TOKEN` (a user environment variable on the old PC; the new PC has none, so don't run against real Discord until the user sets one), the sccache `basedirs` config, the `rustc-slots` wrapper in the global cargo config, and the oxidcord reference build (recreate with `tools/parity/oxidcord-ref.ps1`).
+- Lessons from this run:
+  - All lanes share one desktop. Prefer driving the app in-process (zgx `Ui::dispatch`, as 28 did) over OS-level clicks. A worker that does use OS input must target its own window, close any dialog it opens, and only stop processes whose path is inside its own worktree; one worker's clicks once landed in another lane's dialog, and another worker's helper once killed every kyoko process on the machine.
+  - Give each lane its own parity port (A 8494, B 8496, C 8493).
+  - The oxidcord reference sometimes fails a capture in under a second when one runs right after another; rerun that screen alone.
+  - Three lanes with `CARGO_BUILD_JOBS=5` plus the orchestrator's verification runs made the old PC laggy. On a similar machine, try `CARGO_BUILD_JOBS=3`, or two lanes.
+
+## Earlier handoff (first orchestrator)
+
 Written by the first orchestrator chat (roboco chat `6b0a1fd1`, "kyoko orchestrator") when the user asked to hand off. Read this, then `AGENTS.md`, `.scratch/kyoko-v1/spec.md`, `.scratch/kyoko-v1/execution.md`, `docs/agents/issue-tracker.md`, and the ticket files.
 
 ## The job
