@@ -233,6 +233,16 @@ pub async fn default_avatar(Path(file): Path<String>, Query(query): Query<SizedQ
 	sized(&format!("embed/{index}"), index, kind, &query)
 }
 
+pub async fn guild_icon(
+	Path((guild_id, file)): Path<(String, String)>,
+	Query(query): Query<SizedQuery>,
+) -> Response {
+	let Some((hash, kind)) = split_file(&file) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	sized(&format!("icons/{guild_id}/{hash}"), hash, kind, &query)
+}
+
 pub async fn emoji(Path(file): Path<String>, Query(query): Query<SizedQuery>) -> Response {
 	let Some((id, kind)) = split_file(&file) else {
 		return StatusCode::NOT_FOUND.into_response();

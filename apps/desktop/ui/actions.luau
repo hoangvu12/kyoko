@@ -4,6 +4,26 @@ function M.select_guild(id: string)
 	return ui.action("rail.select_guild", id)
 end
 
+function M.select_home()
+	return ui.action("rail.select_home")
+end
+
+function M.toggle_folder(id: string)
+	return ui.action("rail.toggle_folder", id)
+end
+
+function M.add_server()
+	return ui.action("rail.add_server")
+end
+
+function M.discover()
+	return ui.action("rail.discover")
+end
+
+function M.rail_drop(payload: any, drop: string, target: string)
+	ui.invoke("rail.drop", { guild = payload.guild, folder = payload.folder, drop = drop, target = target })
+end
+
 function M.select_channel(id: string)
 	return ui.action("sidebar.select_channel", id)
 end

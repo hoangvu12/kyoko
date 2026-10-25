@@ -74,7 +74,7 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `server-rail` | 22 | Default selection. | yes |
-| `server-rail-folder` | 22 | Default selection, then open every guild folder in the rail. | no |
+| `server-rail-folder` | 22 | Default selection, then open every guild folder in the rail. | yes |
 
 ### 23 Channel sidebar
 

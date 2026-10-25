@@ -6,6 +6,7 @@ mod fonts;
 mod frame;
 mod integration;
 mod notify;
+mod rail;
 mod theme;
 mod timeline;
 mod tray;

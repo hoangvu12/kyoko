@@ -1,11 +1,12 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, ChannelKind, GuildEntry, Inbox, OpenChannel, Sidebar, Timeline};
+use bridge::{ChannelEntry, ChannelKind, Inbox, OpenChannel, Sidebar, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
@@ -20,6 +21,7 @@ use zgx_script::{ScriptHost, Shared, Value};
 use crate::capture::{self, Capture, Opening};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
+use crate::rail::{self, Icons, RailView};
 use crate::theme::Catalog;
 use crate::timeline::TimelineView;
 
@@ -29,7 +31,6 @@ const FRAME_POLL: Duration = Duration::from_millis(50);
 const FRAME_TRIES: usize = 100;
 const TIMELINE_SLOT: &str = "timeline";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
-const INITIALS: usize = 3;
 const AVATAR_POINTS: f64 = 32.;
 const WIDTH: f64 = 1100.;
 const HEIGHT: f64 = 720.;
@@ -97,6 +98,7 @@ pub fn run(
 			};
 			let link = Link::install(&host, window, session, inbox.clone(), images);
 			link.opening.set(opening);
+			link.rail.restore(desktop.store.clone());
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			if let Some(capture) = capture.clone() {
@@ -198,7 +200,9 @@ pub(crate) struct Link {
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
 	luau_visible: RefCell<Vec<String>>,
-	guilds: Shared,
+	rail: RailView,
+	rail_icons: RefCell<Vec<String>>,
+	shown: RefCell<HashSet<String>>,
 	channels: Shared,
 	selected: Shared,
 	guild_name: Shared,
@@ -244,7 +248,9 @@ impl Link {
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
 			luau_visible: RefCell::new(Vec::new()),
-			guilds: host.shared("rail.guilds", Value::List(Rc::new([]))),
+			rail: RailView::new(host),
+			rail_icons: RefCell::new(Vec::new()),
+			shown: RefCell::new(HashSet::new()),
 			channels: host.shared("sidebar.channels", Value::List(Rc::new([]))),
 			selected: host.shared("sidebar.guild_id", ""),
 			guild_name: host.shared("sidebar.guild_name", ""),
@@ -259,6 +265,7 @@ impl Link {
 			observer: RefCell::new(None),
 		});
 		Link::install_window_actions(host, &link);
+		rail::install_actions(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -369,6 +376,7 @@ impl Link {
 	fn show_image(&self, update: Update) {
 		match update {
 			Update::Show { name, pixels } => {
+				self.shown.borrow_mut().insert(name.as_str().to_owned());
 				match ImageData::new(pixels.width, pixels.height, pixels.rgba) {
 					Ok(image) => {
 						let image = Arc::new(image);
@@ -383,6 +391,7 @@ impl Link {
 			}
 			Update::Clear { name } => {
 				self.timeline_view.show_image(&name, None);
+				self.shown.borrow_mut().remove(name.as_str());
 				self.host.image(&name, None);
 			}
 		}
@@ -417,6 +426,10 @@ impl Link {
 
 	pub(crate) fn gallery(&self) -> &Gallery {
 		&self.images.gallery
+	}
+
+	pub(crate) fn rail(&self) -> &RailView {
+		&self.rail
 	}
 
 	pub(crate) fn take_alerts(&self) -> Vec<Alert> {
@@ -462,6 +475,9 @@ impl Link {
 			}
 			zgx::timer::sleep(capture::POLL).await;
 		}
+		if capture.screen == capture::Screen::RailFolders {
+			self.rail.open_all();
+		}
 		zgx::timer::sleep(capture::SETTLE).await;
 		match capture::signal_ready(&capture.ready) {
 			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),
@@ -474,6 +490,12 @@ impl Link {
 			&& self.timeline.borrow().messages().next().is_some()
 			&& self.timeline_view.settled()
 			&& self.avatar_shown.get()
+			&& self.rail_icons_shown()
+	}
+
+	fn rail_icons_shown(&self) -> bool {
+		let shown = self.shown.borrow();
+		self.rail_icons.borrow().iter().all(|name| shown.contains(name))
 	}
 
 	fn publish(&self, changes: &Changes) -> Option<(Opening, OpenChannel)> {
@@ -489,12 +511,19 @@ impl Link {
 		if changes.current_user {
 			self.request_avatar(&state);
 		}
+		let scale = self.scale_factor();
 		self.window.runtime.batch(|| {
+			let icons = Icons {
+				gallery: &self.images.gallery,
+				cdn: &self.images.cdn,
+				scale,
+			};
+			if let Some(names) = self.rail.apply(&state, changes, icons) {
+				*self.rail_icons.borrow_mut() = names;
+				self.refresh_visible();
+			}
 			if changes.session || changes.current_user {
 				self.status.set(status_text(&state).as_str().into());
-			}
-			if refresh.guilds {
-				self.publish_guilds();
 			}
 			if refresh.channels || refresh.selected || refresh.guilds {
 				self.publish_selection(&state);
@@ -523,6 +552,7 @@ impl Link {
 		let Some(shared) = self.state() else {
 			return;
 		};
+		self.rail.reveal(guild_id);
 		let command = {
 			let state = shared.read();
 			let command = self.sidebar.borrow_mut().select(&state, guild_id);
@@ -609,12 +639,6 @@ impl Link {
 		}
 	}
 
-	fn publish_guilds(&self) {
-		let sidebar = self.sidebar.borrow();
-		let items = sidebar.guilds().iter().map(guild_value).collect();
-		self.guilds.set(Value::List(items));
-	}
-
 	fn publish_selection(&self, state: &State) {
 		let sidebar = self.sidebar.borrow();
 		let items = sidebar.channels().iter().map(channel_value).collect();
@@ -662,6 +686,7 @@ impl Link {
 	fn refresh_visible(&self) {
 		let mut names: Vec<String> = self.luau_visible.borrow().clone();
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
+		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(
 			self.timeline_view
 				.visible_images()
@@ -763,23 +788,6 @@ fn status_text(state: &State) -> String {
 	}
 }
 
-fn initials(name: &str) -> String {
-	name.split_whitespace()
-		.filter_map(|word| word.chars().next())
-		.take(INITIALS)
-		.collect()
-}
-
-fn guild_value(guild: &GuildEntry) -> Value {
-	record([
-		("id", guild.id.to_string().as_str().into()),
-		("name", guild.name.as_str().into()),
-		("initials", initials(&guild.name).as_str().into()),
-		("unread", guild.unread.into()),
-		("mentions", f64::from(guild.mentions).into()),
-	])
-}
-
 fn channel_value(channel: &ChannelEntry) -> Value {
 	record([
 		("id", channel.id.to_string().as_str().into()),
@@ -791,7 +799,7 @@ fn channel_value(channel: &ChannelEntry) -> Value {
 	])
 }
 
-fn record<const N: usize>(mut fields: [(&str, Value); N]) -> Value {
+pub(crate) fn record<const N: usize>(mut fields: [(&str, Value); N]) -> Value {
 	fields.sort_by(|left, right| left.0.cmp(right.0));
 	Value::Map(
 		fields

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{Inbox, Sidebar, Timeline, changes_notifier};
+use bridge::{Inbox, Rail, Sidebar, Timeline, changes_notifier};
 use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
 use session::{Command, Session, SessionConfig};
@@ -17,6 +17,7 @@ const STEP_TIMEOUT: Duration = Duration::from_secs(15);
 pub struct View {
 	pub sidebar: Sidebar,
 	pub timeline: Timeline,
+	pub rail: Rail,
 }
 
 pub struct Running {
@@ -96,6 +97,7 @@ impl Running {
 			let state = state.read();
 			self.view.sidebar.apply(&state, &changes);
 			self.view.timeline.apply(&state, &changes);
+			self.view.rail.apply(&state, &changes);
 		}
 	}
 

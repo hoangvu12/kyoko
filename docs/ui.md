@@ -31,7 +31,7 @@ A screen or component is one module that returns a function building its node. U
 | Region | Module | Size | Filled by |
 |---|---|---|---|
 | Title bar: mark, app name, drag region, minimize/maximize/close | `title_bar.luau` | full width, `title_bar_height` 22 | 20 (done) |
-| Server rail | `server_rail.luau` | `server_rail_width` 72 | 22 |
+| Server rail | `server_rail.luau` | `server_rail_width` 72 | 22 (done) |
 | Channel or DM sidebar, with the guild header | `channel_sidebar.luau` | `channel_sidebar_width` 240, top-left corner `radius_md`; hidden below 900 wide | 23, 24 |
 | User panel at the bottom of the sidebar | `user_panel.luau` | `user_panel_height` 52 | 30 |
 | Top bar: channel icon, name, topic, threads, notifications, pins, members, search, inbox, help | `top_bar.luau` | `top_bar_height` 48 with a 1-point bottom border | 20 (done); 31 search, 33 threads and pins, 35 notifications |
@@ -88,14 +88,24 @@ icon { name = "hash", size = 24, color = theme.color.text_muted }
 
 Without `color` an icon takes `currentColor`, the text colour it inherits, so it follows its button's `color` and `hover`. `components/icon_button.luau` is oxidcord's `IconButton`: a 28-point hit box, a 20-point icon in `interactive_normal`, `interactive_hover` on hover and `interactive_active` when `active` returns true. Sources and licences are in `THIRD_PARTY_NOTICES.md`.
 
+## Server rail
+
+`shell/server_rail.luau` is oxidcord's rail: home, a divider, servers and folders in layout order, add a server and discover. Each square is `components/rail_tile.luau` (oxidcord's tile: the unread pill from `components/unread_pill.luau` at 8, 20 or 40 points for unread, hovered and selected, the 140 ms morph between a 24-point circle and a 16-point rounded square, the mention badge from `components/mention_badge.luau`, a tooltip). `components/rail_gap.luau` is the drop strip in the 8 points above a square.
+
+Rust publishes `rail.items` from `bridge::Rail` (`apps/desktop/src/rail.rs`): a list of `{kind = "guild", key, id, name, acronym, letter, icon, unread, mentions}` and `{kind = "folder", key, id, name, color, tint, unread, mentions, guilds}`, recomputed when the guild list, read state, settings or DMs change and published only when it differs. Unread leaves out muted servers. Folder names default to the first three server names, colours to `#5865f2`, and `tint` is the colour at 40%. `rail.home_mentions` sums the DM mentions. `rail.open_folders` lists the open folder ids; the host keeps them in the store (`rail.open_folders`), and selecting a server opens its folder, as oxidcord does.
+
+Server icons are `bridge::guild_icon_request` at 48 points, `Square`, published as `host:` names and kept visible. The tile clips them: a node with `rounded` and `overflow = "hidden"` cuts every descendant, images included, to its rounded corners, so one square image follows the morph and the folder grid's 16-point circles without masked variants.
+
+Dragging a server or a folder calls `rail.drop` with `{ guild | folder, drop, target }`, where `drop` is `before_guild`, `onto_guild`, `before_folder`, `onto_folder` or `end`. `bridge::rearranged` and `bridge::rearranged_folder` work out the new layout (a server dropped on another makes a folder; the last server leaving a folder removes it; folders never nest) and the host sends `Command::SetGuildLayout`. How it is saved: "Server order and folders" in `docs/rest.md`.
+
 ## Shared values and host actions
 
 Names are `<area>.<name>` in snake case, with the area the region or service that owns them. Plugins (45) will get `plugin.<id>.<name>`.
 
 | Kind | Names |
 |---|---|
-| Shared values (Rust publishes, Luau reads) | `session.status`, `rail.guilds`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
-| Actions (`ui.action`, fire and forget) | `rail.select_guild`, `sidebar.select_channel`, `window.minimize`, `window.maximize`, `window.close`, `media.copy_image` |
+| Shared values (Rust publishes, Luau reads) | `session.status`, `rail.items`, `rail.home_mentions`, `rail.open_folders`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
+| Actions (`ui.action`, fire and forget) | `rail.select_guild`, `rail.select_home`, `rail.toggle_folder`, `rail.drop`, `rail.add_server`, `rail.discover`, `sidebar.select_channel`, `window.minimize`, `window.maximize`, `window.close`, `media.copy_image` |
 | Functions (`ui.call_sync`) | `media.visible`, `media.hover`, `media.reduced_motion`, `frame.slot` |
 
 Rust registers them in `Link::install` (and `Integration::install` for desktop integration). Luau declares each shared value once in `state.luau` and wraps each action in `actions.luau`, so a rename touches one Luau file. State only the interface cares about stays in Luau: `ui.state` in the module that owns it, or in `state.luau` (`state.shell.members_visible`) when several modules share it. Never publish the whole store. Publish small projections from `bridge` and let zgx reconcile them.

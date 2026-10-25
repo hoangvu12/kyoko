@@ -17,19 +17,21 @@ pub enum Opening {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
 	FirstChannel,
+	RailFolders,
 }
 
 impl Screen {
 	pub fn named(name: &str) -> Option<Screen> {
 		match name {
 			"app-frame" | "server-rail" | "channel-sidebar" | "timeline" => Some(Screen::FirstChannel),
+			"server-rail-folder" => Some(Screen::RailFolders),
 			_ => None,
 		}
 	}
 
 	pub fn opening(self) -> Opening {
 		match self {
-			Screen::FirstChannel => Opening::First,
+			Screen::FirstChannel | Screen::RailFolders => Opening::First,
 		}
 	}
 }

@@ -171,6 +171,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/gateway", get(gateway::upgrade))
 		.route("/media/{name}", get(media::media))
 		.route("/cdn/avatars/{user_id}/{file}", get(cdn::avatar))
+		.route("/cdn/icons/{guild_id}/{file}", get(cdn::guild_icon))
 		.route("/cdn/emojis/{file}", get(cdn::emoji))
 		.route("/cdn/embed/avatars/{file}", get(cdn::default_avatar))
 		.route(

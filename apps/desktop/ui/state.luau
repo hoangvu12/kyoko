@@ -1,4 +1,26 @@
-export type Guild = { id: string, name: string, initials: string, unread: boolean, mentions: number }
+export type RailGuild = {
+	kind: string,
+	key: string,
+	id: string,
+	name: string,
+	acronym: string,
+	letter: string,
+	icon: string,
+	unread: boolean,
+	mentions: number,
+}
+export type RailFolder = {
+	kind: string,
+	key: string,
+	id: string,
+	name: string,
+	color: string,
+	tint: string,
+	unread: boolean,
+	mentions: number,
+	guilds: { RailGuild },
+}
+export type RailItem = RailGuild | RailFolder
 export type Channel = { id: string, name: string, kind: string, unread: boolean, muted: boolean, mentions: number }
 
 local M = {}
@@ -8,7 +30,9 @@ M.session = {
 }
 
 M.rail = {
-	guilds = ui.shared("rail.guilds", {} :: { Guild }),
+	items = ui.shared("rail.items", {} :: { RailItem }),
+	home_mentions = ui.shared("rail.home_mentions", 0),
+	open_folders = ui.shared("rail.open_folders", {} :: { string }),
 }
 
 M.sidebar = {
