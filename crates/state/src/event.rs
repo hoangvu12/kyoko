@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use protocol::{
-	ApplicationCommandIndex, DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User,
+	ApplicationCommandIndex, DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, StickerItem,
+	User,
 };
 
 use crate::deletions::{DeleteBatch, DeleteStatus};
@@ -28,6 +29,7 @@ pub enum LocalEvent {
 		channel_id: Snowflake,
 		nonce: Nonce,
 		content: String,
+		stickers: Vec<StickerItem>,
 		author: Box<User>,
 		by_plugin: Option<String>,
 	},

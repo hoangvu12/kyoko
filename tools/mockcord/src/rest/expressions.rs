@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use parking_lot::Mutex;
-use protocol::{LenientVec, Snowflake, Sticker, StickerFormat, StickerKind, StickerPack};
+use protocol::{LenientVec, Snowflake, Sticker, StickerFormat, StickerKind, StickerPack, User};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -268,6 +268,18 @@ fn live_guild_index(shared: &Shared, id: u64) -> Result<usize, ApiError> {
 
 fn seeded_stickers(shared: &Shared, guild_index: usize, guild_id: u64) -> Vec<Sticker> {
 	let user = shared.store.lock().current_user.clone();
+	seeded_for(&user, guild_index, guild_id)
+}
+
+pub(crate) fn ready_stickers(shared: &Shared, user: &User, guild_index: usize, guild_id: u64) -> Value {
+	let key = (std::ptr::from_ref(shared) as usize, guild_id);
+	match GUILD_STICKER_STORE.lock().get(&key) {
+		Some(stickers) => to_json(stickers),
+		None => to_json(&seeded_for(user, guild_index, guild_id)),
+	}
+}
+
+fn seeded_for(user: &User, guild_index: usize, guild_id: u64) -> Vec<Sticker> {
 	GUILD_STICKERS
 		.iter()
 		.enumerate()

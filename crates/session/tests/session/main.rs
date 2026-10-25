@@ -7,6 +7,7 @@ mod collapse;
 mod composer;
 mod deletes;
 mod dms;
+mod expressions;
 mod fingerprint;
 mod gateway;
 mod harness;

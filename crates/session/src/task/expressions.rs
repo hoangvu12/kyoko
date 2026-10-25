@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use protocol::{CreateMessage, Gif, Permissions, Snowflake, Sticker, unicode_emoji_list};
+use protocol::{Gif, Permissions, Snowflake, Sticker, StickerItem, unicode_emoji_list};
 use rest::UploadFile;
 use serde::Serialize;
 use state::{EmojiRef, Loaded, RECENT_CAP};
@@ -8,9 +8,8 @@ use state::{EmojiRef, Loaded, RECENT_CAP};
 use super::{Command, Core};
 use crate::persist::{self, Job};
 
-const GIF_MEDIA_FORMAT: &str = "gif";
-const GIF_PAGE: u16 = 50;
-const GIF_SUGGESTIONS: u8 = 10;
+const GIF_MEDIA_FORMAT: &str = "mp4";
+const GIF_SUGGESTIONS: u8 = 5;
 const STICKER_CONTENT_TYPE: &str = "image/png";
 const RECENT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -89,16 +88,19 @@ impl Core {
 				let locale = self.locale.clone();
 				self.spawn_load("gif search", move |rest| async move {
 					let gifs = rest
-						.gifs_search(&query, &locale, GIF_MEDIA_FORMAT, GIF_PAGE)
+						.gifs_search(&query, &locale, GIF_MEDIA_FORMAT)
 						.await?
 						.into_vec();
 					Ok(Loaded::GifSearch { query, gifs })
 				});
 			}
-			Command::SuggestGifs { query } => self.spawn_load("gif suggestions", move |rest| async move {
-				let terms = rest.gifs_suggest(&query, GIF_SUGGESTIONS).await?;
-				Ok(Loaded::GifSuggestions { query, terms })
-			}),
+			Command::SuggestGifs { query } => {
+				let locale = self.locale.clone();
+				self.spawn_load("gif suggestions", move |rest| async move {
+					let terms = rest.gifs_suggest(&query, &locale, GIF_SUGGESTIONS).await?;
+					Ok(Loaded::GifSuggestions { query, terms })
+				});
+			}
 			Command::SelectGif { id, query } => self.spawn_rest("select gif", move |rest| async move {
 				rest.gif_select(&id, Some(query.as_str()).filter(|query| !query.is_empty()))
 					.await
@@ -112,6 +114,7 @@ impl Core {
 					reply_to: None,
 					ping_reply: true,
 					files: Vec::new(),
+					stickers: Vec::new(),
 				});
 			}
 			Command::SendSticker {
@@ -119,15 +122,24 @@ impl Core {
 				sticker_id,
 			} => {
 				let known = self.state.read().find_sticker(sticker_id).cloned();
+				let item = StickerItem {
+					id: sticker_id,
+					name: known
+						.as_ref()
+						.map(|sticker| sticker.name.clone())
+						.unwrap_or_default(),
+					format_type: known.as_ref().and_then(|sticker| sticker.format_type),
+				};
 				if let Some(sticker) = known {
 					self.remember_sticker(sticker);
 				}
-				let body = CreateMessage {
-					sticker_ids: vec![sticker_id],
-					..CreateMessage::default()
-				};
-				self.spawn_action("send sticker", move |rest| async move {
-					rest.create_message(channel_id, body).await.map(drop)
+				self.send_message(super::outbox::Outgoing {
+					channel_id,
+					content: String::new(),
+					reply_to: None,
+					ping_reply: true,
+					files: Vec::new(),
+					stickers: vec![item],
 				});
 			}
 			Command::CreateSticker {

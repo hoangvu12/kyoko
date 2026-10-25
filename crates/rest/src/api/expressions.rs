@@ -38,17 +38,24 @@ impl RestClient {
 		query: &str,
 		locale: &str,
 		media_format: &str,
-		limit: u16,
 	) -> Result<LenientVec<Gif>> {
-		let request = Request::get("/gifs/search")
-			.query(&[("q", query.to_owned()), ("limit", limit.to_string())])
-			.query(&gif_pairs(locale, media_format));
+		let request = Request::get("/gifs/search").query(&[
+			("q", query),
+			("media_format", media_format),
+			("provider", GIF_PROVIDER),
+			("locale", locale),
+		]);
 		self.send(request).await
 	}
 
-	pub async fn gifs_suggest(&self, query: &str, limit: u8) -> Result<Vec<String>> {
-		let request =
-			Request::get("/gifs/suggest").query(&[("q", query.to_owned()), ("limit", limit.to_string())]);
+	pub async fn gifs_suggest(&self, query: &str, locale: &str, limit: u8) -> Result<Vec<String>> {
+		let limit = limit.to_string();
+		let request = Request::get("/gifs/suggest").query(&[
+			("q", query),
+			("provider", GIF_PROVIDER),
+			("limit", limit.as_str()),
+			("locale", locale),
+		]);
 		self.send(request).await
 	}
 

@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use protocol::rest::{AllowedMentions, AttachmentDescriptor};
-use protocol::{CreateMessage, Message, MessageReference, Nonce, Snowflake};
+use protocol::{CreateMessage, Message, MessageReference, Nonce, Snowflake, StickerItem};
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
 use state::{LocalEvent, MAX_ATTACHMENTS, SendFailure};
@@ -20,6 +20,7 @@ pub(crate) struct Outgoing {
 	pub(crate) reply_to: Option<Snowflake>,
 	pub(crate) ping_reply: bool,
 	pub(crate) files: Vec<UploadFile>,
+	pub(crate) stickers: Vec<StickerItem>,
 }
 
 #[derive(Default)]
@@ -62,6 +63,7 @@ fn create_body(nonce: &Nonce, outgoing: &Outgoing) -> CreateMessage {
 			replied_user: Some(false),
 			..AllowedMentions::default()
 		}),
+		sticker_ids: outgoing.stickers.iter().map(|sticker| sticker.id).collect(),
 		..CreateMessage::default()
 	}
 }
@@ -119,7 +121,7 @@ impl Core {
 			tracing::warn!("message not sent, no signed in user");
 			return;
 		};
-		if outgoing.content.trim().is_empty() && outgoing.files.is_empty() {
+		if outgoing.content.trim().is_empty() && outgoing.files.is_empty() && outgoing.stickers.is_empty() {
 			return;
 		}
 		let limit = self.state.read().upload_limit(outgoing.channel_id);
@@ -134,6 +136,7 @@ impl Core {
 			channel_id: outgoing.channel_id,
 			nonce: nonce.clone(),
 			content: outgoing.content.clone(),
+			stickers: outgoing.stickers.clone(),
 			author: Box::new(author),
 			by_plugin: None,
 		});
@@ -222,12 +225,20 @@ impl Core {
 				reply_to: None,
 				ping_reply: true,
 				files: Vec::new(),
+				stickers: pending.message.sticker_items.to_vec(),
 			})
 		});
 		let Some(outgoing) = outgoing else {
 			return;
 		};
 		self.apply_local(LocalEvent::PendingDiscarded { nonce });
+		if let Some(sticker) = outgoing.stickers.first() {
+			self.on_command(crate::Command::SendSticker {
+				channel_id: outgoing.channel_id,
+				sticker_id: sticker.id,
+			});
+			return;
+		}
 		self.on_command(crate::Command::SendMessage {
 			channel_id: outgoing.channel_id,
 			content: outgoing.content,

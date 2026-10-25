@@ -5,6 +5,7 @@ mod guilds;
 mod interactions;
 mod users;
 
+pub(crate) use expressions::ready_stickers;
 pub use interactions::MOCKBOT_ID;
 
 use std::collections::hash_map::DefaultHasher;

@@ -397,6 +397,7 @@ impl State {
 				channel_id,
 				nonce,
 				content,
+				stickers,
 				author,
 				by_plugin,
 			} => {
@@ -406,6 +407,7 @@ impl State {
 					guild_id: self.channel_guild(*channel_id),
 					author: (**author).clone(),
 					content: content.clone(),
+					sticker_items: stickers.clone().into(),
 					timestamp: Some(Utc::now()),
 					nonce: Some(nonce.clone()),
 					..Message::default()

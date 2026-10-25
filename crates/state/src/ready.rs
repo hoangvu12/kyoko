@@ -139,6 +139,10 @@ impl State {
 			);
 		}
 		self.guilds.insert(id, state);
+		self.lazy
+			.expressions
+			.guild_stickers
+			.insert(id, guild.stickers.to_vec());
 		for presence in guild.presences.iter() {
 			self.apply_presence(presence);
 		}

@@ -743,6 +743,7 @@ impl Core {
 				reply_to,
 				ping_reply,
 				files,
+				stickers: Vec::new(),
 			}),
 			Command::RetryMessage { channel_id, nonce } => self.retry_message(channel_id, nonce),
 			Command::DiscardMessage { channel_id, nonce } => self.discard_message(channel_id, nonce),

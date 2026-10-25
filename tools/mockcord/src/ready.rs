@@ -36,7 +36,13 @@ pub fn guild_threads(store: &Store, guild_id: u64) -> Vec<&Channel> {
 	threads
 }
 
-fn ready_guild(store: &Store, guild: &GuildFixture) -> Value {
+fn ready_guild(shared: &Shared, store: &Store, guild: &GuildFixture) -> Value {
+	let index = shared
+		.fixtures
+		.guilds
+		.iter()
+		.position(|known| known.id == guild.id)
+		.unwrap_or_default();
 	let threads: Vec<Value> = guild_threads(store, guild.id)
 		.into_iter()
 		.map(|thread| store.thread_json(thread))
@@ -47,7 +53,7 @@ fn ready_guild(store: &Store, guild: &GuildFixture) -> Value {
 		"channels": store.guild_channels(guild),
 		"roles": store.roles[&guild.id],
 		"emojis": store.emojis[&guild.id],
-		"stickers": [],
+		"stickers": crate::rest::ready_stickers(shared, &store.current_user, index, guild.id),
 		"threads": threads,
 		"members": [],
 		"voice_states": guild.voice_states,
@@ -238,7 +244,7 @@ pub fn build(
 	let store = shared.store.lock();
 	let guilds: Vec<Value> = live_guilds(fixtures, &store)
 		.map(|guild| {
-			let mut value = ready_guild(&store, guild);
+			let mut value = ready_guild(shared, &store, guild);
 			if !prioritized {
 				value["presences"] = json!(guild_presences(&store, guild.id));
 			}
