@@ -504,10 +504,6 @@ impl Link {
 	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
 		self.drive_capture(capture.screen);
 		self.until_settled(&capture, false).await;
-		if capture.screen.is_home() {
-			self.drive_home(capture.screen);
-			self.until_settled(&capture, true).await;
-		}
 		match &capture.screen {
 			capture::Screen::RailFolders => self.rail.open_all(),
 			capture::Screen::NewestImage => self.reveal(None).await,
@@ -516,6 +512,10 @@ impl Link {
 					.await
 			}
 			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
+			capture::Screen::DmSidebar | capture::Screen::DmGroup => {
+				self.drive_home(capture.screen);
+				self.until_settled(&capture, true).await;
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;

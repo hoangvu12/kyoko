@@ -87,8 +87,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `dm-sidebar` | 24 | Select Home, which opens the most recent DM, and wait for its history. | no |
-| `dm-group` | 24 | Open the first group DM from the DM list and wait for its history. | no |
+| `dm-sidebar` | 24 | Select Home, which opens the most recent DM, and wait for its history. | yes |
+| `dm-group` | 24 | Open the first group DM from the DM list and wait for its history. Kyoko has no group bar or group member panel yet. | yes |
 
 ### 25 Timeline view
 

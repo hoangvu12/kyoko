@@ -56,10 +56,6 @@ impl Screen {
 		}
 	}
 
-	pub fn is_home(self) -> bool {
-		matches!(self, Screen::DmSidebar | Screen::DmGroup)
-	}
-
 	pub fn is_login(self) -> bool {
 		matches!(self, Screen::LoginTos | Screen::LoginToken)
 	}
