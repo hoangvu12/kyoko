@@ -4,7 +4,7 @@
 
 **Blocked by:** 26 (Message rendering)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The lightbox and pickers match oxidcord in the parity captures
 - [ ] The lightbox shows images at full resolution
