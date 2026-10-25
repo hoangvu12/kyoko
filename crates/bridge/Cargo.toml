@@ -25,3 +25,4 @@ parking_lot.workspace = true
 
 [dev-dependencies]
 mockcord.workspace = true
+serde_json.workspace = true

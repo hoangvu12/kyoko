@@ -94,7 +94,6 @@ fn first_text_channel(running: &Running) -> Snowflake {
 		.view
 		.sidebar
 		.channels()
-		.iter()
 		.find(|channel| channel.kind == ChannelKind::Text)
 		.map(|channel| channel.id)
 		.expect("the first guild has a text channel")

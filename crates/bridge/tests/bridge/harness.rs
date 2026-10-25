@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,30 +38,8 @@ impl Running {
 		.expect("mock server starts");
 		let scratch = std::env::temp_dir().join(format!("kyoko-bridge-{name}-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
-		let paths = Paths::at(&scratch).expect("scratch paths");
-		let mut settings = Settings::load(&paths);
-		settings.storage.plaintext_token = true;
-		settings.save(&paths).expect("settings save");
-		let store = Store::open(paths).expect("store opens");
 		let inbox = Inbox::new();
-		let session = Session::start(SessionConfig {
-			identity: session::client_identity(&store),
-			build_source: None,
-			store: Arc::new(store),
-			rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
-			gateway_url: server.gateway_url().to_owned(),
-			token: Token::new(server.token()),
-			runtime: None,
-			notify: changes_notifier(inbox.clone()),
-			hooks: None,
-			gateway: Default::default(),
-			rest: Default::default(),
-			caches: Default::default(),
-			alerts: Default::default(),
-			retention: Default::default(),
-			remember_account: false,
-		})
-		.expect("session starts");
+		let session = open_session(&server, &scratch, &inbox);
 		let mut running = Running {
 			server,
 			view: View::default(),
@@ -71,10 +49,26 @@ impl Running {
 		};
 		running
 			.until("the guild list to arrive", |view| {
-				!view.sidebar.channels().is_empty()
+				view.sidebar.channels().next().is_some()
 			})
 			.await;
 		running
+	}
+
+	pub async fn restart(&mut self) {
+		if let Some(session) = self.session.take() {
+			tokio::task::spawn_blocking(move || session.shutdown())
+				.await
+				.expect("session shuts down");
+		}
+		self.inbox.close();
+		self.inbox = Inbox::new();
+		self.view = View::default();
+		self.session = Some(open_session(&self.server, &self.scratch, &self.inbox));
+		self.until("the guild list after a restart", |view| {
+			view.sidebar.channels().next().is_some()
+		})
+		.await;
 	}
 
 	pub fn session(&self) -> &Session {
@@ -127,4 +121,30 @@ impl Running {
 		self.server.shutdown().await;
 		let _ = std::fs::remove_dir_all(&self.scratch);
 	}
+}
+
+fn open_session(server: &Server, scratch: &Path, inbox: &Inbox<Changes>) -> Session {
+	let paths = Paths::at(scratch).expect("scratch paths");
+	let mut settings = Settings::load(&paths);
+	settings.storage.plaintext_token = true;
+	settings.save(&paths).expect("settings save");
+	let store = Store::open(paths).expect("store opens");
+	Session::start(SessionConfig {
+		identity: session::client_identity(&store),
+		build_source: None,
+		store: Arc::new(store),
+		rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
+		gateway_url: server.gateway_url().to_owned(),
+		token: Token::new(server.token()),
+		runtime: None,
+		notify: changes_notifier(inbox.clone()),
+		hooks: None,
+		gateway: Default::default(),
+		rest: Default::default(),
+		caches: Default::default(),
+		alerts: Default::default(),
+		retention: Default::default(),
+		remember_account: false,
+	})
+	.expect("session starts")
 }

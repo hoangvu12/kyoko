@@ -20,6 +20,7 @@ pub enum Screen {
 	RailFolders,
 	LoginTos,
 	LoginToken,
+	SidebarCollapsed,
 }
 
 impl Screen {
@@ -29,13 +30,14 @@ impl Screen {
 			"server-rail-folder" => Some(Screen::RailFolders),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
+			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
 			_ => None,
 		}
 	}
 
 	pub fn opening(self) -> Option<Opening> {
 		match self {
-			Screen::FirstChannel | Screen::RailFolders => Some(Opening::First),
+			Screen::FirstChannel | Screen::RailFolders | Screen::SidebarCollapsed => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

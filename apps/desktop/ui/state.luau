@@ -21,7 +21,42 @@ export type RailFolder = {
 	guilds: { RailGuild },
 }
 export type RailItem = RailGuild | RailFolder
-export type Channel = { id: string, name: string, kind: string, unread: boolean, muted: boolean, mentions: number }
+export type VoiceMember = {
+	key: string,
+	id: string,
+	name: string,
+	avatar: string,
+	muted: boolean,
+	deafened: boolean,
+	video: string,
+	live: boolean,
+}
+export type SidebarRow = {
+	kind: string,
+	key: string,
+	id: string,
+	name: string,
+	collapsed: boolean?,
+	type: string?,
+	icon: string?,
+	unread: boolean?,
+	mentions: number?,
+	muted: boolean,
+	locked: boolean?,
+	joined: boolean?,
+	selectable: boolean?,
+	thread: boolean?,
+	last_thread: boolean?,
+	voice: { VoiceMember }?,
+}
+export type GuildHeader = {
+	unread: boolean,
+	muted: boolean,
+	owner: boolean,
+	can_invite: boolean,
+	can_manage_channels: boolean,
+	can_open_settings: boolean,
+}
 
 local M = {}
 
@@ -46,9 +81,17 @@ M.rail = {
 }
 
 M.sidebar = {
-	channels = ui.shared("sidebar.channels", {} :: { Channel }),
+	rows = ui.shared("sidebar.rows", {} :: { SidebarRow }),
 	guild_id = ui.shared("sidebar.guild_id", ""),
 	guild_name = ui.shared("sidebar.guild_name", ""),
+	header = ui.shared("sidebar.header", {
+		unread = false,
+		muted = false,
+		owner = false,
+		can_invite = false,
+		can_manage_channels = false,
+		can_open_settings = false,
+	} :: GuildHeader),
 }
 
 M.timeline = {

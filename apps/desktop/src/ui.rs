@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, ChannelKind, Flow, Inbox, OpenChannel, Sidebar, Timeline};
+use bridge::{Flow, Inbox, OpenChannel, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
@@ -26,6 +26,7 @@ use crate::capture::{self, Capture, Opening};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::rail::{self, Icons, RailView};
+use crate::sidebar::{self, SidebarView};
 use crate::theme::Catalog;
 use crate::timeline::TimelineView;
 
@@ -203,16 +204,14 @@ pub(crate) struct Link {
 	avatar_requested_at: Cell<Option<Instant>>,
 	avatar_shown: Cell<bool>,
 	opening: Cell<Option<Opening>>,
-	sidebar: RefCell<Sidebar>,
+	sidebar: SidebarView,
+	sidebar_avatars: RefCell<Vec<String>>,
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
 	shown: RefCell<HashSet<String>>,
-	channels: Shared,
-	selected: Shared,
-	guild_name: Shared,
 	status: Shared,
 	open_channel: Shared,
 	channel_name: Shared,
@@ -248,16 +247,14 @@ impl Link {
 			avatar_requested_at: Cell::new(None),
 			avatar_shown: Cell::new(false),
 			opening: Cell::new(None),
-			sidebar: RefCell::new(Sidebar::default()),
+			sidebar: SidebarView::new(host),
+			sidebar_avatars: RefCell::new(Vec::new()),
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
 			shown: RefCell::new(HashSet::new()),
-			channels: host.shared("sidebar.channels", Value::List(Rc::new([]))),
-			selected: host.shared("sidebar.guild_id", ""),
-			guild_name: host.shared("sidebar.guild_name", ""),
 			status: host.shared("session.status", "Connecting"),
 			open_channel: host.shared("timeline.channel_id", ""),
 			channel_name: host.shared("timeline.channel_name", ""),
@@ -271,16 +268,11 @@ impl Link {
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
 		Link::install_sign_in(host, &link);
+		sidebar::install_actions(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
 				link.select_guild(guild_id);
-			}
-		});
-		let actions = Rc::downgrade(&link);
-		host.action("sidebar.select_channel", move |argument| {
-			if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake(&argument)) {
-				link.select_channel(channel_id);
 			}
 		});
 		let actions = Rc::downgrade(&link);
@@ -437,6 +429,10 @@ impl Link {
 		&self.rail
 	}
 
+	pub(crate) fn sidebar(&self) -> &SidebarView {
+		&self.sidebar
+	}
+
 	pub(crate) fn take_alerts(&self) -> Vec<Alert> {
 		self.flow
 			.borrow()
@@ -465,8 +461,8 @@ impl Link {
 			self.select_channel(open.channel_id);
 			tracing::info!(
 				?opening,
-				guilds = self.sidebar.borrow().guilds().len(),
-				channels = self.sidebar.borrow().channels().len(),
+				guilds = self.sidebar.sidebar().guilds().len(),
+				channels = self.sidebar.sidebar().channels().count(),
 				"opened a channel on launch"
 			);
 		}
@@ -485,10 +481,27 @@ impl Link {
 		if capture.screen == capture::Screen::RailFolders {
 			self.rail.open_all();
 		}
+		if capture.screen == capture::Screen::SidebarCollapsed {
+			self.collapse_first_category();
+		}
 		zgx::timer::sleep(capture::SETTLE).await;
 		match capture::signal_ready(&capture.ready) {
 			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),
 			Err(error) => tracing::warn!(%error, "could not signal the capture screen"),
+		}
+	}
+
+	fn collapse_first_category(&self) {
+		let command = {
+			let sidebar = self.sidebar.sidebar();
+			sidebar
+				.sections()
+				.iter()
+				.find_map(|section| section.category.as_ref())
+				.and_then(|category| sidebar.toggle_command(category.id))
+		};
+		if let Some(command) = command {
+			self.send(command);
 		}
 	}
 
@@ -505,14 +518,18 @@ impl Link {
 
 	fn rail_icons_shown(&self) -> bool {
 		let shown = self.shown.borrow();
-		self.rail_icons.borrow().iter().all(|name| shown.contains(name))
+		self.rail_icons
+			.borrow()
+			.iter()
+			.chain(self.sidebar_avatars.borrow().iter())
+			.all(|name| shown.contains(name))
 	}
 
 	fn publish(&self, changes: &Changes) -> Option<(Opening, OpenChannel)> {
 		let state = self.state()?;
 		let state = state.read();
-		let refresh = self.sidebar.borrow_mut().apply(&state, changes);
-		let moved = refresh.selected && self.open_guild() != self.sidebar.borrow().selected();
+		let refresh = self.sidebar.apply(&state, changes);
+		let moved = refresh.selected && self.open_guild() != self.sidebar.sidebar().selected();
 		let messages = if moved {
 			self.timeline.borrow_mut().close()
 		} else {
@@ -543,7 +560,7 @@ impl Link {
 			}
 		});
 		let opening = self.opening.get()?;
-		if self.sidebar.borrow().guilds().is_empty() {
+		if self.sidebar.sidebar().guilds().is_empty() {
 			return None;
 		}
 		self.opening.set(None);
@@ -565,7 +582,7 @@ impl Link {
 		self.rail.reveal(guild_id);
 		let command = {
 			let state = shared.read();
-			let command = self.sidebar.borrow_mut().select(&state, guild_id);
+			let command = self.sidebar.select(&state, guild_id);
 			if command.is_some() {
 				self.timeline.borrow_mut().close();
 			}
@@ -580,24 +597,22 @@ impl Link {
 		}
 	}
 
-	fn select_channel(&self, channel_id: Snowflake) {
+	pub(crate) fn select_channel(&self, channel_id: Snowflake) {
 		let Some(shared) = self.state() else {
 			return;
 		};
 		let command = {
 			let state = shared.read();
-			let sidebar = self.sidebar.borrow();
+			let sidebar = self.sidebar.sidebar();
 			let openable = sidebar
-				.channels()
-				.iter()
-				.any(|channel| channel.id == channel_id && readable(channel.kind));
+				.channel(channel_id)
+				.is_some_and(|channel| channel.selectable() && channel.kind.opens_timeline());
 			if !openable {
 				return;
 			}
-			let command = self
-				.timeline
-				.borrow_mut()
-				.select(&state, sidebar.selected(), channel_id);
+			let guild_id = sidebar.selected();
+			drop(sidebar);
+			let command = self.timeline.borrow_mut().select(&state, guild_id, channel_id);
 			self.window.runtime.batch(|| self.publish_timeline(&state));
 			command
 		};
@@ -650,17 +665,16 @@ impl Link {
 	}
 
 	fn publish_selection(&self, state: &State) {
-		let sidebar = self.sidebar.borrow();
-		let items = sidebar.channels().iter().map(channel_value).collect();
-		self.channels.set(Value::List(items));
-		let selected = sidebar.selected();
-		let id = selected.map(|id| id.to_string()).unwrap_or_default();
-		self.selected.set(id.as_str().into());
-		let name = selected
-			.and_then(|id| state.guild(id))
-			.map(|guild| guild.name.as_str())
-			.unwrap_or_default();
-		self.guild_name.set(name.into());
+		let icons = Icons {
+			gallery: &self.images.gallery,
+			cdn: &self.images.cdn,
+			scale: self.scale_factor(),
+		};
+		let names = self.sidebar.publish(state, &icons);
+		if *self.sidebar_avatars.borrow() != names {
+			*self.sidebar_avatars.borrow_mut() = names;
+			self.refresh_visible();
+		}
 	}
 
 	fn publish_timeline(&self, state: &State) {
@@ -668,6 +682,9 @@ impl Link {
 		let open = timeline.open();
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
+		if self.sidebar.set_open(open.map(|open| open.channel_id)) {
+			self.publish_selection(state);
+		}
 		let channel = open.and_then(|open| state.channel(open.channel_id));
 		let name = channel
 			.and_then(|channel| channel.name.as_deref())
@@ -697,6 +714,7 @@ impl Link {
 		let mut names: Vec<String> = self.luau_visible.borrow().clone();
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
 		names.extend(self.rail_icons.borrow().iter().cloned());
+		names.extend(self.sidebar_avatars.borrow().iter().cloned());
 		names.extend(
 			self.timeline_view
 				.visible_images()
@@ -715,13 +733,6 @@ impl Link {
 		}
 		tracing::debug!("session stopped");
 	}
-}
-
-fn readable(kind: ChannelKind) -> bool {
-	matches!(
-		kind,
-		ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Thread
-	)
 }
 
 fn field<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
@@ -796,17 +807,6 @@ fn status_text(state: &State) -> String {
 			format!("Disconnected: {message}")
 		}
 	}
-}
-
-fn channel_value(channel: &ChannelEntry) -> Value {
-	record([
-		("id", channel.id.to_string().as_str().into()),
-		("name", channel.name.as_str().into()),
-		("kind", channel.kind.as_str().into()),
-		("unread", channel.unread.into()),
-		("muted", channel.muted.into()),
-		("mentions", f64::from(channel.mentions).into()),
-	])
 }
 
 pub(crate) fn record<const N: usize>(mut fields: [(&str, Value); N]) -> Value {

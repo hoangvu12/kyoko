@@ -7,6 +7,7 @@ mod frame;
 mod integration;
 mod notify;
 mod rail;
+mod sidebar;
 mod theme;
 mod timeline;
 mod tray;

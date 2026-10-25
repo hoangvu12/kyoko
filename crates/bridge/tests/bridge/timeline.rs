@@ -11,7 +11,6 @@ fn text_channels(running: &Running) -> Vec<Snowflake> {
 		.view
 		.sidebar
 		.channels()
-		.iter()
 		.filter(|channel| channel.kind == ChannelKind::Text)
 		.map(|channel| channel.id)
 		.collect()
@@ -236,7 +235,7 @@ async fn messages_in_other_channels_leave_the_open_one_alone() {
 		.expect("mockcord creates a channel");
 	running
 		.until("the other channel to be listed", |view| {
-			view.sidebar.channels().iter().any(|channel| channel.id == other)
+			view.sidebar.channels().any(|channel| channel.id == other)
 		})
 		.await;
 	running
@@ -310,7 +309,6 @@ async fn the_first_channel_is_the_top_text_channel_of_the_top_guild() {
 		.view
 		.sidebar
 		.channels()
-		.iter()
 		.find(|channel| matches!(channel.kind, ChannelKind::Text | ChannelKind::Announcement))
 		.map(|channel| channel.id)
 		.expect("the top guild has a text channel");

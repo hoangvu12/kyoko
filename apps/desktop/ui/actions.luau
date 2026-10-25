@@ -28,6 +28,14 @@ function M.select_channel(id: string)
 	return ui.action("sidebar.select_channel", id)
 end
 
+function M.toggle_category(id: string)
+	return ui.action("sidebar.toggle_category", id)
+end
+
+function M.sidebar_action(name: string, id: string?)
+	ui.invoke("sidebar." .. name, id or "")
+end
+
 function M.minimize_window()
 	return ui.action("window.minimize")
 end

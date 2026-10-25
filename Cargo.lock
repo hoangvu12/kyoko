@@ -3345,6 +3345,7 @@ dependencies = [
  "kyoko-store",
  "mockcord",
  "parking_lot",
+ "serde_json",
  "tokio",
  "tracing",
  "url",

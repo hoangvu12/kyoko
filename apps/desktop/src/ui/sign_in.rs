@@ -1,11 +1,11 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use bridge::{Checked, Flow, Inbox, Screen, Sidebar, Status};
+use bridge::{Checked, Flow, Inbox, Screen, Status};
 use session::Session;
 use state::{Changes, SecretStorage};
 use tokio::runtime::Handle;
-use zgx_script::{ScriptHost, Shared, Value};
+use zgx_script::{ScriptHost, Shared};
 
 use super::{Link, Slot, text};
 use crate::capture;
@@ -185,7 +185,6 @@ impl Link {
 		if let Some(commander) = self.flow.borrow().session().map(Session::commander) {
 			gallery.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
 		}
-		*self.sidebar.borrow_mut() = Sidebar::default();
 		self.timeline.borrow_mut().close();
 		*self.avatar.borrow_mut() = None;
 		self.avatar_requested_at.set(None);
@@ -193,10 +192,9 @@ impl Link {
 		self.window.runtime.batch(|| {
 			self.rail.reset();
 			self.rail_icons.borrow_mut().clear();
-			self.channels.set(Value::List(Rc::new([])));
+			self.sidebar.reset();
+			self.sidebar_avatars.borrow_mut().clear();
 			for value in [
-				&self.selected,
-				&self.guild_name,
 				&self.open_channel,
 				&self.channel_name,
 				&self.channel_topic,

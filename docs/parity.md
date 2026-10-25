@@ -81,7 +81,7 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `channel-sidebar` | 23 | Default selection. | yes |
-| `channel-sidebar-collapsed` | 23 | Default selection, then collapse the guild's first category with `ToggleCategory`. | no |
+| `channel-sidebar-collapsed` | 23 | Default selection, then collapse the guild's first category with `ToggleCategory`. | yes |
 
 ### 24 DM sidebar
 
