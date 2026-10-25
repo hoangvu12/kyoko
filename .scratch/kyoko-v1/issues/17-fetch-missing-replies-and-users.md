@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 (REST safety layer)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Missing referenced messages are fetched, cached and paced
 - [ ] Unknown mentioned users are fetched, cached and paced
