@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The sidebar matches oxidcord in the parity captures
 - [ ] Selecting a channel opens it and subscribes to it
