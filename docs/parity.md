@@ -16,7 +16,7 @@ cargo xtask parity list
    - starts the standalone `mockcord` with `--seed 1 --port 8485 --anchor 2026-10-01T12:00:00Z`, so both apps load the same fixtures from one server;
    - starts the app in capture mode against it, with a fresh data directory;
    - waits for the app to signal that the screen has settled;
-   - finds the app's largest visible window by process id and captures its client area;
+   - finds the app's largest visible window by process id and captures its client area, with the app's other visible windows drawn over it at their places (zgx shows menus, popovers and tooltips in popup windows of their own on Windows);
    - closes the app with `WM_CLOSE`, then kills it after 3 seconds, because zgx sometimes hangs on exit;
    - stops mockcord, so the next app starts on untouched fixtures (read states, drafts and acks included).
 3. The output goes to `target/parity/`:
@@ -121,8 +121,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `message-hover` | 28 | Default selection, then move the mouse over the newest message at (640, 690) to show its action bar. | no |
-| `message-context-menu` | 28 | As `message-hover`, then right-click there. | no |
+| `message-hover` | 28 | Default selection, then move the mouse over the newest message at (640, 690) to show its action bar. Kyoko sends the move through zgx's `Ui::dispatch`. | yes |
+| `message-context-menu` | 28 | As `message-hover`, then right-click there. | yes |
 
 ### 29 Member list
 

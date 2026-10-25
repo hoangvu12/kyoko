@@ -18,8 +18,33 @@ macro_rules! icon_files {
 }
 
 icon_files!(
-	"hash", "join", "pin", "thread", "nitro", "close", "phone", "edit", "image", "chat", "play", "file",
-	"download", "check",
+	"hash",
+	"join",
+	"pin",
+	"thread",
+	"nitro",
+	"close",
+	"phone",
+	"edit",
+	"image",
+	"chat",
+	"play",
+	"file",
+	"download",
+	"check",
+	"reply",
+	"copy",
+	"link",
+	"forward",
+	"unpin",
+	"new_thread",
+	"inbox",
+	"trash",
+	"flag",
+	"emoji",
+	"more",
+	"clock",
+	"lock",
 );
 
 thread_local! {
@@ -41,10 +66,13 @@ fn load(name: &'static str) -> Option<Arc<SvgData>> {
 }
 
 pub fn icon(name: &'static str, size: f32, color: &str) -> View {
+	glyph(name, size).text_color(tok(color))
+}
+
+pub fn glyph(name: &'static str, size: f32) -> View {
 	let shape = load(name);
 	div()
 		.size(size, size)
 		.shrink_0()
-		.text_color(tok(color))
 		.when_some(shape, |slot, shape| slot.child(svg(name, shape).size(size, size)))
 }

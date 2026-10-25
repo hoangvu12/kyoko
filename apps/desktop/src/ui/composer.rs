@@ -554,7 +554,7 @@ impl Link {
 		cancelled
 	}
 
-	fn composer_reply(&self, message_id: Snowflake) {
+	pub(super) fn composer_reply(&self, message_id: Snowflake) {
 		let Some(shared) = self.state() else {
 			return;
 		};
@@ -569,7 +569,7 @@ impl Link {
 		}
 	}
 
-	fn composer_edit(&self, message_id: Snowflake) {
+	pub(super) fn composer_edit(&self, message_id: Snowflake) {
 		let Some(shared) = self.state() else {
 			return;
 		};

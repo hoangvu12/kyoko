@@ -56,6 +56,7 @@ pub struct Body<'a> {
 enum Click {
 	Link(String),
 	Spoiler(usize),
+	Profile(Snowflake),
 }
 
 #[derive(Clone, Default)]
@@ -219,6 +220,11 @@ impl Body<'_> {
 					bump.update(|count| *count += 1);
 				})
 			}
+			Some(Click::Profile(user)) => {
+				let actions = self.env.actions.clone();
+				span.hover(SpanHover::default())
+					.on_click(move || actions.profile(user))
+			}
 			None => span,
 		}
 	}
@@ -313,7 +319,13 @@ impl Body<'_> {
 				};
 				self.push(inline, code, &next);
 			}
-			Node::UserMention(id) => self.mention(inline, &self.names.user(*id), None, style),
+			Node::UserMention(id) => {
+				let next = Style {
+					click: Some(Click::Profile(Snowflake::from(*id))),
+					..style.clone()
+				};
+				self.mention(inline, &self.names.user(*id), None, &next);
+			}
 			Node::RoleMention(id) => {
 				let (label, color) = self.names.role(*id);
 				self.mention(inline, &label, color, style);

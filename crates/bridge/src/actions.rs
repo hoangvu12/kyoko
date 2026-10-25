@@ -317,7 +317,7 @@ impl DeleteProgress {
 			parts.push(format!("{} not yours to delete", self.refused));
 		}
 		if let Some(failure) = &self.failure {
-			parts.push(failure_text(failure));
+			parts.push(delete_failure(failure));
 		}
 		if self.cancelled > 0 {
 			parts.push(format!("{} not attempted", self.cancelled));
@@ -326,7 +326,7 @@ impl DeleteProgress {
 	}
 }
 
-pub fn failure_text(failure: &SendFailure) -> String {
+fn delete_failure(failure: &SendFailure) -> String {
 	match failure {
 		SendFailure::RateLimited { .. } => "rate limited, try again shortly".to_owned(),
 		SendFailure::Forbidden | SendFailure::MissingPermissions => "missing permissions".to_owned(),

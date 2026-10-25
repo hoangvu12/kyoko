@@ -1,9 +1,12 @@
+mod actions;
 mod attachments;
 mod body;
+mod dialogs;
 mod extras;
 mod icons;
 mod inline;
 mod links;
+mod picker;
 mod pictures;
 mod rows;
 mod scroll;
@@ -14,7 +17,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bridge::{Delta, Row, RowKey, Timeline};
+use bridge::{Access, DeleteProgress, Delta, EmojiPicker, Row, RowKey, Timeline};
 use media::{Gallery, ImageName};
 use protocol::Snowflake;
 use session::Command;
@@ -22,11 +25,15 @@ use state::Viewport;
 use zgx::compose::prelude::*;
 use zgx::compose::{NodeHandle, Tasks, VariableHeights, measured_virtual_list};
 use zgx::image::ImageData;
-use zgx::input::InputEvent;
+use zgx::input::{EventPhase, InputEvent, Key, PointerButton};
 use zgx::platform::PlatformService;
 use zgx::reactive::{Effect, Runtime, Signal};
 
+pub use self::actions::Compose;
+use self::actions::{MessageActions, Wiring};
+use self::dialogs::Dialogs;
 use self::links::Links;
+use self::picker::ReactionPicker;
 use self::pictures::Pictures;
 pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
@@ -48,6 +55,7 @@ pub struct Setup {
 	pub code_font: String,
 	pub prefs: Prefs,
 	pub store: Option<Arc<store::Store>>,
+	pub developer_mode: bool,
 }
 
 struct Measured<'a>(&'a VariableHeights);
@@ -86,6 +94,8 @@ pub struct TimelineView {
 	watcher: RefCell<Option<Effect>>,
 	commands: Rc<Sender>,
 	visible_changed: Callback<()>,
+	actions: Rc<MessageActions>,
+	pending_jump: Cell<Option<Snowflake>>,
 }
 
 impl TimelineView {
@@ -97,7 +107,18 @@ impl TimelineView {
 			setup.mock_origin,
 		));
 		let commands: Rc<Sender> = Rc::default();
-		Rc::new(Self {
+		let links = Rc::new(Links::new(runtime, setup.store));
+		let actions = Rc::new(MessageActions::new(
+			runtime,
+			Wiring {
+				dialogs: Rc::new(Dialogs::new(runtime, commands.clone())),
+				picker: Rc::new(ReactionPicker::new(runtime, pictures.clone())),
+				links: links.clone(),
+				commands: commands.clone(),
+				developer_mode: setup.developer_mode,
+			},
+		));
+		let view = Rc::new(Self {
 			runtime: runtime.clone(),
 			offset: runtime.signal(0.),
 			heights: VariableHeights::new(runtime, 0, DEFAULT_HEIGHT).anchor_end(),
@@ -107,13 +128,14 @@ impl TimelineView {
 			channel: Cell::new(None),
 			env: Rc::new(RowEnv {
 				pictures: pictures.clone(),
-				links: Rc::new(Links::new(runtime, setup.store)),
+				links,
 				channel_name: runtime.signal(String::new()),
 				code_font: setup.code_font,
 				prefs: setup.prefs,
 				revealed: RefCell::default(),
 				picks: RefCell::default(),
 				commands: commands.clone(),
+				actions: actions.clone(),
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,
@@ -131,7 +153,82 @@ impl TimelineView {
 			watcher: RefCell::new(None),
 			commands,
 			visible_changed: RefCell::new(None),
-		})
+			actions,
+			pending_jump: Cell::new(None),
+		});
+		let jumper = Rc::downgrade(&view);
+		view.actions.on_jump(move |message_id| {
+			if let Some(view) = jumper.upgrade() {
+				view.jump_to(message_id);
+			}
+		});
+		let images = Rc::downgrade(&view);
+		view.actions.picker.on_images_changed(move || {
+			if let Some(view) = images.upgrade()
+				&& let Some(changed) = view.visible_changed.borrow().as_ref()
+			{
+				changed(());
+			}
+		});
+		view
+	}
+
+	pub fn on_compose(&self, compose: impl Fn(Compose) + 'static) {
+		self.actions.on_compose(compose);
+	}
+
+	pub fn on_profile(&self, profile: impl Fn(Snowflake) + 'static) {
+		self.actions.on_profile(profile);
+	}
+
+	pub fn on_emoji_catalog(&self, source: impl Fn() -> Option<EmojiPicker> + 'static) {
+		self.actions.on_emoji_catalog(source);
+	}
+
+	pub fn set_origin(&self, x: f32, y: f32) {
+		self.actions.set_origin(x, y);
+	}
+
+	pub fn set_window(&self, width: f32, height: f32) {
+		self.actions.set_window(width, height);
+	}
+
+	pub fn set_access(&self, access: Access) {
+		if self.actions.access.with_untracked(|current| *current != access) {
+			self.actions.access.set(access);
+		}
+	}
+
+	pub fn set_progress(&self, progress: Option<DeleteProgress>) {
+		let shown = self
+			.actions
+			.progress
+			.with_untracked(|current| current.as_ref().map(|shown| shown.batch));
+		let progress = progress
+			.filter(|progress| progress.total > 1 || progress.refused > 0 || progress.failure.is_some());
+		let fresh = progress.as_ref().map(|progress| progress.batch);
+		let dismissed = shown.is_none() && progress.as_ref().is_some_and(DeleteProgress::finished);
+		if fresh.is_some() && (shown == fresh || !dismissed) {
+			self.actions.progress.set(progress);
+		}
+	}
+
+	pub fn rejected(&self, reason: &str) {
+		self.actions.rejected(reason);
+	}
+
+	pub fn jump_to(&self, message_id: Snowflake) {
+		if self.scroll_to(&RowKey::Message(message_id)) {
+			return;
+		}
+		let Some(channel_id) = self.channel.get() else {
+			return;
+		};
+		self.pending_jump.set(Some(message_id));
+		self.send(Command::LoadAround {
+			channel_id,
+			message_id,
+		});
 	}
 
 	pub fn on_command(&self, send: impl Fn(Command) + 'static) {
@@ -187,7 +284,9 @@ impl TimelineView {
 	}
 
 	pub fn visible_images(&self) -> Vec<ImageName> {
-		self.visible_images.borrow().clone()
+		let mut names = self.visible_images.borrow().clone();
+		names.extend(self.actions.picker.images());
+		names
 	}
 
 	pub fn settled(&self) -> bool {
@@ -234,11 +333,27 @@ impl TimelineView {
 			.scrollbar(true)
 			.selectable(true);
 			let mounted = Rc::downgrade(&this);
+			let actions = this.actions.clone();
 			div()
+				.relative()
 				.w_full()
 				.h_full()
+				.on_event(move |event| {
+					if event.phase == EventPhase::Capture {
+						return;
+					}
+					if let InputEvent::KeyDown { key: Key::Escape, .. } = event.event
+						&& actions.clear_selection()
+					{
+						event.stop_propagation();
+					}
+				})
 				.child(list)
+				.child(this.actions.footer())
+				.child(this.actions.context_menu())
+				.child(this.actions.picker.view())
 				.child(this.env.links.view())
+				.child(this.actions.dialogs.view())
 				.on_mount(move |node| {
 					if let Some(view) = mounted.upgrade() {
 						view.follow_layout(&node);
@@ -256,14 +371,35 @@ impl TimelineView {
 		let tracker = hovered.clone();
 		let env = self.env.clone();
 		let watched = bump.clone();
+		let pressed = signal.clone();
+		let actions = self.actions.clone();
 		div()
 			.w_full()
-			.on_event(move |event| {
-				if matches!(event.event, InputEvent::PointerEnter) {
+			.on_event(move |event| match event.event {
+				InputEvent::PointerEnter => {
 					tracker.set(true);
-				} else if matches!(event.event, InputEvent::PointerLeave) {
+				}
+				InputEvent::PointerLeave => {
 					tracker.set(false);
 				}
+				InputEvent::PointerDown { x, y, button } if event.phase != EventPhase::Capture => {
+					actions.pointer_at(x, y);
+					if event.default_prevented() {
+						return;
+					}
+					let handled = pressed.with_untracked(|row| match (row.as_ref(), button) {
+						(Row::Message(entry), PointerButton::Secondary) => actions.open_menu(entry),
+						(Row::Message(entry), PointerButton::Primary) => {
+							actions.pressed(entry, event.pointer_modifiers())
+						}
+						_ => false,
+					});
+					if handled {
+						event.prevent_default();
+						event.stop_propagation();
+					}
+				}
+				_ => {}
 			})
 			.child(switch(
 				move || (signal.get(), watched.get()),
@@ -296,7 +432,12 @@ impl TimelineView {
 
 	pub fn apply(&self, timeline: &Timeline, delta: &Delta, channel_name: &str) {
 		let channel = timeline.open().map(|open| open.channel_id);
-		let reset = delta.reset || channel != self.channel.replace(channel);
+		let switched = channel != self.channel.replace(channel);
+		if switched {
+			self.pending_jump.set(None);
+			self.actions.reset();
+		}
+		let reset = delta.reset || switched;
 		let messages = || timeline.messages().filter(|message| !message.pending);
 		self.ends.set(Ends {
 			has_older: timeline.has_older(),
@@ -368,6 +509,11 @@ impl TimelineView {
 				}
 			}
 		});
+		if let Some(message_id) = self.pending_jump.get()
+			&& self.scroll_to(&RowKey::Message(message_id))
+		{
+			self.pending_jump.set(None);
+		}
 	}
 
 	fn scrolled(self: &Rc<Self>) {

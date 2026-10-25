@@ -1,5 +1,6 @@
 mod composer;
 mod home;
+mod message_actions;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -55,6 +56,7 @@ pub struct Images {
 }
 
 struct Messages {
+	developer_mode: bool,
 	code_font: String,
 	store: Option<Arc<store::Store>>,
 }
@@ -113,11 +115,13 @@ pub fn run(
 				slot: cx.ui.runtime.signal(Slot::default()),
 			};
 			let messages = Messages {
+				developer_mode: capture.is_none() && desktop.store.settings.read().developer.developer_mode,
 				code_font: catalog.code_font(&theme),
 				store: capture.is_none().then(|| desktop.store.clone()),
 			};
 			let link = Link::install(&host, window, sign_in, inbox.clone(), images, messages);
 			link.opening.set(opening);
+			link.attach_ui(cx.ui.downgrade());
 			link.rail.restore(desktop.store.clone());
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
@@ -263,6 +267,7 @@ pub(crate) struct Link {
 	observer: RefCell<Option<Observer>>,
 	maximized: Shared,
 	frame_effect: RefCell<Option<Effect>>,
+	ui: RefCell<Option<zgx::widgets::WeakUi>>,
 }
 
 impl Link {
@@ -286,6 +291,7 @@ impl Link {
 				code_font: messages.code_font,
 				prefs: images.prefs,
 				store: messages.store,
+				developer_mode: messages.developer_mode,
 			},
 		);
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
@@ -322,6 +328,7 @@ impl Link {
 			maximized: host.shared("window.maximized", false),
 			frame_effect: RefCell::new(None),
 			observer: RefCell::new(None),
+			ui: RefCell::new(None),
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -329,6 +336,7 @@ impl Link {
 		sidebar::install_actions(host, &link);
 		dm_sidebar::install_actions(host, &link);
 		Link::install_composer(host, &link);
+		Link::install_message_actions(&link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -552,6 +560,8 @@ impl Link {
 					zgx::timer::sleep(capture::POLL).await;
 				}
 			}
+			capture::Screen::MessageHover => self.point_at_last_message(false).await,
+			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -692,6 +702,7 @@ impl Link {
 				self.publish_dms(&state);
 			}
 			self.composer_apply(&state, changes);
+			self.publish_actions(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {

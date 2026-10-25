@@ -1,0 +1,91 @@
+use std::rc::Rc;
+
+use bridge::{Access, DeleteProgress, EmojiPicker};
+use chrono::Utc;
+use state::{Changes, State};
+use zgx::input::{InputEvent, PointerButton};
+use zgx::widgets::WeakUi;
+
+use super::{Link, Slot};
+use crate::capture;
+use crate::timeline::Compose;
+
+impl Link {
+	pub(super) fn install_message_actions(link: &Rc<Link>) {
+		let actions = Rc::downgrade(link);
+		link.timeline_view.on_compose(move |compose| {
+			if let Some(link) = actions.upgrade() {
+				match compose {
+					Compose::Reply(message_id) => link.composer_reply(message_id),
+					Compose::Edit(message_id) => link.composer_edit(message_id),
+				}
+			}
+		});
+		link.timeline_view.on_profile(|user_id| {
+			tracing::debug!(%user_id, "profiles open from ticket 30");
+		});
+		let actions = Rc::downgrade(link);
+		link.timeline_view.on_emoji_catalog(move || {
+			let link = actions.upgrade()?;
+			let shared = link.state()?;
+			let guild_id = link.timeline.borrow().open()?.guild_id;
+			Some(EmojiPicker::of(&shared.read(), guild_id))
+		});
+	}
+
+	pub(super) fn place_actions(&self, slot: Slot) {
+		self.timeline_view.set_origin(slot.x, slot.y);
+		let (width, height) = self.window.info.bounds.with_untracked(|bounds| bounds.size);
+		let scale = self.scale_factor() as f32;
+		if width > 0 && height > 0 && scale > 0. {
+			self.timeline_view
+				.set_window(width as f32 / scale, height as f32 / scale);
+		}
+	}
+
+	pub(super) fn attach_ui(&self, ui: WeakUi) {
+		*self.ui.borrow_mut() = Some(ui);
+	}
+
+	pub(super) fn publish_actions(&self, state: &State, changes: &Changes) {
+		let open = self.timeline.borrow().open();
+		let access = open
+			.map(|open| Access::of(state, open.guild_id, open.channel_id, Utc::now()))
+			.unwrap_or_default();
+		self.timeline_view.set_access(access);
+		if changes.deletions
+			&& let Some(open) = open
+		{
+			self.timeline_view
+				.set_progress(DeleteProgress::of(state, open.channel_id));
+		}
+		if changes.rejected
+			&& let Some(rejection) = state.last_rejection()
+		{
+			self.timeline_view.rejected(&rejection.reason);
+		}
+	}
+
+	pub(super) async fn point_at_last_message(&self, open_menu: bool) {
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
+			tracing::warn!("the window is gone");
+			return;
+		};
+		let (x, y) = capture::LAST_MESSAGE;
+		ui.dispatch(InputEvent::PointerMove { x, y });
+		if open_menu {
+			zgx::timer::sleep(capture::POLL).await;
+			ui.dispatch(InputEvent::PointerDown {
+				x,
+				y,
+				button: PointerButton::Secondary,
+			});
+			zgx::timer::sleep(capture::POLL).await;
+			ui.dispatch(InputEvent::PointerUp {
+				x,
+				y,
+				button: PointerButton::Secondary,
+			});
+		}
+	}
+}

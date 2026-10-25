@@ -15,8 +15,8 @@ mod timeline;
 
 pub use actions::{
 	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle, can_delete,
-	can_edit, can_reply, failure_text, has_actions, message_link, message_menu, reaction_allowed,
-	reaction_toggle, toolbar_actions,
+	can_edit, can_reply, has_actions, message_link, message_menu, reaction_allowed, reaction_toggle,
+	toolbar_actions,
 };
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};

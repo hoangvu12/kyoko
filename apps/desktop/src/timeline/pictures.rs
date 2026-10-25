@@ -84,6 +84,17 @@ impl Pictures {
 		))
 	}
 
+	pub fn guild_icon(&self, guild_id: Snowflake, hash: &str, points: f32) -> ImageName {
+		self.request(bridge::guild_icon_request(
+			&self.cdn,
+			guild_id,
+			hash,
+			f64::from(points),
+			self.scale.get(),
+			false,
+		))
+	}
+
 	pub fn reaction(&self, emoji: &PartialEmoji) -> Option<ImageName> {
 		let id = emoji.id?;
 		Some(self.emoji(id.0, emoji.animated, REACTION_EMOJI))

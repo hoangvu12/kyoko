@@ -14,6 +14,7 @@ M.color = {
 	modifier_selected = token("modifier_selected"),
 	modifier_active = token("modifier_active"),
 	message_hover = token("message_hover"),
+	message_selected = token("message_selected"),
 	reaction_me = token("reaction_me"),
 	poll_fill = token("poll_fill"),
 	poll_fill_chosen = token("poll_fill_chosen"),

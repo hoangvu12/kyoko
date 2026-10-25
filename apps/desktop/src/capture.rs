@@ -8,6 +8,7 @@ pub const POLL: Duration = Duration::from_millis(100);
 pub const SETTLE: Duration = Duration::from_millis(1500);
 pub const LIMIT: Duration = Duration::from_secs(30);
 pub const SCROLL_PASSES: usize = 10;
+pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -28,6 +29,8 @@ pub enum Screen {
 	Showcase(&'static str),
 	DmSidebar,
 	DmGroup,
+	MessageHover,
+	MessageMenu,
 }
 
 impl Screen {
@@ -43,6 +46,8 @@ impl Screen {
 			"timeline-media" => Some(Screen::NewestImage),
 			"dm-sidebar" => Some(Screen::DmSidebar),
 			"dm-group" => Some(Screen::DmGroup),
+			"message-hover" => Some(Screen::MessageHover),
+			"message-context-menu" => Some(Screen::MessageMenu),
 			other => mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase),
 		}
 	}
@@ -57,7 +62,9 @@ impl Screen {
 			| Screen::DmSidebar
 			| Screen::DmGroup
 			| Screen::Composer
-			| Screen::ComposerReply => Some(Opening::First),
+			| Screen::ComposerReply
+			| Screen::MessageHover
+			| Screen::MessageMenu => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

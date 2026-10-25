@@ -12,6 +12,7 @@ use zgx::scene::Color;
 use zgx::style::ObjectFit;
 use zgx::theme::{Themed, TokenId};
 
+use super::actions::MessageActions;
 use super::attachments;
 use super::body::{self, Look};
 use super::extras;
@@ -96,6 +97,7 @@ pub struct RowEnv {
 	pub revealed: RefCell<HashSet<(Snowflake, usize)>>,
 	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
 	pub commands: Rc<Sender>,
+	pub actions: Rc<MessageActions>,
 }
 
 impl RowEnv {
@@ -113,7 +115,7 @@ pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal
 		Row::Day(day) => day_separator(*day),
 		Row::Unread => unread_marker(),
 		Row::Message(entry) if entry.is_plain() && entry.grouped => follow_up(entry, env, hovered, bump),
-		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env, bump),
+		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env, hovered, bump),
 		Row::Message(entry) => system_row(entry),
 	}
 }
@@ -186,15 +188,35 @@ fn body_lines(content: &str, width: f32) -> f32 {
 		.sum()
 }
 
-fn message_frame(entry: &MessageEntry) -> View {
-	column()
+fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>) -> View {
+	let actions = env.actions.clone();
+	let id = entry.id;
+	let frame = column()
 		.relative()
 		.w_full()
 		.pl(GUTTER)
 		.pr(RIGHT)
 		.py(2.)
 		.hover(|style| style.bg(tok("message_hover")))
-		.when(entry.pending, |row| row.opacity(0.5))
+		.reactive_style(move || {
+			if actions.is_selected(id) {
+				Styles::new().bg(tok("message_selected"))
+			} else {
+				Styles::new()
+			}
+		})
+		.when(entry.pending, |row| row.opacity(0.5));
+	if !bridge::has_actions(entry) || entry.deleted {
+		return frame;
+	}
+	let shared = Rc::new(entry.clone());
+	let more = env.pictures.runtime().signal(false);
+	let (hovered, open, actions) = (hovered.clone(), more.clone(), env.actions.clone());
+	let menus = env.actions.clone();
+	frame.child_when(
+		move || ((hovered.get() || open.get()) && !menus.has_menu_open(id)).then_some(()),
+		move |(), _| actions.toolbar(&shared, more.clone()),
+	)
 }
 
 fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<View> {
@@ -283,10 +305,21 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 			} else {
 				quote.text.clone()
 			};
+			let target = entry
+				.message
+				.message_reference
+				.as_ref()
+				.and_then(|reference| reference.message_id);
+			let actions = env.actions.clone();
 			row()
 				.items_center()
 				.gap(4.)
 				.min_w(0.)
+				.when_some(target, move |preview, target| {
+					preview
+						.cursor(Cursor::Pointer)
+						.on_click(move || actions.jump(target))
+				})
 				.child(small_avatar(&quote.author, &quote.name, env))
 				.child(
 					text(format!("@{}", quote.name))
@@ -317,7 +350,12 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 	)
 }
 
-fn first_of_group(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> View {
+fn first_of_group(
+	entry: &MessageEntry,
+	env: &Rc<RowEnv>,
+	hovered: &Signal<bool>,
+	bump: &Signal<u32>,
+) -> View {
 	let time = bridge::message_time(entry.sent_at, bridge::today());
 	let name_color = color_or(entry.author_color, "header_primary");
 	let reply = reply_header(entry, env);
@@ -326,28 +364,39 @@ fn first_of_group(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) ->
 		.items_center()
 		.gap(8.)
 		.h(LINE)
-		.child(
+		.child({
+			let (actions, author) = (env.actions.clone(), entry.message.author.id);
 			text(entry.author.as_str())
 				.text_size(tok("font_md"))
 				.font_weight(600)
-				.text_color(name_color),
-		)
+				.text_color(name_color)
+				.cursor(Cursor::Pointer)
+				.on_click(move || actions.profile(author))
+		})
 		.when(entry.bot, |header| header.child(bot_tag()))
 		.child(
 			text(time)
 				.text_size(tok("font_tiny"))
 				.text_color(tok("text_muted")),
 		);
-	message_frame(entry)
+	message_frame(entry, env, hovered)
 		.mt(HEADER_GAP)
 		.when_some(reply, |row, reply| row.child(reply))
-		.child(avatar(entry, env).absolute().left(16.).top(avatar_top))
+		.child({
+			let (actions, author) = (env.actions.clone(), entry.message.author.id);
+			avatar(entry, env)
+				.absolute()
+				.left(16.)
+				.top(avatar_top)
+				.cursor(Cursor::Pointer)
+				.on_click(move || actions.profile(author))
+		})
 		.child(header)
 		.children(content(entry, env, bump))
 }
 
 fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> View {
-	let hovered = hovered.clone();
+	let shown = hovered.clone();
 	let clock = row()
 		.absolute()
 		.left(0.)
@@ -362,13 +411,13 @@ fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bum
 				.text_color(tok("text_muted")),
 		)
 		.reactive_style(move || {
-			if hovered.get() {
+			if shown.get() {
 				Styles::new().visible()
 			} else {
 				Styles::new().invisible()
 			}
 		});
-	message_frame(entry)
+	message_frame(entry, env, hovered)
 		.child(clock)
 		.children(content(entry, env, bump))
 }

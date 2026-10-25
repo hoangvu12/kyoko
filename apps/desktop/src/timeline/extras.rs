@@ -22,16 +22,17 @@ pub fn reactions(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 	if reactions.is_empty() || !env.prefs.show_reactions {
 		return None;
 	}
+	let shared = Rc::new(entry.clone());
 	Some(
 		row()
 			.flex_wrap()
 			.gap(4.)
 			.mt(4.)
-			.children(reactions.iter().map(|reaction| chip(reaction, env))),
+			.children(reactions.iter().map(|reaction| chip(&shared, reaction, env))),
 	)
 }
 
-fn chip(reaction: &Reaction, env: &Rc<RowEnv>) -> View {
+fn chip(entry: &Rc<MessageEntry>, reaction: &Reaction, env: &Rc<RowEnv>) -> View {
 	let size = REACTION_EMOJI as f32;
 	let glyph = match env.pictures.reaction(&reaction.emoji) {
 		Some(name) => div().size(size, size).shrink_0().child(picture(
@@ -68,6 +69,14 @@ fn chip(reaction: &Reaction, env: &Rc<RowEnv>) -> View {
 		.cursor(Cursor::Pointer)
 		.when(!reaction.me, |chip| {
 			chip.hover(|style| style.border_color(tok("interactive_muted")))
+		})
+		.when(!entry.deleted && !entry.pending, |chip| {
+			let (actions, entry, key) = (
+				env.actions.clone(),
+				entry.clone(),
+				bridge::reaction_key(&reaction.emoji),
+			);
+			chip.on_click(move || actions.toggle_reaction(&entry, &key))
 		})
 		.child(glyph)
 		.child(text(reaction.count.to_string()))

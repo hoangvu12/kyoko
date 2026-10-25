@@ -63,6 +63,7 @@ impl Link {
 	pub(super) fn place_slot(&self, slot: Slot) {
 		self.reported_slot.set(slot);
 		self.timeline_view.resize(slot.width, slot.height);
+		self.place_actions(slot);
 		if self.dms.page().is_empty() {
 			self.window.slot.set(slot);
 		}

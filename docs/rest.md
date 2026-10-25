@@ -39,6 +39,8 @@ A message send is `POST /channels/<id>/messages`. The defaults sit between how f
 - Mark server read and mark everything read send one bulk ack per 100 channels. 2 s between them spreads a large "mark all read" over a few seconds instead of a burst.
 - Pacing only ever delays. Nothing is dropped or merged, so a burst of user actions still completes, just at a human pace.
 
+Reactions, pins and unpins are mutations. Before any request the session checks permissions: adding a reaction needs Read Message History, and Add Reactions when nobody has reacted with that emoji yet; pinning needs Manage Messages in a server. A refusal never reaches REST, and a REST failure is reported as a `CommandRejected` with the reason; neither is retried.
+
 ## Read acks
 
 Every read receipt goes through one debouncer per channel in the session (`crates/session/src/task/reads.rs`). The local read state updates immediately, so badges clear at once. The REST ack waits.

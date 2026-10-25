@@ -31,6 +31,7 @@ pub const COLORS: &[(&str, &str)] = &[
 	("modifier_selected", "rgba(79, 84, 92, 0.24)"),
 	("modifier_active", "rgba(79, 84, 92, 0.48)"),
 	("message_hover", "rgba(0, 0, 0, 0.06)"),
+	("message_selected", "rgba(88, 101, 242, 0.14)"),
 	("reaction_me", "rgba(88, 101, 242, 0.15)"),
 	("poll_fill", "rgba(78, 80, 88, 0.45)"),
 	("poll_fill_chosen", "rgba(88, 101, 242, 0.45)"),
