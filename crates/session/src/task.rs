@@ -38,6 +38,7 @@ mod commands;
 mod deletes;
 mod expressions;
 mod failures;
+mod locks;
 mod reads;
 mod themes;
 
@@ -600,7 +601,11 @@ impl Core {
 	}
 
 	fn on_command(&mut self, command: Command) -> bool {
+		if self.held_by_lock(&command) {
+			return true;
+		}
 		match command {
+			Command::ConfirmRisky { target, reason } => self.confirm_risky(target, reason),
 			Command::SelectChannel { guild_id, channel_id } => self.select_channel(guild_id, channel_id),
 			Command::LoadOlder { channel_id } => self.load_older(channel_id),
 			Command::LoadNewer { channel_id } => self.load_newer(channel_id),

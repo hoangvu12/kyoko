@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 
-use crate::lenient::{flags_serde, int_enum};
+use crate::lenient::{flags_serde, int_enum, nullable_string};
 use crate::snowflake::Snowflake;
 
 bitflags! {
@@ -73,6 +73,8 @@ pub struct User {
 	pub clan: Option<PrimaryGuild>,
 	pub email: Option<String>,
 	pub verified: Option<bool>,
+	#[serde(skip_serializing_if = "Option::is_none", deserialize_with = "nullable_string")]
+	pub phone: Option<Option<String>>,
 	pub mfa_enabled: Option<bool>,
 	pub locale: Option<String>,
 }

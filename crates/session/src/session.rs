@@ -73,6 +73,9 @@ impl Session {
 		let (gateway, gateway_events) =
 			Gateway::spawn_when(async move { gateway_started.await.ok() }, handle.clone());
 		let state = State::shared_with(config.caches);
+		state
+			.write()
+			.set_safety_locks(config.store.settings.read().safety_locks);
 		let search = SharedSearch::default();
 		let stats = Arc::new(Stats::default());
 		let themes = Arc::new(ThemeCatalogs::default());

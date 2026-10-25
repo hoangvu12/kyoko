@@ -5,6 +5,7 @@ mod fingerprint;
 mod gateway;
 mod harness;
 mod hooks;
+mod locks;
 mod reads;
 mod safety;
 mod wire;

@@ -5,7 +5,7 @@ use protocol::{
 use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
-use state::Viewport;
+use state::{RiskyReason, RiskyTarget, Viewport};
 
 #[derive(Debug)]
 pub enum Command {
@@ -78,6 +78,10 @@ pub enum Command {
 	},
 	OpenDm {
 		user_id: Snowflake,
+	},
+	ConfirmRisky {
+		target: RiskyTarget,
+		reason: RiskyReason,
 	},
 	Search {
 		guild_id: Option<Snowflake>,

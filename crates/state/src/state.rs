@@ -15,6 +15,7 @@ use crate::deletions::DeleteBatch;
 use crate::event::{Event, LoadDirection, LocalEvent};
 use crate::guild::GuildState;
 use crate::loaded::Lazy;
+use crate::locks::RiskyLocks;
 use crate::messages::ChannelMessages;
 use crate::settings::GuildFolder;
 use crate::views::RenderedMessage;
@@ -102,6 +103,7 @@ pub struct State {
 	pub(crate) deletions: VecDeque<DeleteBatch>,
 	pub(crate) limits: CacheLimits,
 	pub(crate) warm: Vec<Snowflake>,
+	pub(crate) risky: RiskyLocks,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -562,6 +564,9 @@ impl State {
 				message_id,
 				status,
 			} => self.delete_progressed(*batch, *message_id, status, &mut changes),
+			LocalEvent::RiskyConfirmed { target, reason } => {
+				changes.locks = self.confirm_risky(*target, *reason);
+			}
 		}
 		changes
 	}

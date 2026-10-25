@@ -89,6 +89,7 @@ pub struct Changes {
 	pub streams: bool,
 	pub rejected: bool,
 	pub deletions: bool,
+	pub locks: bool,
 }
 
 impl Changes {
@@ -119,6 +120,7 @@ impl Changes {
 			streams: true,
 			rejected: true,
 			deletions: true,
+			locks: true,
 		}
 	}
 
@@ -139,7 +141,8 @@ impl Changes {
 			|| self.calls
 			|| self.streams
 			|| self.rejected
-			|| self.deletions)
+			|| self.deletions
+			|| self.locks)
 			&& self.channel_lists.is_empty()
 			&& self.messages.is_empty()
 			&& self.members.is_empty()
@@ -168,6 +171,7 @@ impl Changes {
 		self.streams |= other.streams;
 		self.rejected |= other.rejected;
 		self.deletions |= other.deletions;
+		self.locks |= other.locks;
 		self.channel_lists.merge(&other.channel_lists);
 		self.messages.merge(&other.messages);
 		self.members.merge(&other.members);

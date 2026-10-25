@@ -5,6 +5,7 @@ use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflak
 
 use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::loaded::Loaded;
+use crate::locks::{RiskyReason, RiskyTarget};
 use crate::messages::{SendFailure, Viewport};
 use crate::state::ConnectionStatus;
 use crate::views::{RenderedMessage, UserOverride};
@@ -116,6 +117,10 @@ pub enum LocalEvent {
 		batch: u64,
 		message_id: Snowflake,
 		status: DeleteStatus,
+	},
+	RiskyConfirmed {
+		target: RiskyTarget,
+		reason: RiskyReason,
 	},
 }
 

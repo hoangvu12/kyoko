@@ -170,7 +170,13 @@ impl State {
 		let Some(guild) = guild_id.and_then(|id| self.guilds.get_mut(&id)) else {
 			return;
 		};
-		guild.members.insert(message.author.id, stripped_member(member));
+		let mut stripped = stripped_member(member);
+		if let Some(known) = guild.members.get(&message.author.id) {
+			stripped.pending = stripped.pending.or(known.pending);
+			stripped.flags = stripped.flags.or(known.flags);
+			stripped.joined_at = stripped.joined_at.or(known.joined_at);
+		}
+		guild.members.insert(message.author.id, stripped);
 	}
 
 	pub(crate) fn store_private_channel(&mut self, channel: &Channel) {

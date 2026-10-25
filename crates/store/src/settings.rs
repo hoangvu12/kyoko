@@ -31,6 +31,7 @@ pub struct Settings {
 	pub accessibility: AccessibilitySettings,
 	pub chat: ChatSettings,
 	pub client: ClientSettings,
+	pub safety_locks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -186,6 +187,7 @@ impl Default for Settings {
 			accessibility: AccessibilitySettings::default(),
 			chat: ChatSettings::default(),
 			client: ClientSettings::default(),
+			safety_locks: true,
 		}
 	}
 }

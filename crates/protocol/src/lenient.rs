@@ -342,6 +342,16 @@ pub fn present<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Er
 	IgnoredAny::deserialize(deserializer).map(|_| true)
 }
 
+pub fn nullable_string<'de, D: Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Option<Option<String>>, D::Error> {
+	Ok(match serde_json::Value::deserialize(deserializer)? {
+		serde_json::Value::String(value) => Some(Some(value)),
+		serde_json::Value::Null => Some(None),
+		_ => None,
+	})
+}
+
 macro_rules! int_enum {
 	(
 		$(#[$meta:meta])*

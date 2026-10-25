@@ -6,6 +6,10 @@ use crate::permissions::Permissions;
 use crate::snowflake::Snowflake;
 use crate::user::{AvatarDecorationData, User};
 
+pub const MEMBER_COMPLETED_ONBOARDING: u64 = 1 << 1;
+pub const MEMBER_BYPASSES_VERIFICATION: u64 = 1 << 2;
+pub const MEMBER_STARTED_ONBOARDING: u64 = 1 << 3;
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Member {

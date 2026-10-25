@@ -7,6 +7,7 @@ mod eviction;
 mod expressions;
 mod guild;
 mod loaded;
+mod locks;
 mod member_list;
 mod messages;
 mod notifications;
@@ -32,6 +33,7 @@ pub use loaded::{
 	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, ConnectedAccount, InviteInfo, InvitePreview,
 	Loaded, ProfileBadge, UserProfile, audit_action_label,
 };
+pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
 pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport};
 pub use permissions::DM_PERMISSIONS;
