@@ -43,6 +43,20 @@ pub fn at_bottom(extent: &(impl Extent + ?Sized), offset: f32, viewport: f32) ->
 	limit(extent, viewport) - offset.min(limit(extent, viewport)) <= AT_BOTTOM
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resize {
+	FollowEnd,
+	Keep,
+}
+
+pub fn resized(extent: &(impl Extent + ?Sized), offset: f32, before: f32, after: f32) -> Resize {
+	if before != after && at_bottom(extent, offset, before) {
+		Resize::FollowEnd
+	} else {
+		Resize::Keep
+	}
+}
+
 pub fn visible(extent: &(impl Extent + ?Sized), offset: f32, viewport: f32) -> Option<(usize, usize)> {
 	let offset = offset.clamp(0., limit(extent, viewport));
 	let first = extent.row_at(offset)?;
@@ -176,6 +190,37 @@ mod tests {
 
 	fn heights(count: usize, each: f32) -> Vec<f32> {
 		vec![each; count]
+	}
+
+	#[test]
+	fn a_list_at_the_bottom_follows_the_end_when_the_viewport_changes() {
+		let rows = heights(20, 30.);
+		let bottom = limit(rows.as_slice(), VIEW);
+		assert_eq!(
+			resized(rows.as_slice(), bottom, VIEW, VIEW - 32.),
+			Resize::FollowEnd
+		);
+		let short_bottom = limit(rows.as_slice(), VIEW - 32.);
+		assert_eq!(
+			resized(rows.as_slice(), short_bottom, VIEW - 32., VIEW),
+			Resize::FollowEnd
+		);
+		assert_eq!(
+			resized(rows.as_slice(), f32::MAX, VIEW, VIEW - 60.),
+			Resize::FollowEnd
+		);
+		assert_eq!(resized(rows.as_slice(), bottom, VIEW, VIEW), Resize::Keep);
+		assert!(!at_bottom(rows.as_slice(), bottom, VIEW - 32.));
+	}
+
+	#[test]
+	fn a_scrolled_up_list_keeps_its_first_visible_row_when_the_viewport_shrinks() {
+		let rows = heights(20, 30.);
+		let offset = 95.;
+		assert_eq!(resized(rows.as_slice(), offset, VIEW, VIEW - 32.), Resize::Keep);
+		let before = visible(rows.as_slice(), offset, VIEW).expect("rows in view");
+		let after = visible(rows.as_slice(), offset, VIEW - 32.).expect("rows in view");
+		assert_eq!(before.0, after.0);
 	}
 
 	#[test]

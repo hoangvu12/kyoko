@@ -20,7 +20,7 @@ use protocol::Snowflake;
 use session::Command;
 use state::Viewport;
 use zgx::compose::prelude::*;
-use zgx::compose::{Tasks, VariableHeights, measured_virtual_list};
+use zgx::compose::{NodeHandle, Tasks, VariableHeights, measured_virtual_list};
 use zgx::image::ImageData;
 use zgx::input::InputEvent;
 use zgx::platform::PlatformService;
@@ -30,7 +30,7 @@ use self::links::Links;
 use self::pictures::Pictures;
 pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
-use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter};
+use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter, Resize};
 
 const OVERSCAN: usize = 4;
 const PAD_TOP: f32 = 8.;
@@ -81,6 +81,8 @@ pub struct TimelineView {
 	pictures: Rc<Pictures>,
 	visible_images: RefCell<Vec<ImageName>>,
 	tasks: RefCell<Option<Tasks>>,
+	pinned: Cell<Option<f32>>,
+	layout_watcher: RefCell<Option<Effect>>,
 	watcher: RefCell<Option<Effect>>,
 	commands: Rc<Sender>,
 	visible_changed: Callback<()>,
@@ -124,6 +126,8 @@ impl TimelineView {
 			pictures,
 			visible_images: RefCell::default(),
 			tasks: RefCell::new(None),
+			pinned: Cell::new(None),
+			layout_watcher: RefCell::new(None),
 			watcher: RefCell::new(None),
 			commands,
 			visible_changed: RefCell::new(None),
@@ -139,16 +143,39 @@ impl TimelineView {
 	}
 
 	pub fn resize(&self, width: f32, height: f32) {
-		let (_, viewport) = self.viewport();
-		let before = self.size.with_untracked(|size| size.1);
-		let following = self.runtime.untracked(|| {
+		let (_, before) = self.viewport();
+		let after = (height - PAD_TOP - PAD_BOTTOM).max(0.);
+		let decision = self.runtime.untracked(|| {
 			let offset = self.offset.with_untracked(|offset| *offset);
-			scroll::at_bottom(&Measured(&self.heights), offset, viewport)
+			scroll::resized(&Measured(&self.heights), offset, before, after)
 		});
 		self.size.set((width, height));
-		if following && height != before {
+		if decision == Resize::FollowEnd {
+			self.pinned.set(Some(height));
 			self.offset.set(f32::MAX);
 		}
+	}
+
+	fn follow_layout(self: &Rc<Self>, node: &NodeHandle) {
+		let Some(laid_out) = node.observe_size() else {
+			return;
+		};
+		let view = Rc::downgrade(self);
+		let effect = self.runtime.effect(move || {
+			let (_, height) = laid_out.get();
+			let Some(view) = view.upgrade() else {
+				return;
+			};
+			if view
+				.pinned
+				.get()
+				.is_some_and(|wanted| (wanted - height).abs() < 1.)
+			{
+				view.pinned.set(None);
+				view.offset.set(f32::MAX);
+			}
+		});
+		*self.layout_watcher.borrow_mut() = Some(effect);
 	}
 
 	pub fn set_scale(&self, scale: f64) {
@@ -206,7 +233,17 @@ impl TimelineView {
 			.pb(PAD_BOTTOM)
 			.scrollbar(true)
 			.selectable(true);
-			div().w_full().h_full().child(list).child(this.env.links.view())
+			let mounted = Rc::downgrade(&this);
+			div()
+				.w_full()
+				.h_full()
+				.child(list)
+				.child(this.env.links.view())
+				.on_mount(move |node| {
+					if let Some(view) = mounted.upgrade() {
+						view.follow_layout(&node);
+					}
+				})
 		})
 	}
 
