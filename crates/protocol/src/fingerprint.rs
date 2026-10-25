@@ -293,12 +293,31 @@ impl JoinLocation {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelationshipLocation {
+	AddFriend,
+}
+
+impl RelationshipLocation {
+	pub fn label(self) -> &'static str {
+		match self {
+			Self::AddFriend => "Add Friend",
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ContextProperties {
-	pub location: &'static str,
+pub struct ContextPlace {
 	pub location_guild_id: Option<Snowflake>,
 	pub location_channel_id: Option<Snowflake>,
 	pub location_channel_type: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ContextProperties {
+	pub location: &'static str,
+	#[serde(flatten, skip_serializing_if = "Option::is_none")]
+	pub place: Option<ContextPlace>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub location_message_id: Option<Snowflake>,
 }
@@ -312,9 +331,19 @@ impl ContextProperties {
 	) -> Self {
 		Self {
 			location: location.label(),
-			location_guild_id: guild_id,
-			location_channel_id: channel_id,
-			location_channel_type: channel_type,
+			place: Some(ContextPlace {
+				location_guild_id: guild_id,
+				location_channel_id: channel_id,
+				location_channel_type: channel_type,
+			}),
+			location_message_id: None,
+		}
+	}
+
+	pub fn relationship(location: RelationshipLocation) -> Self {
+		Self {
+			location: location.label(),
+			place: None,
 			location_message_id: None,
 		}
 	}

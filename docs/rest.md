@@ -219,6 +219,17 @@ The requests follow the web client, read against discord-userdoccers (docs.disco
 
 Not confirmed against live traffic yet: whether the web client adds `inputValue` to the invite lookup, `flags: 0` to invite creation, and the exact accept body outside guest invites.
 
+## Relationships
+
+Friends arrive in READY (`relationships`) and change with RELATIONSHIP_ADD, RELATIONSHIP_REMOVE and RELATIONSHIP_UPDATE (a partial relationship: `type` and `nickname` when present, `nickname: null` clears it; an update for someone not listed is ignored). The requests are the web client's (`crates/session/src/task/commands.rs`, `crates/rest/src/api/users.rs`):
+
+- `Command::AddFriend { username, from }`: `POST /users/@me/relationships` with `{"username", "discriminator": null}`. From the friends page's Add Friend tab (`FriendSource::AddFriend`) it carries `X-Context-Properties` `{"location":"Add Friend"}`; from a profile (`FriendSource::Profile`) it carries none for now.
+- `Command::AcceptFriend { user_id }`: `PUT /users/@me/relationships/{id}` with `{}`.
+- `Command::RemoveRelationship { user_id }`: `DELETE /users/@me/relationships/{id}`, for removing a friend, ignoring or cancelling a request and unblocking.
+- `Command::BlockUser { user_id }`: `PUT /users/@me/relationships/{id}` with `{"type": 2}`.
+
+All are mutations (`mutation_gap`), never retried after a captcha or a refusal; a failure is a `CommandRejected` ("friend request: complete this in the official Discord client" for a captcha). The state changes only when Discord dispatches the event. Not confirmed against live traffic: whether the web client sends `X-Context-Properties` on accept, remove and block (likely `"Friends"` or `"ContextMenu"`), and that a profile's Add Friend is `PUT /users/@me/relationships/{id}` rather than the by-username POST kyoko sends.
+
 ## Forwarding
 
 `Command::ForwardMessage { channel_id, message_id, to_channel_id }` posts `POST /channels/{to}/messages` with a fresh `nonce` and `message_reference: {"type": 1, "message_id", "channel_id", "guild_id"}` and no content, through the same send path as messages: the target's channel lock is checked first (a locked target is held with the lock's explanation), Send Messages is checked in a server, and the request is paced as a message send (`send_gap`, `channel_send_gap`), so forwarding to several channels goes out one send apart, never in a burst. A failure is a `CommandRejected` ("Forward: ..."), not retried. No pending row is made for a forward.

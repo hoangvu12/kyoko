@@ -9,6 +9,12 @@ use serde_json::Value;
 use state::{RiskyReason, RiskyTarget, Viewport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FriendSource {
+	AddFriend,
+	Profile,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InviteSource {
 	AddServer,
 	Message {
@@ -185,6 +191,7 @@ pub enum Command {
 	},
 	AddFriend {
 		username: String,
+		from: FriendSource,
 	},
 	AcceptFriend {
 		user_id: Snowflake,

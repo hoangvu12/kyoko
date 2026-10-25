@@ -211,6 +211,23 @@ impl State {
 		);
 	}
 
+	pub(crate) fn update_relationship(&mut self, update: &protocol::RelationshipUpdate) -> bool {
+		if let Some(user) = &update.user {
+			intern_user(&mut self.users, user);
+		}
+		let Some(stored) = self.relationships.get_mut(&update.id) else {
+			return false;
+		};
+		let before = stored.clone();
+		if let Some(kind) = update.kind {
+			stored.kind = kind;
+		}
+		if let Some(nickname) = &update.nickname {
+			stored.nickname.clone_from(nickname);
+		}
+		*stored != before || update.user.is_some()
+	}
+
 	pub(crate) fn apply_presence(&mut self, presence: &Presence) -> Option<Snowflake> {
 		let user_id = presence
 			.user_id

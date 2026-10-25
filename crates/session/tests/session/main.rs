@@ -10,6 +10,7 @@ mod deletes;
 mod dms;
 mod expressions;
 mod fingerprint;
+mod friends;
 mod gateway;
 mod harness;
 mod hooks;

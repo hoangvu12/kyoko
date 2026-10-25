@@ -9,7 +9,7 @@ use crate::emoji::{Emoji, PartialEmoji, Sticker};
 use crate::error::DecodeError;
 use crate::fingerprint::IdentifyProperties;
 use crate::guild::{Guild, UnavailableGuild};
-use crate::lenient::{LenientVec, int_enum, timestamp};
+use crate::lenient::{LenientVec, int_enum, nullable_string, timestamp};
 use crate::member::Member;
 use crate::message::{Message, MessageUpdate};
 use crate::presence::Presence;
@@ -405,6 +405,17 @@ pub struct RelationshipRemove {
 	pub nickname: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RelationshipUpdate {
+	pub id: Snowflake,
+	#[serde(rename = "type")]
+	pub kind: Option<RelationshipKind>,
+	#[serde(skip_serializing_if = "Option::is_none", deserialize_with = "nullable_string")]
+	pub nickname: Option<Option<String>>,
+	pub user: Option<User>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceServerUpdate {
@@ -489,6 +500,7 @@ pub enum DispatchEvent {
 	UserGuildSettingsUpdate(Box<UserGuildSettings>),
 	RelationshipAdd(Box<Relationship>),
 	RelationshipRemove(RelationshipRemove),
+	RelationshipUpdate(Box<RelationshipUpdate>),
 	VoiceStateUpdate(Box<VoiceState>),
 	VoiceServerUpdate(VoiceServerUpdate),
 	StreamCreate(Box<StreamState>),
@@ -561,6 +573,7 @@ impl DispatchEvent {
 			"USER_GUILD_SETTINGS_UPDATE" => Self::UserGuildSettingsUpdate(decode(name, data)?),
 			"RELATIONSHIP_ADD" => Self::RelationshipAdd(decode(name, data)?),
 			"RELATIONSHIP_REMOVE" => Self::RelationshipRemove(decode(name, data)?),
+			"RELATIONSHIP_UPDATE" => Self::RelationshipUpdate(decode(name, data)?),
 			"VOICE_STATE_UPDATE" => Self::VoiceStateUpdate(decode(name, data)?),
 			"VOICE_SERVER_UPDATE" => Self::VoiceServerUpdate(decode(name, data)?),
 			"STREAM_CREATE" => Self::StreamCreate(decode(name, data)?),

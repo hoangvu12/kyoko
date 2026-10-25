@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use bridge::{ProfileCard, Relation};
-use session::Command;
+use session::{Command, FriendSource};
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
 
@@ -109,6 +109,7 @@ pub fn actions(layer: &Rc<ProfileLayer>, card: &Rc<ProfileCard>) -> View {
 					actions.child(parts::small_button("Add Friend", Look::Secondary, move || {
 						friend.request(Request::Command(Command::AddFriend {
 							username: username.clone(),
+							from: FriendSource::Profile,
 						}));
 					}))
 				}

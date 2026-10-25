@@ -1,3 +1,4 @@
+use protocol::fingerprint::{ContextProperties, RelationshipLocation};
 use protocol::{Permissions, Snowflake, StatusKind};
 use std::time::Duration;
 
@@ -9,6 +10,7 @@ use state::Loaded;
 use super::actions::{mute_config, object, some};
 use super::outbox::ForumPost;
 use super::{Command, Core};
+use crate::FriendSource;
 
 const PNG: &str = "image/png";
 const DEFAULT_ARCHIVE_MINUTES: i64 = 4320;
@@ -23,6 +25,13 @@ fn sessions_or_empty(result: rest::Result<Value>) -> Value {
 		tracing::warn!(%error, "device sessions were not loaded");
 		Value::Null
 	})
+}
+
+fn friend_context(from: FriendSource) -> Option<ContextProperties> {
+	match from {
+		FriendSource::AddFriend => Some(ContextProperties::relationship(RelationshipLocation::AddFriend)),
+		FriendSource::Profile => None,
+	}
 }
 
 fn png(bytes: &[u8]) -> Value {
@@ -296,9 +305,12 @@ impl Core {
 
 	fn on_social_command(&mut self, command: Command) {
 		match command {
-			Command::AddFriend { username } => self.spawn_action("friend request", move |rest| async move {
-				rest.send_friend_request(&username).await
-			}),
+			Command::AddFriend { username, from } => {
+				let context = friend_context(from);
+				self.spawn_action("friend request", move |rest| async move {
+					rest.send_friend_request(&username, context.as_ref()).await
+				});
+			}
 			Command::AcceptFriend { user_id } => self.spawn_action("accept friend", move |rest| async move {
 				rest.add_relationship(user_id).await
 			}),

@@ -2,7 +2,7 @@ use anyhow::{Context, Result, ensure};
 use chrono::Utc;
 use mockcord::{COMMUNITY_INVITE, Fixtures};
 use protocol::{ChannelType, Message, Snowflake};
-use session::{Command, InviteSource, RiskyReason};
+use session::{Command, FriendSource, InviteSource, RiskyReason};
 use state::{MemberListRow, State};
 
 use super::Harness;
@@ -129,7 +129,10 @@ impl Harness {
 				.context("no incoming friend request in the fixtures")?;
 			(stranger.username.clone(), stranger.id, incoming)
 		};
-		self.session.send(Command::AddFriend { username });
+		self.session.send(Command::AddFriend {
+			username,
+			from: FriendSource::AddFriend,
+		});
 		self.until("the outgoing request to appear", |state| {
 			state.pending_outgoing().iter().any(|row| row.user_id == user_id)
 		})

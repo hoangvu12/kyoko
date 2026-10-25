@@ -162,6 +162,10 @@ impl State {
 				relationships: self.relationships.shift_remove(&remove.id).is_some(),
 				..Changes::default()
 			},
+			DispatchEvent::RelationshipUpdate(update) => Changes {
+				relationships: self.update_relationship(update),
+				..Changes::default()
+			},
 			DispatchEvent::VoiceStateUpdate(voice) => self.voice_state_update(voice),
 			DispatchEvent::CallCreate(payload) | DispatchEvent::CallUpdate(payload) => {
 				self.call_changed(payload)

@@ -13,7 +13,7 @@ mod task;
 
 pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use catalog::{ThemeCatalog, ThemeEntry};
-pub use command::{Command, InviteSource};
+pub use command::{Command, FriendSource, InviteSource};
 pub use config::{NotifyFn, SessionConfig};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{Rewrite, SessionHooks};

@@ -1,3 +1,4 @@
+use protocol::fingerprint::ContextProperties;
 use protocol::{Guild, LenientVec, Relationship, Snowflake, User};
 use serde_json::{Value, json};
 
@@ -70,9 +71,16 @@ impl RestClient {
 }
 
 impl RestClient {
-	pub async fn send_friend_request(&self, username: &str) -> Result<()> {
-		let request = Request::post("/users/@me/relationships")
+	pub async fn send_friend_request(
+		&self,
+		username: &str,
+		context: Option<&ContextProperties>,
+	) -> Result<()> {
+		let mut request = Request::post("/users/@me/relationships")
 			.json(&json!({ "username": username, "discriminator": null }));
+		if let Some(context) = context {
+			request = request.context_properties(context);
+		}
 		self.send_empty(request).await
 	}
 
