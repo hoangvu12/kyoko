@@ -4,6 +4,7 @@ mod deep_links;
 mod dms;
 mod harness;
 mod media;
+mod members;
 mod message;
 mod rail;
 mod reorder;

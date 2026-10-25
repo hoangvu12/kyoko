@@ -6,6 +6,7 @@ mod dm_sidebar;
 mod fonts;
 mod frame;
 mod integration;
+mod member_list;
 mod notify;
 mod rail;
 mod sidebar;

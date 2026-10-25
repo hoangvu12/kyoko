@@ -7,6 +7,7 @@ mod dm_list;
 mod emoji_picker;
 mod images;
 mod inbox;
+mod member_list;
 mod message;
 mod rail;
 mod sidebar;
@@ -36,6 +37,10 @@ pub use images::{
 	sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
+pub use member_list::{
+	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
+	MemberRowKind, OpenMembers, SEARCH_GROUP, layout_of,
+};
 pub use message::{
 	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, PollChoice,
 	PollSummary, Quote, ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL,

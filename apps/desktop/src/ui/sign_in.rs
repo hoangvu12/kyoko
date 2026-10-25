@@ -196,6 +196,8 @@ impl Link {
 			self.sidebar_avatars.borrow_mut().clear();
 			self.dms.reset();
 			self.dm_avatars.borrow_mut().clear();
+			self.members.reset();
+			self.member_avatars.borrow_mut().clear();
 			for value in [
 				&self.open_channel,
 				&self.channel_name,

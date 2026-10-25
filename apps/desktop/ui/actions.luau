@@ -158,6 +158,20 @@ end
 
 function M.composer_start_edit(message_id: string)
 	ui.invoke("composer.start_edit", message_id)
+function M.member_scroll(offset: number, height: number, member: number, group: number)
+	ui.call_sync("members.scroll", { offset = offset, height = height, member = member, group = group })
+end
+
+function M.member_search(query: string)
+	ui.invoke("members.search", query)
+end
+
+function M.member_search_remote(query: string)
+	ui.invoke("members.search_remote", query)
+end
+
+function M.open_member_profile(id: string)
+	ui.invoke("members.open_profile", { id = id })
 end
 
 return M

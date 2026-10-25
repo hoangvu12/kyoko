@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{DmList, Inbox, Rail, Sidebar, Timeline, changes_notifier};
+use bridge::{DmList, Inbox, MemberPanel, Rail, Sidebar, Timeline, changes_notifier};
 use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
 use session::{Command, Session, SessionConfig};
@@ -19,6 +19,8 @@ pub struct View {
 	pub timeline: Timeline,
 	pub rail: Rail,
 	pub dms: DmList,
+	pub members: MemberPanel,
+	pub member_publishes: usize,
 }
 
 pub struct Running {
@@ -31,9 +33,13 @@ pub struct Running {
 
 impl Running {
 	pub async fn start(name: &str) -> Running {
+		Self::start_with(name, MockConfig::default()).await
+	}
+
+	pub async fn start_with(name: &str, config: MockConfig) -> Running {
 		let server = Server::start(MockConfig {
 			record: true,
-			..MockConfig::default()
+			..config
 		})
 		.await
 		.expect("mock server starts");
@@ -79,9 +85,18 @@ impl Running {
 	pub async fn until(&mut self, what: &str, ready: impl Fn(&View) -> bool) {
 		let deadline = Instant::now() + STEP_TIMEOUT;
 		while !ready(&self.view) {
-			let batch = match timeout_at(deadline, self.inbox.next()).await {
+			let wake = self
+				.view
+				.members
+				.due()
+				.map_or(deadline, |due| deadline.min(Instant::from_std(due)));
+			let batch = match timeout_at(wake, self.inbox.next()).await {
 				Ok(Some(batch)) => batch,
 				Ok(None) => panic!("the inbox closed while waiting for {what}"),
+				Err(_) if wake < deadline => {
+					self.flush_members();
+					continue;
+				}
 				Err(_) => panic!("timed out waiting for {what}"),
 			};
 			let mut changes = Changes::default();
@@ -94,6 +109,24 @@ impl Running {
 			self.view.timeline.apply(&state, &changes);
 			self.view.rail.apply(&state, &changes);
 			self.view.dms.apply(&state, &changes);
+			self.view
+				.members
+				.apply(&state, &changes, std::time::Instant::now());
+			drop(state);
+			self.flush_members();
+		}
+	}
+
+	pub fn flush_members(&mut self) {
+		let state = self.session().state().clone();
+		let state = state.read();
+		if self
+			.view
+			.members
+			.flush(&state, std::time::Instant::now())
+			.is_some()
+		{
+			self.view.member_publishes += 1;
 		}
 	}
 

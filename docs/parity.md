@@ -128,7 +128,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `member-list` | 29 | Default selection; the member list shows at 1280 pixels wide. | no |
+| `member-list` | 29 | Default selection; the member list shows at 1280 pixels wide. | yes |
+| `member-list-scrolled` | 29 | As `member-list`, then scroll the member list to its end, with a wheel event at (1160, 450) in oxidcord. | yes |
 
 ### 30 User panel, status and profiles
 

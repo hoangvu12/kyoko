@@ -15,10 +15,16 @@ pub enum DmStatus {
 
 impl DmStatus {
 	pub fn of(state: &State, user_id: Snowflake) -> Self {
-		match state.presence(user_id).map(|presence| &presence.status) {
-			Some(StatusKind::Online) => Self::Online,
-			Some(StatusKind::Idle) => Self::Idle,
-			Some(StatusKind::Dnd) => Self::Dnd,
+		state
+			.presence(user_id)
+			.map_or(Self::Offline, |presence| Self::from_kind(&presence.status))
+	}
+
+	pub fn from_kind(kind: &StatusKind) -> Self {
+		match kind {
+			StatusKind::Online => Self::Online,
+			StatusKind::Idle => Self::Idle,
+			StatusKind::Dnd => Self::Dnd,
 			_ => Self::Offline,
 		}
 	}

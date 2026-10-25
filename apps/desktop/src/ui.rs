@@ -1,6 +1,7 @@
 mod composer;
 mod home;
 mod message_actions;
+mod members;
 mod sign_in;
 
 use std::cell::{Cell, RefCell};
@@ -29,6 +30,7 @@ use crate::capture::{self, Capture, Opening};
 use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
+use crate::member_list::{self, MemberListView};
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
 use crate::theme::Catalog;
@@ -133,6 +135,7 @@ pub fn run(
 			}
 			let pictures = link.clone();
 			cx.tasks.spawn(async move { pictures.show_images().await });
+			cx.tasks.spawn(link.clone().flush_members());
 			cx.tasks.spawn(link.clone().attach_frame());
 			if let Err(error) = host.reload() {
 				tracing::warn!(%error, "the interface script did not load");
@@ -250,6 +253,8 @@ pub(crate) struct Link {
 	sidebar_avatars: RefCell<Vec<String>>,
 	dms: DmSidebarView,
 	dm_avatars: RefCell<Vec<String>>,
+	members: MemberListView,
+	member_avatars: RefCell<Vec<String>>,
 	reported_slot: Cell<Slot>,
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
@@ -311,6 +316,8 @@ impl Link {
 			sidebar_avatars: RefCell::new(Vec::new()),
 			dms: DmSidebarView::new(host),
 			dm_avatars: RefCell::new(Vec::new()),
+			members: MemberListView::new(host),
+			member_avatars: RefCell::new(Vec::new()),
 			reported_slot: Cell::new(Slot::default()),
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
@@ -337,6 +344,7 @@ impl Link {
 		dm_sidebar::install_actions(host, &link);
 		Link::install_composer(host, &link);
 		Link::install_message_actions(&link);
+		member_list::install_actions(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -500,6 +508,10 @@ impl Link {
 		&self.sidebar
 	}
 
+	pub(crate) fn members(&self) -> &MemberListView {
+		&self.members
+	}
+
 	pub(crate) fn take_alerts(&self) -> Vec<Alert> {
 		self.flow
 			.borrow()
@@ -549,6 +561,9 @@ impl Link {
 					.await
 			}
 			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
+			capture::Screen::MemberList | capture::Screen::MemberListScrolled => {
+				self.until_members(&capture).await
+			}
 			capture::Screen::DmSidebar | capture::Screen::DmGroup => {
 				self.drive_home(capture.screen);
 				self.until_settled(&capture, true).await;
@@ -661,6 +676,7 @@ impl Link {
 			.iter()
 			.chain(self.sidebar_avatars.borrow().iter())
 			.chain(self.dm_avatars.borrow().iter())
+			.chain(self.member_avatars.borrow().iter())
 			.all(|name| shown.contains(name))
 	}
 
@@ -669,6 +685,7 @@ impl Link {
 		let state = state.read();
 		let refresh = self.sidebar.apply(&state, changes);
 		let dms = self.dms.apply(&state, changes);
+		self.members.apply(&state, changes);
 		let moved = refresh.selected && self.open_guild() != self.sidebar.sidebar().selected();
 		let messages = if moved {
 			self.timeline.borrow_mut().close()
@@ -828,6 +845,7 @@ impl Link {
 		let open = timeline.open();
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
+		self.show_members(open);
 		if self.sidebar.set_open(open.map(|open| open.channel_id)) {
 			self.publish_selection(state);
 		}
@@ -864,6 +882,7 @@ impl Link {
 		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());
 		names.extend(self.dm_avatars.borrow().iter().cloned());
+		names.extend(self.member_avatars.borrow().iter().cloned());
 		names.extend(
 			self.timeline_view
 				.visible_images()
@@ -884,7 +903,7 @@ impl Link {
 	}
 }
 
-fn field<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+pub(crate) fn field<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
 	match value {
 		Value::Map(fields) => fields
 			.iter()
@@ -894,7 +913,7 @@ fn field<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
 	}
 }
 
-fn number(value: &Value, key: &str) -> Option<f32> {
+pub(crate) fn number(value: &Value, key: &str) -> Option<f32> {
 	match field(value, key)? {
 		Value::Num(number) if number.is_finite() => Some(*number as f32),
 		_ => None,

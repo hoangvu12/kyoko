@@ -31,6 +31,8 @@ pub enum Screen {
 	DmGroup,
 	MessageHover,
 	MessageMenu,
+	MemberList,
+	MemberListScrolled,
 }
 
 impl Screen {
@@ -48,6 +50,8 @@ impl Screen {
 			"dm-group" => Some(Screen::DmGroup),
 			"message-hover" => Some(Screen::MessageHover),
 			"message-context-menu" => Some(Screen::MessageMenu),
+			"member-list" => Some(Screen::MemberList),
+			"member-list-scrolled" => Some(Screen::MemberListScrolled),
 			other => mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase),
 		}
 	}
@@ -64,7 +68,9 @@ impl Screen {
 			| Screen::Composer
 			| Screen::ComposerReply
 			| Screen::MessageHover
-			| Screen::MessageMenu => Some(Opening::First),
+			| Screen::MessageMenu
+			| Screen::MemberList
+			| Screen::MemberListScrolled => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

@@ -73,6 +73,14 @@ export type ComposerReply = { active: boolean, name: string?, ping: boolean?, ow
 export type ComposerFile = { id: string, name: string, size: string, image: string }
 export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
+export type MemberWindow = {
+	first: number,
+	rows: { any },
+}
+export type MemberJump = {
+	serial: number,
+	offset: number,
+}
 
 local M = {}
 
@@ -144,6 +152,12 @@ M.composer = {
 M.user = {
 	avatar = ui.shared("user.avatar", ""),
 	avatar_ready = ui.shared("user.avatar_ready", false),
+}
+
+M.members = {
+	heights = ui.shared("members.heights", {} :: { number }),
+	window = ui.shared("members.window", { first = 0, rows = {} } :: MemberWindow),
+	jump = ui.shared("members.jump", { serial = 0, offset = 0 } :: MemberJump),
 }
 
 M.window = {

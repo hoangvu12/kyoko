@@ -190,10 +190,10 @@ index 3decd26..3bf6214 100644
  pub mod pages;
 diff --git a/crates/ui/src/shell/capture.rs b/crates/ui/src/shell/capture.rs
 new file mode 100644
-index 0000000..3bae769
+index 0000000..ca31dfa
 --- /dev/null
 +++ b/crates/ui/src/shell/capture.rs
-@@ -0,0 +1,599 @@
+@@ -0,0 +1,636 @@
 +use std::path::PathBuf;
 +use std::sync::Arc;
 +use std::time::{Duration, Instant};
@@ -201,7 +201,8 @@ index 0000000..3bae769
 +use anyhow::{Context as _, anyhow, bail};
 +use gpui::{
 +	Anchor, AsyncWindowContext, Context, Entity, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
-+	MouseUpEvent, PlatformInput, Pixels, Point, WeakEntity, Window, point, px,
++	MouseUpEvent, PlatformInput, Pixels, Point, ScrollDelta, ScrollWheelEvent, TouchPhase, WeakEntity, Window,
++	point, px,
 +};
 +use gpui_component::WindowExt as _;
 +use gpui_component::notification::Notification;
@@ -231,6 +232,8 @@ index 0000000..3bae769
 +const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
 +const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 +const LAST_MESSAGE: (f32, f32) = (640., 690.);
++const MEMBER_LIST: (f32, f32) = (1160., 450.);
++const FAR_SCROLL: f32 = 100_000.;
 +
 +pub struct Capture {
 +	pub screen: String,
@@ -345,6 +348,18 @@ index 0000000..3bae769
 +			shell.timeline.update(cx, |timeline, cx| timeline.jump_to(message, cx));
 +			Ok(())
 +		})?,
++		"member-list-scrolled" => {
++			until(cx, "the member list", |cx| {
++				shell.read_with(cx, |shell, cx| {
++					let guild = shell.guild?;
++					let rows = shell.data.read(cx).state().member_rows(guild).len();
++					(rows > 0).then_some(())
++				})
++			})
++			.await?;
++			cx.background_executor().timer(SETTLE).await;
++			scroll(cx, at(MEMBER_LIST), FAR_SCROLL)?;
++		}
 +		"message-hover" => hover(cx, at(LAST_MESSAGE))?,
 +		"message-context-menu" => {
 +			hover(cx, at(LAST_MESSAGE))?;
@@ -600,6 +615,28 @@ index 0000000..3bae769
 +				position,
 +				pressed_button: None,
 +				modifiers: Modifiers::default(),
++			}),
++			cx,
++		);
++	})
++}
++
++fn scroll(cx: &mut AsyncWindowContext, position: Point<Pixels>, distance: f32) -> anyhow::Result<()> {
++	cx.update(|window, cx| {
++		window.dispatch_event(
++			PlatformInput::MouseMove(MouseMoveEvent {
++				position,
++				pressed_button: None,
++				modifiers: Modifiers::default(),
++			}),
++			cx,
++		);
++		window.dispatch_event(
++			PlatformInput::ScrollWheel(ScrollWheelEvent {
++				position,
++				delta: ScrollDelta::Pixels(point(px(0.), px(-distance))),
++				modifiers: Modifiers::default(),
++				touch_phase: TouchPhase::Moved,
 +			}),
 +			cx,
 +		);
