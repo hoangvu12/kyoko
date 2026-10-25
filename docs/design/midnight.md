@@ -69,7 +69,7 @@ Left column, top to bottom: the server rail panel and the channel sidebar panel 
 
 ### Server rail
 
-- Width: avatar size + 12 padding on each side + 2 border, so 74 at Discord's 48-point server icons (Discord's 2025 layout offers 40; the reference uses 48).
+- Width: avatar size + 12 padding on each side + 2 border, so 66 at the reference's 40-point server icons. Every server icon is a rounded square; an open folder is a taller rounded container in a lighter wash holding the folder icon and its servers, a closed folder a 2x2 tile of mini icons. The home button has its own tile with a divider under it.
 - 12 points of padding above and below the list inside the panel.
 - The selected/unread marker at the left edge is 4 points wide with 4-point rounded ends, centred in the 12-point padding.
 - Home button: Midnight replaces the Discord logo with a custom SVG (the flavour's pixel-art mark; Midnight's base uses a crescent moon) masked to 65% of the button in `--text-4`, white when hovered or selected, rotating -360 degrees and scaling to 0.8 over 0.4 s on hover. Kyoko should use its own mark here the same way.
@@ -88,7 +88,7 @@ Left column, top to bottom: the server rail panel and the channel sidebar panel 
 
 ### Channel header
 
-- Its own panel above the chat, 12-point gap below it. Height: avatar size + 8 + 2 border, so 58 at 48.
+- Its own panel above the chat and member list, 12-point gap below it. Height: avatar size + 8 + 2 border, so 50 at 40. In titlebar mode Midnight hides the help button, so the right end is the search field, inbox, then the window controls.
 - Left: channel icon, name in `--text-2`, a dot, the topic in `--text-4`. Right: threads, notifications, pins, member list, the search field (`--bg-3`, rounded, placeholder `--text-5`), then inbox and help, each a 32-point button with a 20-point icon, `--text-4`, `--text-3` hovered.
 
 ### Chat panel
@@ -102,7 +102,7 @@ Left column, top to bottom: the server rail panel and the channel sidebar panel 
 - Code blocks, images and thread links: `--radius-md`. Code block background `--bg-3`.
 - Reactions and the add-reaction button: 2-point borders.
 - Text selection: `--accent-3` background, `--text-0` text.
-- Composer: `--radius-md`, height 47 (`--chatbar-height`, to line up with the user panel), background `--active`, placeholder `--text-5`; icons `--text-4`. The send button's active icon is `--accent-2`. Midnight's `--custom-chatbar: separated` (composer in its own panel under the timeline) is off in this flavour.
+- Composer: `--radius-md`, height 47 (`--chatbar-height`, to line up with the user panel), background `--bg-3` with a 1-point `--hover` border (as the reference shows), placeholder `--text-5`; icons `--text-4`. The send button's active icon is `--accent-2`. Midnight's `--custom-chatbar: separated` (composer in its own panel under the timeline) is off in this flavour.
 - Typing line: names in `--text-3`.
 
 ### Member list
@@ -111,6 +111,14 @@ Left column, top to bottom: the server rail panel and the channel sidebar panel 
 - Group headers in `--text-4`: "the almighty — 2". Rows: 32-point avatar with status, name in the role colour, then the activity line. Hovered rows slide right 18 points over 0.2 s ease (DM rows too).
 - Nameplates (Discord's collectible row backgrounds) fill the row with `--radius-lg` corners.
 - Bot and app tags: `--accent-2` background, `--text-0` text.
+
+## Settings
+
+Discord's current settings are not a full screen: a rounded dialog over the dimmed app (52 points in from each edge at 1280 by 800, the window controls staying above the dim), with a close X at its top right. The sidebar holds a profile card (avatar, name, "Edit Profiles"), a search field, then icon groups with small headers (Account, Data & Privacy, Messaging Permissions, Notifications, Clips; Billing; Experience: Voice & Video, Appearance, Accessibility, System, Language & Time; Games & Apps; Developer; Log Out in red) and the build info at the bottom. The selected item is a `--bg-2` pill with its sub-sections listed under it, a thin line marking the current one. The page has the dialog title in its top bar and a centred column of about 696 points: large section headings, label and description on the left, the control on the right, thin dividers between sections and "Related Settings" link cards. Vencord's own groups sit between Account and Billing; kyoko's plugin and theme pages take that place. The full profile is a large dialog too: banner, avatar, names, tags, badges, Message button, Bio, Member Since, Connections, Note, and a Board / Activity / Wishlist tab set of widget cards.
+
+## Mockups
+
+`docs/design/mockups/` holds the target as plain HTML and CSS at 1280 by 800, one page per screen, every value a Midnight variable from one `:root` block: the main screen, settings (My Account, Notifications, Appearance, Plugins, Themes), the profile popout and full profile, the status menu, the message menu and hover bar, the emoji picker, Home with Friends and Active Now, the quick switcher, search results, server Roles, the delete dialog, and the login screen in its two states. They were drafted in Claude Design from this spec, the Midnight CSS, the reference screenshot and captures of the live client, then checked against them. Measured from the reference: server icons 40, channel sidebar 280, member list 264, rounded-square server icons. Icons, avatars, banners and nameplates are stand-ins; text is filler except on the login pages, which follow `docs/sign-in.md`. Open one in a browser at 1280 by 800 to compare with a kyoko capture.
 
 ## Other surfaces
 
