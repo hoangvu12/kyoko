@@ -5,6 +5,7 @@ mod images;
 mod inbox;
 mod rail;
 mod sidebar;
+mod sign_in;
 mod timeline;
 
 pub use alerts::{ToastText, toast_text};
@@ -20,6 +21,7 @@ pub use rail::{
 	rearranged_folder, reorder_command, reorder_folder_command,
 };
 pub use sidebar::{ChannelEntry, ChannelKind, GuildEntry, Refresh, Sidebar};
+pub use sign_in::{Checked, Failure, Flow, Gate, Remember, Screen, SignOut, StartSession, Status, Verified};
 pub use timeline::{
 	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, first_channel,
 };

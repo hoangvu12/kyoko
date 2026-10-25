@@ -10,6 +10,12 @@ rust-version.workspace = true
 name = "bridge"
 
 [dependencies]
+login.workspace = true
+rest.workspace = true
+store.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
 protocol.workspace = true
 state.workspace = true
 session.workspace = true
@@ -19,6 +25,3 @@ parking_lot.workspace = true
 
 [dev-dependencies]
 mockcord.workspace = true
-store.workspace = true
-tokio.workspace = true
-url.workspace = true

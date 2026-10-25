@@ -4,4 +4,5 @@ mod media;
 mod rail;
 mod reorder;
 mod sidebar;
+mod sign_in;
 mod timeline;

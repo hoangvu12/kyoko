@@ -3336,14 +3336,17 @@ name = "kyoko-bridge"
 version = "0.2.0-beta.1"
 dependencies = [
  "chrono",
+ "kyoko-login",
  "kyoko-media",
  "kyoko-protocol",
+ "kyoko-rest",
  "kyoko-session",
  "kyoko-state",
  "kyoko-store",
  "mockcord",
  "parking_lot",
  "tokio",
+ "tracing",
  "url",
 ]
 

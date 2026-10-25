@@ -10,6 +10,8 @@ pub enum LoginError {
 	InvalidToken,
 	#[error("network error: {0}")]
 	Network(String),
+	#[error("discord refused the request for now")]
+	Refused,
 	#[error("unexpected response: {0}")]
 	Protocol(String),
 	#[error("login cancelled")]
@@ -29,9 +31,9 @@ impl From<rest::RestError> for LoginError {
 		match error {
 			rest::RestError::Unauthorized => Self::InvalidToken,
 			rest::RestError::Network(reason) => Self::Network(reason),
-			rest::RestError::RateLimited { retry_after } => {
-				Self::Network(format!("rate limited, retry in {retry_after:?}"))
-			}
+			rest::RestError::RateLimited { .. }
+			| rest::RestError::Captcha { .. }
+			| rest::RestError::Suspended { .. } => Self::Refused,
 			other => Self::Protocol(other.to_string()),
 		}
 	}
