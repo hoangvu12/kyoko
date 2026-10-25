@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A before-typing hook can veto the typing signal
 - [ ] A composer button slot exists and hosts the toggle
