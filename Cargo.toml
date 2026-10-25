@@ -23,9 +23,9 @@ login = { path = "crates/login", package = "kyoko-login" }
 mockcord = { path = "tools/mockcord" }
 bridge = { path = "crates/bridge", package = "kyoko-bridge" }
 
-zgui = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-zgui-desktop = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-zgui-script = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+zgx-script = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
@@ -93,15 +93,15 @@ aes-gcm = { version = "0.11", features = ["hazmat"] }
 chacha20poly1305 = "0.11"
 
 [patch.crates-io]
-wgpu-hal = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-cosmic-text = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-taffy = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-accesskit_macos = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-accesskit_atspi_common = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-accesskit_unix = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-accesskit_windows = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-winit = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
-mlua = { git = "https://github.com/zeronsh/zgui", rev = "a9dc28246170b4099a414191ca6fc172586b0f9c" }
+wgpu-hal = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+cosmic-text = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+taffy = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+accesskit_macos = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+accesskit_atspi_common = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+accesskit_unix = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+accesskit_windows = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+winit = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+mlua = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 
 [profile.release]
 opt-level = 3

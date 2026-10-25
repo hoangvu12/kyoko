@@ -1,6 +1,6 @@
 # 02 — Strip GPUI UI, voice, WASM plugins and updater
 
-**What to build:** The workspace holds only what kyoko keeps. The session runs on its own: no voice, no WebAssembly plugin host, no updater, and no way for a plugin failure to stop startup. This clears the way for zgui, whose crate patches would conflict with GPUI.
+**What to build:** The workspace holds only what kyoko keeps. The session runs on its own: no voice, no WebAssembly plugin host, no updater, and no way for a plugin failure to stop startup. This clears the way for zgx, whose crate patches would conflict with GPUI.
 
 **Blocked by:** 01 (Rebrand fork to kyoko)
 

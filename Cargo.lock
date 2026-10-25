@@ -30,7 +30,7 @@ dependencies = [
 [[package]]
 name = "accesskit_atspi_common"
 version = "0.19.1"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -67,7 +67,7 @@ dependencies = [
 [[package]]
 name = "accesskit_macos"
 version = "0.26.3"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -80,7 +80,7 @@ dependencies = [
 [[package]]
 name = "accesskit_unix"
 version = "0.22.1"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "accesskit",
  "accesskit_atspi_common",
@@ -97,7 +97,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.34.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -1316,7 +1316,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.19.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "bitflags 2.13.2",
  "fontdb",
@@ -3319,9 +3319,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "zgui",
- "zgui-desktop",
- "zgui-script",
+ "zgx",
+ "zgx-desktop",
+ "zgx-script",
 ]
 
 [[package]]
@@ -3776,7 +3776,7 @@ dependencies = [
 [[package]]
 name = "mlua"
 version = "0.12.2"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "bstr",
  "either",
@@ -6426,7 +6426,7 @@ dependencies = [
 [[package]]
 name = "taffy"
 version = "0.9.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "arrayvec",
  "grid",
@@ -7669,7 +7669,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "29.0.4"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -8157,7 +8157,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "ahash",
  "android-activity",
@@ -8649,9 +8649,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "zgui"
+name = "zgx"
 version = "0.1.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "objc2-core-foundation",
  "objc2-core-video",
@@ -8663,17 +8663,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "zgui-components"
+name = "zgx-components"
 version = "0.1.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
- "zgui",
+ "zgx",
 ]
 
 [[package]]
-name = "zgui-desktop"
+name = "zgx-desktop"
 version = "0.1.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -8709,14 +8709,14 @@ dependencies = [
  "winit",
  "x11-dl",
  "x11rb",
- "zgui",
- "zgui-gpu",
+ "zgx",
+ "zgx-gpu",
 ]
 
 [[package]]
-name = "zgui-gpu"
+name = "zgx-gpu"
 version = "0.1.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -8739,23 +8739,24 @@ dependencies = [
  "wgpu",
  "windows",
  "winit",
- "zgui",
+ "zgx",
 ]
 
 [[package]]
-name = "zgui-script"
+name = "zgx-script"
 version = "0.1.0"
-source = "git+https://github.com/zeronsh/zgui?rev=a9dc28246170b4099a414191ca6fc172586b0f9c#a9dc28246170b4099a414191ca6fc172586b0f9c"
+source = "git+https://github.com/zeronsh/zgx?rev=fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6#fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6"
 dependencies = [
  "libc",
+ "memchr",
  "mlua",
  "pulldown-cmark",
  "serde_json",
  "smallvec",
  "windows",
- "zgui",
- "zgui-components",
- "zgui-gpu",
+ "zgx",
+ "zgx-components",
+ "zgx-gpu",
 ]
 
 [[package]]

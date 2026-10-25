@@ -1,4 +1,4 @@
-# 03 — Spike A: zgui window with a live server/channel list
+# 03 — Spike A: zgx window with a live server/channel list
 
 **What to build:** A kyoko window opens on Windows. Its server and channel list is drawn in Luau and updates live from the session through the event bridge. It works against both mockcord and real Discord.
 
@@ -6,9 +6,9 @@
 
 **Status:** claimed
 
-- [x] zgui is pinned to a recorded commit, and the workspace carries zgui's required crate patches
-- [x] The desktop app opens a zgui window on Windows and hot-reloads its Luau scripts in development
-- [x] Session events cross to the UI thread through an unbounded inbox drained by a UI-thread task, not zgui's latest-value channel
+- [x] zgx is pinned to a recorded commit, and the workspace carries zgx's required crate patches
+- [x] The desktop app opens a zgx window on Windows and hot-reloads its Luau scripts in development
+- [x] Session events cross to the UI thread through an unbounded inbox drained by a UI-thread task, not zgx's latest-value channel
 - [x] A Luau list shows the servers and the selected server's channels, and updates live as mockcord's state changes
 - [ ] With a token from KYOKO_TOKEN, the same list shows the throwaway account's real servers
 

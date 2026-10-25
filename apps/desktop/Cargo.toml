@@ -24,9 +24,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-zgui.workspace = true
-zgui-desktop.workspace = true
-zgui-script.workspace = true
+zgx.workspace = true
+zgx-desktop.workspace = true
+zgx-script.workspace = true
 
 [build-dependencies]
 embed-resource.workspace = true

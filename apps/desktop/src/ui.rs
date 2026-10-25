@@ -8,9 +8,9 @@ use bridge::{ChannelEntry, GuildEntry, Inbox, Sidebar};
 use protocol::Snowflake;
 use session::{Command, Session};
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
-use zgui::reactive::Runtime;
-use zgui_desktop::{Application, WindowOptions};
-use zgui_script::{ScriptHost, Shared, Value};
+use zgx::reactive::Runtime;
+use zgx_desktop::{Application, WindowOptions};
+use zgx_script::{ScriptHost, Shared, Value};
 
 const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);

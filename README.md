@@ -26,7 +26,7 @@
 
 ## What it is
 
-- A native window drawn with zgui, with the interface written in Luau scripts on top of a Rust core.
+- A native window drawn with zgx, with the interface written in Luau scripts on top of a Rust core.
 - Luau plugins with a declared, default-deny permission model.
 - No telemetry, no analytics, no crash upload, no remote logging.
 - Session token kept in the operating system credential store. The local message cache is encrypted with a key held in the same store.
@@ -40,7 +40,7 @@ Kyoko is a fork of [oxidcord](https://github.com/Master0fFate/oxidcord) by Maste
 
 What kyoko changes:
 
-- **UI.** oxidcord's GPUI interface is replaced by a zgui window whose interface is written in Luau, with a Rust timeline view for the message list.
+- **UI.** oxidcord's GPUI interface is replaced by a zgx window whose interface is written in Luau, with a Rust timeline view for the message list.
 - **Core.** The inherited core gets a correctness and safety pass: request pacing and backoff, safer defaults, and behaviour tests at the session seam against the in-process mock server.
 - **Plugins.** The WebAssembly plugin host is replaced by Luau plugins running in a sandbox with declared permissions.
 - **Platforms.** v1 targets Windows only. Voice, the self-updater and the macOS and Linux packages are dropped.
@@ -91,7 +91,7 @@ cd kyoko
 cargo run --locked --release -p kyoko -- --mock
 ```
 
-The desktop UI is being rebuilt on zgui. For now the window shows the server list and the selected server's channels. `kyoko --mock` runs it against the mock server; `kyoko` without `--mock` signs in with the token in the `KYOKO_TOKEN` environment variable and keeps it in memory only. Without `--data-dir`, settings and cache go to a scratch folder that is deleted on exit. Debug builds reload the Luau interface in `apps/desktop/ui/` as you save it. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
+The desktop UI is being rebuilt on zgx. For now the window shows the server list and the selected server's channels. `kyoko --mock` runs it against the mock server; `kyoko` without `--mock` signs in with the token in the `KYOKO_TOKEN` environment variable and keeps it in memory only. Without `--data-dir`, settings and cache go to a scratch folder that is deleted on exit. Debug builds reload the Luau interface in `apps/desktop/ui/` as you save it. Read `docs/architecture.md` for the crate layout and `CONTRIBUTING.md` before sending changes.
 
 ## Disclaimer
 

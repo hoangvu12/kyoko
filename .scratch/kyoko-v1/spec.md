@@ -1,4 +1,4 @@
-# kyoko v1: a lightweight native Discord client on zgui, forked from oxidcord
+# kyoko v1: a lightweight native Discord client on zgx, forked from oxidcord
 
 Status: ready-for-agent
 
@@ -40,7 +40,7 @@ What I want:
 
 It replaces their session layer with a smaller one, adds a real account-safety layer, and fixes their protocol and fingerprint gaps.
 
-**UI.** The UI is rebuilt on zgui, a GPU-rendered Rust UI framework whose views are written in Luau scripts:
+**UI.** The UI is rebuilt on zgx, a GPU-rendered Rust UI framework whose views are written in Luau scripts:
 
 - It is a 1:1 port of oxidcord's current UI.
 - Every screen is verified by comparing screenshots of both apps running against the same mock Discord server.
@@ -71,12 +71,12 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 6. As the maintainer, I want the origin and licence of oxidcord's bundled emoji table established and attributed, so that kyoko ships no unattributed third-party data.
 7. As the maintainer, I want the oxidcord repository kept as an upstream remote, so that I can review and hand-port useful upstream fixes later.
 8. As a contributor, I want the contributor rules to say that behaviour tests at the session boundary are required, so that the "no unit tests" rule inherited from oxidcord no longer applies.
-9. As a contributor, I want the research notes on zgui, the Discord protocol, the oxidcord review and the Vencord triage to live in the repo, so that I can understand every decision without the original conversation.
+9. As a contributor, I want the research notes on zgx, the Discord protocol, the oxidcord review and the Vencord triage to live in the repo, so that I can understand every decision without the original conversation.
 
 ### Spike (first milestone)
 
 10. As the maintainer, I want a short Windows spike that proves the risky parts end to end before the main work starts:
-    - zgui builds with its required patches
+    - zgx builds with its required patches
     - the forked core logs in to real Discord with a throwaway token from an environment variable
     - a Luau server/channel list updates live through the event bridge
     - new messages appear live
@@ -278,13 +278,13 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 
 - **Keep and fix:** `protocol`, `gateway`, `rest`, `state`, `store`, `login`, `media`, `platform`.
   - `markdown` stays as-is.
-  - `platform` drops its single-instance module in favour of zgui's.
-  - `login` keeps token and QR; web login is rebuilt on zgui's webview.
+  - `platform` drops its single-instance module in favour of zgx's.
+  - `login` keeps token and QR; web login is rebuilt on zgx's webview.
 - **Replace:** `session` with a new, smaller session crate. oxidcord's is a reference only, because it hard-wires voice and the WebAssembly plugin host and crashes at startup if the plugin runtime fails.
 - **Drop:** `ui` (GPUI), `voice`, `plugin-host` (WebAssembly), `plugin-sdk`, `updater`, plus the WebAssembly first-party plugins and the plugin pack files. Their behaviour is reimplemented where needed in the Luau plugin system.
 - **Keep and extend:** `mockcord` and `xtask`, which remain the development and test tools.
 - **New:**
-  - the zgui desktop app (Rust host)
+  - the zgx desktop app (Rust host)
   - the Luau UI scripts
   - a Rust timeline view
   - the plugin runtime (Luau)
@@ -364,9 +364,9 @@ It replaces their session layer with a smaller one, adds a real account-safety l
   - **Snapshot reads** of state by area and revision.
 - Voice and plugins are not dependencies of the session. Plugin hooks attach through an optional hook interface, and a plugin failure never stops the session.
 - **Bridge from session to UI thread:**
-  - Events cross on an unbounded inbox (queue plus waker) drained by a UI-thread task. zgui's latest-value channel is not used for events, because it drops intermediate values.
-  - The UI thread reads the changed state areas and publishes small projections as zgui shared values: the visible guild/channel tree, the open channel's message window, the visible member ranges. The whole store is never published.
-- UI actions from Luau go to Rust through zgui host actions and are forwarded to the session as commands.
+  - Events cross on an unbounded inbox (queue plus waker) drained by a UI-thread task. zgx's latest-value channel is not used for events, because it drops intermediate values.
+  - The UI thread reads the changed state areas and publishes small projections as zgx shared values: the visible guild/channel tree, the open channel's message window, the visible member ranges. The whole store is never published.
+- UI actions from Luau go to Rust through zgx host actions and are forwarded to the session as commands.
 
 ### Media
 
@@ -375,15 +375,15 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 - **Cache:** byte-budgeted LRU.
 - **Requests:** CDN and media-proxy URLs sized to device pixels.
 - **Expired signed attachment URLs** are refreshed by re-fetching the message, never by retrying the stale URL.
-- Decoded images reach the UI as host-supplied images, not through zgui's built-in remote image loader, which never evicts and spawns a thread per decode.
+- Decoded images reach the UI as host-supplied images, not through zgx's built-in remote image loader, which never evicts and spawns a thread per decode.
 - **Animation:**
   - It pauses offscreen.
   - It honours the animation setting and reduced motion.
 - An "original resolution" quality option replaces FixImagesQuality.
 
-### UI on zgui
+### UI on zgx
 
-- **zgui is pinned** to a specific commit (starting from `a9dc282` or the latest commit validated by the spike). The workspace copies zgui's required crate patches (winit, mlua, cosmic-text, taffy, wgpu-hal, four AccessKit adapters). Upgrades are deliberate.
+- **zgx is pinned** to `fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6` (zgx is zgx renamed; the spike started on zgx `a9dc282`). The workspace copies zgx's required crate patches (winit, mlua, cosmic-text, taffy, wgpu-hal, four AccessKit adapters). Upgrades are deliberate.
 - **The UI is a 1:1 port** of oxidcord's UI at release 0.2.0-beta.1:
   - layout, spacing, colours, icons, components, interactions and animations, screen by screen
   - the server rail and folders
@@ -403,11 +403,11 @@ It replaces their session layer with a smaller one, adds a real account-safety l
   - account and settings pages
   - login screens
   - toasts and transitions
-- **Theme:** oxidcord's theme tokens (colours, UI font, code font) become zgui theme data. The theme catalog and its themes carry over.
+- **Theme:** oxidcord's theme tokens (colours, UI font, code font) become zgx theme data. The theme catalog and its themes carry over.
 - **Reused as logic:** emoji data and lookup, formatting helpers, and the Fluent translations (nine languages).
-- **The timeline is a Rust view placed beside the Luau UI**, because zgui can't embed a Rust view inside a Luau tree. It is built on zgui's measured-row virtual list:
+- **The timeline is a Rust view placed beside the Luau UI**, because zgx can't embed a Rust view inside a Luau tree. It is built on zgx's measured-row virtual list:
   - It follows the end of the conversation while the user is at the bottom.
-  - It keeps the first visible row anchored when older history is prepended. zgui lacks this, so kyoko adds it.
+  - It keeps the first visible row anchored when older history is prepended. zgx lacks this, so kyoko adds it.
   - It is styled to match oxidcord exactly.
 - **Text rendering** will differ very slightly from GPUI's DirectWrite output. All other visuals must match.
 - **Rebuilt rather than ported:** voice UI waits for voice; the updater screen waits for kyoko's own updater; the plugin settings screens are rebuilt for the Luau plugin system in oxidcord's visual style.
@@ -415,21 +415,21 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 
 ### Platform integration
 
-- From `platform`, integrated on zgui's UI thread inside its event loop:
+- From `platform`, integrated on zgx's UI thread inside its event loop:
   - **tray**
   - **global hotkeys**
   - **OS notifications**, with an app user model id on Windows
   - **image clipboard**
   - **autostart**
-- zgui provides single instance and deep links.
-- **Windows is the only v1 platform.** Development, CI, packaging and validation target Windows (x86_64, MSVC). Linux and macOS code paths inherited from oxidcord may be removed or left uncompiled. No effort goes into keeping them working. In particular, the zgui web login is WebView2-only, and zgui has no Linux webview.
+- zgx provides single instance and deep links.
+- **Windows is the only v1 platform.** Development, CI, packaging and validation target Windows (x86_64, MSVC). Linux and macOS code paths inherited from oxidcord may be removed or left uncompiled. No effort goes into keeping them working. In particular, the zgx web login is WebView2-only, and zgx has no Linux webview.
 - Packaging is Windows only: oxidcord's per-user installer and portable zip, with kyoko's identity. Oxidcord's macOS and Linux packaging and release jobs are dropped.
 
 ### Login
 
 - **Token:** validated before saving.
 - **QR:** the remote-auth gateway with its RSA handshake. Oxidcord's implementation is kept.
-- **Web login** in a zgui WebView2 window:
+- **Web login** in a zgx WebView2 window:
   - an ephemeral profile
   - the same reduced Chrome user agent as the client, to avoid a device mismatch
   - the token read from Discord's page storage by a document-start script restricted to discord.com
@@ -443,7 +443,7 @@ It replaces their session layer with a smaller one, adds a real account-safety l
 
 - **One contract, owned by the core and versioned.** Each plugin is Luau and has two halves:
   - **Logic half:** data hooks run in a sandboxed Luau VM on a worker thread, with call deadlines, so per-message hooks never block the UI thread.
-  - **UI half:** a zgui plugin that contributes to named UI slots. It reaches Discord data only through capabilities the app exposes by name.
+  - **UI half:** a zgx plugin that contributes to named UI slots. It reaches Discord data only through capabilities the app exposes by name.
 - **Plugin manifest** declares:
   - permissions (network hosts, storage, UI slots, Discord read scopes, action scopes)
   - settings schema
@@ -475,7 +475,7 @@ It replaces their session layer with a smaller one, adds a real account-safety l
   - NoOnboardingDelay (no artificial delay in onboarding)
   - FullSearchContext (search results share the timeline's context menu)
 - **Themes:**
-  - zgui theme data with kyoko's token set
+  - zgx theme data with kyoko's token set
   - an importer that takes only colour variables from Vencord/BetterDiscord CSS
   - The theme catalog keeps oxidcord's signed-catalog model with kyoko's own key.
 
@@ -547,7 +547,7 @@ The parity captures run on demand.
 - **Updating and oxidcord's plugin stack:** kyoko's own auto-updater (oxidcord's updater is dropped), oxidcord's WebAssembly plugin host, SDK and plugins, and a TypeScript or JavaScript plugin authoring path.
 - **Real Vencord:** running Vencord, Vencord plugin code or Vencord CSS themes. Only colour variables are imported from themes.
 - **Plugins we never ship:** any that fake client features (FakeNitro, SpotifyCrack, Experiments-style unlocks), automate actions or presence in the background, or bypass permissions beyond display-only.
-- **Web-only plugins:** CrashHandler, F8Break, NoDevtoolsWarning, ReactErrorDecoder and YoutubeAdblock. These are web-client specific; kyoko relies on native panic handling and zgui's script error reporting instead.
+- **Web-only plugins:** CrashHandler, F8Break, NoDevtoolsWarning, ReactErrorDecoder and YoutubeAdblock. These are web-client specific; kyoko relies on native panic handling and zgx's script error reporting instead.
 - **Things kyoko won't do:** solving or bypassing captchas, and any self-bot or automation feature.
 - **Platforms and distribution:** Linux and macOS builds, packaging and CI (deferred); mobile clients; app-store distribution.
 
@@ -555,9 +555,9 @@ The parity captures run on demand.
 
 - **Account risk.** Using a third-party client with a user account can violate Discord's Terms of Service. Discord's support policy explicitly forbids automating user accounts. The safety layer reduces risk but can't remove it. The login-screen notice and the README disclaimer stay.
 - **Clean-room rules.** concord (GPL-3.0) and Vencord (GPL-3.0-or-later) are behavioural references only: protocol facts and feature ideas, never code or close paraphrase. oxidcord's own code is MIT/Apache and may be reused with attribution.
-- **zgui maturity.** zgui is at 0.1 and changes quickly, and Windows is its least automatically tested platform. The spike exists to surface problems early. Upgrades are planned events.
+- **zgx maturity.** zgx is at 0.1 and changes quickly, and Windows is its least automatically tested platform. The spike exists to surface problems early. Upgrades are planned events.
 - **Capability bits.** The exact set to advertise, and whether the current web client still sends what concord uses (253), should be confirmed against real traffic during the spike.
 - **Fingerprint drift.** Chrome version and build-number discovery can change without notice. The fingerprint module is the one place to update.
 - **Web login fragility.** Web login depends on how Discord's page stores the token. If that changes, token and QR login remain.
-- **Other platforms.** Linux and macOS are deferred, not abandoned. The core crates stay platform-neutral where that costs nothing, so a later port mostly concerns the zgui host, login webview, platform integrations and packaging.
-- **Background research.** Citations for every protocol and framework fact are in the research notes kept in the repository: the zgui and Discord core research, the oxidcord review and the Vencord triage.
+- **Other platforms.** Linux and macOS are deferred, not abandoned. The core crates stay platform-neutral where that costs nothing, so a later port mostly concerns the zgx host, login webview, platform integrations and packaging.
+- **Background research.** Citations for every protocol and framework fact are in the research notes kept in the repository: the zgx and Discord core research, the oxidcord review and the Vencord triage.

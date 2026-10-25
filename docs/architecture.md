@@ -3,7 +3,7 @@
 Kyoko is a Cargo workspace. Data flows one way: gateway event, state reducer, revision bump, UI re-render of the views whose revision changed. The UI never performs network calls; it sends `Command` values to the session, which owns the REST client and the gateway task.
 
 ```
-apps/desktop        binary `kyoko`: the zgui host, its Luau interface in `apps/desktop/ui/`, mockcord with `--mock`
+apps/desktop        binary `kyoko`: the zgx host, its Luau interface in `apps/desktop/ui/`, mockcord with `--mock`
 crates/protocol     typed Discord REST and gateway models, lenient serde decoding
 crates/gateway      websocket session: identify, heartbeat, resume, zlib-stream, send window, backoff
 crates/rest         HTTP client: rate-limit buckets, 429 retry, Authorization redaction
@@ -19,7 +19,7 @@ tools/mockcord      mock Discord REST and gateway server driven by fixtures, wit
 tools/xtask         test, headless-run, theme catalog tooling, release notes
 ```
 
-Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session` and `state`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgui. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
+Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session` and `state`. `apps/desktop` depends on `bridge`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session` or `bridge` has a UI dependency.
 
 Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`.
 
@@ -36,15 +36,15 @@ Text hooks run on a blocking worker. Each call is wrapped in `catch_unwind`; an 
 
 ## Threads
 
-- The UI thread owns the zgui window, its Luau scripts and every zgui value. zgui values are `Rc` based and never leave it.
+- The UI thread owns the zgx window, its Luau scripts and every zgx value. zgx values are `Rc` based and never leave it.
 - A tokio runtime on background threads owns the gateway socket, REST client and sqlite writer.
-- Out of the session: its `notify` callback pushes each `Changes` into `bridge::Inbox`, an unbounded queue with a waker. A task on the UI thread drains it, merges the batch, read-locks `State` once, lets `bridge::Sidebar` work out what changed and publishes small projections as zgui shared values: `guilds`, `channels`, `selected_guild`, `guild_name` and `status`. zgui's latest-value channel is not used, because it drops intermediate values, and the whole store is never published.
+- Out of the session: its `notify` callback pushes each `Changes` into `bridge::Inbox`, an unbounded queue with a waker. A task on the UI thread drains it, merges the batch, read-locks `State` once, lets `bridge::Sidebar` work out what changed and publishes small projections as zgx shared values: `guilds`, `channels`, `selected_guild`, `guild_name` and `status`. zgx's latest-value channel is not used, because it drops intermediate values, and the whole store is never published.
 - Into the session: Luau calls host actions (`ui.action("select_guild", id)`), Rust turns them into `Command`s and sends them to the session.
 - No lock is held across a frame.
 
-## zgui
+## zgx
 
-zgui is a git dependency pinned to one commit in the workspace `Cargo.toml`, together with the nine crates it patches (`wgpu-hal`, `cosmic-text`, `taffy`, four AccessKit adapters, `winit`, `mlua`) at the same commit. A git dependency does not carry its `[patch]`, so these must move together. `luau0-src` is held at the version zgui locks: a newer Luau writes bytecode that mlua-sys 0.13 refuses to load. Upgrades are deliberate.
+zgx (formerly zgui) is a git dependency on `zeronsh/zgx`, pinned to one commit in the workspace `Cargo.toml`, together with the nine crates it patches (`wgpu-hal`, `cosmic-text`, `taffy`, four AccessKit adapters, `winit`, `mlua`) at the same commit. A git dependency does not carry its `[patch]`, so these must move together. `luau0-src` is held at the version zgx locks: a newer Luau writes bytecode that mlua-sys 0.13 refuses to load. Upgrades are deliberate.
 
 ## Decoding policy
 

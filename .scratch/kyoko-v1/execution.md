@@ -45,17 +45,17 @@ So the plan keeps the chain moving with one dedicated lane, and uses spare capac
    - Lanes don't share a target directory: cargo's lock would serialize them, and switching branches would make them rebuild each other's work.
 2. **One shared sccache for every lane.**
    - Add the kyoko checkout and each lane worktree to `basedirs` in `%APPDATA%\Mozilla\sccache\config\config`, then restart the server (`sccache --stop-server; sccache --start-server`).
-   - Dependency crates (zgui, wgpu, Luau, reqwest and others) then compile once for all lanes.
+   - Dependency crates (zgx, wgpu, Luau, reqwest and others) then compile once for all lanes.
 3. **Cap build parallelism per lane** with `CARGO_BUILD_JOBS=5`, so three lanes together use about the whole CPU without freezing the desktop. Drop to 2 lanes if RAM pressure appears: heavy linking, or free RAM below about 4 GB.
 4. **Core tickets build only the headless crates.**
-   - Tickets 05–17 build and test the core packages (`-p`), never the zgui app.
+   - Tickets 05–17 build and test the core packages (`-p`), never the zgx app.
    - Those builds skip wgpu and Luau entirely, so they are fast and light.
 5. **UI tickets iterate in Luau.**
    - Screens are Luau scripts that hot-reload without recompiling. Rust rebuilds only when a bridge projection or the timeline view changes.
    - Keep the app running against mockcord while a screen is built.
 6. **Tests are cheap by design.** Mockcord runs in-process with controlled time, so pacing and backoff tests finish in seconds.
 7. **Parity captures run on demand,** never in a loop. They render both apps once per screen.
-8. **Try faster linking in the spike.** Test `rust-lld` as the MSVC linker during 03/04. Keep it if the zgui app links reliably and faster.
+8. **Try faster linking in the spike.** Test `rust-lld` as the MSVC linker during 03/04. Keep it if the zgx app links reliably and faster.
 9. **Disk hygiene.**
    - The three lane target dirs are the main disk cost.
    - Run `cargo clean` on a lane only when switching it to a very different kind of work, or when C: drops below about 40 GB free.

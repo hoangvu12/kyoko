@@ -1,6 +1,6 @@
 # Kyoko contributor rules
 
-Kyoko is a lightweight native Discord client for Windows: a Rust core with a zgui window, a Luau interface and sandboxed Luau plugins. Read `docs/architecture.md` for the crate graph.
+Kyoko is a lightweight native Discord client for Windows: a Rust core with a zgx window, a Luau interface and sandboxed Luau plugins. Read `docs/architecture.md` for the crate graph.
 
 ## Hard rules
 
@@ -24,7 +24,7 @@ Subject under 60 characters, imperative, no period. Optional plain body. No emoj
 
 ## Research
 
-Background for kyoko (zgui + Luau UI on the forked core) lives in `docs/research/`. Start with `docs/research/README.md`.
+Background for kyoko (zgx + Luau UI on the forked core) lives in `docs/research/`. Start with `docs/research/README.md`.
 
 ## Agent skills
 

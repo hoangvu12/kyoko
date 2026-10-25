@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] oxidcord's theme tokens (colours, UI font, code font) are ported to zgui theme data
+- [ ] oxidcord's theme tokens (colours, UI font, code font) are ported to zgx theme data
 - [ ] oxidcord's icons are available to Luau
 - [ ] The title bar and top bar match oxidcord in the parity captures, apart from text-rendering differences
