@@ -11,9 +11,11 @@ mod member_list;
 mod message;
 mod profile;
 mod rail;
+mod search;
 mod settings;
 mod sidebar;
 mod sign_in;
+mod switcher;
 mod timeline;
 
 pub use actions::{
@@ -57,6 +59,10 @@ pub use rail::{
 	DEFAULT_FOLDER_COLOR, Drop, Rail, RailFolder, RailGuild, RailItem, acronym, new_folder_id, rearranged,
 	rearranged_folder, reorder_command, reorder_folder_command,
 };
+pub use search::{
+	HIT_SNIPPET, ParsedSearch, SearchChip, SearchFilter, SearchHit, SearchPanel, parse_search, result_count,
+	search_notice,
+};
 pub use settings::{
 	AccountCard, Applies, SettingKey, account_card, change_setting, mask_email, mask_phone, media_playback,
 	media_quality, setting_values,
@@ -66,6 +72,11 @@ pub use sidebar::{
 	SidebarSection, VoiceMember, VoiceVideo, channel_icon,
 };
 pub use sign_in::{Checked, Failure, Flow, Gate, Remember, Screen, SignOut, StartSession, Status, Verified};
+pub use switcher::{
+	Leading, MAX_RECENT, MAX_RESULTS, QuickSwitcher, RECENT_TARGETS, RecentTargets, Shown, SwitcherCategory,
+	SwitcherEntry, SwitcherTarget, fuzzy_score, switcher_entries,
+};
 pub use timeline::{
-	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, first_channel,
+	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, detached_entry,
+	first_channel,
 };

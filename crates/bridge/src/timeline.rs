@@ -399,6 +399,15 @@ fn entry(state: &State, guild_id: Option<Snowflake>, view: MessageView, body: Ar
 	}
 }
 
+pub fn detached_entry(state: &State, message: &Arc<Message>) -> MessageEntry {
+	let view = state.detached_view(message);
+	let guild_id = message
+		.guild_id
+		.or_else(|| state.channel_guild(message.channel_id));
+	let body = Arc::new(Body::parse(&view.message, view.rendered.as_deref()));
+	entry(state, guild_id, view, body)
+}
+
 pub fn busiest_channel(state: &State) -> Option<OpenChannel> {
 	state
 		.guild_summaries()

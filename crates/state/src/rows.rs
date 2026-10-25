@@ -378,6 +378,16 @@ impl State {
 		rows
 	}
 
+	pub fn detached_view(&self, message: &Arc<Message>) -> MessageView {
+		let guild = message
+			.guild_id
+			.or_else(|| self.channel_guild(message.channel_id))
+			.and_then(|guild_id| self.guilds.get(&guild_id));
+		let empty = ChannelMessages::default();
+		let cache = self.messages.get(&message.channel_id).unwrap_or(&empty);
+		self.message_view(guild, cache, message, false, None)
+	}
+
 	fn message_view(
 		&self,
 		guild: Option<&GuildState>,
