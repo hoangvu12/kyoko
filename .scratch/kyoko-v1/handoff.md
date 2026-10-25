@@ -1,6 +1,53 @@
 # kyoko v1 orchestrator handoff
 
-## Latest: moving to another machine (main `4c7338a` + this note)
+## Latest: third orchestrator hands off (main `85cd454` + this note)
+
+Written by the third orchestrator (roboco chat `6e78591a`, "Kyoko Orchestrator Handoff", on the new PC) when the user asked to hand off. Everything below this section still applies unless this section says otherwise.
+
+### State
+
+- Resolved on this machine: 60, 37, 30, 31, 45, 32, 33, 35, 61 (new, click regression), 36, 38. Resolved overall: 01–33, 35–38, 40, 45, 59, 60, 61.
+- In flight (completion notices go to `6e78591a`, not to you: send each running worker a short message so its next turn reports to you, or poll with `get_chat`/`read_chat`):
+
+| Ticket | Lane | Worker chat | State |
+|---|---|---|---|
+| 34 friends | A | `5aae230b` (finished) | Worker done. The orchestrator rebased `lane-a` onto `73b91a0` (union conflicts in `capture.rs`, `docs/ui.md`, `state.luau`) and re-ran checks: fmt, clippy, build, `test --workspace` passed; `xtask test`, `headless-run` and a friends capture were still running when this note was written (log `kyoko-lane-a/target/orch-verify.log`). Finish: re-run what's missing, `git rebase origin/main` in lane A (main only gained `.scratch` commits), `git merge --ff-only lane-a`, push, write 34's Answer (worker report in `5aae230b`). Its commit `969b81e` changes `tools/parity/oxidcord-ref.patch` (oxidcord's friends capture waits for the DM to settle): after merging, re-apply the patch in `oxidcord-ref` (`git -C ..\oxidcord-ref checkout -- . ; git -C ..\oxidcord-ref apply --whitespace=nowarn <patch>`, check `git status` first, nobody else should have edits there) and rebuild with the cmake env vars below. Until then `friends-*` oxidcord captures show a DM; the worker's private build is `kyoko-lane-a/target/oxidcord-build/debug/oxidcord.exe` (`--oxidcord <exe>`). |
+| 41 multi-account | B | `8982c463` (running) | Per-account databases, `Flow::switch`, accounts view in `profile/status_menu.rs`, second mock account; has a WIP commit `39bec48`. Told about 38 (`Link::reset_connection()` on the switch path, toasts) and that 34 adds `FriendsPage::reset()`. |
+| 47 SilentTyping + plugin UI slots | C | `1e56e571` (running) | Builds the plugin UI-half loader and the `composer.buttons` slot that 49/52/54/56 reuse. |
+
+- Unclaimed, in suggested order: lane A → 57 (rewritten, see decisions), then 62 (moderation menu follow-ups) and 63 (friend confirmations). After 41 lands: 42 QR login, 43 web login, then 44 (needs 43). Plugins 46, 48–56 (after 47 for the slot-based ones: 49, 52, 54, 56). 39 translations deliberately deferred until few UI tickets are in flight (it touches every string and conflicts with everything). 58 packaging last; any release or tag needs the user's go-ahead.
+
+### Decisions the user made this session
+
+- Ticket 57: no signing key and no catalog server. Themes come from bundled ones, local files in `<data>/themes/`, or links the user adds (like Vencord's Local/Online Themes); a theme is a kyoko `theme.json` or a Vencord/BetterDiscord `.css` whose colour variables are imported. Spec lines (story 84, Themes section) and ticket 57 are rewritten; remove the signed-catalog leftovers (`session/src/catalog.rs`, `xtask theme keygen/sign`, `themes/README.md` catalog section).
+- Ticket 34 friends: "do the same as Discord": no kyoko lock on friend requests; Remove Friend and Block get Discord's confirmation dialogs (ticket 63).
+- Tickets 34 and 44 are in scope (they were missing from the user's list by accident).
+- sccache set up on this machine (user asked).
+
+### This machine
+
+- i9-12900HK (14 cores, 20 threads), 32 GB RAM, RTX 3070 Ti laptop, display at 150% scale (captures are 1920×1200 on both apps; shares still compare). C: about 125 GB free.
+- Paths: main checkout `C:\Users\HP MEDIA\Desktop\nguyenvu\kyoko`; lanes `kyoko-lane-a`/`-b`/`-c` beside it; oxidcord reference `nguyenvu\oxidcord-ref`. Worker rules and done-means list (paste or point to in every prompt): `C:\Users\HP MEDIA\Desktop\nguyenvu\.orchestrator\rules.md` (outside the repo).
+- 3 lanes × `CARGO_BUILD_JOBS=3`; incremental builds 20–40 s, machine stays responsive. Parity ports A 8494, B 8496, C 8493.
+- sccache 0.18 (winget, `%LOCALAPPDATA%\Microsoft\WinGet\Links\sccache.exe`), set as `rustc-wrapper` in `~/.cargo/config.toml`; config `%APPDATA%\Mozilla\sccache\config\config` with `basedirs` = main checkout and the three lanes, 28 GiB disk cache. `cargo-deny` installed in `~/.cargo/bin`.
+- No cmake on PATH. oxidcord builds need `$env:CMAKE='C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'` and `$env:CMAKE_GENERATOR='Visual Studio 17 2022'`. `tools/parity/oxidcord-ref.ps1` aborts under PowerShell 5.1 on rustup's stderr ("syncing channel updates") because of `$ErrorActionPreference = "Stop"`; build the checkout with `cargo build -p oxidcord` directly (a small fix to the script is worth doing in some ticket).
+- `KYOKO_TOKEN` is set as a Windows user environment variable (the user's throwaway token). kyoko starts a real session whenever it is launched without `--mock`, so workers always use `--mock`. No real-Discord run was made on this machine. Same rules as before: one at a time, look only, stop on captcha/401/fatal close; clear the variable when the user says it's revoked.
+
+### How this session worked (lessons)
+
+- Verification per ticket: review the report, check the diff for comments/conflict markers/manifest changes, run fmt, clippy, build, `test --workspace`, `xtask test`, `headless-run --mock` in the lane in the background (log to `target/orch-verify.log`), look at one `pair.png`, then ff-merge, push, Answer, claim next, fast-forward the idle lane, launch the next worker, and steer the running workers with "main moved to X (what landed), rebase before final checks".
+- When two lanes finish on the same base, merge one and rebase the other yourself if conflicts are mechanical unions (both sides appended rows/variants/fields); verify again before merging. Anything semantic goes back to the worker. The main checkout gains `.scratch` commits between merges, so rebase a lane onto `origin/main` before `merge --ff-only`.
+- Ticket 61: a closed root-overlay layer from 31 silently swallowed every click; none of the checks caught it. The rule and test are now in `docs/ui.md` ("Root overlay layers") and `ui::root`. Tell every UI worker about it (rules.md does).
+- Workers on Claude can hit the 5-hour usage limit mid-turn; their transcript shows "Claude usage limit reached". Resume with `send_message` (mode run) describing where they stopped. "Stopped" completion notices were sometimes misleading (the worker was still running or had already finished): check `get_chat` before acting.
+- The user wants short status notes, asks "how many tickets left" now and then (count from the `Status:` lines), and makes spec decisions quickly when asked plainly.
+
+### Real-Discord confirmations still open (added this session)
+
+- 35: the `X-Context-Properties` shape on joins (undocumented), `inputValue` on invite lookup, `flags` on invite creation, the join body outside guest invites. Joins are actions; don't test them on the user's account without asking.
+- 34: whether the web client sends a location context on accept/remove/block, and `PUT /users/@me/relationships/{id}` for a profile's Add Friend.
+- 33: thread request `location` values. 32: GIF category previews arrive as `.mp4` on real Discord.
+
+## Earlier: moving to another machine (main `4c7338a` + this note)
 
 The second orchestrator (roboco chat `02ecdad4`) stopped every worker and pushed everything to GitHub when the user moved the work to another PC. The worker chats and lane worktrees below live on the old machine only; on the new machine, recreate the lanes from the pushed branches and start fresh workers.
 
