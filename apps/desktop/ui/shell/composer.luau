@@ -471,6 +471,7 @@ local typing_dots = ui.component(function()
 		table.insert(
 			dots,
 			ui.div {
+				id = "typing_dot_" .. index,
 				w = DOT,
 				h = DOT,
 				rounded = DOT,

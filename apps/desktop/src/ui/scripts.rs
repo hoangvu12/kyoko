@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use zgx_script::testing::TestApp;
@@ -79,10 +80,139 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"the settings view",
+		"Edit User Profile",
+		&[
+			("settings.values", setting_values(true)),
+			("settings.account", settings_account()),
+			(
+				"settings.about",
+				json!({ "data_dir": "C:\\kyoko", "version": "0.0.0" }),
+			),
+			("settings.page", json!("my-account")),
+		],
+	);
+	for (page, marker) in SETTINGS_PAGES {
+		shows(&mut app, page, marker, &[("settings.page", json!(page))]);
+	}
+	shows(
+		&mut app,
+		"the closed settings view",
+		"Playing Chess",
+		&[("settings.page", json!(""))],
+	);
+	shows(
+		&mut app,
 		"a home page",
 		"Coming in a later version.",
 		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],
 	);
+}
+
+const SETTINGS_PAGES: [(&str, &str); 15] = [
+	("my-account", "Edit User Profile"),
+	("profiles", "Your profile is edited in Discord's web app for now."),
+	("privacy", "Warn before opening links"),
+	("devices", "Devices are managed in Discord's web app."),
+	("connections", "Connections are managed in Discord's web app."),
+	("clips", "Clips are not supported in Kyoko."),
+	(
+		"friend-requests",
+		"Who can send you friend requests is managed in Discord's web app.",
+	),
+	("appearance", "Cozy: modern, beautiful, and easy to read."),
+	("accessibility", "Play them when hovered"),
+	("chat", "Original image quality"),
+	("notifications", "Enable Desktop Notifications"),
+	("keybinds", "Show or Hide Kyoko"),
+	("language", "English (US)"),
+	("streamer-mode", "Hide sensitive details while you stream."),
+	("advanced", "Open Kyoko on Login"),
+];
+
+const TYPING: &str = "ada is typing...";
+const DOT_DIM: f32 = 0.35;
+
+#[test]
+fn the_typing_dots_animate_only_while_the_setting_allows() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"someone typing",
+		TYPING,
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("10")),
+			("sidebar.guild_name", json!("Kyoko")),
+			("sidebar.rows", sidebar_rows()),
+			("timeline.channel_id", json!("20")),
+			("timeline.channel_name", json!("general")),
+			("composer.open", json!(true)),
+			("composer.typing", json!(TYPING)),
+			("settings.values", setting_values(true)),
+		],
+	);
+	let watched = watch_dots(&mut app, Duration::from_millis(1500));
+	assert!(
+		watched.iter().any(|dots| (dots[0] - DOT_DIM).abs() < 0.01),
+		"with the animation on, the first dot dims as the others light: {watched:?}"
+	);
+
+	shows(
+		&mut app,
+		"someone typing",
+		TYPING,
+		&[("settings.values", setting_values(false))],
+	);
+	let watched = watch_dots(&mut app, Duration::from_millis(1500));
+	assert!(
+		watched.iter().all(|dots| dots == &[1., 1., 1.]),
+		"with the animation off, the dots stay lit and still: {watched:?}"
+	);
+}
+
+fn watch_dots(app: &mut TestApp, span: Duration) -> Vec<[f32; 3]> {
+	let deadline = Instant::now() + span;
+	let mut seen = Vec::new();
+	while Instant::now() < deadline {
+		app.frame();
+		seen.push([
+			app.opacity("typing_dot_0"),
+			app.opacity("typing_dot_1"),
+			app.opacity("typing_dot_2"),
+		]);
+		std::thread::sleep(Duration::from_millis(20));
+	}
+	seen.dedup();
+	seen
+}
+
+fn setting_values(typing_animation: bool) -> serde_json::Value {
+	let mut settings = store::Settings::default();
+	settings.chat.typing_animation = typing_animation;
+	serde_json::Value::Object(
+		bridge::setting_values(&settings)
+			.into_iter()
+			.map(|(key, value)| (key.to_owned(), value))
+			.collect(),
+	)
+}
+
+fn settings_account() -> serde_json::Value {
+	json!({
+		"name": "Ada", "username": "ada", "email": "a•••@example.invalid", "phone": "",
+		"accent": "", "status": "online", "avatar": "",
+	})
 }
 
 fn shows(app: &mut TestApp, screen: &str, marker: &str, values: &[(&str, serde_json::Value)]) {
