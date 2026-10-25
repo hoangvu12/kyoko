@@ -15,16 +15,11 @@ use crate::rail::Icons;
 use crate::ui::{Link, record};
 
 const VOICE_AVATAR_POINTS: f64 = 24.;
-const LATER: [&str; 9] = [
-	"sidebar.invite",
+const LATER: [&str; 4] = [
 	"sidebar.server_settings",
 	"sidebar.create_channel",
-	"sidebar.notification_settings",
-	"sidebar.mute_guild",
-	"sidebar.mute_channel",
 	"sidebar.edit_channel",
 	"sidebar.delete_channel",
-	"sidebar.leave_guild",
 ];
 
 pub(crate) struct SidebarView {

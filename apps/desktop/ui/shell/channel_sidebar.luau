@@ -45,14 +45,76 @@ local function separator()
 	return ui.div { h = 1, my = 4, mx = 4, bg = theme.color.modifier_hover }
 end
 
-local function item(label: string, on_click: () -> (), disabled: boolean?)
-	return ui.menu_item { label, on_click = on_click, disabled = disabled == true }
+local function item(label: string, on_click: () -> (), disabled: boolean?, id: string?)
+	return ui.menu_item { label, id = id, on_click = on_click, disabled = disabled == true }
 end
 
 local function later(name: string, id: string?): () -> ()
 	return function()
 		actions.sidebar_action(name, id)
 	end
+end
+
+local MUTE_WINDOWS = {
+	{ label = "For 15 Minutes", minutes = 15 },
+	{ label = "For 1 Hour", minutes = 60 },
+	{ label = "For 8 Hours", minutes = 480 },
+	{ label = "For 24 Hours", minutes = 1440 },
+	{ label = "Until I turn it back on", minutes = 0 },
+}
+
+local LEVELS = {
+	{ label = "All Messages", level = "all" },
+	{ label = "Only @mentions", level = "mentions" },
+	{ label = "Nothing", level = "nothing" },
+	{ label = "Use Category Default", level = "inherit" },
+}
+
+local function send(name: string, payload: any): () -> ()
+	return function()
+		actions.sidebar_send(name, payload)
+	end
+end
+
+local function submenu(id: string, label: string, open: any, items: { any })
+	return ui.submenu {
+		open = open,
+		trigger = ui.menu_item { label, id = id },
+		label = label,
+		w = MENU_WIDTH,
+		p = 6,
+		rounded = 4,
+		bg = theme.color.background_floating,
+		table.unpack(items),
+	}
+end
+
+local function mute_items(action: string, id: string): { any }
+	local items = {}
+	for _, window in MUTE_WINDOWS do
+		table.insert(
+			items,
+			item(window.label, send(action, { id = id, minutes = window.minutes }), nil, `{action}_{window.minutes}`)
+		)
+	end
+	return items
+end
+
+local function level_items(id: string): { any }
+	local current = actions.channel_level(id)
+	local items = {}
+	for _, choice in LEVELS do
+		table.insert(
+			items,
+			ui.menu_item {
+				choice.label,
+				id = `level_{choice.level}`,
+				checked = current == choice.level,
+				on_click = send("channel_notifications", { id = id, level = choice.level }),
+			}
+		)
+	end
+	return items
 end
 
 local function header_flag(name: string): () -> boolean
@@ -68,22 +130,26 @@ local function header_lacks(name: string): () -> boolean
 	end
 end
 
-local function header_menu(): { any }
+local function header_menu(mute_open: any): { any }
 	local can_invite = header_flag("can_invite")
 	local can_settings = header_flag("can_open_settings")
 	local can_manage = header_flag("can_manage_channels")
 	return {
-		ui.show(can_invite, item("Invite People", later("invite"))),
+		ui.show(can_invite, item("Invite People", later("invite"), nil, "menu_invite")),
 		ui.show(can_settings, item("Server Settings", later("server_settings"))),
 		ui.show(can_manage, item("Create Channel", later("create_channel"))),
 		ui.show(function()
 			return can_invite() or can_settings() or can_manage()
 		end, separator()),
 		ui.menu_item { "Mark As Read", on_click = later("mark_guild_read"), disabled = header_lacks("unread") },
-		ui.show(header_flag("muted"), item("Unmute Server", later("mute_guild")), item("Mute Server", later("mute_guild"))),
-		item("Notification Settings", later("notification_settings")),
+		ui.show(
+			header_flag("muted"),
+			item("Unmute Server", send("mute_guild", { unmute = true }), nil, "menu_unmute_guild"),
+			submenu("menu_mute_guild", "Mute Server", mute_open, mute_items("mute_guild", ""))
+		),
+		item("Notification Settings", later("notification_settings"), nil, "menu_notifications"),
 		ui.show(header_lacks("owner"), separator()),
-		ui.show(header_lacks("owner"), item("Leave Server", later("leave_guild"))),
+		ui.show(header_lacks("owner"), item("Leave Server", later("leave_guild"), nil, "menu_leave")),
 	}
 end
 
@@ -94,12 +160,35 @@ local function channel_menu(channel: state.SidebarRow): { any }
 		separator(),
 	}
 	if not channel.thread and header.can_invite then
-		table.insert(items, item("Invite to Channel", later("invite", channel.id)))
+		table.insert(items, item("Invite to Channel", later("invite", channel.id), nil, "menu_invite_channel"))
 	end
-	table.insert(
-		items,
-		item(if channel.muted then "Unmute Channel" else "Mute Channel", later("mute_channel", channel.id))
-	)
+	if channel.muted then
+		table.insert(
+			items,
+			item("Unmute Channel", send("mute_channel", { id = channel.id, unmute = true }), nil, "menu_unmute_channel")
+		)
+	else
+		table.insert(
+			items,
+			submenu(
+				"menu_mute_channel",
+				"Mute Channel",
+				ui.state("channel_mute_open", false),
+				mute_items("mute_channel", channel.id)
+			)
+		)
+	end
+	if not channel.thread then
+		table.insert(
+			items,
+			submenu(
+				"menu_channel_levels",
+				"Notification Settings",
+				ui.state("channel_levels_open", false),
+				level_items(channel.id)
+			)
+		)
+	end
 	if not channel.thread and header.can_manage_channels then
 		table.insert(items, separator())
 		table.insert(items, item("Edit Channel", later("edit_channel", channel.id)))
@@ -113,6 +202,7 @@ end
 local header = ui.component(function()
 	local open = ui.use_state(false)
 	local hovered = ui.use_state(false)
+	local mute_open = ui.use_state(false)
 	return ui.div {
 		w_full = true,
 		shrink = 0,
@@ -127,6 +217,7 @@ local header = ui.component(function()
 			bg = theme.color.background_floating,
 			placement = { side = "bottom", align = "center", offset = 4 },
 			anchor = ui.button {
+				id = "server_menu",
 				w_full = true,
 				h = theme.size.guild_header_height,
 				p = 0,
@@ -161,7 +252,7 @@ local header = ui.component(function()
 					icon { name = "chevron_down", size = CHEVRON, color = theme.color.header_primary },
 				},
 			},
-			table.unpack(header_menu()),
+			table.unpack(header_menu(mute_open)),
 		},
 	}
 end)
@@ -381,6 +472,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 		w_full = true,
 		ui.show(row.thread == true, spine(row.last_thread == true)),
 		ui.row {
+			id = `channel_{row.id}`,
 			relative = true,
 			h = theme.size.channel_row_height,
 			ml = if row.thread then THREAD_INDENT else theme.size.space_8,

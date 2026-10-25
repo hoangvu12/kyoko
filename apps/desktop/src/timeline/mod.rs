@@ -271,6 +271,10 @@ impl TimelineView {
 		self.actions.rejected(reason);
 	}
 
+	pub fn on_forward(&self, forward: impl Fn((Snowflake, Snowflake)) + 'static) {
+		self.actions.on_forward(forward);
+	}
+
 	pub fn on_reveal(&self, reveal: impl Fn((Snowflake, MessageAction)) + 'static) {
 		self.actions.on_reveal(reveal);
 	}

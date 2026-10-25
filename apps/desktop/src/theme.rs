@@ -51,6 +51,7 @@ pub const COLORS: &[(&str, &str)] = &[
 	("brand_hover", "#4752c4"),
 	("text_on_brand", "#ffffff"),
 	("focus_ring", "rgba(88, 101, 242, 0.5)"),
+	("brand_wash", "rgba(88, 101, 242, 0.16)"),
 	("status_online", "#23a559"),
 	("status_idle", "#f0b232"),
 	("status_dnd", "#f23f43"),

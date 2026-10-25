@@ -2,6 +2,7 @@
 
 mod capture;
 mod churn;
+mod community;
 mod dm_sidebar;
 mod fonts;
 mod frame;

@@ -58,6 +58,14 @@ pub enum Screen {
 	Forum,
 	ForumPost,
 	ForumPostCreate,
+	Community(Community),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Community {
+	AddServer,
+	Forward,
+	GuildNotifications,
 }
 
 impl Screen {
@@ -95,6 +103,9 @@ impl Screen {
 			"forum" => Some(Screen::Forum),
 			"forum-post" => Some(Screen::ForumPost),
 			"forum-post-create" => Some(Screen::ForumPostCreate),
+			"add-server" => Some(Screen::Community(Community::AddServer)),
+			"forward" => Some(Screen::Community(Community::Forward)),
+			"guild-notifications" => Some(Screen::Community(Community::GuildNotifications)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
@@ -132,7 +143,8 @@ impl Screen {
 			| Screen::Pins
 			| Screen::Forum
 			| Screen::ForumPost
-			| Screen::ForumPostCreate => Some(Opening::First),
+			| Screen::ForumPostCreate
+			| Screen::Community(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

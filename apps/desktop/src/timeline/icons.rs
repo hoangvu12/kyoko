@@ -66,6 +66,7 @@ icon_files!(
 	"chevron_down",
 	"list_layout",
 	"grid_layout",
+	"upload",
 );
 
 thread_local! {

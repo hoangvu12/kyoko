@@ -185,9 +185,6 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			link.select_home();
 		}
 	});
-	host.action("rail.add_server", |_| {
-		tracing::debug!("adding a server is not built yet");
-	});
 	host.action("rail.discover", |_| {
 		if let Err(error) = platform::open::open_url(SERVER_DIRECTORY) {
 			tracing::warn!(%error, "could not open the server directory");

@@ -88,6 +88,7 @@ pub struct MessageActions {
 	compose: Hook<Compose>,
 	jump: Hook<Snowflake>,
 	reveal: Hook<(Snowflake, MessageAction)>,
+	forward: Hook<(Snowflake, Snowflake)>,
 	profile: Hook<(Snowflake, (f32, f32))>,
 	open_thread: Hook<Snowflake>,
 	create_thread: Hook<(Snowflake, Snowflake)>,
@@ -128,6 +129,7 @@ impl MessageActions {
 			compose: RefCell::new(None),
 			jump: RefCell::new(None),
 			reveal: RefCell::new(None),
+			forward: RefCell::new(None),
 			profile: RefCell::new(None),
 			open_thread: RefCell::new(None),
 			create_thread: RefCell::new(None),
@@ -149,6 +151,10 @@ impl MessageActions {
 
 	pub fn on_reveal(&self, hook: impl Fn((Snowflake, MessageAction)) + 'static) {
 		*self.reveal.borrow_mut() = Some(Box::new(hook));
+	}
+
+	pub fn on_forward(&self, hook: impl Fn((Snowflake, Snowflake)) + 'static) {
+		*self.forward.borrow_mut() = Some(Box::new(hook));
 	}
 
 	pub fn on_profile(&self, hook: impl Fn((Snowflake, (f32, f32))) + 'static) {
@@ -353,7 +359,11 @@ impl MessageActions {
 			MessageAction::CopyText => copy(&entry.message.content),
 			MessageAction::CopyLink => copy(&bridge::message_link(access.guild_id, channel_id, message_id)),
 			MessageAction::CopyId => copy(&message_id.to_string()),
-			MessageAction::Forward => tracing::debug!("forwarding opens from ticket 35"),
+			MessageAction::Forward => {
+				if let Some(forward) = self.forward.borrow().as_ref() {
+					forward((channel_id, message_id));
+				}
+			}
 			MessageAction::CreateThread => match self.create_thread.borrow().as_ref() {
 				Some(create) => create((channel_id, message_id)),
 				None => tracing::debug!("no thread creation hook"),

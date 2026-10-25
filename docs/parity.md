@@ -183,9 +183,11 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `add-server` | 35 | Default selection, then open the add-a-server dialog. | no |
-| `forward` | 35 | Default selection, then open the forward dialog for the newest message. | no |
-| `guild-notifications` | 35 | Default selection, then open the guild's notification settings. | no |
+| `add-server` | 35 | Default selection, then open the add-a-server dialog. | yes |
+| `forward` | 35 | Default selection, then open the forward dialog for the newest message. | yes |
+| `guild-notifications` | 35 | Default selection, then open the guild's notification settings. | yes |
+
+Oxidcord has no rules (membership screening) or onboarding screens, so they have no rows; kyoko draws them in the same dialog style (`docs/ui.md`, "Community dialogs"). The forward preview names mentions where oxidcord prints their raw ids, and kyoko's input placeholders are dimmer than oxidcord's, as in 31's screens.
 
 ### 36 Moderation and server settings
 

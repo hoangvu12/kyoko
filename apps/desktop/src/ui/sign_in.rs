@@ -187,6 +187,8 @@ impl Link {
 			gallery.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
 		}
 		self.timeline.borrow_mut().close();
+		self.community.close();
+		self.community.attach(self.state());
 		*self.avatar.borrow_mut() = None;
 		self.avatar_requested_at.set(None);
 		self.avatar_shown.set(false);

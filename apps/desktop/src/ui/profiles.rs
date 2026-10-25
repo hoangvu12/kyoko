@@ -192,7 +192,10 @@ impl Link {
 	}
 
 	pub(super) fn escape_overlay(&self) -> bool {
-		self.timeline_view.close_lightbox() || self.profile.escape() || self.threads_escape()
+		self.timeline_view.close_lightbox()
+			|| self.community.escape()
+			|| self.profile.escape()
+			|| self.threads_escape()
 	}
 
 	pub(super) async fn drive_profiles(&self, screen: capture::Screen) {

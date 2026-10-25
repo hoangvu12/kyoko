@@ -1,3 +1,4 @@
+mod community;
 mod composer;
 mod expressions;
 mod home;
@@ -35,6 +36,7 @@ use zgx_desktop::{Application, Titlebar, WindowHandle, WindowInfo, WindowOptions
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::capture::{self, Capture, Opening};
+use crate::community::CommunityLayer;
 use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
@@ -190,6 +192,7 @@ pub fn run(
 			let expressions = link.expressions.view();
 			let escaped = Rc::downgrade(&link);
 			let switcher = link.finder.view();
+			let community = link.community.view();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
 			let keys = Rc::downgrade(&link);
@@ -212,6 +215,7 @@ pub fn run(
 					.child(profiles)
 					.child(switcher)
 					.child(thread_layer)
+					.child(community)
 					.child(expressions)
 					.child(lightbox)
 					.on_event(move |event| {
@@ -344,6 +348,8 @@ pub(crate) struct Link {
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
 	profile: Rc<ProfileLayer>,
+	community: Rc<CommunityLayer>,
+	joins: community::Joins,
 	profile_effect: RefCell<Option<Effect>>,
 	panel: Shared,
 	panel_shown: RefCell<Option<[String; 6]>>,
@@ -415,6 +421,7 @@ impl Link {
 		);
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone(), &composer::MAIN);
 		let profile = ProfileLayer::new(&window.runtime, timeline_view.pictures());
+		let community = CommunityLayer::new(&window.runtime, timeline_view.pictures());
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
@@ -439,6 +446,8 @@ impl Link {
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
 			profile,
+			community,
+			joins: community::Joins::default(),
 			profile_effect: RefCell::new(None),
 			panel: host.shared("user.panel", profiles::empty_panel()),
 			panel_shown: RefCell::new(None),
@@ -479,6 +488,7 @@ impl Link {
 		Link::install_profiles(host, &link);
 		Link::install_search(host, &link);
 		Link::install_threads(host, &link);
+		Link::install_community(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -673,6 +683,7 @@ impl Link {
 		}
 		self.watch_session(changes);
 		let opened = self.publish(changes);
+		self.community_apply(changes);
 		self.follow_friend(changes);
 		self.follow_threads();
 		if let Some((opening, open)) = opened {
@@ -731,6 +742,14 @@ impl Link {
 			capture::Screen::QuickSwitcher => {
 				self.open_switcher();
 				self.until_capture(|link| link.switcher_settled()).await;
+			}
+			capture::Screen::Community(screen) => {
+				match screen {
+					capture::Community::AddServer => self.drive_add_server(),
+					capture::Community::Forward => self.drive_forward(),
+					capture::Community::GuildNotifications => self.drive_guild_notifications(),
+				}
+				self.until_capture(|link| link.community_settled()).await;
 			}
 			capture::Screen::Search => {
 				self.drive_search(capture::SEARCH_QUERY);
@@ -961,6 +980,7 @@ impl Link {
 		if let Some(command) = command {
 			self.send(command);
 		}
+		self.offer_gate(guild_id);
 	}
 
 	pub(crate) fn select_channel(&self, channel_id: Snowflake) {
@@ -1097,6 +1117,7 @@ impl Link {
 		names.extend(self.profile_images());
 		names.extend(self.search_images());
 		names.extend(self.thread_images());
+		names.extend(self.community_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

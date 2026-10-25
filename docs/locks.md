@@ -57,6 +57,10 @@ The confirmation lifts that one reason on that one target for the rest of the se
 
 Confirmations are only ever a user gesture. Plugins must not send `ConfirmRisky`.
 
+## Rules and onboarding
+
+The screening and onboarding gates cannot be confirmed away by kyoko. Instead the interface shows Discord's own screens when the user joins or opens such a server (`docs/ui.md`, "Community dialogs"): the server's rules, and the onboarding prompts, with no artificial delay. Only the user's own Submit or Finish sends them (`AcceptMemberVerification`, `SubmitOnboarding`, `docs/rest.md`), with exactly what the user picked. Until Discord confirms the member (GUILD_MEMBER_UPDATE), the gate keeps holding sends, reactions and forwards in every channel of the server.
+
 ## The setting
 
 `Settings::safety_locks` in the store's `settings.json`, `true` by default. When `false`, no lock applies. The session reads it once at start, so a change takes effect after a restart (or sign-in). The Privacy & Safety settings page shows it under "Safety Locks" as "Hold risky actions", with the warning that turning it off is at the user's own risk and applies after a restart.

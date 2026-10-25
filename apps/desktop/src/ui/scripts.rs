@@ -267,6 +267,141 @@ fn the_plugins_page_asks_before_a_plugin_is_enabled() {
 	assert!(app.texts().iter().any(|text| text == "hook:send"));
 }
 
+type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
+
+fn recording_app(calls: &Calls, level: &'static str) -> TestApp {
+	let calls = calls.clone();
+	TestApp::new(move |runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			let (seen, recorded) = (calls.clone(), name.clone());
+			host.action(name.clone(), move |argument| {
+				seen.borrow_mut().push((recorded.clone(), argument.to_json()));
+			});
+			host.function(name, |_| Value::Nil);
+		}
+		host.function("sidebar.channel_level", move |_| Value::from(level));
+		host
+	})
+}
+
+fn last_call(calls: &Calls, name: &str) -> Option<serde_json::Value> {
+	calls
+		.borrow()
+		.iter()
+		.rev()
+		.find(|(called, _)| called == name)
+		.and_then(|(_, argument)| serde_json::from_str(argument).ok())
+}
+
+fn server_values(muted: bool) -> Vec<(&'static str, serde_json::Value)> {
+	vec![
+		("login.screen", json!("main")),
+		("rail.items", rail_items()),
+		("sidebar.guild_id", json!("10")),
+		("sidebar.guild_name", json!("Kyoko")),
+		("sidebar.rows", sidebar_rows()),
+		(
+			"sidebar.header",
+			json!({
+				"unread": true, "muted": muted, "owner": false, "can_invite": true,
+				"can_manage_channels": false, "can_open_settings": false,
+			}),
+		),
+		("timeline.channel_id", json!("20")),
+		("timeline.channel_name", json!("general")),
+		("settings.values", setting_values(true)),
+	]
+}
+
+#[test]
+fn the_server_menu_reaches_the_community_actions() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "mentions");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	for (item, action) in [
+		("menu_invite", "sidebar.invite"),
+		("menu_notifications", "sidebar.notification_settings"),
+		("menu_leave", "sidebar.leave_guild"),
+	] {
+		app.click("server_menu");
+		app.frames(2);
+		app.click(item);
+		app.frames(2);
+		assert!(last_call(&calls, action).is_some(), "{item} calls {action}");
+	}
+	app.click("server_menu");
+	app.frames(2);
+	app.click("menu_mute_guild");
+	app.frames(2);
+	app.click("mute_guild_60");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.mute_guild"),
+		Some(json!({ "id": "", "minutes": 60 })),
+		"the mute submenu sends the chosen window"
+	);
+	shows(&mut app, "a muted server", "general", &server_values(true));
+	app.click("server_menu");
+	app.frames(2);
+	app.click("menu_unmute_guild");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.mute_guild"),
+		Some(json!({ "unmute": true }))
+	);
+}
+
+fn open_channel_menu(app: &mut TestApp, id: &str) {
+	use zgx::input::{InputEvent, PointerButton};
+	let bounds = app.bounds(id);
+	let (x, y) = (bounds.x + bounds.width / 2., bounds.y + bounds.height / 2.);
+	app.ui.dispatch(InputEvent::PointerMove { x, y });
+	app.ui.dispatch(InputEvent::PointerDown {
+		x,
+		y,
+		button: PointerButton::Secondary,
+	});
+	app.ui.dispatch(InputEvent::PointerUp {
+		x,
+		y,
+		button: PointerButton::Secondary,
+	});
+	app.frames(2);
+}
+
+#[test]
+fn the_channel_menu_mutes_invites_and_sets_notifications() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "mentions");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	open_channel_menu(&mut app, "channel_20");
+	app.click("menu_invite_channel");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "sidebar.invite"), Some(json!("20")));
+	open_channel_menu(&mut app, "channel_20");
+	app.click("menu_mute_channel");
+	app.frames(2);
+	app.click("mute_channel_15");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.mute_channel"),
+		Some(json!({ "id": "20", "minutes": 15 }))
+	);
+	open_channel_menu(&mut app, "channel_20");
+	app.click("menu_channel_levels");
+	app.frames(2);
+	app.click("level_nothing");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.channel_notifications"),
+		Some(json!({ "id": "20", "level": "nothing" }))
+	);
+}
+
 const TYPING: &str = "ada is typing...";
 const DOT_DIM: f32 = 0.35;
 

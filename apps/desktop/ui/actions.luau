@@ -36,6 +36,15 @@ function M.sidebar_action(name: string, id: string?)
 	ui.invoke("sidebar." .. name, id or "")
 end
 
+function M.sidebar_send(name: string, payload: any)
+	ui.invoke("sidebar." .. name, payload)
+end
+
+function M.channel_level(id: string): string
+	local level = ui.call_sync("sidebar.channel_level", id)
+	return if type(level) == "string" then level else "inherit"
+end
+
 function M.select_dm(id: string)
 	return ui.action("dms.select", id)
 end

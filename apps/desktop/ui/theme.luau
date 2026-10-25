@@ -34,6 +34,7 @@ M.color = {
 	brand_hover = token("brand_hover"),
 	text_on_brand = token("text_on_brand"),
 	focus_ring = token("focus_ring"),
+	brand_wash = token("brand_wash"),
 	status_online = token("status_online"),
 	status_idle = token("status_idle"),
 	status_dnd = token("status_dnd"),
