@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 40 (Tray, notifications and desktop integration)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A before-notify filter hook exists
 - [ ] OnePingPerDM suppresses repeat sounds and notifications until the DM is read
