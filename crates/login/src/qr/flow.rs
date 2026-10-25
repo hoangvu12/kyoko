@@ -255,6 +255,7 @@ impl Flow<'_> {
 
 fn exchange_error(error: rest::RestError) -> LoginError {
 	match error {
+		rest::RestError::Captcha { .. } => LoginError::Protocol(CAPTCHA_HINT.to_owned()),
 		rest::RestError::Http(status, _) if status.as_u16() == 400 => {
 			LoginError::Protocol(CAPTCHA_HINT.to_owned())
 		}

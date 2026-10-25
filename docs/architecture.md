@@ -6,7 +6,7 @@ Kyoko is a Cargo workspace. Data flows one way: gateway event, state reducer, re
 apps/desktop        binary `kyoko`: the zgx host, its Luau interface in `apps/desktop/ui/`, mockcord with `--mock`
 crates/protocol     typed Discord REST and gateway models, lenient serde decoding
 crates/gateway      websocket session: identify, heartbeat, resume, zlib-stream, send window, backoff
-crates/rest         HTTP client: rate-limit buckets, 429 retry, Authorization redaction
+crates/rest         HTTP client: rate-limit buckets, pacing, 401 stop, 403 breaker, captcha errors (docs/rest.md)
 crates/state        normalized store, permission math, read state, message cache
 crates/store        sqlite cache and settings, token in the OS keyring
 crates/markdown     Discord markdown parser to AST

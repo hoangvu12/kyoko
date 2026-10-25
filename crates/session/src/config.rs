@@ -3,6 +3,7 @@ use std::sync::Arc;
 use gateway::GatewayTuning;
 use protocol::Token;
 use rest::ClientIdentity;
+use rest::RestTuning;
 use state::Changes;
 use tokio::runtime::Handle;
 use url::Url;
@@ -22,5 +23,6 @@ pub struct SessionConfig {
 	pub notify: NotifyFn,
 	pub hooks: Option<Arc<dyn SessionHooks>>,
 	pub gateway: GatewayTuning,
+	pub rest: RestTuning,
 	pub remember_account: bool,
 }

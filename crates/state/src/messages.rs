@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use protocol::{Message, MessageUpdate, Nonce, PartialEmoji, Reaction, Snowflake};
 
@@ -8,11 +9,21 @@ use crate::views::RenderedMessage;
 
 pub const MESSAGE_CAP: usize = 500;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendFailure {
+	RateLimited { retry_after: Duration },
+	Forbidden,
+	MissingPermissions,
+	Captcha { service: Option<String> },
+	Unauthorized,
+	Network,
+	Other(Option<u16>),
+}
+
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
 	pub message: Arc<Message>,
-	pub failed: bool,
-	pub failure_reason: Option<String>,
+	pub failure: Option<SendFailure>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,
 	pub rendered: Option<Arc<RenderedMessage>>,
@@ -117,8 +128,7 @@ impl ChannelMessages {
 	) {
 		self.pending.push(PendingMessage {
 			message,
-			failed: false,
-			failure_reason: None,
+			failure: None,
 			plugin,
 			altered_by: None,
 			rendered: Some(rendered),
@@ -137,11 +147,10 @@ impl ChannelMessages {
 		self.take_pending(nonce).is_some()
 	}
 
-	pub fn fail_pending(&mut self, nonce: &Nonce, reason: Option<String>) -> bool {
+	pub fn fail_pending(&mut self, nonce: &Nonce, failure: SendFailure) -> bool {
 		match self.pending_mut(nonce) {
 			Some(pending) => {
-				pending.failed = true;
-				pending.failure_reason = reason;
+				pending.failure = Some(failure);
 				true
 			}
 			None => false,

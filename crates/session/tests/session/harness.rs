@@ -6,7 +6,7 @@ use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
 use protocol::Opcode;
 use protocol::{ChannelType, Snowflake, Token};
-use session::{Command, GatewayTuning, Session, SessionConfig, SessionHooks};
+use session::{Command, GatewayTuning, RestTuning, Session, SessionConfig, SessionHooks};
 use state::State;
 use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
@@ -25,6 +25,7 @@ pub struct Options {
 	mock: MockConfig,
 	hooks: Option<Arc<dyn SessionHooks>>,
 	gateway: GatewayTuning,
+	rest: RestTuning,
 	prepare: Option<Prepare>,
 	remember_account: bool,
 }
@@ -40,6 +41,7 @@ impl Options {
 			},
 			hooks: None,
 			gateway: GatewayTuning::default(),
+			rest: RestTuning::default(),
 			prepare: None,
 			remember_account: true,
 		}
@@ -62,6 +64,17 @@ impl Options {
 
 	pub fn gateway(mut self, tuning: GatewayTuning) -> Self {
 		self.gateway = tuning;
+		self
+	}
+
+	pub fn rest(mut self, tuning: RestTuning) -> Self {
+		self.rest = tuning;
+		self
+	}
+
+	pub fn buckets(mut self, limit: u32, window: Duration) -> Self {
+		self.mock.bucket_limit = limit;
+		self.mock.bucket_window = window;
 		self
 	}
 
@@ -99,6 +112,7 @@ impl Running {
 		let launch = Launch {
 			hooks: options.hooks,
 			gateway: options.gateway,
+			rest: options.rest,
 			remember_account: options.remember_account,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
@@ -260,6 +274,7 @@ impl Running {
 struct Launch {
 	hooks: Option<Arc<dyn SessionHooks>>,
 	gateway: GatewayTuning,
+	rest: RestTuning,
 	remember_account: bool,
 }
 
@@ -286,6 +301,7 @@ fn open_session(
 		notify: Arc::new(move |_| notifier.notify_one()),
 		hooks: launch.hooks.clone(),
 		gateway: launch.gateway,
+		rest: launch.rest,
 		remember_account: launch.remember_account,
 	})
 	.expect("session starts");

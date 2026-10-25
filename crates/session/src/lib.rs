@@ -16,5 +16,6 @@ pub use config::{NotifyFn, SessionConfig};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::SessionHooks;
 pub use identity::{client_identity, discord_build_source};
+pub use rest::RestTuning;
 pub use search::SearchResults;
 pub use session::Session;

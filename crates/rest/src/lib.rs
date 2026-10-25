@@ -7,12 +7,15 @@ mod identity;
 mod limiter;
 mod request;
 mod route;
+mod safety;
+mod tuning;
 
 pub use client::RestClient;
 pub use config::RestConfig;
 pub use cookies::CookieJar;
 pub use error::{RestError, Result};
 pub use identity::ClientIdentity;
-pub use limiter::RateLimiter;
+pub use limiter::{Probe, RateLimiter};
 pub use request::{Request, UploadFile, encode_component};
 pub use route::{RouteKey, route_key};
+pub use tuning::RestTuning;

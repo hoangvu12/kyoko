@@ -23,6 +23,15 @@ pub enum RestError {
 	Unauthorized,
 	#[error("forbidden")]
 	Forbidden,
+	#[error("missing permissions")]
+	MissingPermissions,
+	#[error("route suspended after repeated forbidden responses, retry in {retry_in:?}")]
+	Suspended {
+		retry_in: Duration,
+		missing_permissions: bool,
+	},
+	#[error("captcha required")]
+	Captcha { service: Option<String> },
 	#[error("not found")]
 	NotFound,
 	#[error("response body too large")]

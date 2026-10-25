@@ -1,0 +1,79 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
+use parking_lot::Mutex;
+use reqwest::Method;
+use tokio::time::Instant;
+
+use crate::route::RouteKey;
+use crate::tuning::RestTuning;
+
+const PRUNE_THRESHOLD: usize = 256;
+
+pub(crate) enum Pace {
+	Free,
+	Mutation,
+	Send(String),
+}
+
+impl Pace {
+	pub fn of(method: &Method, route: &RouteKey) -> Self {
+		if route.is_message_send() {
+			Self::Send(route.major().to_owned())
+		} else if method == Method::GET || method == Method::HEAD {
+			Self::Free
+		} else {
+			Self::Mutation
+		}
+	}
+}
+
+#[derive(Default)]
+struct Slots {
+	mutation: Option<Instant>,
+	send: Option<Instant>,
+	channels: HashMap<String, Instant>,
+}
+
+pub(crate) struct Pacer {
+	mutation_gap: Duration,
+	send_gap: Duration,
+	channel_send_gap: Duration,
+	slots: Mutex<Slots>,
+}
+
+fn later(at: Instant, other: Option<Instant>) -> Instant {
+	other.map_or(at, |other| at.max(other))
+}
+
+impl Pacer {
+	pub fn new(tuning: &RestTuning) -> Self {
+		Self {
+			mutation_gap: tuning.mutation_gap,
+			send_gap: tuning.send_gap,
+			channel_send_gap: tuning.channel_send_gap,
+			slots: Mutex::default(),
+		}
+	}
+
+	pub fn reserve(&self, pace: &Pace) -> Option<Instant> {
+		let now = Instant::now();
+		let mut slots = self.slots.lock();
+		let mut at = later(now, slots.mutation);
+		match pace {
+			Pace::Free => return None,
+			Pace::Mutation => {}
+			Pace::Send(channel) => {
+				at = later(at, slots.send);
+				at = later(at, slots.channels.get(channel).copied());
+				slots.send = Some(at + self.send_gap);
+				slots.channels.insert(channel.clone(), at + self.channel_send_gap);
+				if slots.channels.len() > PRUNE_THRESHOLD {
+					slots.channels.retain(|_, next| *next > now);
+				}
+			}
+		}
+		slots.mutation = Some(at + self.mutation_gap);
+		(at > now).then_some(at)
+	}
+}

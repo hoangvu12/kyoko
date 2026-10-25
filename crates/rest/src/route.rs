@@ -18,6 +18,15 @@ impl RouteKey {
 	pub fn major(&self) -> &str {
 		&self.major
 	}
+
+	pub fn is_message_send(&self) -> bool {
+		self.major.starts_with("channels/")
+			&& self
+				.key
+				.strip_prefix("POST /")
+				.and_then(|path| path.strip_suffix("/messages"))
+				== Some(self.major.as_str())
+	}
 }
 
 impl fmt::Display for RouteKey {

@@ -48,7 +48,9 @@ pub async fn validate_token(
 	let client = RestClient::new(RestConfig::new(rest_base.clone(), identity.clone()));
 	client.set_token(Token::new(token));
 	client.current_user().await.map_err(|error| match error {
-		RestError::Unauthorized | RestError::Forbidden => LoginError::Rejected,
+		RestError::Unauthorized | RestError::Forbidden | RestError::MissingPermissions => {
+			LoginError::Rejected
+		}
 		other => LoginError::Rest(other),
 	})
 }

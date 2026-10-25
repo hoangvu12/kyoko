@@ -91,6 +91,23 @@ pub struct RateLimitBody {
 	pub code: Option<i64>,
 }
 
+#[derive(Default, Deserialize)]
+#[serde(default)]
+pub struct CaptchaChallenge {
+	captcha_key: Value,
+	captcha_service: Value,
+}
+
+impl CaptchaChallenge {
+	pub fn is_challenge(&self) -> bool {
+		!self.captcha_key.is_null()
+	}
+
+	pub fn service(&self) -> Option<&str> {
+		self.captcha_service.as_str()
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ApiError {

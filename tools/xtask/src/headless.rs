@@ -185,6 +185,7 @@ impl Harness {
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks,
 			gateway: Default::default(),
+			rest: Default::default(),
 			remember_account: true,
 		})
 		.context("session did not start")?;

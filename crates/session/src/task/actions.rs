@@ -27,7 +27,10 @@ pub(super) fn timestamp(time: DateTime<Utc>) -> String {
 
 fn failure_reason(what: &str, error: &RestError) -> String {
 	match error {
-		RestError::Forbidden => format!("{what}: missing permissions"),
+		RestError::Forbidden | RestError::MissingPermissions => format!("{what}: missing permissions"),
+		RestError::Suspended { .. } => format!("{what}: not allowed, paused after repeated refusals"),
+		RestError::Captcha { .. } => format!("{what}: complete this in the official Discord client"),
+		RestError::Unauthorized => format!("{what}: signed out"),
 		RestError::NotFound => format!("{what}: not found"),
 		RestError::RateLimited { .. } => format!("{what}: rate limited, try again shortly"),
 		RestError::Http(_, Some(api)) if !api.message.is_empty() => format!("{what}: {}", api.message),

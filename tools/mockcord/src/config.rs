@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
@@ -15,6 +17,8 @@ pub struct MockConfig {
 	pub record: bool,
 	pub anchor: Option<DateTime<Utc>>,
 	pub build_number: u64,
+	pub bucket_limit: u32,
+	pub bucket_window: Duration,
 }
 
 impl Default for MockConfig {
@@ -33,6 +37,8 @@ impl Default for MockConfig {
 			record: false,
 			anchor: None,
 			build_number: 424_242,
+			bucket_limit: 5,
+			bucket_window: Duration::from_secs(2),
 		}
 	}
 }

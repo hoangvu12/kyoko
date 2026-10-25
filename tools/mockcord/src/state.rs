@@ -16,9 +16,6 @@ use crate::ids::snowflake_at;
 use crate::record::Recorder;
 use crate::scenario::Scenario;
 
-const WINDOW_SECONDS: f64 = 2.0;
-const BUCKET_LIMIT: u32 = 5;
-
 pub struct Urls {
 	pub origin: String,
 	pub rest: String,
@@ -164,6 +161,7 @@ struct Window {
 }
 
 pub struct RateLimitSnapshot {
+	pub limit: u32,
 	pub remaining: u32,
 	pub reset_after: f64,
 }
@@ -216,12 +214,13 @@ impl Shared {
 			used: 0,
 		});
 		if window.reset_at <= now {
-			window.reset_at = now + std::time::Duration::from_secs_f64(WINDOW_SECONDS);
+			window.reset_at = now + self.config.bucket_window;
 			window.used = 0;
 		}
 		window.used += 1;
 		RateLimitSnapshot {
-			remaining: BUCKET_LIMIT.saturating_sub(window.used),
+			limit: self.config.bucket_limit,
+			remaining: self.config.bucket_limit.saturating_sub(window.used),
 			reset_after: window.reset_at.saturating_duration_since(now).as_secs_f64(),
 		}
 	}

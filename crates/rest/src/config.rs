@@ -4,6 +4,7 @@ use protocol::fingerprint::{API_VERSION, WEB_ORIGIN};
 use url::Url;
 
 use crate::identity::ClientIdentity;
+use crate::tuning::RestTuning;
 
 #[derive(Debug, Clone)]
 pub struct RestConfig {
@@ -11,6 +12,7 @@ pub struct RestConfig {
 	pub identity: ClientIdentity,
 	pub timeout: Duration,
 	pub max_body: usize,
+	pub tuning: RestTuning,
 }
 
 impl RestConfig {
@@ -20,6 +22,7 @@ impl RestConfig {
 			identity,
 			timeout: Duration::from_secs(30),
 			max_body: 16 * 1024 * 1024,
+			tuning: RestTuning::default(),
 		}
 	}
 

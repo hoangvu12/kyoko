@@ -17,7 +17,7 @@ use rest::{RestClient, UploadFile};
 use serde_json::json;
 use state::{
 	Changes, ConnectionStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent, RenderedMessage,
-	SharedState, TYPING_TIMEOUT,
+	SendFailure, SharedState, TYPING_TIMEOUT,
 };
 use store::Store;
 use tokio::runtime::Handle;
@@ -37,6 +37,7 @@ mod accounts;
 mod actions;
 mod commands;
 mod expressions;
+mod failures;
 mod themes;
 
 const PAGE_SIZE: u8 = 50;
@@ -70,7 +71,7 @@ pub(crate) enum Internal {
 		cache: bool,
 	},
 	LoadFinished(Snowflake, Page),
-	SendFailed(Nonce),
+	SendFailed(Nonce, SendFailure),
 	Search(SearchResults),
 	DmOpened(Box<Channel>),
 	ThreadOpened(Box<Channel>),
@@ -226,6 +227,9 @@ impl Core {
 		self.restore().await;
 		self.restore_recents().await;
 		let mut gateway_open = true;
+		let rest_stopped = self.rest.stopped();
+		tokio::pin!(rest_stopped);
+		let mut signed_out = false;
 		loop {
 			let flush_at = self.notifier.deadline();
 			let expire_at = self.typing_expiry;
@@ -243,6 +247,10 @@ impl Core {
 					None => break,
 				},
 				Some(message) = internal.recv() => self.on_internal(message),
+				() = &mut rest_stopped, if !signed_out => {
+					signed_out = true;
+					self.on_token_rejected();
+				}
 				() = sleep_until(flush_at.unwrap_or_else(Instant::now)), if flush_at.is_some() => {
 					self.notifier.flush();
 				}
@@ -327,7 +335,18 @@ impl Core {
 		self.notifier.push(changes);
 	}
 
+	fn on_token_rejected(&mut self) {
+		tracing::warn!("the token was rejected, signing out");
+		self.gateway.shutdown();
+		self.apply_local(LocalEvent::Connection(ConnectionStatus::Disconnected(
+			DisconnectReason::AuthenticationFailed,
+		)));
+	}
+
 	fn on_gateway(&mut self, event: GatewayEvent) {
+		if self.rest.is_stopped() && !matches!(event, GatewayEvent::Fatal(_)) {
+			return;
+		}
 		match event {
 			GatewayEvent::Connecting { resuming, .. } => {
 				let status = if resuming {
@@ -378,6 +397,9 @@ impl Core {
 			}
 			GatewayEvent::Fatal(error) => {
 				tracing::error!(%error, "gateway stopped");
+				if error.is_authentication_failure() {
+					self.rest.stop_all();
+				}
 				self.apply_local(LocalEvent::Connection(ConnectionStatus::Disconnected(
 					disconnect_reason(&error),
 				)));
@@ -466,8 +488,8 @@ impl Core {
 			Internal::LoadFinished(channel_id, page) => {
 				self.loading.remove(&(channel_id, page));
 			}
-			Internal::SendFailed(nonce) => {
-				self.apply_local(LocalEvent::PendingFailed { nonce, reason: None })
+			Internal::SendFailed(nonce, reason) => {
+				self.apply_local(LocalEvent::PendingFailed { nonce, reason })
 			}
 			Internal::Search(results) => {
 				*self.search.lock() = Some(Arc::new(results));
@@ -983,7 +1005,7 @@ impl Core {
 			};
 			if let Err(error) = sent {
 				tracing::warn!(%error, "message was not sent");
-				let _ = internal.send(Internal::SendFailed(nonce));
+				let _ = internal.send(Internal::SendFailed(nonce, failures::send_failure(&error)));
 			}
 		});
 	}

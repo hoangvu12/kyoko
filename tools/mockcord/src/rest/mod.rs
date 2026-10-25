@@ -29,7 +29,6 @@ use crate::state::{RateLimitSnapshot, Shared};
 use crate::web;
 
 const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
-const BUCKET_LIMIT: u32 = 5;
 const CHAOS_RATE_LIMIT_PERCENT: f64 = 0.05;
 const CHAOS_RETRY_AFTER: f64 = 0.5;
 
@@ -258,7 +257,7 @@ fn apply_rate_limit_headers(headers: &mut HeaderMap, key: &str, snapshot: &RateL
 	key.hash(&mut hasher);
 	let reset_at = Utc::now().timestamp_millis() as f64 / 1000.0 + snapshot.reset_after;
 	let remaining = if limited { 0 } else { snapshot.remaining };
-	set_header(headers, "x-ratelimit-limit", &BUCKET_LIMIT.to_string());
+	set_header(headers, "x-ratelimit-limit", &snapshot.limit.to_string());
 	set_header(headers, "x-ratelimit-remaining", &remaining.to_string());
 	set_header(
 		headers,

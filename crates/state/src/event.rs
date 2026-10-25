@@ -4,6 +4,7 @@ use std::time::Duration;
 use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
 
 use crate::loaded::Loaded;
+use crate::messages::SendFailure;
 use crate::state::ConnectionStatus;
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
@@ -26,7 +27,7 @@ pub enum LocalEvent {
 	},
 	PendingFailed {
 		nonce: Nonce,
-		reason: Option<String>,
+		reason: SendFailure,
 	},
 	PendingAltered {
 		nonce: Nonce,

@@ -46,6 +46,7 @@ impl Running {
 			notify: changes_notifier(inbox.clone()),
 			hooks: None,
 			gateway: Default::default(),
+			rest: Default::default(),
 			remember_account: false,
 		})
 		.expect("session starts");

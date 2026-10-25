@@ -4,6 +4,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use protocol::{ChannelType, Message, Snowflake, StatusKind};
 use smallvec::SmallVec;
 
+use crate::messages::SendFailure;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuildSummary {
 	pub id: Snowflake,
@@ -66,8 +68,7 @@ pub struct MessageView {
 	pub message: Arc<Message>,
 	pub grouped_with_previous: bool,
 	pub pending: bool,
-	pub failed: bool,
-	pub failure_reason: Option<String>,
+	pub failure: Option<SendFailure>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,
 	pub rendered: Option<Arc<RenderedMessage>>,
