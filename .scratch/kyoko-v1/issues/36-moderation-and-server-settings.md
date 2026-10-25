@@ -4,7 +4,7 @@
 
 **Blocked by:** 23 (Channel sidebar)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Moderation and server settings screens match oxidcord in the parity captures
 - [ ] Edits are permission-checked and paced
