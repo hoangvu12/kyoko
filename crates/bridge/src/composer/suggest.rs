@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use protocol::expressions::unicode::search_unicode;
 use protocol::{ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, ChannelType, Snowflake};
-use state::{MemberListRow, RiskyLock, State};
+use state::{MemberListRow, State};
 
 const MAX_SUGGESTIONS: usize = 8;
 const MIN_EMOJI_QUERY: usize = 2;
@@ -356,16 +356,5 @@ pub fn placeholder(state: &State, channel_id: Snowflake) -> String {
 		}
 		ChannelType::GroupDm => format!("Message {}", channel.name.clone().unwrap_or_default()),
 		_ => format!("Message #{}", channel.name.clone().unwrap_or_default()),
-	}
-}
-
-pub fn lock_text(lock: &RiskyLock) -> String {
-	if lock.reason.is_gate() {
-		format!(
-			"{} Finish this step in the official Discord client.",
-			lock.reason.explanation()
-		)
-	} else {
-		lock.reason.explanation().to_owned()
 	}
 }

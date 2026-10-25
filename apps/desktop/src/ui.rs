@@ -158,6 +158,9 @@ pub fn run(
 					.child(host.view())
 					.child(timeline_slot(slot, transcript))
 					.on_event(move |event| {
+						if event.phase == zgx::input::EventPhase::Capture {
+							return;
+						}
 						let hovering = match event.event {
 							zgx::input::InputEvent::FileHover { .. } => true,
 							zgx::input::InputEvent::FileHoverCancelled

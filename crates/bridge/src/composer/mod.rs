@@ -11,8 +11,7 @@ use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
 
 pub use slash::{Slash, parse_slash};
 pub use suggest::{
-	Query, Suggestion, Trigger, Visual, apply_suggestion, lock_text, placeholder, query_at, suggestions,
-	typing_line,
+	Query, Suggestion, Trigger, Visual, apply_suggestion, placeholder, query_at, suggestions, typing_line,
 };
 
 const MIB: f64 = 1024.0 * 1024.0;
@@ -375,7 +374,7 @@ impl Composer {
 		}
 		if let Some(lock) = self.lock(state, now) {
 			return Some(Notice::Lock {
-				text: lock_text(&lock),
+				text: lock.reason.explanation().to_owned(),
 				confirmable: !lock.reason.is_gate(),
 			});
 		}

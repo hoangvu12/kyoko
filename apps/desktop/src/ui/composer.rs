@@ -346,11 +346,13 @@ impl Link {
 	}
 
 	pub(super) fn files_dropped(&self, paths: &[PathBuf]) {
+		tracing::debug!(files = paths.len(), "files dropped on the window");
 		self.composer.drop_hover.set(false.into());
 		self.composer_add_paths(paths.to_vec());
 	}
 
 	pub(super) fn files_hovering(&self, hovering: bool) {
+		tracing::debug!(hovering, "files over the window");
 		self.composer.drop_hover.set(hovering.into());
 	}
 

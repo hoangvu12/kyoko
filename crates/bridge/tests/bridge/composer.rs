@@ -1,11 +1,13 @@
 use bridge::{ChannelKind, Composer, Notice, Visual};
 use chrono::Utc;
 use mockcord::Reply as MockReply;
-use protocol::{CommandOptionType, Snowflake};
+use std::time::Duration;
+
+use protocol::{ChannelType, CommandOptionType, Snowflake};
 use rest::UploadFile;
 use serde_json::json;
 use session::Command;
-use state::State;
+use state::{RiskyReason, RiskyTarget, State};
 
 use crate::harness::Running;
 
@@ -317,5 +319,166 @@ async fn attachments_are_checked_against_the_limit() {
 		Some(Command::SendMessage { files, content, .. }) if files.len() == 9 && content.is_empty()
 	));
 	assert!(composer.files().is_empty());
+	running.stop().await;
+}
+
+async fn quiet_channel(running: &mut Running, guild_id: Snowflake) -> Snowflake {
+	running.session().send(Command::CreateChannel {
+		guild_id,
+		name: "quiet-corner".to_owned(),
+		kind: ChannelType::GuildText,
+		parent_id: None,
+	});
+	running
+		.until_state("the new channel", move |state| {
+			state.guild(guild_id).is_some_and(|guild| {
+				guild
+					.channels
+					.values()
+					.any(|channel| channel.name.as_deref() == Some("quiet-corner"))
+			})
+		})
+		.await;
+	let channel_id = running
+		.session()
+		.state()
+		.read()
+		.guild(guild_id)
+		.and_then(|guild| {
+			guild
+				.channels
+				.values()
+				.find(|channel| channel.name.as_deref() == Some("quiet-corner"))
+				.map(|channel| channel.id)
+		})
+		.expect("the new channel");
+	running.session().send(Command::SelectChannel {
+		guild_id: Some(guild_id),
+		channel_id,
+	});
+	running
+		.until_state("the empty history", move |state| {
+			state
+				.messages(channel_id)
+				.is_some_and(|cache| cache.reached_start && cache.ordered.is_empty())
+		})
+		.await;
+	channel_id
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_empty_channel_holds_the_send_until_the_user_confirms() {
+	let (mut running, _, _) = opened("composer-lock").await;
+	let guild_id = running.view.sidebar.selected().expect("a selected guild");
+	let channel_id = quiet_channel(&mut running, guild_id).await;
+	let state = running.session().state().clone();
+	let mut composer = Composer::default();
+	composer.open(&state.read(), Some(guild_id), Some(channel_id));
+	assert_eq!(
+		composer.notice(&state.read(), Utc::now()),
+		Some(Notice::Lock {
+			text: RiskyReason::EmptyChannel.explanation().to_owned(),
+			confirmable: true,
+		})
+	);
+	let held = submitted(&mut composer, &running, "first post");
+	assert!(held.commands.is_empty());
+	assert!(held.replace.is_none());
+	let confirmed = composer.confirm_lock(&state.read(), Utc::now());
+	assert_eq!(confirmed.replace, Some((String::new(), 0)));
+	match confirmed.commands.as_slice() {
+		[
+			Command::ConfirmRisky { target, reason },
+			Command::SendMessage {
+				content,
+				channel_id: sent_to,
+				..
+			},
+		] => {
+			assert_eq!(*target, RiskyTarget::Channel(channel_id));
+			assert_eq!(*reason, RiskyReason::EmptyChannel);
+			assert_eq!(content, "first post");
+			assert_eq!(*sent_to, channel_id);
+		}
+		other => panic!("expected a confirmation and the held send, got {other:?}"),
+	}
+	for command in confirmed.commands {
+		running.session().send(command);
+	}
+	running
+		.until_state("the held message to arrive", move |state| {
+			state.messages(channel_id).is_some_and(|cache| {
+				cache.pending.is_empty()
+					&& cache
+						.ordered
+						.iter()
+						.any(|message| message.content == "first post")
+			})
+		})
+		.await;
+	tokio::time::sleep(Duration::from_millis(600)).await;
+	let path = format!("/channels/{channel_id}/messages");
+	let posts = running
+		.server
+		.control()
+		.recording()
+		.requests_to("POST", &path)
+		.count();
+	assert_eq!(posts, 1);
+	assert_eq!(composer.notice(&state.read(), Utc::now()), None);
+	assert!(
+		composer
+			.confirm_lock(&state.read(), Utc::now())
+			.commands
+			.is_empty()
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_server_gate_points_to_the_official_client_without_a_confirm() {
+	let (mut running, mut composer, channel_id) = opened("composer-gate").await;
+	let guild_id = running.view.sidebar.selected().expect("a selected guild");
+	let guild = running
+		.server
+		.fixtures()
+		.guilds
+		.iter()
+		.find(|guild| guild.id == guild_id.0)
+		.expect("the guild fixture");
+	let member = json!({
+		"guild_id": guild_id.to_string(),
+		"user": running.server.fixtures().current_user,
+		"roles": guild.current_member().roles,
+		"joined_at": "2025-01-01T00:00:00+00:00",
+		"pending": true,
+		"flags": 0,
+	});
+	running.server.control().dispatch("GUILD_MEMBER_UPDATE", &member);
+	running
+		.until_state("the screening gate", move |state| {
+			state
+				.channel_lock(channel_id, Utc::now())
+				.is_some_and(|lock| lock.reason == RiskyReason::Screening)
+		})
+		.await;
+	let state = running.session().state().clone();
+	let notice = composer.notice(&state.read(), Utc::now());
+	assert_eq!(
+		notice,
+		Some(Notice::Lock {
+			text: RiskyReason::Screening.explanation().to_owned(),
+			confirmable: false,
+		})
+	);
+	let Some(Notice::Lock { text, .. }) = notice else {
+		unreachable!();
+	};
+	assert!(text.contains("in the official client"));
+	assert!(
+		submitted(&mut composer, &running, "let me in")
+			.commands
+			.is_empty()
+	);
 	running.stop().await;
 }

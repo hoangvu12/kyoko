@@ -15,7 +15,7 @@ pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
 pub use composer::{
 	Attachment, Composer, Notice, Outcome, Query, Reply, Slash, Suggestion, Trigger, Visual,
-	apply_suggestion, failure_text, lock_text, parse_slash, placeholder, query_at, suggestions, typing_line,
+	apply_suggestion, failure_text, parse_slash, placeholder, query_at, suggestions, typing_line,
 };
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
