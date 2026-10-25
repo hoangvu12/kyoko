@@ -43,6 +43,7 @@ mod commands;
 mod deletes;
 mod expressions;
 mod failures;
+mod layout;
 mod locks;
 mod member_requests;
 mod reads;
@@ -114,6 +115,7 @@ pub(crate) enum Internal {
 		channel_id: Snowflake,
 		kept: persist::Kept,
 	},
+	LayoutSaved(bool),
 }
 
 pub(crate) struct CoreParts {
@@ -176,6 +178,7 @@ pub(crate) struct Core {
 	select_created_guild: bool,
 	startup: Option<Startup>,
 	acks: reads::Acks,
+	layout: layout::LayoutWriter,
 	viewing: bool,
 	manual_unread: HashSet<Snowflake>,
 	deletes: mpsc::UnboundedSender<deletes::DeleteJob>,
@@ -253,6 +256,7 @@ impl Core {
 			select_created_guild: false,
 			startup: Some(parts.startup),
 			acks: reads::Acks::new(&parts.tuning),
+			layout: layout::LayoutWriter::new(&parts.tuning),
 			viewing: true,
 			manual_unread: HashSet::new(),
 			deletes,
@@ -624,6 +628,7 @@ impl Core {
 				status,
 			}),
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
+			Internal::LayoutSaved(saved) => self.on_layout_saved(saved),
 			Internal::Kept { channel_id, kept } => self.apply_local(LocalEvent::KeptRestored {
 				channel_id,
 				deleted: kept.deleted,
@@ -1203,6 +1208,7 @@ impl Core {
 			self.subscriptions.deadline(),
 			self.member_requests.deadline(),
 			self.backfill.deadline(),
+			self.layout.deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1215,6 +1221,9 @@ impl Core {
 			self.flush_subscriptions();
 		}
 		self.run_backfill(now);
+		if self.layout.deadline().is_some_and(|due| due <= now) {
+			self.flush_layout();
+		}
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {
 				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),

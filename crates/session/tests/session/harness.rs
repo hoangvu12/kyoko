@@ -111,6 +111,11 @@ impl Options {
 		self
 	}
 
+	pub fn guilds(mut self, count: usize) -> Self {
+		self.mock.guilds = count;
+		self
+	}
+
 	pub fn rest(mut self, tuning: RestTuning) -> Self {
 		self.rest = tuning;
 		self

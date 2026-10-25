@@ -27,6 +27,8 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `channel_send_gap` | 1 s | between two message sends in one channel |
 | `delete_gap` | 1.2 s | between two message deletes in any channels |
 | `bulk_ack_gap` | 2 s | between two `POST /read-states/ack-bulk` requests |
+| `settings_delay` | 1 s | quiet time after the last server-order change before it is saved |
+| `settings_gap` | 10 s | between two server-order saves |
 
 A message send is `POST /channels/<id>/messages`. The defaults sit between how fast a person acts and what Discord tolerates:
 
@@ -48,6 +50,18 @@ Every read receipt goes through one debouncer per channel in the session (`crate
 - Pending acks are not sent at shutdown. Discord keeps the older read position and the next READY brings it back.
 
 The 1.5 s delay follows how people read: a message is acked once it has had time to be seen, and a fast conversation coalesces. Concord debounces for 1 s.
+
+## Server order and folders
+
+The web client keeps the rail's order and folders in the preloaded settings protobuf and saves them with `PATCH /users/@me/settings-proto/1` and `{"settings":"<base64>"}`. kyoko does the same; the legacy `PATCH /users/@me/settings` is not used for it.
+
+- `Command::SetGuildLayout(Vec<RailEntry>)` updates the local layout at once and hands it to one writer (`crates/session/src/task/layout.rs`). The write waits `settings_delay` (1 s) after the last change, so a burst of drops is one request with the final layout, and two writes are at least `settings_gap` (10 s) apart, following Discord's guidance for settings the user changes often. A drop never causes more than one request. The request still goes through the mutation lane.
+- The body is the minimal protobuf `protocol::encode_guild_folders` writes: field 14 (`guild_folders`) of `PreloadedUserSettings` with every rail entry as a `GuildFolder`. A real folder carries `id`, `name` and `color` as wrapped values; a server outside folders is a folder of one with no id, as the web client stores it. The deprecated `guild_positions` is left empty. A sent top-level field replaces the stored one, so the whole field is always sent.
+- Discord answers with the merged settings and dispatches USER_SETTINGS_PROTO_UPDATE, which the state applies as it does READY's folders.
+- If the request fails and no newer change is waiting, the rail goes back to the last saved layout and the session reports a rejection. A newer change waiting is sent at its time instead.
+- A change not yet sent when kyoko quits is lost; the next READY brings back the saved order.
+
+The settings-proto gateway capability (bit 9) is still not advertised: Discord sends `user_settings_proto` in READY and the update event without it, and the write path does not depend on it.
 
 ## Deleting messages
 

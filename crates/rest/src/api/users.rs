@@ -53,6 +53,11 @@ impl RestClient {
 			.await
 	}
 
+	pub async fn patch_preloaded_settings(&self, settings: String) -> Result<Value> {
+		self.send(Request::patch("/users/@me/settings-proto/1").json(&json!({ "settings": settings })))
+			.await
+	}
+
 	pub async fn auth_sessions(&self) -> Result<Value> {
 		self.send(Request::get("/auth/sessions")).await
 	}

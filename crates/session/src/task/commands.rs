@@ -2,10 +2,10 @@ use protocol::{CreateMessage, MessageReference, MessageReferenceKind, Permission
 use rest::UploadFile;
 use rest::api::image_data_uri;
 use serde_json::{Value, json};
-use state::{Loaded, LocalEvent, guild_folders_settings};
+use state::Loaded;
 
 use super::actions::{mute_config, object, some, timestamp};
-use super::{Command, Core, CustomStatus, Internal};
+use super::{Command, Core, CustomStatus};
 
 const PNG: &str = "image/png";
 const DEFAULT_ARCHIVE_MINUTES: u32 = 1440;
@@ -900,22 +900,5 @@ impl Core {
 		self.status = status;
 		self.custom_status = custom_status.map(|text| CustomStatus { text, emoji: None });
 		self.publish_presence();
-	}
-}
-
-impl Core {
-	fn set_guild_layout(&mut self, layout: &[state::RailEntry]) {
-		let previous = guild_folders_settings(&self.state.read().guild_layout());
-		let body = guild_folders_settings(layout);
-		self.apply_local(LocalEvent::Loaded(Box::new(Loaded::UserSettings(body.clone()))));
-		let rest = self.rest.clone();
-		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
-			if let Err(error) = rest.patch_user_settings(body).await {
-				tracing::warn!(%error, "rest call failed");
-				let _ = internal.send(Internal::Loaded(Loaded::UserSettings(previous)));
-				let _ = internal.send(Internal::Rejected("server order failed".to_owned()));
-			}
-		});
 	}
 }

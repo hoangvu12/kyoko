@@ -5,6 +5,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
+use protocol::{decode_guild_folders, encode_guild_folders};
 use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult};
@@ -16,6 +17,7 @@ type NoContent = Result<StatusCode, ApiError>;
 
 const AUDIT_REASON: &str = "x-audit-log-reason";
 const DEFAULT_REACTION_LIMIT: usize = 25;
+const PRELOADED_SETTINGS: u32 = 1;
 
 fn audit_reason(headers: &HeaderMap) -> Option<String> {
 	let raw = headers.get(AUDIT_REASON)?.to_str().ok()?;
@@ -77,8 +79,45 @@ pub async fn patch_profile(State(shared): Mock, Json(body): Json<Value>) -> ApiR
 }
 
 pub async fn patch_settings(State(shared): Mock, Json(body): Json<Value>) -> ApiResult {
+	if let Some(folders) = body["guild_folders"].as_array() {
+		shared.store.lock().guild_folders = Some(folders.clone());
+	}
 	shared.hub.broadcast("USER_SETTINGS_UPDATE", &body);
 	Ok(Json(body))
+}
+
+pub async fn patch_settings_proto(
+	State(shared): Mock,
+	Path(kind): Path<u32>,
+	Json(body): Json<Value>,
+) -> ApiResult {
+	if kind != PRELOADED_SETTINGS {
+		return Err(ApiError::invalid_body("Only preloaded settings are kept"));
+	}
+	let encoded = body["settings"]
+		.as_str()
+		.ok_or(ApiError::invalid_body("settings is required"))?;
+	let folders =
+		decode_guild_folders(encoded).ok_or(ApiError::invalid_body("Only guild folders are kept"))?;
+	let legacy: Vec<Value> = folders
+		.folders
+		.iter()
+		.map(|folder| {
+			json!({
+				"id": folder.id,
+				"name": folder.name,
+				"color": folder.color,
+				"guild_ids": folder.guild_ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+			})
+		})
+		.collect();
+	shared.store.lock().guild_folders = Some(legacy);
+	let settings = encode_guild_folders(&folders);
+	shared.hub.broadcast(
+		"USER_SETTINGS_PROTO_UPDATE",
+		&json!({ "settings": { "type": PRELOADED_SETTINGS, "proto": settings }, "partial": false }),
+	);
+	Ok(Json(json!({ "settings": settings })))
 }
 
 pub async fn patch_guild_settings(

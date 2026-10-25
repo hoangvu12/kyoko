@@ -245,10 +245,18 @@ pub fn build(
 			value
 		})
 		.collect();
-	let folder_guild_ids: Vec<String> = live_guilds(fixtures, &store)
-		.take(2)
-		.map(|guild| guild.id.to_string())
-		.collect();
+	let guild_folders = store.guild_folders.clone().unwrap_or_else(|| {
+		let folder_guild_ids: Vec<String> = live_guilds(fixtures, &store)
+			.take(2)
+			.map(|guild| guild.id.to_string())
+			.collect();
+		vec![json!({
+			"id": MOCK_FOLDER_ID,
+			"name": "Mock folder",
+			"color": MOCK_FOLDER_COLOR,
+			"guild_ids": folder_guild_ids,
+		})]
+	});
 	let mut ready = json!({
 		"v": version,
 		"user": store.current_user,
@@ -271,14 +279,7 @@ pub fn build(
 		"api_code_version": API_CODE_VERSION,
 		"apex_experiments": { "installation": installation_id(shared.config.seed) },
 		"user_settings_proto": null,
-		"user_settings": {
-			"guild_folders": [{
-				"id": MOCK_FOLDER_ID,
-				"name": "Mock folder",
-				"color": MOCK_FOLDER_COLOR,
-				"guild_ids": folder_guild_ids,
-			}],
-		},
+		"user_settings": { "guild_folders": guild_folders },
 	});
 	if dedupe {
 		ready["users"] = json!(referenced_users(fixtures, &store));

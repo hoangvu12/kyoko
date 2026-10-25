@@ -46,6 +46,7 @@ pub struct Store {
 	pub created_guilds: HashMap<u64, Value>,
 	pub read_state_version: Versions,
 	pub settings_version: Versions,
+	pub guild_folders: Option<Vec<Value>>,
 	last_id: u64,
 }
 
@@ -146,6 +147,7 @@ impl Store {
 			joined_threads: BTreeSet::new(),
 			read_state_version: Versions::default(),
 			settings_version: Versions::default(),
+			guild_folders: None,
 			last_id,
 		}
 	}

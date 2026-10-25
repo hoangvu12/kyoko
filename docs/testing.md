@@ -34,6 +34,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `hooks(..)` installs session hooks.
 - `heartbeat_ms(ms)` shortens mockcord's heartbeat interval.
 - `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
+- `guilds(n)` sets how many guilds mockcord makes (3 by default; the first two are in the mock folder). mockcord keeps the folders a `PATCH /users/@me/settings-proto/1` writes and serves them in later READYs.
 - `members(n)` sets mockcord's members per guild, for member lists longer than a few buckets.
 - `caches(CacheLimits { .. })` shrinks the cache limits (see `docs/caches.md`), so tests reach them with a few channels and pages.
 - `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
@@ -74,7 +75,7 @@ Wait on the effect you are about to assert. For example, wait for a RESUME frame
 
 `Recording::requests_to(method, pattern)` and `frames_with(opcode)` filter. Patterns compare path segments. `*` or `{name}` matches one segment, `**` matches any number, and `"*"` as the method matches any method. Use the `at` timestamps to assert spacing and pacing. Group frames by `connection` to tell an IDENTIFY on a fresh socket from a RESUME after a drop.
 
-The mock CDN serves avatars (`/cdn/avatars/<user>/<hash>.<png|jpg|webp|gif>`; `a_` hashes are animated as GIF, or as WebP with `animated=true`, four frames of 100 ms), emoji (`/cdn/emojis/<id>.<ext>`) and signed attachments (`/cdn/attachments/<channel>/<id>/<file>`). Attachments answer 404 when `ex` has passed or `hm` does not match, honour `width`, `height` and `format=webp`, and are re-signed with a fresh expiry whenever a messages list is served. `Server::post_image(channel, filename, Signature::{Fresh, Expired, Revoked})` posts a message with one such attachment. Media tests live in `crates/bridge/tests/bridge/media.rs`.
+The mock CDN serves avatars (`/cdn/avatars/<user>/<hash>.<png|jpg|webp|gif>`; `a_` hashes are animated as GIF, or as WebP with `animated=true`, four frames of 100 ms), server icons (`/cdn/icons/<guild>/<hash>.<ext>`, generated like avatars), emoji (`/cdn/emojis/<id>.<ext>`) and signed attachments (`/cdn/attachments/<channel>/<id>/<file>`). Attachments answer 404 when `ex` has passed or `hm` does not match, honour `width`, `height` and `format=webp`, and are re-signed with a fresh expiry whenever a messages list is served. `Server::post_image(channel, filename, Signature::{Fresh, Expired, Revoked})` posts a message with one such attachment. Media tests live in `crates/bridge/tests/bridge/media.rs`.
 
 Recorded traffic includes the Authorization header and the token in IDENTIFY. It stays in memory: never write a recording to disk or to logs.
 

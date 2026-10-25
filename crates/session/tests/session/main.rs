@@ -8,6 +8,7 @@ mod gateway;
 mod harness;
 mod hooks;
 mod kept;
+mod layout;
 mod locks;
 mod members;
 mod reads;

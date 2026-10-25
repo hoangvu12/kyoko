@@ -43,7 +43,7 @@ pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply
 pub use notifications::{AlertKind, Attention};
 pub use permissions::DM_PERMISSIONS;
 pub use references::{BackfillNeeds, Referenced, ReplyTarget, reply_reference};
-pub use settings::{GuildFolder, RailEntry, guild_folders_settings};
+pub use settings::{GuildFolder, RailEntry, guild_folders_proto, guild_folders_settings};
 pub use state::{
 	ConnectionStatus, DisconnectReason, Rejection, SecretStorage, Selection, SessionInfo, SharedState, State,
 	TYPING_TIMEOUT,

@@ -224,3 +224,30 @@ pub fn guild_folders_settings(layout: &[RailEntry]) -> Value {
 		.collect();
 	json!({ "guild_folders": folders })
 }
+
+pub fn guild_folders_proto(layout: &[RailEntry]) -> ProtoGuildFolders {
+	let folders = layout
+		.iter()
+		.map(|entry| match entry {
+			RailEntry::Guild(id) => ProtoGuildFolder {
+				guild_ids: vec![*id],
+				..ProtoGuildFolder::default()
+			},
+			RailEntry::Folder {
+				id,
+				name,
+				color,
+				guilds,
+			} => ProtoGuildFolder {
+				id: Some(*id as i64),
+				name: name.clone(),
+				color: color.map(u64::from),
+				guild_ids: guilds.clone(),
+			},
+		})
+		.collect();
+	ProtoGuildFolders {
+		folders,
+		positions: Vec::new(),
+	}
+}

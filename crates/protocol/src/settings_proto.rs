@@ -159,3 +159,82 @@ pub fn decode_guild_folders(encoded: &str) -> Option<ProtoGuildFolders> {
 		_ => None,
 	})
 }
+
+struct Writer {
+	bytes: Vec<u8>,
+}
+
+impl Writer {
+	fn new() -> Self {
+		Self { bytes: Vec::new() }
+	}
+
+	fn varint(&mut self, mut value: u64) {
+		while value >= 0x80 {
+			self.bytes.push((value as u8 & 0x7f) | 0x80);
+			value >>= 7;
+		}
+		self.bytes.push(value as u8);
+	}
+
+	fn key(&mut self, number: u32, wire: u64) {
+		self.varint(u64::from(number) << 3 | wire);
+	}
+
+	fn varint_field(&mut self, number: u32, value: u64) {
+		self.key(number, 0);
+		self.varint(value);
+	}
+
+	fn bytes_field(&mut self, number: u32, bytes: &[u8]) {
+		self.key(number, 2);
+		self.varint(bytes.len() as u64);
+		self.bytes.extend_from_slice(bytes);
+	}
+
+	fn packed_ids(&mut self, number: u32, ids: &[Snowflake]) {
+		if ids.is_empty() {
+			return;
+		}
+		let packed: Vec<u8> = ids.iter().flat_map(|id| id.0.to_le_bytes()).collect();
+		self.bytes_field(number, &packed);
+	}
+
+	fn wrapped_varint(&mut self, number: u32, value: u64) {
+		let mut inner = Writer::new();
+		inner.varint_field(WRAPPED_VALUE, value);
+		self.bytes_field(number, &inner.bytes);
+	}
+
+	fn wrapped_text(&mut self, number: u32, text: &str) {
+		let mut inner = Writer::new();
+		inner.bytes_field(WRAPPED_VALUE, text.as_bytes());
+		self.bytes_field(number, &inner.bytes);
+	}
+}
+
+fn encode_folder(folder: &ProtoGuildFolder) -> Vec<u8> {
+	let mut writer = Writer::new();
+	writer.packed_ids(FOLDER_GUILD_IDS, &folder.guild_ids);
+	if let Some(id) = folder.id {
+		writer.wrapped_varint(FOLDER_ID, id as u64);
+	}
+	if let Some(name) = &folder.name {
+		writer.wrapped_text(FOLDER_NAME, name);
+	}
+	if let Some(color) = folder.color {
+		writer.wrapped_varint(FOLDER_COLOR, color);
+	}
+	writer.bytes
+}
+
+pub fn encode_guild_folders(folders: &ProtoGuildFolders) -> String {
+	let mut inner = Writer::new();
+	for folder in &folders.folders {
+		inner.bytes_field(FOLDERS, &encode_folder(folder));
+	}
+	inner.packed_ids(POSITIONS, &folders.positions);
+	let mut settings = Writer::new();
+	settings.bytes_field(PRELOADED_GUILD_FOLDERS, &inner.bytes);
+	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
+}
