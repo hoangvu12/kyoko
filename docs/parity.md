@@ -173,11 +173,13 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `friends-online` | 34 | Select Home, then open Friends on the Online tab. | no |
-| `friends-all` | 34 | As `friends-online`, on the All tab. | no |
-| `friends-pending` | 34 | As `friends-online`, on the Pending tab. | no |
-| `friends-blocked` | 34 | As `friends-online`, on the Blocked tab. | no |
-| `friends-add` | 34 | As `friends-online`, on the Add Friend tab. | no |
+| `friends-online` | 34 | Select Home, then open Friends on the Online tab. | yes |
+| `friends-all` | 34 | As `friends-online`, on the All tab. | yes |
+| `friends-pending` | 34 | As `friends-online`, on the Pending tab. | yes |
+| `friends-blocked` | 34 | As `friends-online`, on the Blocked tab. | yes |
+| `friends-add` | 34 | As `friends-online`, on the Add Friend tab. | yes |
+
+Oxidcord's steps wait 2 seconds after the DM opens before showing Friends, because its selection sync otherwise closes the page again.
 
 ### 35 Community flows
 

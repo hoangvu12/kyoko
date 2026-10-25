@@ -2,6 +2,7 @@ mod community;
 mod composer;
 mod connection;
 mod expressions;
+mod friends;
 mod home;
 mod members;
 mod message_actions;
@@ -44,6 +45,7 @@ use crate::capture::{self, Capture, Opening};
 use crate::community::CommunityLayer;
 use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
+use crate::friends::{self as friends_page, FriendsPage};
 use crate::integration::{Desktop, Integration};
 use crate::member_list::{self, MemberListView};
 use crate::moderation::ModerationLayer;
@@ -367,6 +369,7 @@ pub(crate) struct Link {
 	sidebar_avatars: RefCell<Vec<String>>,
 	dms: DmSidebarView,
 	dm_avatars: RefCell<Vec<String>>,
+	friends: FriendsPage,
 	members: MemberListView,
 	member_avatars: RefCell<Vec<String>>,
 	reported_slot: Cell<Slot>,
@@ -478,6 +481,7 @@ impl Link {
 			sidebar_avatars: RefCell::new(Vec::new()),
 			dms: DmSidebarView::new(host),
 			dm_avatars: RefCell::new(Vec::new()),
+			friends: FriendsPage::new(host),
 			members: MemberListView::new(host),
 			member_avatars: RefCell::new(Vec::new()),
 			reported_slot: Cell::new(Slot::default()),
@@ -527,6 +531,7 @@ impl Link {
 		Link::install_sign_in(host, &link);
 		sidebar::install_actions(host, &link);
 		dm_sidebar::install_actions(host, &link);
+		friends_page::install_actions(host, &link);
 		Link::install_composer(host, &link);
 		Link::install_expressions(host, &link);
 		Link::install_message_actions(&link);
@@ -769,6 +774,12 @@ impl Link {
 				self.drive_home(capture.screen);
 				self.until_settled(&capture, true).await;
 			}
+			capture::Screen::Friends(_) => {
+				self.select_home();
+				self.until_settled(&capture, true).await;
+				self.drive_friends(capture.screen);
+				self.until_capture(|link| link.friends_settled()).await;
+			}
 			capture::Screen::Composer | capture::Screen::ComposerReply => {
 				self.drive_composer(&capture.screen);
 				let started = Instant::now();
@@ -1000,6 +1011,7 @@ impl Link {
 			if dms {
 				self.publish_dms(&state);
 			}
+			self.friends_apply(&state, changes);
 			self.composer_apply(&state, changes);
 			self.expressions_apply(&state, changes);
 			self.publish_actions(&state, changes);
@@ -1187,6 +1199,7 @@ impl Link {
 		names.extend(self.thread_images());
 		names.extend(self.community_images());
 		names.extend(self.server_images());
+		names.extend(self.friends_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

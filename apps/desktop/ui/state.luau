@@ -69,6 +69,19 @@ export type DmRow = {
 	mentions: number,
 }
 export type ConnectionBanner = { shown: boolean, state: string, text: string, tone: string, retry: boolean }
+export type FriendRow = {
+	kind: string,
+	key: string,
+	title: string?,
+	id: string,
+	name: string,
+	username: string,
+	avatar: string,
+	status: string,
+	subtitle: string,
+	relation: string,
+}
+export type FriendAdd = { phase: string, text: string }
 export type ComposerReplace = { serial: number, text: string, caret: number }
 export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
 export type ComposerFile = { id: string, name: string, size: string, image: string }
@@ -262,6 +275,15 @@ M.dms = {
 
 M.home = {
 	page = ui.shared("home.page", ""),
+}
+
+M.friends = {
+	tab = ui.shared("friends.tab", "online"),
+	rows = ui.shared("friends.rows", {} :: { FriendRow }),
+	empty = ui.shared("friends.empty", ""),
+	pending = ui.shared("friends.pending", 0),
+	active = ui.shared("friends.active", {} :: { FriendRow }),
+	add = ui.shared("friends.add", { phase = "idle", text = "" } :: FriendAdd),
 }
 
 M.timeline = {

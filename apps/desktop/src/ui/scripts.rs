@@ -254,7 +254,44 @@ fn the_interface_loads_and_builds_every_screen() {
 		&mut app,
 		"a home page",
 		"Coming in a later version.",
-		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],
+		&[("sidebar.guild_id", json!("")), ("home.page", json!("nitro"))],
+	);
+	shows(
+		&mut app,
+		"the friends list",
+		"ONLINE — 2",
+		&[
+			("home.page", json!("friends")),
+			("friends.rows", friend_rows()),
+			("friends.pending", json!(1)),
+			("friends.active", json!([friend_rows()[2]])),
+		],
+	);
+	shows(&mut app, "friends active now", "Playing Hades II", &[]);
+	shows(
+		&mut app,
+		"no pending friends",
+		"There are no pending friend requests.",
+		&[
+			("friends.tab", json!("pending")),
+			("friends.rows", json!([])),
+			("friends.empty", json!("There are no pending friend requests.")),
+			("friends.active", json!([])),
+		],
+	);
+	shows(&mut app, "a quiet active now", "It's quiet for now...", &[]);
+	shows(
+		&mut app,
+		"the add friend form",
+		"Success! Your friend request to grace was sent.",
+		&[
+			("friends.tab", json!("add")),
+			("friends.empty", json!("")),
+			(
+				"friends.add",
+				json!({ "phase": "sent", "text": "Success! Your friend request to grace was sent." }),
+			),
+		],
 	);
 }
 
@@ -842,6 +879,99 @@ pub(super) fn rail_items() -> serde_json::Value {
 			"guilds": [guild("11", "Games", false, 0), guild("12", "Music", true, 0)],
 		},
 	])
+}
+
+fn friend_rows() -> serde_json::Value {
+	let person = |id: &str, name: &str, status: &str, subtitle: &str, relation: &str| {
+		json!({
+			"kind": "person", "key": format!("p{id}"), "id": id, "name": name, "username": name,
+			"avatar": "", "status": status, "subtitle": subtitle, "relation": relation,
+		})
+	};
+	json!([
+		{ "kind": "title", "key": "tONLINE — 2", "title": "ONLINE — 2" },
+		person("41", "ada", "online", "Online", "friend"),
+		person("42", "grace", "dnd", "Playing Hades II", "friend"),
+		{ "kind": "title", "key": "tINCOMING — 1", "title": "INCOMING — 1" },
+		person("43", "linus", "offline", "Incoming Friend Request", "incoming"),
+		person("44", "ken", "offline", "Outgoing Friend Request", "outgoing"),
+		person("45", "troll", "offline", "Blocked", "blocked"),
+	])
+}
+
+#[test]
+fn the_friends_page_reaches_every_relationship_action() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "mentions");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the friends page",
+		"ONLINE — 2",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("")),
+			("home.page", json!("friends")),
+			("friends.rows", friend_rows()),
+		],
+	);
+	for (button, action, id) in [
+		("friend_message_41", "friends.message", "41"),
+		("friend_accept_43", "friends.accept", "43"),
+		("friend_ignore_43", "friends.remove", "43"),
+		("friend_cancel_44", "friends.remove", "44"),
+		("friend_unblock_45", "friends.remove", "45"),
+	] {
+		calls.borrow_mut().clear();
+		app.click(button);
+		app.frames(2);
+		assert_eq!(
+			last_call(&calls, action),
+			Some(json!(id)),
+			"{button} calls {action}"
+		);
+		assert!(
+			last_call(&calls, "friends.open_profile").is_none(),
+			"{button} does not open the profile"
+		);
+	}
+	for (item, action) in [
+		("friend_remove_42", "friends.remove"),
+		("friend_block_42", "friends.block"),
+		("friend_copy_42", "friends.copy_id"),
+	] {
+		app.click("friend_more_42");
+		app.frames(2);
+		app.click(item);
+		app.frames(2);
+		assert_eq!(
+			last_call(&calls, action),
+			Some(json!("42")),
+			"{item} calls {action}"
+		);
+	}
+	app.click("friend_open_41");
+	app.frames(2);
+	let opened = last_call(&calls, "friends.open_profile").expect("a row opens the profile");
+	assert_eq!(opened["id"], json!("41"));
+	app.click("friends_tab_pending");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "friends.select_tab"), Some(json!("pending")));
+	app.type_text("friends_search", "gra");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "friends.filter"), Some(json!("gra")));
+	shows(
+		&mut app,
+		"the add friend tab",
+		"ADD FRIEND",
+		&[("friends.tab", json!("add"))],
+	);
+	app.type_text("friends_add_input", "grace");
+	app.frames(2);
+	app.click("friends_add_send");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "friends.add"), Some(json!("grace")));
 }
 
 fn dm_rows() -> serde_json::Value {

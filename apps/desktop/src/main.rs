@@ -6,6 +6,7 @@ mod community;
 mod dm_sidebar;
 mod fonts;
 mod frame;
+mod friends;
 mod integration;
 mod member_list;
 mod moderation;

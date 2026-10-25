@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use bridge::FriendsTab;
+
 use crate::pickers::Tab;
 
 pub const UNKNOWN_SCREEN: u8 = 3;
@@ -64,6 +66,7 @@ pub enum Screen {
 	Moderation(&'static str),
 	Toast,
 	Disconnected,
+	Friends(FriendsTab),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,6 +116,11 @@ impl Screen {
 			"guild-notifications" => Some(Screen::Community(Community::GuildNotifications)),
 			"toast" => Some(Screen::Toast),
 			"connection-offline" => Some(Screen::Disconnected),
+			"friends-online" => Some(Screen::Friends(FriendsTab::Online)),
+			"friends-all" => Some(Screen::Friends(FriendsTab::All)),
+			"friends-pending" => Some(Screen::Friends(FriendsTab::Pending)),
+			"friends-blocked" => Some(Screen::Friends(FriendsTab::Blocked)),
+			"friends-add" => Some(Screen::Friends(FriendsTab::Add)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -157,7 +165,8 @@ impl Screen {
 			| Screen::ServerSettings(_)
 			| Screen::Moderation(_)
 			| Screen::Toast
-			| Screen::Disconnected => Some(Opening::First),
+			| Screen::Disconnected
+			| Screen::Friends(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

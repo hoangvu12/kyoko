@@ -7,6 +7,7 @@ mod connection;
 mod deep_link;
 mod dm_list;
 mod emoji_picker;
+mod friends;
 mod gif_picker;
 mod guild_admin;
 mod images;
@@ -50,6 +51,7 @@ pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,
 	category_title, custom_markup, toned,
 };
+pub use friends::{FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, status_label};
 pub use gif_picker::{
 	GIF_SEARCH_DELAY, GIF_SUGGESTION_CHIPS, GifSearch, GifTile, GifView, gif_masonry, gif_motion, gif_still,
 	gif_tile_height, is_video_url,

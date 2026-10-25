@@ -305,4 +305,24 @@ function M.server_action(name: string, argument: any?)
 	ui.invoke("server." .. name, argument)
 end
 
+function M.friends_tab(key: string)
+	return ui.action("friends.select_tab", key)
+end
+
+function M.friends_filter(text: string)
+	ui.invoke("friends.filter", text)
+end
+
+function M.add_friend(username: string)
+	ui.invoke("friends.add", username)
+end
+
+function M.friends_act(name: string, id: string)
+	ui.invoke("friends." .. name, id)
+end
+
+function M.open_friend_profile(id: string, x: number, y: number)
+	ui.invoke("friends.open_profile", { id = id, x = x, y = y })
+end
+
 return M

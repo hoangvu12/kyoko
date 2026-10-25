@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{DmList, Inbox, MemberPanel, Rail, Sidebar, Timeline, changes_notifier};
+use bridge::{DmList, FriendsView, Inbox, MemberPanel, Rail, Sidebar, Timeline, changes_notifier};
 use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
 use session::{Command, GatewayTuning, Session, SessionConfig};
@@ -19,6 +19,7 @@ pub struct View {
 	pub timeline: Timeline,
 	pub rail: Rail,
 	pub dms: DmList,
+	pub friends: FriendsView,
 	pub members: MemberPanel,
 	pub member_publishes: usize,
 }
@@ -120,6 +121,7 @@ impl Running {
 			self.view.timeline.apply(&state, &changes);
 			self.view.rail.apply(&state, &changes);
 			self.view.dms.apply(&state, &changes);
+			self.view.friends.apply(&state, &changes);
 			self.view
 				.members
 				.apply(&state, &changes, std::time::Instant::now());

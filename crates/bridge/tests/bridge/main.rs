@@ -4,6 +4,7 @@ mod connection;
 mod deep_links;
 mod dms;
 mod expressions;
+mod friends;
 mod guild_admin;
 mod harness;
 mod media;

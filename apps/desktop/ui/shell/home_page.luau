@@ -1,5 +1,6 @@
 local theme = require("../theme")
 local state = require("../state")
+local friends = require("./friends")
 
 local TITLES = {
 	friends = "Friends",
@@ -12,10 +13,11 @@ local function title(): string
 	return TITLES[state.home.page:get()] or ""
 end
 
-return function()
+local function placeholder()
 	return ui.show(
 		function()
-			return state.home.page:get() ~= ""
+			local page = state.home.page:get()
+			return page ~= "" and page ~= "friends"
 		end,
 		ui.column {
 			absolute = true,
@@ -40,4 +42,10 @@ return function()
 			},
 		}
 	)
+end
+
+return function()
+	return ui.show(function()
+		return state.home.page:get() == "friends"
+	end, friends(), placeholder())
 end

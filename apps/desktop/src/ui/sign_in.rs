@@ -199,6 +199,7 @@ impl Link {
 			self.sidebar_avatars.borrow_mut().clear();
 			self.dms.reset();
 			self.dm_avatars.borrow_mut().clear();
+			self.friends.reset();
 			self.members.reset();
 			self.member_avatars.borrow_mut().clear();
 			for value in [
