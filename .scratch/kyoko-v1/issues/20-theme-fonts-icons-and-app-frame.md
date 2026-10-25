@@ -4,7 +4,7 @@
 
 **Blocked by:** 19 (Parity capture tooling)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] oxidcord's theme tokens (colours, UI font, code font) are ported to zgx theme data
 - [ ] oxidcord's icons are available to Luau
