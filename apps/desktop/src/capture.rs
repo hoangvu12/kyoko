@@ -33,6 +33,7 @@ pub enum Screen {
 	MessageMenu,
 	MemberList,
 	MemberListScrolled,
+	Settings(&'static str),
 }
 
 impl Screen {
@@ -52,7 +53,9 @@ impl Screen {
 			"message-context-menu" => Some(Screen::MessageMenu),
 			"member-list" => Some(Screen::MemberList),
 			"member-list-scrolled" => Some(Screen::MemberListScrolled),
-			other => mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase),
+			other => settings_page(other)
+				.map(Screen::Settings)
+				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
 		}
 	}
 
@@ -70,13 +73,26 @@ impl Screen {
 			| Screen::MessageHover
 			| Screen::MessageMenu
 			| Screen::MemberList
-			| Screen::MemberListScrolled => Some(Opening::First),
+			| Screen::MemberListScrolled
+			| Screen::Settings(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}
 
 	pub fn is_login(self) -> bool {
 		matches!(self, Screen::LoginTos | Screen::LoginToken)
+	}
+}
+
+fn settings_page(name: &str) -> Option<&'static str> {
+	match name {
+		"settings-my-account" => Some("my-account"),
+		"settings-appearance" => Some("appearance"),
+		"settings-accessibility" => Some("accessibility"),
+		"settings-chat" => Some("chat"),
+		"settings-notifications" => Some("notifications"),
+		"settings-advanced" => Some("advanced"),
+		_ => None,
 	}
 }
 

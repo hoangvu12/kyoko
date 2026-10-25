@@ -11,6 +11,7 @@ local member_list = require("./member_list")
 local login = require("./login")
 local storage_notice = require("./storage_notice")
 local home_page = require("./home_page")
+local settings = require("./settings")
 
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
@@ -26,6 +27,7 @@ return function()
 	local members_room = wider(MEMBER_LIST_MIN_WIDTH)
 	local shell = ui.column {
 		ref = root,
+		relative = true,
 		w_full = true,
 		h_full = true,
 		bg = theme.color.background_tertiary,
@@ -75,6 +77,7 @@ return function()
 				home_page(),
 			},
 		},
+		settings(),
 	}
 	return ui.show(function()
 		return state.login.screen:get() == "main"

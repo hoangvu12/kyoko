@@ -81,6 +81,8 @@ export type MemberJump = {
 	serial: number,
 	offset: number,
 }
+export type SettingsAccount = { name: string, username: string, email: string, phone: string, accent: string, status: string, avatar: string }
+export type SettingsAbout = { data_dir: string, version: string }
 
 local M = {}
 
@@ -166,6 +168,14 @@ M.window = {
 
 M.shell = {
 	members_visible = ui.state("members_visible", true),
+}
+
+M.settings = {
+	page = ui.shared("settings.page", ""),
+	values = ui.shared("settings.values", {} :: { [string]: any }),
+	account = ui.shared("settings.account", nil :: SettingsAccount?),
+	notes = ui.shared("settings.notes", {} :: { [string]: string }),
+	about = ui.shared("settings.about", { data_dir = "", version = "" } :: SettingsAbout),
 }
 
 return M

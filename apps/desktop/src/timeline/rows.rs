@@ -1,9 +1,10 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon};
 use chrono::NaiveDate;
+use media::cdn::Quality;
 use protocol::{MessageFlags, Snowflake};
 use session::Command;
 use zgx::compose::prelude::*;
@@ -69,11 +70,25 @@ fn color_or(color: Option<u32>, fallback: &str) -> Themed<Color> {
 	}
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Prefs {
 	pub inline_media: bool,
 	pub link_previews: bool,
 	pub show_reactions: bool,
+	pub quality: Quality,
+	pub link_warning: bool,
+}
+
+impl Prefs {
+	pub fn of(settings: &store::Settings) -> Self {
+		Self {
+			inline_media: settings.chat.inline_media,
+			link_previews: settings.chat.link_previews,
+			show_reactions: settings.chat.show_reactions,
+			quality: bridge::media_quality(settings),
+			link_warning: settings.chat.link_warning,
+		}
+	}
 }
 
 impl Default for Prefs {
@@ -82,6 +97,8 @@ impl Default for Prefs {
 			inline_media: true,
 			link_previews: true,
 			show_reactions: true,
+			quality: Quality::Fitted,
+			link_warning: true,
 		}
 	}
 }
@@ -93,7 +110,7 @@ pub struct RowEnv {
 	pub links: Rc<Links>,
 	pub channel_name: Signal<String>,
 	pub code_font: String,
-	pub prefs: Prefs,
+	pub prefs: Cell<Prefs>,
 	pub revealed: RefCell<HashSet<(Snowflake, usize)>>,
 	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
 	pub commands: Rc<Sender>,

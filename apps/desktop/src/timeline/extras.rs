@@ -19,7 +19,7 @@ const CHIP_HEIGHT: f32 = 24.;
 
 pub fn reactions(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 	let reactions = &entry.message.reactions;
-	if reactions.is_empty() || !env.prefs.show_reactions {
+	if reactions.is_empty() || !env.prefs.get().show_reactions {
 		return None;
 	}
 	let shared = Rc::new(entry.clone());

@@ -3,7 +3,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{DeepLink, Inbox, parse_deep_link};
+use bridge::{DeepLink, Inbox, SettingKey, parse_deep_link};
 use platform::hotkeys::{HotkeyEvent, Hotkeys};
 use platform::tray::TrayEvent;
 use protocol::Snowflake;
@@ -26,6 +26,11 @@ const TOGGLE_WINDOW: &str = "toggle_window";
 const FOCUS_POLL: Duration = Duration::from_millis(500);
 const ATTENTION_DELAY: Duration = Duration::from_millis(750);
 const HOST_PREFIX: &str = "host:";
+const KEYBIND_INVALID: &str = "That key combination can't be used.";
+const KEYBINDS_UNAVAILABLE: &str = "Global keybinds are unavailable on this system.";
+const TEST_BODY: &str = "Desktop notifications are working.";
+const TEST_NOTE_KEY: &str = "notifications.test";
+const TEST_SENT: &str = "Notification sent.";
 
 pub enum Request {
 	Toggle,
@@ -168,6 +173,7 @@ impl Integration {
 		cx.tasks.spawn(async move { serve(requests).await });
 		let focus = Rc::downgrade(&integration);
 		cx.tasks.spawn(async move { watch_focus(focus).await });
+		integration.watch_settings(host);
 		if desktop.background && integration.tray.borrow().is_some() {
 			integration.hide();
 		}
@@ -194,6 +200,68 @@ impl Integration {
 				self.link.open(guild_id, channel_id);
 			}
 		}
+	}
+
+	fn watch_settings(self: &Rc<Self>, host: &ScriptHost) {
+		let watcher = Rc::downgrade(self);
+		self.link.settings_view().on_change(move |key, settings| {
+			let integration = watcher.upgrade()?;
+			match key {
+				SettingKey::ToggleWindow => integration.rebind(settings.keybinds.toggle_window.as_deref()),
+				SettingKey::OpenOnLogin | SettingKey::DiscordLinks => {
+					apply_startup_settings(settings);
+					None
+				}
+				_ => None,
+			}
+		});
+		let tester = Rc::downgrade(self);
+		host.action("settings.test_notification", move |_| {
+			if let Some(integration) = tester.upgrade() {
+				integration.test_notification();
+			}
+		});
+	}
+
+	fn rebind(&self, binding: Option<&str>) -> Option<String> {
+		let mut slot = self.hotkeys.borrow_mut();
+		if let Some(hotkeys) = slot.as_mut()
+			&& let Err(error) = hotkeys.unregister(TOGGLE_WINDOW)
+		{
+			tracing::debug!(%error, "the old show/hide hotkey was not registered");
+		}
+		let binding = binding.map(str::trim).filter(|binding| !binding.is_empty())?;
+		if slot.is_none() {
+			*slot = new_hotkeys(&self.requests);
+		}
+		let Some(hotkeys) = slot.as_mut() else {
+			return Some(KEYBINDS_UNAVAILABLE.to_owned());
+		};
+		match hotkeys.register(binding, TOGGLE_WINDOW) {
+			Ok(()) => {
+				tracing::info!(binding, "show/hide hotkey registered");
+				None
+			}
+			Err(error) => {
+				tracing::warn!(%error, binding, "the show/hide hotkey could not be registered");
+				Some(KEYBIND_INVALID.to_owned())
+			}
+		}
+	}
+
+	fn test_notification(&self) {
+		let sound = {
+			let settings = self.store.settings.read();
+			settings.notifications.sounds && !settings.streamer_mode.mutes_sounds()
+		};
+		let text = bridge::ToastText {
+			title: "Kyoko".to_owned(),
+			body: TEST_BODY.to_owned(),
+		};
+		notify::show(self.toast_id, text, sound, || {});
+		self.link
+			.settings_view()
+			.note(TEST_NOTE_KEY, Some(TEST_SENT.to_owned()));
 	}
 
 	fn close_requested(&self) -> bool {
@@ -340,23 +408,27 @@ fn hotkeys(settings: &Settings, requests: &Inbox<Request>) -> Option<Hotkeys> {
 	if binding.is_empty() {
 		return None;
 	}
+	let mut hotkeys = new_hotkeys(requests)?;
+	match hotkeys.register(binding, TOGGLE_WINDOW) {
+		Ok(()) => Some(hotkeys),
+		Err(error) => {
+			tracing::warn!(%error, binding, "the show/hide hotkey could not be registered");
+			None
+		}
+	}
+}
+
+fn new_hotkeys(requests: &Inbox<Request>) -> Option<Hotkeys> {
 	let requests = requests.clone();
 	let created = Hotkeys::new(move |event: HotkeyEvent| {
 		if event.pressed && event.id == TOGGLE_WINDOW {
 			requests.push(Request::Toggle);
 		}
 	});
-	let mut hotkeys = match created {
-		Ok(hotkeys) => hotkeys,
+	match created {
+		Ok(hotkeys) => Some(hotkeys),
 		Err(error) => {
 			tracing::warn!(%error, "global hotkeys are unavailable");
-			return None;
-		}
-	};
-	match hotkeys.register(binding, TOGGLE_WINDOW) {
-		Ok(()) => Some(hotkeys),
-		Err(error) => {
-			tracing::warn!(%error, binding, "the show/hide hotkey could not be registered");
 			None
 		}
 	}

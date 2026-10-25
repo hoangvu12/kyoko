@@ -152,6 +152,7 @@ impl Link {
 			return;
 		};
 		tracing::info!("signing out");
+		self.close_settings();
 		self.release_media();
 		let events = self.account.events.clone();
 		self.account.runtime.spawn_blocking(move || {

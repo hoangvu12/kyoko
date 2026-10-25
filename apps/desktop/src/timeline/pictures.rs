@@ -29,6 +29,7 @@ pub struct Pictures {
 	cdn: String,
 	mock_origin: Option<String>,
 	scale: Cell<f64>,
+	quality: Cell<Quality>,
 	avatars: RefCell<HashMap<(Snowflake, String, u32), ImageName>>,
 	pictures: RefCell<HashMap<ImageName, Picture>>,
 	placeholders: RefCell<HashMap<String, Option<Arc<ImageData>>>>,
@@ -42,6 +43,7 @@ impl Pictures {
 			cdn,
 			mock_origin,
 			scale: Cell::new(1.),
+			quality: Cell::new(Quality::Fitted),
 			avatars: RefCell::default(),
 			pictures: RefCell::default(),
 			placeholders: RefCell::default(),
@@ -50,6 +52,10 @@ impl Pictures {
 
 	pub fn runtime(&self) -> &Runtime {
 		&self.runtime
+	}
+
+	pub fn set_quality(&self, quality: Quality) {
+		self.quality.set(quality);
 	}
 
 	pub fn set_scale(&self, scale: f64) {
@@ -113,7 +119,7 @@ impl Pictures {
 			message_id,
 			(f64::from(width), f64::from(height)),
 			self.scale.get(),
-			Quality::Fitted,
+			self.quality.get(),
 		)?;
 		Some(self.request(request))
 	}

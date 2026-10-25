@@ -475,6 +475,19 @@ impl Catalog {
 		name
 	}
 
+	pub fn apply(&self, runtime: &Runtime, chosen: &str) -> String {
+		let themes = Themes::of(runtime);
+		if chosen == SYSTEM {
+			themes.follow_system(Some(("dark", "light")));
+			return themes.current().to_string();
+		}
+		let name = self.resolve(chosen);
+		if let Err(error) = themes.set(&name) {
+			tracing::warn!(%error, theme = %name, "could not apply the theme");
+		}
+		name
+	}
+
 	pub fn code_font(&self, theme: &str) -> String {
 		let palette = self
 			.palettes

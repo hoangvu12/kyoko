@@ -64,7 +64,7 @@ impl Link {
 		self.reported_slot.set(slot);
 		self.timeline_view.resize(slot.width, slot.height);
 		self.place_actions(slot);
-		if self.dms.page().is_empty() {
+		if self.dms.page().is_empty() && !self.settings_view().is_open() {
 			self.window.slot.set(slot);
 		}
 	}
@@ -130,7 +130,7 @@ impl Link {
 	}
 
 	pub(super) fn leave_home_page(&self) {
-		if self.dms.set_page("") {
+		if self.dms.set_page("") && !self.settings_view().is_open() {
 			self.window.slot.set(self.reported_slot.get());
 		}
 	}
