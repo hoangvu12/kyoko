@@ -18,6 +18,8 @@ pub enum Opening {
 pub enum Screen {
 	FirstChannel,
 	RailFolders,
+	LoginTos,
+	LoginToken,
 }
 
 impl Screen {
@@ -25,14 +27,21 @@ impl Screen {
 		match name {
 			"app-frame" | "server-rail" | "channel-sidebar" | "timeline" => Some(Screen::FirstChannel),
 			"server-rail-folder" => Some(Screen::RailFolders),
+			"login-tos" => Some(Screen::LoginTos),
+			"login-token" => Some(Screen::LoginToken),
 			_ => None,
 		}
 	}
 
-	pub fn opening(self) -> Opening {
+	pub fn opening(self) -> Option<Opening> {
 		match self {
-			Screen::FirstChannel | Screen::RailFolders => Opening::First,
+			Screen::FirstChannel | Screen::RailFolders => Some(Opening::First),
+			Screen::LoginTos | Screen::LoginToken => None,
 		}
+	}
+
+	pub fn is_login(self) -> bool {
+		matches!(self, Screen::LoginTos | Screen::LoginToken)
 	}
 }
 

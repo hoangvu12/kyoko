@@ -59,4 +59,20 @@ function M.media_reduced_motion(system: boolean)
 	ui.call_sync("media.reduced_motion", system)
 end
 
+function M.login_acknowledge()
+	ui.invoke("login.acknowledge")
+end
+
+function M.login_submit(token: string)
+	ui.invoke("login.submit", token)
+end
+
+function M.login_continue()
+	ui.invoke("login.continue")
+end
+
+function M.sign_out()
+	return ui.action("login.sign_out")
+end
+
 return M

@@ -8,6 +8,8 @@ local user_panel = require("./user_panel")
 local timeline = require("./timeline")
 local composer = require("./composer")
 local member_list = require("./member_list")
+local login = require("./login")
+local storage_notice = require("./storage_notice")
 
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
@@ -21,7 +23,7 @@ return function()
 	end
 	local sidebar_shown = wider(SIDEBAR_MIN_WIDTH)
 	local members_room = wider(MEMBER_LIST_MIN_WIDTH)
-	return ui.column {
+	local shell = ui.column {
 		ref = root,
 		w_full = true,
 		h_full = true,
@@ -30,6 +32,7 @@ return function()
 		text_size = theme.size.font_md,
 		font = theme.font.ui,
 		title_bar(),
+		storage_notice(),
 		ui.row {
 			w_full = true,
 			grow = 1,
@@ -68,4 +71,7 @@ return function()
 			},
 		},
 	}
+	return ui.show(function()
+		return state.login.screen:get() == "main"
+	end, shell, login())
 end

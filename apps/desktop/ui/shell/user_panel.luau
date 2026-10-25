@@ -13,6 +13,9 @@ return function()
 		gap = theme.size.space_8,
 		items = "center",
 		bg = theme.color.user_panel_background,
+		context_menu = function()
+			return { ui.menu_item { "Log Out", on_click = actions.sign_out() } }
+		end,
 		ui.show(
 			state.user.avatar_ready,
 			ui.image {

@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
-use bridge::{Inbox, changes_notifier};
+use bridge::{Flow, Gate, Inbox, Remember, StartSession, changes_notifier};
 use capture::{Capture, Opening, Screen};
 use clap::Parser;
 use integration::{APP_ID, Desktop, MOCK_APP_ID};
@@ -80,6 +80,11 @@ struct Cli {
 	open_busiest: bool,
 	#[arg(
 		long,
+		help = "Start at the sign-in screen instead of signing in with the mock token, used with --mock"
+	)]
+	login: bool,
+	#[arg(
+		long,
 		value_name = "URL",
 		hide = true,
 		conflicts_with = "mock",
@@ -127,9 +132,8 @@ struct Cli {
 struct Backend {
 	rest_base: Url,
 	gateway_url: String,
-	token: Token,
+	token: Option<Token>,
 	build_source: Option<Url>,
-	remember_account: bool,
 	cdn: String,
 	loopback_port: Option<u16>,
 }
@@ -256,36 +260,26 @@ fn main() -> Result<ExitCode> {
 	notify::register(APP_ID, &cache_dir);
 	let inbox: Inbox<Changes> = Inbox::new();
 	let identity = session::client_identity(&store);
+	let budget = store.settings.read().media.memory_mb.max(1) as usize * MIB;
 	let gallery = gallery(
 		&identity,
 		backend.loopback_port,
 		cache_dir,
 		&store.settings.read().media,
+		budget,
 		runtime.handle(),
 	)?;
 	let reduced_motion = store.settings.read().accessibility.reduced_motion;
-	let retention = session::Retention::for_settings(&store.settings.read().storage);
 	let store = Arc::new(store);
-	let session = Session::start(SessionConfig {
-		identity,
-		retention,
-		build_source: backend.build_source,
-		store: store.clone(),
-		rest_base: backend.rest_base,
-		gateway_url: backend.gateway_url,
-		token: backend.token,
-		runtime: Some(runtime.handle().clone()),
-		notify: changes_notifier(inbox.clone()),
-		hooks: None,
-		gateway: Default::default(),
-		rest: Default::default(),
-		caches: Default::default(),
-		alerts: Default::default(),
-		remember_account: backend.remember_account,
-	})
-	.context("start the session")?;
-	let chatter = match (&server, cli.chatter) {
-		(Some(server), Some(seconds)) => Some(runtime.spawn(churn::chatter(
+	let gate = Gate::new(store.clone(), identity.clone(), backend.rest_base.clone());
+	let mut flow = Flow::new(
+		gate,
+		session_starter(&backend, identity, &store, &inbox, runtime.handle()),
+	);
+	let signs_in = !cli.login && capture.as_ref().is_none_or(|capture| !capture.screen.is_login());
+	flow.launch(backend.token.filter(|_| signs_in));
+	let chatter = match (&server, cli.chatter, flow.session()) {
+		(Some(server), Some(seconds), Some(session)) => Some(runtime.spawn(churn::chatter(
 			server.clone(),
 			session.state().clone(),
 			Duration::from_secs(seconds.max(1)),
@@ -293,16 +287,21 @@ fn main() -> Result<ExitCode> {
 		_ => None,
 	};
 	let opening = match &capture {
-		Some(capture) => Some(capture.screen.opening()),
+		Some(capture) => capture.screen.opening(),
 		None => cli.open_busiest.then_some(Opening::Busiest),
 	};
 	let outcome = ui::run(
-		session,
+		ui::SignIn {
+			flow,
+			runtime: runtime.handle().clone(),
+			storage_warnings: !mocked,
+		},
 		inbox,
 		ui::Images {
 			gallery,
 			cdn: backend.cdn,
 			reduced_motion,
+			budget,
 		},
 		appearance,
 		ui::Launch { opening, capture },
@@ -334,13 +333,47 @@ fn main() -> Result<ExitCode> {
 	outcome.map(|()| ExitCode::SUCCESS)
 }
 
+fn session_starter(
+	backend: &Backend,
+	identity: rest::ClientIdentity,
+	store: &Arc<Store>,
+	inbox: &Inbox<Changes>,
+	runtime: &tokio::runtime::Handle,
+) -> StartSession {
+	let retention = session::Retention::for_settings(&store.settings.read().storage);
+	let store = store.clone();
+	let notify = changes_notifier(inbox.clone());
+	let runtime = runtime.clone();
+	let rest_base = backend.rest_base.clone();
+	let gateway_url = backend.gateway_url.clone();
+	let build_source = backend.build_source.clone();
+	Box::new(move |token, remember| {
+		Session::start(SessionConfig {
+			identity: identity.clone(),
+			retention,
+			build_source: build_source.clone(),
+			store: store.clone(),
+			rest_base: rest_base.clone(),
+			gateway_url: gateway_url.clone(),
+			token,
+			runtime: Some(runtime.clone()),
+			notify: notify.clone(),
+			hooks: None,
+			gateway: Default::default(),
+			rest: Default::default(),
+			caches: Default::default(),
+			alerts: Default::default(),
+			remember_account: remember == Remember::Account,
+		})
+	})
+}
+
 fn mock_backend(server: &Server) -> Result<Backend> {
 	Ok(Backend {
 		rest_base: Url::parse(server.rest_base_url()).context("mock rest url")?,
 		gateway_url: server.gateway_url().to_owned(),
-		token: Token::new(server.token()),
+		token: Some(Token::new(server.token())),
 		build_source: None,
-		remember_account: true,
 		cdn: server.cdn_url(),
 		loopback_port: Some(server.address().port()),
 	})
@@ -355,9 +388,8 @@ fn external_mock_backend(origin: &Url) -> Result<Backend> {
 	Ok(Backend {
 		rest_base: Url::parse(&format!("{base}/api/v9")).context("mock rest url")?,
 		gateway_url: format!("ws://{host}:{port}/gateway"),
-		token: Token::new(MockConfig::default().token),
+		token: Some(Token::new(MockConfig::default().token)),
 		build_source: None,
-		remember_account: true,
 		cdn: format!("{base}/cdn"),
 		loopback_port: Some(port),
 	})
@@ -368,15 +400,11 @@ fn discord_backend() -> Result<Backend> {
 		.ok()
 		.map(|token| token.trim().to_owned())
 		.filter(|token| !token.is_empty());
-	let Some(token) = token else {
-		bail!("set {TOKEN_VARIABLE} to sign in, or run with --mock");
-	};
 	Ok(Backend {
 		rest_base: rest::RestConfig::default_base_url(),
 		gateway_url: gateway::GatewayConfig::DEFAULT_GATEWAY_URL.to_owned(),
-		token: Token::new(token),
+		token: token.map(Token::new),
 		build_source: Some(session::discord_build_source()),
-		remember_account: false,
 		cdn: media::cdn::CDN.to_owned(),
 		loopback_port: None,
 	})
@@ -387,12 +415,13 @@ fn gallery(
 	loopback_port: Option<u16>,
 	cache_dir: PathBuf,
 	settings: &MediaSettings,
+	budget: usize,
 	runtime: &tokio::runtime::Handle,
 ) -> Result<Gallery> {
 	let fetcher =
 		bridge::media_fetcher(&identity.fingerprint(), loopback_port).context("build the media fetcher")?;
 	let loader = MediaService::new(fetcher, cache_dir, Limits::default());
-	let gallery = Gallery::with_budget(loader, runtime.clone(), settings.memory_mb.max(1) as usize * MIB);
+	let gallery = Gallery::with_budget(loader, runtime.clone(), budget);
 	gallery.set_playback(match settings.animation {
 		AnimationPlayback::OnHover => Playback::OnHover,
 		AnimationPlayback::Never => Playback::Never,
@@ -404,6 +433,12 @@ fn gallery(
 fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, Scratch)> {
 	let (root, scratch) = match data_dir {
 		Some(path) => (path, Scratch::default()),
+		None if !mock => {
+			let paths = Paths::discover().context("find the data directories")?;
+			let cache_dir = paths.cache_dir().to_path_buf();
+			let store = Store::open(paths).context("open store")?;
+			return Ok((store, cache_dir, Scratch::default()));
+		}
 		None => {
 			let path = std::env::temp_dir().join(format!("kyoko-scratch-{}", std::process::id()));
 			(path.clone(), Scratch::at(path))

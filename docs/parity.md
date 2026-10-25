@@ -66,8 +66,8 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `login-tos` | 21 | Start without a token on a fresh data directory: the login screen with the unacknowledged Terms of Service notice. | no |
-| `login-token` | 21 | As `login-tos`, then acknowledge the notice. The QR column shows its failed state, because the mock has no remote-auth gateway. | no |
+| `login-tos` | 21 | Start without a token on a fresh data directory: the login screen with the unacknowledged Terms of Service notice. | yes |
+| `login-token` | 21 | As `login-tos`, then acknowledge the notice. The QR column shows its failed state, because the mock has no remote-auth gateway. Kyoko's QR column says QR login is coming soon (ticket 42). | yes |
 
 ### 22 Server rail and folders
 

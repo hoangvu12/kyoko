@@ -27,6 +27,16 @@ local M = {}
 
 M.session = {
 	status = ui.shared("session.status", "Connecting"),
+	storage_warning = ui.shared("session.storage_warning", ""),
+}
+
+M.login = {
+	screen = ui.shared("login.screen", "login"),
+	acknowledged = ui.shared("login.acknowledged", false),
+	checking = ui.shared("login.checking", false),
+	message = ui.shared("login.message", ""),
+	error = ui.shared("login.error", false),
+	unsaved = ui.shared("login.unsaved", false),
 }
 
 M.rail = {

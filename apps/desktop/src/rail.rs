@@ -41,6 +41,22 @@ impl RailView {
 	}
 
 	pub(crate) fn restore(&self, store: Arc<Store>) {
+		*self.store.borrow_mut() = Some(store);
+		self.reload_open();
+	}
+
+	pub(crate) fn reset(&self) {
+		*self.rail.borrow_mut() = Rail::default();
+		self.icons.borrow_mut().clear();
+		self.items.set(Value::List(Rc::new([])));
+		self.home_mentions.set(0.0.into());
+		self.reload_open();
+	}
+
+	fn reload_open(&self) {
+		let Some(store) = self.store.borrow().clone() else {
+			return;
+		};
 		let saved = store
 			.db
 			.kv_get(OPEN_FOLDERS_KEY)
@@ -48,8 +64,7 @@ impl RailView {
 			.flatten()
 			.map(|bytes| parse_ids(&String::from_utf8_lossy(&bytes)))
 			.unwrap_or_default();
-		*self.store.borrow_mut() = Some(store);
-		self.open_folders.borrow_mut().extend(saved);
+		*self.open_folders.borrow_mut() = saved.into_iter().collect();
 		self.publish_open();
 	}
 

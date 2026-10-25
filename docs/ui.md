@@ -39,6 +39,8 @@ A screen or component is one module that returns a function building its node. U
 | Composer | `composer.luau` | 44-point field, 16 sides, 24 below | 27 |
 | Member list | `member_list.luau` | `member_list_width` 240, `background_secondary`; shown at 1200 wide and up, toggled by the members button | 29 |
 
+The login screen (`login.luau`, ticket 21) stands beside the shell: `frame.luau` shows it instead of the shell while `login.screen` is not `main`, with the same title bar. `storage_notice.luau` is a warning bar under the title bar, shown only when `session.storage_warning` is set. See `docs/sign-in.md`.
+
 Overlays (menus, popovers, dialogs, toasts, the lightbox, settings) are added beside the shell's root by the tickets that build them (28, 30–38).
 
 ### The timeline slot
@@ -104,8 +106,8 @@ Names are `<area>.<name>` in snake case, with the area the region or service tha
 
 | Kind | Names |
 |---|---|
-| Shared values (Rust publishes, Luau reads) | `session.status`, `rail.items`, `rail.home_mentions`, `rail.open_folders`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
-| Actions (`ui.action`, fire and forget) | `rail.select_guild`, `rail.select_home`, `rail.toggle_folder`, `rail.drop`, `rail.add_server`, `rail.discover`, `sidebar.select_channel`, `window.minimize`, `window.maximize`, `window.close`, `media.copy_image` |
+| Shared values (Rust publishes, Luau reads) | `login.screen`, `login.acknowledged`, `login.checking`, `login.message`, `login.error`, `login.unsaved`, `session.status`, `session.storage_warning`, `rail.items`, `rail.home_mentions`, `rail.open_folders`, `sidebar.channels`, `sidebar.guild_id`, `sidebar.guild_name`, `timeline.channel_id`, `timeline.channel_name`, `timeline.channel_topic`, `user.avatar`, `user.avatar_ready`, `window.maximized` |
+| Actions (`ui.action`, fire and forget) | `login.acknowledge`, `login.submit`, `login.continue`, `login.sign_out`, `rail.select_guild`, `rail.select_home`, `rail.toggle_folder`, `rail.drop`, `rail.add_server`, `rail.discover`, `sidebar.select_channel`, `window.minimize`, `window.maximize`, `window.close`, `media.copy_image` |
 | Functions (`ui.call_sync`) | `media.visible`, `media.hover`, `media.reduced_motion`, `frame.slot` |
 
 Rust registers them in `Link::install` (and `Integration::install` for desktop integration). Luau declares each shared value once in `state.luau` and wraps each action in `actions.luau`, so a rename touches one Luau file. State only the interface cares about stays in Luau: `ui.state` in the module that owns it, or in `state.luau` (`state.shell.members_visible`) when several modules share it. Never publish the whole store. Publish small projections from `bridge` and let zgx reconcile them.

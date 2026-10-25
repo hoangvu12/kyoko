@@ -1,3 +1,5 @@
+mod sign_in;
+
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -6,11 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ChannelEntry, ChannelKind, Inbox, OpenChannel, Sidebar, Timeline};
+use bridge::{ChannelEntry, ChannelKind, Flow, Inbox, OpenChannel, Sidebar, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
 use session::{Command, Session};
+
+pub use sign_in::SignIn;
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
 use zgx::compose::prelude::*;
 use zgx::image::ImageData;
@@ -41,6 +45,7 @@ pub struct Images {
 	pub gallery: Gallery,
 	pub cdn: String,
 	pub reduced_motion: bool,
+	pub budget: usize,
 }
 
 pub struct Appearance {
@@ -54,7 +59,7 @@ pub struct Launch {
 }
 
 pub fn run(
-	session: Session,
+	sign_in: SignIn,
 	inbox: Inbox<Changes>,
 	images: Images,
 	appearance: Appearance,
@@ -96,11 +101,12 @@ pub fn run(
 				frame: Cell::new(None),
 				slot: cx.ui.runtime.signal(Slot::default()),
 			};
-			let link = Link::install(&host, window, session, inbox.clone(), images);
+			let link = Link::install(&host, window, sign_in, inbox.clone(), images);
 			link.opening.set(opening);
 			link.rail.restore(desktop.store.clone());
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
+			cx.tasks.spawn(link.clone().follow_sign_in());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -188,7 +194,8 @@ struct Window {
 pub(crate) struct Link {
 	window: Window,
 	host: ScriptHost,
-	session: RefCell<Option<Session>>,
+	flow: RefCell<Flow>,
+	account: sign_in::Account,
 	inbox: Inbox<Changes>,
 	images: Images,
 	image_wakes: Inbox<()>,
@@ -221,22 +228,19 @@ impl Link {
 	fn install(
 		host: &ScriptHost,
 		window: Window,
-		session: Session,
+		sign_in: SignIn,
 		inbox: Inbox<Changes>,
 		images: Images,
 	) -> Rc<Link> {
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
 		images.gallery.set_waker(move || wakes.push(()));
-		let commander = session.commander();
-		images
-			.gallery
-			.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
 		let timeline_view = TimelineView::new(&window.runtime, images.gallery.clone(), images.cdn.clone());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
-			session: RefCell::new(Some(session)),
+			flow: RefCell::new(sign_in.flow),
+			account: sign_in::Account::install(host, sign_in.runtime, sign_in.storage_warnings),
 			inbox,
 			images,
 			image_wakes,
@@ -266,6 +270,7 @@ impl Link {
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
+		Link::install_sign_in(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -433,9 +438,9 @@ impl Link {
 	}
 
 	pub(crate) fn take_alerts(&self) -> Vec<Alert> {
-		self.session
+		self.flow
 			.borrow()
-			.as_ref()
+			.session()
 			.map(Session::take_alerts)
 			.unwrap_or_default()
 	}
@@ -451,6 +456,7 @@ impl Link {
 		if let Some(observer) = self.observer.borrow().as_ref() {
 			observer(changes);
 		}
+		self.watch_session(changes);
 		let opened = self.publish(changes);
 		if let Some((opening, open)) = opened {
 			if let Some(guild_id) = open.guild_id {
@@ -467,8 +473,9 @@ impl Link {
 	}
 
 	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
+		self.drive_capture(capture.screen);
 		let started = Instant::now();
-		while !self.settled() {
+		while !self.settled(capture.screen) {
 			if started.elapsed() >= capture::LIMIT {
 				tracing::warn!(screen = %capture.name, "the capture screen did not settle in time");
 				break;
@@ -485,7 +492,10 @@ impl Link {
 		}
 	}
 
-	fn settled(&self) -> bool {
+	fn settled(&self, screen: capture::Screen) -> bool {
+		if screen.is_login() {
+			return self.login_settled(screen);
+		}
 		self.opening.get().is_none()
 			&& self.timeline.borrow().messages().next().is_some()
 			&& self.timeline_view.settled()
@@ -627,14 +637,14 @@ impl Link {
 	}
 
 	pub(crate) fn state(&self) -> Option<state::SharedState> {
-		self.session
+		self.flow
 			.borrow()
-			.as_ref()
+			.session()
 			.map(|session| session.state().clone())
 	}
 
 	pub(crate) fn send(&self, command: Command) {
-		if let Some(session) = self.session.borrow().as_ref() {
+		if let Some(session) = self.flow.borrow().session() {
 			session.send(command);
 		}
 	}
@@ -699,7 +709,7 @@ impl Link {
 	fn shutdown(&self) {
 		tracing::debug!("window closed, stopping the session");
 		self.inbox.close();
-		let session = self.session.borrow_mut().take();
+		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();
 		}
