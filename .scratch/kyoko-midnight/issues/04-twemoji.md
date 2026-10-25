@@ -4,7 +4,7 @@
 
 **Blocked by:** none (v1 18 media pipeline and v1 26 inline custom emoji exist)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/expressions-in-messages.html`, `docs/design/mockups/reactions.html`, `docs/design/mockups/emoji-picker.html`, `docs/design/mockups/midnight-discord.html`
 
