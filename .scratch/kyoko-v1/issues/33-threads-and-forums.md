@@ -4,7 +4,7 @@
 
 **Blocked by:** 26 (Message rendering)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Thread and forum screens match oxidcord in the parity captures
 - [ ] Opening, following and creating threads and posts works
