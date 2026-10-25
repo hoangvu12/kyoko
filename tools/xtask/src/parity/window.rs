@@ -9,7 +9,8 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::Storage::Xps::{PRINT_WINDOW_FLAGS, PrintWindow};
 use windows::Win32::UI::HiDpi::{
-	DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, SetProcessDpiAwarenessContext,
+	DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem, GetDpiForWindow,
+	SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
 	EnumWindows, GetClientRect, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
@@ -29,21 +30,32 @@ pub fn init_dpi_awareness() {
 	let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 }
 
-pub fn capture(pid: u32, app: App) -> Result<RgbaImage> {
+pub fn system_scale() -> f64 {
+	f64::from(unsafe { GetDpiForSystem() }) / f64::from(STANDARD_DPI)
+}
+
+pub fn capture(pid: u32, app: App, scale: Scale) -> Result<RgbaImage> {
 	let window = find(pid, app)?;
 	if unsafe { IsIconic(window) }.as_bool() {
 		let _ = unsafe { ShowWindow(window, SW_RESTORE) };
 		std::thread::sleep(FOREGROUND_SETTLE);
 	}
 	let dpi = unsafe { GetDpiForWindow(window) };
-	if dpi != STANDARD_DPI {
+	if scale == Scale::Standard && dpi != STANDARD_DPI {
 		eprintln!(
 			"{app}: the window is at {dpi} dpi, not {STANDARD_DPI}; captures assume 100% display scale"
 		);
 	}
 	let (width, height) = client_size(window);
-	if (width, height) != (WIDTH as i32, HEIGHT as i32) {
-		eprintln!("{app}: the client area is {width}x{height}, not {WIDTH}x{HEIGHT}");
+	let expected = match scale {
+		Scale::Standard => (WIDTH as i32, HEIGHT as i32),
+		Scale::Window => scaled(dpi),
+	};
+	if (width, height) != expected {
+		eprintln!(
+			"{app}: the client area is {width}x{height}, not {}x{}",
+			expected.0, expected.1
+		);
 	}
 	let mut printed = print(window, width, height)?;
 	if !is_blank(&printed) {
@@ -57,6 +69,17 @@ pub fn capture(pid: u32, app: App) -> Result<RgbaImage> {
 		bail!("{app}: the window captured blank");
 	}
 	Ok(copied)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scale {
+	Standard,
+	Window,
+}
+
+fn scaled(dpi: u32) -> (i32, i32) {
+	let at = |length: u32| (length * dpi).div_ceil(STANDARD_DPI) as i32;
+	(at(WIDTH), at(HEIGHT))
 }
 
 pub fn request_close(pid: u32) {

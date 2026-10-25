@@ -52,6 +52,99 @@ A UI ticket that builds a screen also adds its capture steps:
 
 Oxidcord's steps are already in the reference patch. When the parity list grows, add the row here and the steps to the patch, then regenerate it as described in `tools/parity/README.md`.
 
+## Comparing with the Midnight mockups
+
+Kyoko's look is moving to Discord's layout in the Midnight theme (`docs/design/midnight.md`). A restyled screen is checked against its page in `docs/design/mockups/` instead of oxidcord:
+
+```
+cargo xtask parity mockup --screens timeline --port 8496
+cargo xtask parity mockup
+cargo xtask parity list
+```
+
+For each screen it captures kyoko against mockcord exactly as `parity capture` does, then renders the screen's mockup in a headless Chrome or Edge and writes the pair. With no `--screens` it runs every screen in the table below. `parity list` shows each screen's mockup page.
+
+- The browser is `--browser <exe>`, else the `KYOKO_PARITY_BROWSER` environment variable, else Chrome or Edge under Program Files, Program Files (x86) or the user's local app data, else the `App Paths` registry entries for `chrome.exe` and `msedge.exe`. The command stops before building anything when it finds none. It starts one browser for the run with a throwaway profile and closes it at the end.
+- The mockup is opened as a file, unchanged, in a 1280 by 800 viewport over the Chrome DevTools Protocol. The screenshot is taken after the page's load event, once `document.fonts.ready` has resolved, every image has decoded and two frames have drawn. If a stylesheet, an image or the Inter font did not load, the mockup side fails with the missing URLs in `<screen>/mockup.log`; it is never captured half loaded.
+- The mockups load Inter from Google Fonts and Twemoji from jsDelivr, so a run needs the network: each run uses a fresh browser profile and fetches them again.
+- Scale: the mockup is rendered with a device scale factor equal to kyoko's window scale, the width of kyoko's capture divided by 1280 (the system scale when kyoko failed). At 150% both images are 1920 by 1200 and line up pixel for pixel. Unlike `parity capture`, this mode does not assume 100% display scale and does not warn about it; it warns when kyoko's client area is not 1280 by 800 at its own scale, and when the two images still differ in size, in which case there is no `diff.png`.
+- The output goes to `target/parity-mockup/` (`--out` changes it) with the same layout as the oxidcord mode: `<screen>/mockup.png`, `kyoko.png`, `pair.png` (mockup left, kyoko right), `diff.png` (changed pixels in red over a dimmed mockup), the kyoko and mockcord logs, `browser.log` and `index.html` with the differing-pixel share. `--seed`, `--anchor`, `--port`, `--no-build` work as in `parity capture`. The command fails if any capture failed.
+
+Mockup text, avatars and icons are placeholders, so the share never reaches zero; read `pair.png` and `diff.png` for layout, sizes, spacing and colour.
+
+### Screens and their mockups
+
+The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change both together. A screen is listed only when kyoko has capture steps for it and a mockup shows the same state.
+
+| Screen | Mockup |
+|---|---|
+| `app-frame` | `midnight-discord.html` |
+| `login-tos` | `login.html` |
+| `login-token` | `login-token.html` |
+| `server-rail` | `midnight-discord.html` |
+| `server-rail-folder` | `midnight-discord.html` |
+| `channel-sidebar` | `midnight-discord.html` |
+| `dm-sidebar` | `dm.html` |
+| `dm-group` | `group-dm.html` |
+| `timeline` | `midnight-discord.html` |
+| `composer` | `composer-markdown.html` |
+| `composer-reply` | `composer-markdown.html` |
+| `message-hover` | `midnight-discord.html` |
+| `message-context-menu` | `message-menu.html` |
+| `member-list` | `midnight-discord.html` |
+| `user-panel` | `midnight-discord.html` |
+| `status-menu` | `status-menu.html` |
+| `custom-status` | `dialog-custom-status.html` |
+| `profile-popout` | `profile-popout.html` |
+| `full-profile` | `profile-full.html` |
+| `quick-switcher` | `quick-switcher.html` |
+| `search` | `search-results.html` |
+| `lightbox` | `lightbox.html` |
+| `emoji-picker` | `emoji-picker.html` |
+| `gif-picker` | `gif-picker.html` |
+| `sticker-picker` | `sticker-picker.html` |
+| `threads-list` | `threads-list.html` |
+| `thread-panel` | `threads-split-view.html` |
+| `thread-create` | `threads-create.html` |
+| `pins` | `pins.html` |
+| `forum` | `forum.html` |
+| `forum-post` | `forum-post.html` |
+| `forum-post-create` | `forum-new-post.html` |
+| `friends-online` | `home-friends.html` |
+| `friends-all` | `friends-all.html` |
+| `friends-pending` | `friends-pending.html` |
+| `friends-blocked` | `friends-blocked.html` |
+| `friends-add` | `friends-add-friend.html` |
+| `add-server` | `dialog-add-a-server.html` |
+| `forward` | `dialog-forward.html` |
+| `guild-notifications` | `dialog-notification-settings.html` |
+| `server-settings-overview` | `server-settings-overview.html` |
+| `server-settings-roles` | `server-settings-roles.html` |
+| `server-settings-emoji` | `server-settings-emoji.html` |
+| `server-settings-stickers` | `server-settings-stickers.html` |
+| `server-settings-members` | `server-settings-members.html` |
+| `server-settings-invites` | `server-settings-invites.html` |
+| `server-settings-bans` | `server-settings-bans.html` |
+| `server-settings-audit-log` | `server-settings-audit-log.html` |
+| `moderation-nickname` | `dialog-change-nickname.html` |
+| `moderation-timeout` | `dialog-timeout.html` |
+| `moderation-kick` | `dialog-kick.html` |
+| `moderation-ban` | `dialog-ban.html` |
+| `settings-my-account` | `settings-my-account.html` |
+| `settings-appearance` | `settings-appearance.html` |
+| `settings-notifications` | `settings-notifications.html` |
+| `settings-plugins` | `settings-plugins.html` |
+| `toast` | `toast-rate-limited.html` |
+| `connection-offline` | `connection-lost.html` |
+
+Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
+
+Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
+
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `expressions-in-messages`, `expressions-in-messages-emoji-popout`, `expressions-in-messages-sticker-popout`, `gif-picker-results`, `inbox`, `link-preview-while-typing`, `login-2fa`, `login-captcha`, `login-email`, `login-qr-expired`, `login-qr-scanned`, `login-unsaved`, `login-web`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+
+To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
+
 ## Screens
 
 Unless a row says otherwise, both apps start signed in on the first guild in rail order with its first readable text channel open, which is oxidcord's default selection, and wait for that channel's history. "At (x, y)" is the window position oxidcord's steps use for a popout anchor or a synthetic mouse event. The kyoko column says whether kyoko has steps for the screen yet.

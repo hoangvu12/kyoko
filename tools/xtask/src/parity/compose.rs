@@ -19,7 +19,7 @@ const LABEL: Rgba<u8> = Rgba([219, 222, 225, 255]);
 const MUTED: Rgba<u8> = Rgba([148, 155, 164, 255]);
 const DANGER: Rgba<u8> = Rgba([242, 63, 66, 255]);
 
-pub fn shot_image(app: App, screen: &str, shot: &Shot) -> RgbaImage {
+pub fn shot_image(app: &str, screen: &str, shot: &Shot) -> RgbaImage {
 	match shot {
 		Shot::Captured(image) => image.clone(),
 		Shot::NotBuilt => placeholder(&format!("{app}: not built yet"), screen, LABEL),
@@ -49,12 +49,12 @@ fn centred(image: &mut RgbaImage, text: &str, y: u32, scale: u32, colour: Rgba<u
 	font::draw(image, text, (image.width() - width) / 2, y, scale, colour);
 }
 
-pub fn pair(left: &RgbaImage, right: &RgbaImage) -> RgbaImage {
+pub fn pair(reference: &str, left: &RgbaImage, right: &RgbaImage) -> RgbaImage {
 	let width = left.width() + GAP + right.width();
 	let height = HEADER + left.height().max(right.height());
 	let mut image = RgbaImage::from_pixel(width, height, BACKDROP);
 	let label_top = (HEADER - GLYPH_HEIGHT * LABEL_SCALE) / 2;
-	font::draw(&mut image, App::Oxidcord.name(), 0, label_top, LABEL_SCALE, LABEL);
+	font::draw(&mut image, reference, 0, label_top, LABEL_SCALE, LABEL);
 	font::draw(
 		&mut image,
 		App::Kyoko.name(),
