@@ -8,7 +8,7 @@ use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
 use session::{Command, Session, SessionConfig};
 use state::Changes;
-use store::{Paths, Store};
+use store::{Paths, Settings, Store};
 use tokio::time::{Instant, timeout_at};
 use url::Url;
 
@@ -29,10 +29,11 @@ impl Running {
 			.expect("mock server starts");
 		let scratch = std::env::temp_dir().join(format!("kyoko-bridge-{name}-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
-		let store = Store::open(Paths::at(&scratch).expect("scratch paths")).expect("store opens");
-		store
-			.update_settings(|settings| settings.storage.plaintext_token = true)
-			.expect("settings save");
+		let paths = Paths::at(&scratch).expect("scratch paths");
+		let mut settings = Settings::load(&paths);
+		settings.storage.plaintext_token = true;
+		settings.save(&paths).expect("settings save");
+		let store = Store::open(paths).expect("store opens");
 		let inbox = Inbox::new();
 		let session = Session::start(SessionConfig {
 			identity: session::client_identity(&store),

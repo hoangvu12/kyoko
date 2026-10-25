@@ -88,7 +88,7 @@ fn main() -> Result<()> {
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	let (store, scratch) = open_store(cli.data_dir.clone())?;
+	let (store, scratch) = open_store(cli.data_dir.clone(), cli.mock)?;
 	let server = if cli.mock {
 		Some(Arc::new(
 			runtime
@@ -170,7 +170,7 @@ fn discord_backend() -> Result<Backend> {
 	})
 }
 
-fn open_store(data_dir: Option<PathBuf>) -> Result<(Store, Scratch)> {
+fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, Scratch)> {
 	let (root, scratch) = match data_dir {
 		Some(path) => (path, Scratch(None)),
 		None => {
@@ -179,10 +179,12 @@ fn open_store(data_dir: Option<PathBuf>) -> Result<(Store, Scratch)> {
 		}
 	};
 	let paths = Paths::at(&root).context("prepare data directories")?;
-	if scratch.0.is_some() {
+	if mock || scratch.0.is_some() {
 		let mut settings = Settings::load(&paths);
 		settings.storage.plaintext_token = true;
-		settings.save(&paths).context("configure the scratch store")?;
+		settings
+			.save(&paths)
+			.context("keep the store's secrets out of Credential Manager")?;
 	}
 	let store = Store::open(paths).context("open store")?;
 	Ok((store, scratch))
