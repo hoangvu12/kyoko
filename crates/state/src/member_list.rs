@@ -33,6 +33,9 @@ impl MemberList {
 		if items.len() < range_len {
 			self.slots.truncate(items_end);
 		}
+		if items.is_empty() {
+			return;
+		}
 		if self.slots.len() < items_end {
 			self.slots.resize(items_end, MemberSlot::Empty);
 		}
