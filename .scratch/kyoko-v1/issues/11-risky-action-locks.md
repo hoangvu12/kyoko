@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 (REST safety layer)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Locks cover new DMs to strangers, message-request and spam DMs, empty channels, and server screening, onboarding and verification gates
 - [ ] The locked state and its reason are exposed in state for the UI
