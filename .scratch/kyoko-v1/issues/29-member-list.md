@@ -9,3 +9,7 @@
 - [ ] The member list matches oxidcord in the parity captures
 - [ ] Scrolling requests further ranges and fills them in
 - [ ] Presence and activity update live
+
+## Comments
+
+From the spike (04): one open real server produced 60–76 member-list updates in about 4 minutes; coalesce them in the bridge and keep them off the message list's update path.

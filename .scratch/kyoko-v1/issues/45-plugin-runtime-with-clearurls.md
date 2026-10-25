@@ -13,3 +13,7 @@
 - [ ] The plugin settings screen follows oxidcord's visual style, and plugins hot-reload in development
 - [ ] The before-send hook exists. ClearURLs ships its rules inside the package and works
 - [ ] Session tests cover permissions, the gesture rule, deadlines and the hook
+
+## Comments
+
+From the spike (04): zgx host image names and shared-value names are global, so plugins need their own namespace (prefix per plugin id) to avoid clashing with the app and each other.

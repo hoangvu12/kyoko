@@ -9,3 +9,7 @@
 - [ ] Community screens match oxidcord in the parity captures
 - [ ] Joining by invite, creating invites and forwarding messages work
 - [ ] Onboarding completes without artificial waits and respects the risky-action locks
+
+## Comments
+
+From the spike (04): joins and invite acceptance need the web client's `X-Context-Properties` header; add it to the fingerprint module when this ticket builds those requests.

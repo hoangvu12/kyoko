@@ -9,3 +9,7 @@
 - [ ] oxidcord's theme tokens (colours, UI font, code font) are ported to zgx theme data
 - [ ] oxidcord's icons are available to Luau
 - [ ] The title bar and top bar match oxidcord in the parity captures, apart from text-rendering differences
+
+## Comments
+
+From the spike (04): about one window close in three leaves the process running after the window is gone (seen under mock with no channel open too); the cause inside zgx is not found. The app frame should find and fix it (or report it upstream to zgx); 04 made the scratch folder get deleted as soon as the session stops.
