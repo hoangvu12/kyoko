@@ -491,6 +491,19 @@ impl Gallery {
 		})
 	}
 
+	pub fn pixels(&self, name: &str) -> Option<Pixels> {
+		let key = key_of_name(name)?;
+		let inner = self.shared.inner.lock();
+		let entry = inner.entries.peek(&key)?;
+		let Phase::Ready(picture) = &entry.phase else {
+			return None;
+		};
+		let frame = entry
+			.shown
+			.unwrap_or(entry.frame)
+			.min(picture.frames.len().checked_sub(1)?);
+		Some(picture.frames[frame].0.clone())
+	}
 	pub fn set_visible<I, S>(&self, names: I)
 	where
 		I: IntoIterator<Item = S>,

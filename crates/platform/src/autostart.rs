@@ -2,10 +2,10 @@ use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
 use crate::{PlatformError, Result};
 
-pub fn set_enabled(enabled: bool) -> Result<()> {
-	let launcher = launcher()?;
+pub fn set_enabled(enabled: bool, args: &[&str]) -> Result<()> {
+	let launcher = launcher(args)?;
 	match (enabled, launcher.is_enabled()?) {
-		(true, false) => launcher.enable()?,
+		(true, _) => launcher.enable()?,
 		(false, true) => launcher.disable()?,
 		_ => {}
 	}
@@ -13,10 +13,10 @@ pub fn set_enabled(enabled: bool) -> Result<()> {
 }
 
 pub fn is_enabled() -> Result<bool> {
-	Ok(launcher()?.is_enabled()?)
+	Ok(launcher(&[])?.is_enabled()?)
 }
 
-fn launcher() -> Result<AutoLaunch> {
+fn launcher(args: &[&str]) -> Result<AutoLaunch> {
 	let exe = std::env::current_exe()?;
 	let name = exe
 		.file_stem()
@@ -27,6 +27,7 @@ fn launcher() -> Result<AutoLaunch> {
 		.ok_or_else(|| PlatformError::Os("executable path is not valid unicode".to_owned()))?;
 	Ok(AutoLaunchBuilder::new()
 		.set_app_name(name)
-		.set_app_path(path)
+		.set_app_path(&format!("\"{path}\""))
+		.set_args(args)
 		.build()?)
 }
