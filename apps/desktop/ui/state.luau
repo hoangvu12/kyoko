@@ -132,6 +132,19 @@ export type Plugin = {
 	permissions: { PluginPermission },
 }
 export type PluginNotice = { plugin: string, text: string }
+export type ThemeEntry = {
+	id: string,
+	source: string,
+	name: string,
+	author: string,
+	description: string,
+	version: string,
+	enabled: boolean,
+	error: string,
+	note: string,
+	scheme: string,
+	swatch: { string },
+}
 export type UserPanel = {
 	name: string,
 	subtitle: string,
@@ -364,6 +377,12 @@ M.plugins = {
 	notice = ui.shared("plugins.notice", nil :: PluginNotice?),
 	folder = ui.shared("plugins.folder", ""),
 	slots = ui.shared("plugins.slots", {} :: { [string]: { string } }),
+}
+
+M.themes = {
+	list = ui.shared("themes.list", {} :: { ThemeEntry }),
+	links = ui.shared("themes.links", ""),
+	folder = ui.shared("themes.folder", ""),
 }
 
 M.timeline.channel_icon = ui.shared("timeline.channel_icon", "hash")

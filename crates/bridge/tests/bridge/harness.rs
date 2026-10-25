@@ -193,6 +193,7 @@ fn open_session(server: &Server, scratch: &Path, inbox: &Inbox<Changes>, gateway
 		alerts: Default::default(),
 		retention: Default::default(),
 		remember_account: false,
+		theme_links: Default::default(),
 	})
 	.expect("session starts")
 }

@@ -245,6 +245,20 @@ function M.plugin_action(name: string, argument: any?)
 	ui.invoke("plugins." .. name, argument)
 end
 
+function M.theme_action(name: string, argument: any?)
+	if name == "apply" then
+		ui.invoke("themes.apply", argument)
+	elseif name == "toggle" then
+		ui.invoke("themes.toggle", argument)
+	elseif name == "set_links" then
+		ui.invoke("themes.set_links", argument)
+	elseif name == "refresh" then
+		ui.invoke("themes.refresh", argument)
+	elseif name == "open_folder" then
+		ui.invoke("themes.open_folder", argument)
+	end
+end
+
 function M.open_threads(x: number, y: number)
 	ui.invoke("threads.open_list", { x = x, y = y })
 end

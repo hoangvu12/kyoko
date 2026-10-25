@@ -10,6 +10,7 @@ use url::Url;
 
 use crate::alerts::AlertPacing;
 use crate::hooks::SessionHooks;
+use crate::theme_links::ThemeLinkTuning;
 
 pub type NotifyFn = Arc<dyn Fn(Changes) + Send + Sync>;
 
@@ -29,4 +30,5 @@ pub struct SessionConfig {
 	pub alerts: AlertPacing,
 	pub retention: store::Retention,
 	pub remember_account: bool,
+	pub theme_links: ThemeLinkTuning,
 }

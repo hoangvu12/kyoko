@@ -1,6 +1,6 @@
 # Themes
 
-First party themes. A theme is one `theme.json` of token overrides on top of a built-in theme, with no code. The format and the token list are in `docs/themes.md`.
+First party themes. A theme is one `theme.json` of token overrides on top of a built-in theme, with no code. The format and the token list are in `docs/themes.md`. These themes ship with Kyoko and are listed under Built In in Settings, Themes, where Apply makes one the base theme.
 
 | Theme | What it looks like |
 | --- | --- |
@@ -20,16 +20,7 @@ themes/<id>/README.md
 ## Add a theme
 
 1. Make a folder `themes/<id>/` with `theme.json` and `theme.toml`.
-2. Open a pull request. Bump `version` in `theme.toml` for every later change to `theme.json`.
-3. A maintainer regenerates and signs the catalog after merging.
+2. Run `cargo xtask theme check`. It checks every folder: the `theme.toml` fields, the id, that `theme.json` is a JSON object under 512 KB and that its `base` is `dark`, `light` or `amoled`.
+3. Open a pull request. Bump `version` in `theme.toml` for every later change to `theme.json`.
 
-## Catalog
-
-`catalog.json` lists every theme with the sha256 and length of its `theme.json`. `catalog.json.sig` is a base64 ed25519 signature over the exact bytes of `catalog.json`, made with the catalog key.
-
-```
-cargo xtask theme catalog --dir themes --out themes/catalog.json --base-url https://raw.githubusercontent.com/hoangvu12/kyoko/main/themes
-cargo xtask theme sign themes/catalog.json <catalog key file>
-```
-
-Commit `catalog.json`, `catalog.json.sig` and the theme folders together. The private key never goes into the repository.
+There is no catalog and no signing key. Themes carry no code, so anyone can share one as a file or a link, and users add it in Settings, Themes (`docs/themes.md`).

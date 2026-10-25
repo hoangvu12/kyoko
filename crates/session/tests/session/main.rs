@@ -24,6 +24,7 @@ mod safety;
 mod search;
 mod status;
 mod storage;
+mod theme_links;
 mod threads;
 mod versions;
 mod wire;

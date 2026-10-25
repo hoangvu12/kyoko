@@ -141,11 +141,8 @@ pub enum Command {
 		guild_id: Snowflake,
 		category_id: Snowflake,
 	},
-	ThemeCatalogRefresh {
-		url: String,
-	},
-	ThemeInstall {
-		id: String,
+	RefreshThemeLinks {
+		urls: Vec<String>,
 	},
 	CreateThread {
 		channel_id: Snowflake,

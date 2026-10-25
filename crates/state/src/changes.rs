@@ -75,7 +75,7 @@ pub struct Changes {
 	pub search: bool,
 	pub plugin_slots: bool,
 	pub plugins: bool,
-	pub theme_catalog: bool,
+	pub theme_links: bool,
 	pub channel_lists: IdSet,
 	pub messages: IdSet,
 	pub members: IdSet,
@@ -108,7 +108,7 @@ impl Changes {
 			search: true,
 			plugin_slots: true,
 			plugins: true,
-			theme_catalog: true,
+			theme_links: true,
 			channel_lists: IdSet::All,
 			messages: IdSet::All,
 			members: IdSet::All,
@@ -140,7 +140,7 @@ impl Changes {
 			|| self.search
 			|| self.plugin_slots
 			|| self.plugins
-			|| self.theme_catalog
+			|| self.theme_links
 			|| self.voice_session
 			|| self.calls
 			|| self.streams
@@ -171,7 +171,7 @@ impl Changes {
 		self.search |= other.search;
 		self.plugin_slots |= other.plugin_slots;
 		self.plugins |= other.plugins;
-		self.theme_catalog |= other.theme_catalog;
+		self.theme_links |= other.theme_links;
 		self.voice_session |= other.voice_session;
 		self.calls |= other.calls;
 		self.streams |= other.streams;

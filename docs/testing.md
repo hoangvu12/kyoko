@@ -38,6 +38,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
 - `guilds(n)` sets how many guilds mockcord makes (3 by default; the first two are in the mock folder). mockcord keeps the folders a `PATCH /users/@me/settings-proto/1` writes and serves them in later READYs.
 - `members(n)` sets mockcord's members per guild, for member lists longer than a few buckets.
+- `theme_links(ThemeLinkTuning { max_bytes, timeout, trusted_roots })` shrinks the theme link limits and trusts extra PEM roots. `theme_links.rs` serves theme files from a local HTTPS server with a root and server certificate made by `rcgen` for each test, so no key is committed.
 - `caches(CacheLimits { .. })` shrinks the cache limits (see `docs/caches.md`), so tests reach them with a few channels and pages.
 - `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
 - `plaintext_secrets(true)` turns on the plaintext storage setting before the store opens (see `docs/storage.md`).

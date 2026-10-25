@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, RefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -22,7 +22,7 @@ pub type SettingHook = Box<dyn Fn(SettingKey, &Settings) -> Option<String>>;
 
 pub struct SettingsView {
 	store: Arc<Store>,
-	catalog: Catalog,
+	catalog: RefCell<Catalog>,
 	page: Shared,
 	values: Shared,
 	account: Shared,
@@ -48,7 +48,7 @@ impl SettingsView {
 			avatar: RefCell::new(None),
 			written: RefCell::new(Vec::new()),
 			hooks: RefCell::new(Vec::new()),
-			catalog,
+			catalog: RefCell::new(catalog),
 			store,
 		};
 		view.about.set(record([
@@ -61,6 +61,10 @@ impl SettingsView {
 		view.publish_values();
 		view.publish_notes();
 		view
+	}
+
+	pub fn catalog(&self) -> RefMut<'_, Catalog> {
+		self.catalog.borrow_mut()
 	}
 
 	pub fn is_open(&self) -> bool {
@@ -228,8 +232,12 @@ impl Link {
 		let settings = self.settings.settings();
 		match key {
 			SettingKey::Theme => {
-				let applied = self.settings.catalog.apply(&self.window.runtime, &settings.theme);
+				let applied = self
+					.settings
+					.catalog()
+					.apply(&self.window.runtime, &settings.theme);
 				tracing::info!(theme = %applied, "theme switched");
+				self.publish_themes();
 			}
 			SettingKey::ReducedMotion => {
 				self.images

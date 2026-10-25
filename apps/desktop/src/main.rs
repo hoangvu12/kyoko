@@ -242,7 +242,6 @@ fn main() -> Result<ExitCode> {
 	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), mocked)?;
 	let appearance = ui::Appearance {
 		theme: store.settings.read().theme.clone(),
-		user_themes: store.paths.themes_dir(),
 	};
 	let server = if cli.mock {
 		Some(Arc::new(
@@ -397,6 +396,7 @@ fn session_starter(
 				caches: Default::default(),
 				alerts: Default::default(),
 				remember_account: remember == Remember::Account,
+				theme_links: Default::default(),
 			})?;
 			plugin_host.attach(session.state().clone(), session.commander());
 			Ok(session)

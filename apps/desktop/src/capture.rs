@@ -205,6 +205,7 @@ fn settings_page(name: &str) -> Option<&'static str> {
 		"settings-streamer-mode" => Some("streamer-mode"),
 		"settings-advanced" => Some("advanced"),
 		"settings-plugins" => Some("plugins"),
+		"settings-themes" => Some("themes"),
 		_ => None,
 	}
 }

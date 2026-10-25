@@ -9,7 +9,7 @@ use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
 use session::{
 	AlertPacing, CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig,
-	SessionHooks,
+	SessionHooks, ThemeLinkTuning,
 };
 use state::State;
 use store::{MemoryKeyring, Paths, Settings, Store};
@@ -40,6 +40,7 @@ pub struct Options {
 	retention: Retention,
 	keyring: Arc<MemoryKeyring>,
 	clock: Clock,
+	theme_links: ThemeLinkTuning,
 }
 
 impl Options {
@@ -63,6 +64,7 @@ impl Options {
 			retention: Retention::default(),
 			keyring: Arc::new(MemoryKeyring::new()),
 			clock: Clock::system(),
+			theme_links: ThemeLinkTuning::default(),
 		}
 	}
 
@@ -142,6 +144,11 @@ impl Options {
 		self
 	}
 
+	pub fn theme_links(mut self, tuning: ThemeLinkTuning) -> Self {
+		self.theme_links = tuning;
+		self
+	}
+
 	pub fn prepare(mut self, prepare: impl FnOnce(&Control) + 'static) -> Self {
 		self.prepare = Some(Box::new(prepare));
 		self
@@ -187,6 +194,7 @@ impl Running {
 			retention: options.retention,
 			keyring: options.keyring,
 			clock: options.clock,
+			theme_links: options.theme_links,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
 		Running {
@@ -374,6 +382,7 @@ struct Launch {
 	retention: Retention,
 	keyring: Arc<MemoryKeyring>,
 	clock: Clock,
+	theme_links: ThemeLinkTuning,
 }
 
 fn open_session(
@@ -406,6 +415,7 @@ fn open_session(
 		alerts: launch.alerts,
 		retention: launch.retention,
 		remember_account: launch.remember_account,
+		theme_links: launch.theme_links.clone(),
 	})
 	.expect("session starts");
 	(session, store)

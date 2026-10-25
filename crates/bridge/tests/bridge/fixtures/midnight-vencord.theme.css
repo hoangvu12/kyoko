@@ -1,0 +1,96 @@
+/**
+ * @name midnight (vencord)
+ * @description a dark, rounded discord theme. (test fixture shaped like the vencord flavour's variable block)
+ * @author refact0r
+ * @version 2.1.1
+ * @source https://github.com/refact0r/midnight-discord
+ * @website https://refact0r.github.io/midnight-discord
+ */
+
+@import url('https://refact0r.github.io/midnight-discord/build/midnight.css');
+
+body {
+	--font: 'Inter';
+	--code-font: '';
+	--gap: 12px;
+	--divider-thickness: 4px;
+	--border-thickness: 1px;
+	--animations: on;
+	--list-item-transition: 0.2s ease;
+	--top-bar-height: var(--gap);
+	--small-user-panel: on;
+	--unrounding: on;
+	--custom-window-controls: on;
+}
+
+:root {
+	--colors: on;
+
+	--text-0: var(--bg-4);
+	--text-1: #f1e9da;
+	--text-2: #e4d2b4;
+	--text-3: #d4be98;
+	--text-4: #a79a83;
+	--text-5: #d4be9866;
+
+	--bg-1: #433f3d;
+	--bg-2: #3c3836;
+	--bg-3: #31302f;
+	--bg-4: #282828;
+	--hover: #6965631a;
+	--active: #69656333;
+	--active-2: #6965634c;
+	--message-hover: #0000001a;
+
+	--accent-1: var(--purple-1);
+	--accent-2: var(--purple-2);
+	--accent-3: var(--purple-3);
+	--accent-4: var(--purple-4);
+	--accent-5: var(--purple-5);
+	--accent-new: var(--accent-2);
+	--mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 90%) 40%, transparent);
+	--mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 95%) 40%, transparent);
+	--reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+	--reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+
+	--online: var(--green-2);
+	--dnd: var(--red-2);
+	--idle: var(--yellow-2);
+	--streaming: var(--purple-2);
+	--offline: var(--text-4);
+
+	--border-light: var(--hover);
+	--border: var(--active);
+	--border-hover: var(--accent-2);
+	--button-border: hsl(0, 0%, 100%, 0.1);
+
+	--red-1: #ed7e78;
+	--red-2: #ea6962;
+	--red-3: #ea6962;
+	--red-4: #e7534b;
+	--red-5: #e33e35;
+
+	--green-1: #b1be74;
+	--green-2: #a8b665;
+	--green-3: #a8b665;
+	--green-4: #9ead52;
+	--green-5: #8f9e45;
+
+	--blue-1: #8ab7ad;
+	--blue-2: #7caea3;
+	--blue-3: #7caea3;
+	--blue-4: #6da599;
+	--blue-5: #5e9a8d;
+
+	--yellow-1: #ddb169;
+	--yellow-2: #d8a656;
+	--yellow-3: #d8a656;
+	--yellow-4: #d39b43;
+	--yellow-5: #c98e30;
+
+	--purple-1: #db9aab;
+	--purple-2: #d3869b;
+	--purple-3: #d3869b;
+	--purple-4: #cd748c;
+	--purple-5: #c6627c;
+}

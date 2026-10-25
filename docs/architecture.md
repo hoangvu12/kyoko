@@ -11,13 +11,13 @@ crates/state        normalized store, permission math, read state, message cache
 crates/store        sqlite cache and settings, token in the OS keyring
 crates/markdown     Discord markdown parser to AST
 crates/media        image fetching, decoding and the budgeted gallery of host images (docs/media.md)
-crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes
-crates/bridge       core to UI bridge without a UI dependency: the Changes inbox and the projections the UI publishes
+crates/session      session core: owns REST, gateway and persistence, takes Commands, emits Changes; fetches theme links (docs/themes.md)
+crates/bridge       core to UI bridge without a UI dependency: the Changes inbox, the projections the UI publishes, theme tokens and the theme catalog
 crates/login        token, QR and web login
 crates/plugins      the Luau plugin runtime: sandboxed VMs on worker threads behind SessionHooks (docs/plugins.md)
 crates/platform     Windows tray, notifications, hotkeys, clipboard, autostart, URL scheme (docs/desktop.md)
 tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
-tools/xtask         test, headless-run, theme catalog tooling, release notes
+tools/xtask         test, headless-run, the first party theme check, release notes
 ```
 
 Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state` and `media`. `plugins` depends on `session`, `state`, `store`, `protocol` and mlua. `apps/desktop` depends on `bridge`, `plugins`, `session`, `state`, `store`, `protocol`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session`, `bridge` or `plugins` has a UI dependency.

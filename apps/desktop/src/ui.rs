@@ -18,6 +18,7 @@ mod search;
 mod server_settings;
 mod settings;
 mod sign_in;
+mod themes;
 mod threads;
 
 use std::cell::{Cell, RefCell};
@@ -54,7 +55,6 @@ use crate::motion::Motion;
 use crate::profile::ProfileLayer;
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
-use crate::theme::Catalog;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
@@ -86,12 +86,12 @@ struct Messages {
 
 pub struct Appearance {
 	pub theme: String,
-	pub user_themes: PathBuf,
 }
 
 struct Views {
 	settings: settings::SettingsView,
 	plugins: plugins::PluginsView,
+	themes: themes::ThemesView,
 }
 
 pub struct Launch {
@@ -136,7 +136,7 @@ pub fn run(
 			..Default::default()
 		})
 		.run(move |cx| {
-			let catalog = Catalog::load(&[themes_dir(), appearance.user_themes.clone()]);
+			let (themes, catalog) = themes::ThemesView::startup(&desktop.store, &[themes_dir()]);
 			let theme = catalog.install(&cx.ui.runtime, &appearance.theme);
 			tracing::info!(%theme, themes = catalog.palettes.len(), "themes installed");
 			let host = ScriptHost::new(&cx.ui.runtime, script);
@@ -154,6 +154,7 @@ pub fn run(
 			};
 			let settings = settings::SettingsView::new(&host, desktop.store.clone(), catalog);
 			let plugins = plugins::PluginsView::new(&host, plugin_host.clone(), sign_in.runtime.clone());
+			let themes = themes::ThemesView::new(&host, desktop.store.clone(), themes);
 			let link = Link::install(
 				&host,
 				window,
@@ -161,7 +162,11 @@ pub fn run(
 				inbox.clone(),
 				images,
 				messages,
-				Views { settings, plugins },
+				Views {
+					settings,
+					plugins,
+					themes,
+				},
 			);
 			link.opening.set(opening);
 			link.attach_ui(cx.ui.downgrade());
@@ -175,6 +180,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_post_files());
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
+			cx.tasks.spawn(link.clone().follow_theme_folder());
 			cx.tasks.spawn(link.clone().follow_gif_search());
 			cx.tasks.spawn(link.clone().follow_server_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
@@ -396,6 +402,7 @@ pub(crate) struct Link {
 	settings: settings::SettingsView,
 	finder: search::Finder,
 	plugins: plugins::PluginsView,
+	themes: themes::ThemesView,
 	moderation: Rc<ModerationLayer>,
 	moderation_effect: RefCell<Option<Effect>>,
 	server: server_settings::ServerSettingsView,
@@ -425,7 +432,11 @@ impl Link {
 		messages: Messages,
 		views: Views,
 	) -> Rc<Link> {
-		let Views { settings, plugins } = views;
+		let Views {
+			settings,
+			plugins,
+			themes,
+		} = views;
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
 		images.gallery.set_waker(move || wakes.push(()));
@@ -508,6 +519,7 @@ impl Link {
 			settings,
 			finder,
 			plugins,
+			themes,
 			moderation,
 			moderation_effect: RefCell::new(None),
 			server: server_settings::ServerSettingsView::new(host),
@@ -539,6 +551,7 @@ impl Link {
 		Link::install_server_settings(host, &link);
 		Link::install_settings(host, &link);
 		Link::install_plugins(host, &link);
+		Link::install_themes(host, &link);
 		Link::install_profiles(host, &link);
 		Link::install_search(host, &link);
 		Link::install_threads(host, &link);
@@ -740,6 +753,7 @@ impl Link {
 		self.watch_session(changes);
 		let opened = self.publish(changes);
 		self.community_apply(changes);
+		self.themes_apply(changes);
 		self.follow_friend(changes);
 		self.follow_threads();
 		if let Some((opening, open)) = opened {

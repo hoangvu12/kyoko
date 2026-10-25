@@ -93,6 +93,10 @@ impl Paths {
 		self.data.join("themes")
 	}
 
+	pub fn theme_links_dir(&self) -> PathBuf {
+		self.cache.join("theme-links")
+	}
+
 	pub fn logs_dir(&self) -> PathBuf {
 		self.data.join("logs")
 	}

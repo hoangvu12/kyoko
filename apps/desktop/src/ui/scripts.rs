@@ -401,7 +401,7 @@ fn server_pages() -> [(&'static str, &'static str, &'static str, serde_json::Val
 	]
 }
 
-const SETTINGS_PAGES: [(&str, &str); 16] = [
+const SETTINGS_PAGES: [(&str, &str); 17] = [
 	("my-account", "Edit User Profile"),
 	("profiles", "Your profile is edited in Discord's web app for now."),
 	("privacy", "Warn before opening links"),
@@ -421,6 +421,10 @@ const SETTINGS_PAGES: [(&str, &str); 16] = [
 	("streamer-mode", "Hide sensitive details while you stream."),
 	("advanced", "Open Kyoko on Login"),
 	("plugins", "Strips tracking parameters from the links you send."),
+	(
+		"themes",
+		"Paste direct links to .css or theme.json files, one per line. Start a line with @light or @dark to use it only with light or dark colours.",
+	),
 ];
 
 #[test]
@@ -561,6 +565,76 @@ fn every_field_plugin() -> serde_json::Value {
 		],
 		"permissions": [],
 	}])
+}
+
+#[test]
+fn the_themes_page_applies_toggles_and_saves_links() {
+	let calls: Calls = std::rc::Rc::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the themes page",
+		"Midnight Ocean",
+		&[
+			("login.screen", json!("main")),
+			("settings.values", setting_values(true)),
+			("settings.page", json!("themes")),
+			("themes.list", theme_list()),
+		],
+	);
+	let texts = app.texts();
+	for shown in [
+		"APPLIED",
+		"v2.1.0 · by someone",
+		"Deep blue with a teal accent.",
+		"the server answered 404 Not Found",
+		"v1.0 · by Kyoko · dark only",
+	] {
+		assert!(texts.iter().any(|text| text == shown), "{shown} is not shown");
+	}
+	app.click("theme_apply_light");
+	app.click("theme_switch_ocean.css");
+	app.type_text("theme_links", "https://a.example/one.css");
+	app.click("theme_links_save");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "themes.apply"), Some(json!("light")));
+	assert_eq!(
+		last_call(&calls, "themes.toggle"),
+		Some(json!({ "id": "ocean.css", "on": true }))
+	);
+	assert_eq!(
+		last_call(&calls, "themes.set_links"),
+		Some(json!("https://a.example/one.css"))
+	);
+}
+
+fn theme_entry(id: &str, source: &str, name: &str, enabled: bool) -> serde_json::Value {
+	json!({
+		"id": id, "source": source, "name": name, "author": "", "description": "", "version": "",
+		"enabled": enabled, "error": "", "note": "", "scheme": "",
+		"swatch": ["#1e1f22", "#2b2d31", "#313338", "#5865f2", "#dbdee1", "#00a8fc"],
+	})
+}
+
+fn theme_list() -> serde_json::Value {
+	let mut ocean = theme_entry("ocean.css", "local", "Midnight Ocean", false);
+	ocean["author"] = json!("someone");
+	ocean["version"] = json!("2.1.0");
+	ocean["description"] = json!("Deep blue with a teal accent.");
+	let mut broken = theme_entry("https://a.example/broken.css", "online", "broken", false);
+	broken["error"] = json!("the server answered 404 Not Found");
+	let mut green = theme_entry("@dark https://a.example/green.css", "online", "Green", true);
+	green["author"] = json!("Kyoko");
+	green["version"] = json!("1.0");
+	green["scheme"] = json!("dark");
+	json!([
+		theme_entry("dark", "builtin", "Dark", true),
+		theme_entry("light", "builtin", "Light", false),
+		ocean,
+		broken,
+		green,
+	])
 }
 
 type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;

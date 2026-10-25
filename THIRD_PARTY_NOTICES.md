@@ -91,7 +91,11 @@ Kyoko bundles no fonts. Like oxidcord, it asks for the first installed family of
 
 ## Oxidcord theme and layout
 
-The theme tokens in `apps/desktop/src/theme.rs` (colours, sizes, fonts, the light and AMOLED overrides) and the shell layout in `apps/desktop/ui/shell/` are ported from oxidcord's `crates/ui/src/theme.rs` and `crates/ui/src/shell/`, under oxidcord's MIT OR Apache-2.0 licence (see `NOTICE`).
+The theme tokens in `crates/bridge/src/themes/tokens.rs` and `apps/desktop/src/theme.rs` (colours, sizes, fonts, the light and AMOLED overrides) and the shell layout in `apps/desktop/ui/shell/` are ported from oxidcord's `crates/ui/src/theme.rs` and `crates/ui/src/shell/`, under oxidcord's MIT OR Apache-2.0 licence (see `NOTICE`).
+
+## Midnight test fixture
+
+`crates/bridge/tests/bridge/fixtures/midnight-vencord.theme.css` is a test fixture shaped like the variable block of refact0r's Midnight theme, Vencord flavour 2.1.1 ([refact0r/midnight-discord](https://github.com/refact0r/midnight-discord)), with its variable names and palette values. Midnight is distributed under the MIT License. The fixture contains no selectors or rules from Midnight and is not shipped in the application.
 
 ## ClearURLs rules (not bundled)
 

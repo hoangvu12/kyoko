@@ -1,15 +1,13 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, Subcommand};
-use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use serde_json::Value;
 
-use crate::signing::{KeygenArgs, SignArgs, keygen, sign};
-
-const CATALOG_VERSION: u32 = 1;
 const MAX_ID_LENGTH: usize = 64;
+const BASES: [&str; 3] = ["dark", "light", "amoled"];
+const FIELDS: [&str; 4] = ["name", "version", "author", "description"];
 
 #[derive(Args)]
 pub struct ThemeArgs {
@@ -19,54 +17,40 @@ pub struct ThemeArgs {
 
 #[derive(Subcommand)]
 enum ThemeCommand {
-	#[command(about = "Read every theme folder and write a catalog json")]
-	Catalog(CatalogArgs),
-	#[command(about = "Write an ed25519 key for signing catalogs")]
-	Keygen(KeygenArgs),
-	#[command(about = "Sign a catalog json with an ed25519 key")]
-	Sign(SignArgs),
+	#[command(about = "Check every first party theme folder")]
+	Check(CheckArgs),
 }
 
 #[derive(Args)]
-struct CatalogArgs {
+struct CheckArgs {
 	#[arg(long, default_value = "themes")]
 	dir: PathBuf,
-	#[arg(long, default_value = "themes/catalog.json")]
-	out: PathBuf,
-	#[arg(long, help = "Prefix for the url of each theme.json")]
-	base_url: String,
 }
 
 pub fn run(args: ThemeArgs) -> Result<()> {
 	match args.command {
-		ThemeCommand::Catalog(args) => catalog(&args),
-		ThemeCommand::Keygen(args) => keygen(&args),
-		ThemeCommand::Sign(args) => sign(&args),
+		ThemeCommand::Check(args) => check(&args),
 	}
 }
 
-fn catalog(args: &CatalogArgs) -> Result<()> {
-	let mut themes = Vec::new();
-	for entry in fs::read_dir(&args.dir).with_context(|| format!("could not read {}", args.dir.display()))? {
-		let folder = entry?.path();
-		if folder.join("theme.toml").is_file() {
-			themes.push(entry_for(&folder, &args.base_url)?);
-		}
+fn check(args: &CheckArgs) -> Result<()> {
+	let mut count = 0;
+	let mut entries: Vec<PathBuf> = fs::read_dir(&args.dir)
+		.with_context(|| format!("could not read {}", args.dir.display()))?
+		.flatten()
+		.map(|entry| entry.path())
+		.filter(|path| path.is_dir())
+		.collect();
+	entries.sort();
+	for folder in entries {
+		check_folder(&folder)?;
+		count += 1;
 	}
-	themes.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
-	let count = themes.len();
-	let catalog = json!({
-		"version": CATALOG_VERSION,
-		"generated_at": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-		"themes": themes,
-	});
-	let text = serde_json::to_string_pretty(&catalog)? + "\n";
-	fs::write(&args.out, text).with_context(|| format!("could not write {}", args.out.display()))?;
-	println!("{count} themes in {}", args.out.display());
+	println!("{count} themes in {} are valid", args.dir.display());
 	Ok(())
 }
 
-fn entry_for(folder: &std::path::Path, base_url: &str) -> Result<Value> {
+fn check_folder(folder: &Path) -> Result<()> {
 	let meta_path = folder.join("theme.toml");
 	let meta: toml::Table = fs::read_to_string(&meta_path)
 		.with_context(|| format!("could not read {}", meta_path.display()))?
@@ -75,31 +59,47 @@ fn entry_for(folder: &std::path::Path, base_url: &str) -> Result<Value> {
 	let field = |name: &str| -> Result<&str> {
 		meta.get(name)
 			.and_then(|value| value.as_str())
-			.filter(|value| !value.is_empty())
+			.filter(|value| !value.trim().is_empty())
 			.with_context(|| format!("{} needs a `{name}` string", meta_path.display()))
 	};
 	let id = field("id")?;
-	if !valid_id(id) {
-		bail!(
-			"{}: id `{id}` must match [a-z0-9-]{{1,{MAX_ID_LENGTH}}}",
-			meta_path.display()
-		);
+	ensure!(
+		valid_id(id),
+		"{}: id `{id}` must match [a-z0-9-]{{1,{MAX_ID_LENGTH}}}",
+		meta_path.display()
+	);
+	let folder_name = folder
+		.file_name()
+		.and_then(|name| name.to_str())
+		.unwrap_or_default();
+	ensure!(
+		id == folder_name,
+		"{}: id `{id}` must match the folder name",
+		meta_path.display()
+	);
+	for name in FIELDS {
+		field(name)?;
 	}
 	let theme_path = folder.join("theme.json");
 	let bytes = fs::read(&theme_path).with_context(|| format!("could not read {}", theme_path.display()))?;
-	if !serde_json::from_slice::<Value>(&bytes).is_ok_and(|value| value.is_object()) {
+	ensure!(
+		bytes.len() <= session::MAX_THEME_BYTES,
+		"{} is larger than {} KB",
+		theme_path.display(),
+		session::MAX_THEME_BYTES / 1024
+	);
+	let Ok(Value::Object(tokens)) = serde_json::from_slice::<Value>(&bytes) else {
 		bail!("{} must be a JSON object", theme_path.display());
+	};
+	if let Some(base) = tokens.get("base") {
+		ensure!(
+			base.as_str().is_some_and(|base| BASES.contains(&base)),
+			"{}: base must be one of {}",
+			theme_path.display(),
+			BASES.join(", ")
+		);
 	}
-	Ok(json!({
-		"id": id,
-		"name": field("name")?,
-		"version": field("version")?,
-		"description": field("description")?,
-		"author": field("author")?,
-		"url": format!("{}/{id}/theme.json", base_url.trim_end_matches('/')),
-		"sha256": hex::encode(Sha256::digest(&bytes)),
-		"length": bytes.len(),
-	}))
+	Ok(())
 }
 
 fn valid_id(id: &str) -> bool {

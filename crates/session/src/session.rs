@@ -11,13 +11,13 @@ use tokio::runtime::{Builder, Handle, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::alerts::{Alert, AlertQueue};
-use crate::catalog::{ThemeCatalog, ThemeCatalogs};
 use crate::command::Command;
 use crate::config::SessionConfig;
 use crate::hooks::{Hooks, guarded};
 use crate::notifier::Notifier;
 use crate::search::SearchResults;
 use crate::task::{Core, CoreParts, SharedSearch, Startup, Stats};
+use crate::theme_links::{ThemeLinkCopy, ThemeLinks};
 
 const COMMAND_CAPACITY: usize = 256;
 const RUNTIME_WORKERS: usize = 4;
@@ -44,7 +44,7 @@ pub struct Session {
 	search: SharedSearch,
 	alerts: AlertQueue,
 	stats: Arc<Stats>,
-	themes: Arc<ThemeCatalogs>,
+	themes: Arc<ThemeLinks>,
 	hooks: Hooks,
 	finished: std::sync::mpsc::Receiver<()>,
 	runtime: Option<Runtime>,
@@ -97,7 +97,7 @@ impl Session {
 		let search = SharedSearch::default();
 		let alerts = AlertQueue::default();
 		let stats = Arc::new(Stats::default());
-		let themes = Arc::new(ThemeCatalogs::default());
+		let themes = Arc::new(ThemeLinks::default());
 		let (commands, command_receiver) = mpsc::channel(COMMAND_CAPACITY);
 		let (internal, internal_receiver) = mpsc::unbounded_channel();
 		let core = Core::new(CoreParts {
@@ -108,6 +108,7 @@ impl Session {
 			internal,
 			hooks: config.hooks.clone(),
 			themes: themes.clone(),
+			theme_tuning: config.theme_links,
 			locale,
 			notifier: Notifier::new(config.notify),
 			runtime: handle.clone(),
@@ -170,12 +171,8 @@ impl Session {
 		self.alerts.take()
 	}
 
-	pub fn theme_catalog(&self) -> Option<Arc<ThemeCatalog>> {
-		self.themes.catalog()
-	}
-
-	pub fn theme_catalog_error(&self) -> Option<String> {
-		self.themes.error()
+	pub fn theme_links(&self) -> Arc<Vec<ThemeLinkCopy>> {
+		self.themes.copies()
 	}
 
 	pub fn search_results(&self) -> Option<Arc<SearchResults>> {

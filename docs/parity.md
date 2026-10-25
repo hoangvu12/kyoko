@@ -304,7 +304,7 @@ Oxidcord has no rules (membership screening) or onboarding screens, so they have
 
 ### 37 Account and settings pages
 
-The voice and video and updates pages are left out, as ticket 37 says; ticket 45 adds the Plugins page. Kyoko has no Themes page until ticket 57 adds one through the settings page registry, and no Developer page: its developer mode switch is on Advanced.
+The voice and video and updates pages are left out, as ticket 37 says; ticket 45 adds the Plugins page. Ticket 57 adds the Themes page through the settings page registry. Kyoko has no Developer page: its developer mode switch is on Advanced.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
@@ -323,7 +323,7 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 | `settings-language` | 37 | As above, on Language. | yes |
 | `settings-streamer-mode` | 37 | As above, on Streamer Mode. | yes |
 | `settings-advanced` | 37 | As above, on Advanced. | yes |
-| `settings-themes` | 37 | As above, on Themes. | no |
+| `settings-themes` | 57 | As above, on Themes. Oxidcord shows Built In, an empty From Plugins and its catalog URL; kyoko shows Built In (with the two first party themes and each card's version, author and description), an empty Local Themes and the Online Themes links box. | yes |
 | `settings-developer` | 37 | As above, on Developer. | no |
 
 ### 45 Plugin runtime

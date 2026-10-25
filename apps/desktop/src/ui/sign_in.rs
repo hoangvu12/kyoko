@@ -278,6 +278,7 @@ impl Link {
 		if let Some(store) = self.flow.borrow().store().cloned() {
 			self.rail.restore(store);
 		}
+		self.themes_session_started();
 		self.community.close();
 		self.community.attach(self.state());
 		self.window.runtime.batch(|| self.reset_session_views());

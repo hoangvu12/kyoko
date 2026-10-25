@@ -5,7 +5,10 @@ local frame = require("@shell/frame")
 pages.add_section({
 	key = "kyoko",
 	title = "Kyoko",
-	pages = { { key = "plugins", title = "Plugins", icon = "plugins", build = require("@settings/plugins") } },
+	pages = {
+		{ key = "plugins", title = "Plugins", icon = "plugins", build = require("@settings/plugins") },
+		{ key = "themes", title = "Themes", icon = "themes", build = require("@settings/themes") },
+	},
 })
 
 ui.effect(function()

@@ -26,13 +26,13 @@ use tokio::time::{Instant, sleep_until};
 use url::Url;
 
 use crate::alerts::{Alert, AlertPacing, AlertQueue, Pacing};
-use crate::catalog::ThemeCatalogs;
 use crate::command::Command;
 use crate::hooks::{Hooks, Rewrite, guarded, guarded_blocking};
 use crate::identity;
 use crate::notifier::Notifier;
 use crate::persist::{self, Job, Persistor};
 use crate::search::SearchResults;
+use crate::theme_links::{ThemeLinkTuning, ThemeLinks};
 
 mod accounts;
 mod actions;
@@ -117,7 +117,7 @@ pub(crate) enum Internal {
 		scope: Snowflake,
 		index: Option<Box<protocol::ApplicationCommandIndex>>,
 	},
-	ThemeCatalogChanged,
+	ThemeLinksChanged,
 	Alert(Alert),
 	AlertVetoed(StdInstant),
 	AccountSwitch(Snowflake),
@@ -162,7 +162,8 @@ pub(crate) struct CoreParts {
 	pub(crate) stats: Arc<Stats>,
 	pub(crate) internal: mpsc::UnboundedSender<Internal>,
 	pub(crate) hooks: Hooks,
-	pub(crate) themes: Arc<ThemeCatalogs>,
+	pub(crate) themes: Arc<ThemeLinks>,
+	pub(crate) theme_tuning: ThemeLinkTuning,
 	pub(crate) locale: String,
 	pub(crate) token: Arc<Token>,
 	pub(crate) remember_account: bool,
@@ -198,7 +199,8 @@ pub(crate) struct Core {
 	profiles: profiles::Profiles,
 	afk: bool,
 	hooks: Hooks,
-	themes: Arc<ThemeCatalogs>,
+	themes: Arc<ThemeLinks>,
+	theme_tuning: ThemeLinkTuning,
 	locale: String,
 	token: Arc<Token>,
 	remember_account: bool,
@@ -277,6 +279,7 @@ impl Core {
 			afk: false,
 			hooks: parts.hooks,
 			themes: parts.themes,
+			theme_tuning: parts.theme_tuning,
 			locale: parts.locale,
 			token: parts.token,
 			remember_account: parts.remember_account,
@@ -661,8 +664,8 @@ impl Core {
 			}),
 			Internal::Alert(alert) => self.push_alert(alert),
 			Internal::AlertVetoed(reserved) => self.release_alert(reserved),
-			Internal::ThemeCatalogChanged => self.notifier.push(Changes {
-				theme_catalog: true,
+			Internal::ThemeLinksChanged => self.notifier.push(Changes {
+				theme_links: true,
 				..Changes::default()
 			}),
 			Internal::AccountSwitch(user_id) => self.apply_local(LocalEvent::AccountSwitchRequested(user_id)),
@@ -854,9 +857,7 @@ impl Core {
 				category_id,
 			} => self.toggle_category(guild_id, category_id),
 			Command::SwitchAccount(user_id) => self.switch_account(user_id),
-			command @ (Command::ThemeCatalogRefresh { .. } | Command::ThemeInstall { .. }) => {
-				self.on_theme_command(command)
-			}
+			Command::RefreshThemeLinks { urls } => self.refresh_theme_links(urls),
 			Command::Reconnect => self.gateway.reconnect(),
 			Command::ShowDeletedMessages(show) => self.apply_local(LocalEvent::ShowDeletedMessages(show)),
 			Command::Logout => {

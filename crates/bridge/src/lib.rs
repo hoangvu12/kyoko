@@ -23,6 +23,7 @@ mod sidebar;
 mod sign_in;
 mod sticker_picker;
 mod switcher;
+pub mod themes;
 mod threads;
 mod timeline;
 mod toasts;

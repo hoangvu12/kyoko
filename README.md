@@ -123,7 +123,7 @@ If you do not agree with any of this, do not use Kyoko.
 
 ## Privacy and security
 
-- No telemetry of any kind. The only network traffic is to Discord, to the public pages used to read the current Discord build number and Chrome version once a day, and to the media hosts Discord messages point at. Kyoko has no update server and no plugin or theme catalog yet, so it fetches neither.
+- No telemetry of any kind. The only network traffic is to Discord, to the public pages used to read the current Discord build number and Chrome version once a day, and to the media hosts Discord messages point at. Kyoko has no update server and no plugin or theme catalog, so it fetches neither. The only other requests are the theme links you add yourself in Settings, Themes: plain HTTPS downloads with no Discord token, cookies or client details.
 - The token is attached only to `https://discord.com` requests and is dropped on any redirect. It is never logged.
 - Everything from the network, from a plugin or from disk is treated as untrusted and decoded leniently.
 - The message cache is encrypted at rest with XChaCha20-Poly1305. The key lives in the OS credential store, or in a file next to the settings if you turn on the plaintext storage setting, which shows a warning. The channel and message ids and timestamps used to index the cache stay unencrypted.

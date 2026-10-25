@@ -23,6 +23,7 @@ pub struct Settings {
 	pub integration: IntegrationSettings,
 	pub first_run_acknowledged: bool,
 	pub plugins: PluginSettings,
+	pub themes: ThemeSettings,
 	pub developer: DeveloperSettings,
 	pub trusted_link_hosts: Vec<String>,
 	pub advanced: AdvancedSettings,
@@ -199,6 +200,13 @@ pub struct PluginSettings {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
+pub struct ThemeSettings {
+	pub enabled: Vec<String>,
+	pub links: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DeveloperSettings {
 	pub show_plugin_debug: bool,
 	pub developer_mode: bool,
@@ -219,6 +227,7 @@ impl Default for Settings {
 			integration: IntegrationSettings::default(),
 			first_run_acknowledged: false,
 			plugins: PluginSettings::default(),
+			themes: ThemeSettings::default(),
 			developer: DeveloperSettings::default(),
 			trusted_link_hosts: Vec::new(),
 			advanced: AdvancedSettings::default(),

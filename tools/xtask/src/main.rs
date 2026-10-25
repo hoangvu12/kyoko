@@ -2,7 +2,6 @@ mod checks;
 mod headless;
 mod parity;
 mod release;
-mod signing;
 mod theme;
 
 use std::process::ExitCode;

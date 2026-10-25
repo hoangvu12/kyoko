@@ -31,8 +31,8 @@ pub use secrets::{Keyring, MemoryKeyring, SecretHealth, SystemKeyring, TokenBack
 pub use settings::{
 	AccessibilitySettings, AnimationPlayback, AppearanceSettings, ChatSettings, ClientSettings,
 	DeveloperSettings, IntegrationSettings, KeybindSettings, MediaSettings, NotificationSettings,
-	PluginSettings, Settings, StartupSettings, StorageSettings, StreamerModeSettings, VoiceSettings,
-	WindowSettings,
+	PluginSettings, Settings, StartupSettings, StorageSettings, StreamerModeSettings, ThemeSettings,
+	VoiceSettings, WindowSettings,
 };
 pub use token::TokenStore;
 

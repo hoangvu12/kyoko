@@ -204,6 +204,7 @@ fn flow_for(server: &Server, store: Arc<Store>, rest_base: Url) -> Flow {
 				alerts: Default::default(),
 				retention: Default::default(),
 				remember_account: remember == Remember::Account,
+				theme_links: Default::default(),
 			})
 		},
 	);
