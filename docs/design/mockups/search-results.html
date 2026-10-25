@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html data-src-ver="6c2ca063" lang="en" data-om-id="6c2ca063:0">
+<head data-om-id="6c2ca063:1">
+<style data-omelette-injected>html,body{background:transparent}</style>
+
+<meta charset="utf-8" data-om-id="6c2ca063:2">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-om-id="6c2ca063:3">
+<title>Discord · Midnight · Search results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-om-id="6c2ca063:4">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" data-om-id="6c2ca063:5">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" data-om-id="6c2ca063:6">
+<style>
+:root {
+  /* text */
+  --text-0: var(--bg-4);
+  --text-1: hsl(38, 47%, 90%);
+  --text-2: hsl(38, 47%, 80%);
+  --text-3: #d4be98;
+  --text-4: #a79a83;
+  --text-5: #d4be9866;
+  /* backgrounds */
+  --bg-1: hsl(20, 5%, 25%);
+  --bg-2: #3c3836;
+  --bg-3: hsl(20, 2%, 19%);
+  --bg-4: #282828;
+  --hover: hsla(20, 3%, 40%, 0.1);
+  --active: hsla(20, 3%, 40%, 0.2);
+  --active-2: hsla(20, 3%, 40%, 0.3);
+  --message-hover: hsla(0, 0%, 0%, 0.1);
+  /* accents */
+  --accent-1: var(--purple-1);
+  --accent-2: var(--purple-2);
+  --accent-3: var(--purple-3);
+  --accent-4: var(--purple-4);
+  --accent-5: var(--purple-5);
+  --accent-new: var(--accent-2);
+  --mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 90%) 40%, transparent);
+  --mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 95%) 40%, transparent);
+  --reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+  --reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+  /* status */
+  --online: var(--green-2);
+  --dnd: var(--red-2);
+  --idle: var(--yellow-2);
+  --streaming: var(--purple-2);
+  --offline: var(--text-4);
+  /* borders */
+  --border-light: var(--hover);
+  --border: var(--active);
+  --border-hover: var(--active);
+  --button-border: hsl(0, 0%, 100%, 0.1);
+  /* base scales */
+  --red-1: hsl(3, 76%, 70%); --red-2: #ea6962; --red-3: #ea6962; --red-4: hsl(3, 76%, 60%); --red-5: hsl(3, 76%, 55%);
+  --green-1: hsl(70, 36%, 60%); --green-2: #a8b665; --green-3: #a8b665; --green-4: hsl(70, 36%, 50%); --green-5: hsl(70, 36%, 45%);
+  --blue-1: hsl(167, 24%, 63%); --blue-2: #7caea3; --blue-3: #7caea3; --blue-4: hsl(167, 24%, 53%); --blue-5: hsl(167, 24%, 48%);
+  --yellow-1: hsl(37, 63%, 64%); --yellow-2: #d8a656; --yellow-3: #d8a656; --yellow-4: hsl(37, 63%, 54%); --yellow-5: hsl(37, 63%, 49%);
+  --purple-1: hsl(344, 47%, 73%); --purple-2: #d3869b; --purple-3: #d3869b; --purple-4: hsl(344, 47%, 63%); --purple-5: hsl(344, 47%, 58%);
+  /* Discord semantic colours as midnight.css maps them */
+  --mention-background: color-mix(in hsl, var(--accent-2), transparent 90%);
+  --mention-foreground: var(--accent-1);
+  --text-link: var(--accent-1);
+  --background-code: var(--bg-3);
+  --background-scrim: hsl(0, 0%, 0%, 0.7);
+  --background-feedback-critical: color-mix(in hsl, var(--red-2), transparent 80%);
+  --background-feedback-positive: color-mix(in hsl, var(--green-2), transparent 80%);
+  --input-background-error-default: color-mix(in hsl, var(--red-2), transparent 90%);
+  --highlight-background: var(--accent-3);
+  --highlight-text: var(--text-0);
+  --spine-default: var(--text-5);
+  --input-background-default: var(--bg-3);
+  --input-border-default: var(--border-light);
+  --input-border-hover: var(--border);
+  --input-border-active: var(--accent-2);
+  --input-border-error: var(--red-2);
+  --input-placeholder-text-default: var(--text-5);
+  --input-text-default: var(--text-3);
+  --reaction-background-default: var(--hover);
+  --reaction-border-default: var(--border-light);
+  --reaction-text-default: var(--text-3);
+  --reaction-background-reacted-default: color-mix(in hsl, var(--accent-2), transparent 80%);
+  --reaction-border-reacted-default: var(--accent-2);
+  --reaction-text-reacted-default: var(--text-1);
+  --user-panel-button-active-background: color-mix(in hsl, var(--accent-new), transparent 90%);
+  --switch-background-default: var(--bg-3);
+  --switch-border-default: var(--border);
+  --switch-background-selected: var(--accent-3);
+  --switch-border-selected: var(--button-border);
+  --switch-thumb-default: var(--text-3);
+  --switch-thumb-selected: var(--bg-4);
+  --switch-thumb-background: rgb(255, 255, 255);
+  --radio-background-default: var(--bg-2);
+  --radio-background-selected: var(--accent-2);
+  --slider-track-background: var(--bg-2);
+  --slider-fill-background: var(--accent-2);
+  --slider-grabber: var(--text-3);
+  --card-background-default: var(--bg-3);
+  --guild-pill: var(--text-2);
+  --channel-unread-dot: var(--text-3);
+  /* content-only colours (stand-ins for nameplate images, banners) */
+  --nameplate-1: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--blue-5), transparent 65%));
+  --nameplate-2: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--purple-5), transparent 60%));
+  --nameplate-3: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--bg-1), transparent 10%));
+  --nameplate-4: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--red-5), transparent 65%));
+  --desktop: #000;
+  /* type */
+  --font-primary: 'Inter', 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-code: 'gg mono', 'Source Code Pro', Consolas, Monaco, monospace;
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-opsz: 32; /* Inter optical size the reference renders at; Windows Chromium's auto value would be the px size */
+  --font-size-tag: 10px;
+  --font-size-timestamp-alt: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-inline-code: 0.85em;
+  --line-height-xs: 16px;
+  --line-height-sm: 18px;
+  --line-height-md: 22px;
+  --line-height-lg: 24px;
+  --line-height-xl: 30px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* theme sizes (theme.css) */
+  --gap: 12px;
+  --divider-thickness: 4px;
+  --border-thickness: 1px;
+  --chatbar-height: 47px;
+  --top-bar-height: var(--gap);
+  --window-control-size: 14px;
+  --window-controls-padding: calc(var(--gap) - (var(--window-control-size) / 2) + 1px);
+  --list-item-hover-shift: 10px;
+  --member-hover-shift: 18px;
+  /* Discord sizes Midnight builds on */
+  --space-1: 1px; --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-12: 12px; --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px; --space-40: 40px;
+  --space-xs: var(--space-8); --space-sm: var(--space-12); --space-md: var(--space-16); --space-lg: var(--space-24);
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --guildbar-avatar-size: 40px;
+  --custom-guild-list-padding: 12px;
+  --custom-guild-list-width: calc(var(--guildbar-avatar-size) + var(--custom-guild-list-padding) * 2 + var(--border-thickness) * 2);
+  --custom-guild-sidebar-width: calc(var(--custom-guild-list-width) + 280px);
+  --custom-channel-header-height: calc(var(--guildbar-avatar-size) + var(--space-xs) + var(--border-thickness) * 2);
+  --member-list-width: 264px;
+  --search-results-width: 420px;
+  --window-width: 1280px;
+  --window-height: 800px;
+  --icon-size-xs: 12px; --icon-size-sm: 16px; --icon-size-md: 20px; --icon-size-lg: 24px;
+  --button-size: 32px;
+  --button-height-sm: 32px; --button-height-md: 38px; --button-height-lg: 44px;
+  --input-height: 40px;
+  --avatar-size-xs: 16px; --avatar-size-sm: 32px; --avatar-size-md: 40px; --avatar-size-lg: 80px;
+  --status-size: 10px; --status-cutout: 3px;
+  --status-size-lg: 16px; --status-cutout-lg: 5px;
+  --role-icon-size: 20px;
+  --folder-size: 48px;
+  --guild-pill-width: 4px;
+  --guild-pill-selected-height: 36px;
+  --guild-pill-unread-height: 8px;
+  --guild-separator-width: 32px;
+  --badge-size: 16px;
+  --unread-dot-size: 8px;
+  --channel-row-height: 32px;
+  --category-row-height: 24px;
+  --member-row-height: 40px;
+  --dm-row-height: 42px;
+  --group-header-height: 40px;
+  --search-width: 240px;
+  --new-messages-bar-height: 32px;
+  --typing-height: 24px;
+  --message-gutter: 72px;
+  --message-group-gap: 17px;
+  --message-padding-right: 48px;
+  --reply-spine-width: 2px;
+  --reply-spine-radius: 6px;
+  --reaction-height: 24px;
+  --reaction-border-width: 2px;
+  --embed-max-width: 432px;
+  --embed-accent-width: 4px;
+  --tag-height: 16px;
+  --bot-tag-height: 15px;
+  --unread-pill-height: 13px;
+  --switch-width: 48px; --switch-height: 24px; --switch-thumb-size: 14px;
+  --radio-size: 20px;
+  --slider-track-height: 4px;
+  --menu-width: 220px; --menu-item-height: 32px;
+  --popout-width: 300px; --banner-height: 105px; --settings-banner-height: 100px;
+  --modal-width-sm: 440px; --modal-width-md: 570px;
+    --emoji-picker-width: 418px; --emoji-picker-height: 440px; --emoji-cell-size: 40px; --emoji-size: 32px;
+  --qr-size: 176px;
+  --disabled-opacity: 0.3;
+  --offline-opacity: 0.3;
+  /* settings dialog (measured from live captures) */
+  --settings-dialog-inset: calc(var(--space-40) + var(--top-bar-height));
+  --settings-dialog-max-width: 1400px;
+  --settings-nav-width: 254px;
+  --settings-topbar-height: 48px;
+  --settings-column-width: 696px;
+  --settings-item-height: 40px;
+  --settings-row-gap: 34px;
+  --settings-divider-margin: 56px;
+  --settings-page-padding-top: 64px;
+  --space-10: 10px; --space-14: 14px; --space-56: 56px;
+  --line-height-label: 20px;
+  --select-height: 40px;
+  --vc-switch-width: 40px; --vc-switch-thumb-size: 18px;
+  --radio-border-selected: 6px;
+  --slider-grabber-size: 16px;
+  --theme-swatch-size: 46px;
+  --disabled-opacity-control: 0.5;
+  --scrollbar-thin-thumb: var(--bg-1);
+  --background-feedback-warning: color-mix(in hsl, var(--yellow-2), transparent 80%);
+  --background-feedback-info: color-mix(in hsl, var(--blue-2), transparent 80%);
+  --border-feedback-warning: var(--yellow-1);
+  /* Discord's own theme-preview colours (light maps to --text-0 because midnight sets --white to it) */
+  --overlay-button-background: hsl(0, 0%, 0%, 0.5);
+  --avatar-size-xl: 120px; --status-size-xl: 24px; --status-cutout-xl: 7px;
+  --profile-dialog-width: 900px; --profile-dialog-height: 640px; --profile-banner-height: 160px; --profile-column-width: 340px;
+  --menu-item-hover-background: var(--accent-3); --menu-item-hover-text: var(--text-0);
+  --menu-item-danger-hover-background: var(--red-3);
+  --context-menu-width: 220px; --status-menu-width: 240px;
+  --theme-preview-light: var(--text-0);
+  --theme-preview-ash: #323339;
+  --theme-preview-dark: #1d1d21;
+  --theme-preview-onyx: #000000;
+}
+html, body { margin: 0; padding: 0; background: var(--desktop); }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body data-om-id="6c2ca063:7">
+<div data-region="window" data-screen-label="Search results" style="position:relative;width:var(--window-width);height:var(--window-height);overflow:hidden;display:flex;flex-direction:column;background:var(--bg-3);font-family:var(--font-primary);font-variation-settings:'opsz' var(--font-opsz);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:8">
+  <div data-region="titlebar" style="flex:none;height:var(--top-bar-height)" data-om-id="6c2ca063:9"></div>
+  <div data-region="base" style="flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap) var(--gap)" data-om-id="6c2ca063:10">
+    <div data-region="sidebar" style="flex:none;display:flex;gap:var(--gap)" data-om-id="6c2ca063:11">
+      <nav data-region="server-rail" style="flex:none;width:var(--custom-guild-list-width);height:100%;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--custom-guild-list-padding) 0" data-om-id="6c2ca063:12">
+        <div data-item="home" style="position:relative;flex:none;width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:13">
+          <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:14">
+            <svg viewBox="0 0 27 27" fill="currentColor" style="width:calc(var(--guildbar-avatar-size) * 0.585);height:calc(var(--guildbar-avatar-size) * 0.585)" data-om-id="6c2ca063:15"><path d="M0 0h7v1H6v1H5v1H4v1H3v1H2v1h5v1H0V6h1V5h1V4h1V3h1V2h1V1H0m13 2h5v1h-1v1h-1v1h-1v1h3v1h-5V7h1V6h1V5h1V4h-3m8 5h1v5h1v-1h1v1h-1v1h1v-1h1v1h-1v3h-1v1h-2v1h-1v1h1v-1h2v-1h1v2h-1v1h-2v1h-1v-1h-1v1h-6v-1h-1v-1h-1v-2h1v1h2v1h3v1h1v-1h-1v-1h-3v-1h-4v-4h1v-2h1v-1h1v-1h1v2h1v1h1v-1h1v1h-1v1h2v-2h1v-2h1v-1h1M8 14h2v1H9v4h1v2h1v1h1v1h1v1h4v1h-6v-1H5v-1H4v-5h1v-1h1v-2h2m17 3h1v3h-1v1h-1v1h-1v2h-2v-2h2v-1h1v-1h1m1 0h1v3h-1v1h-2v-1h1v-1h1" data-om-id="6c2ca063:16"></path></svg>
+          </div>
+        </div>
+        <div data-item="separator" style="flex:none;width:var(--guild-separator-width);height:var(--border-thickness);background:var(--border)" data-om-id="6c2ca063:17"></div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="6c2ca063:18">
+          <div style="border-radius:var(--radius-xs);background:var(--text-1)" data-om-id="6c2ca063:19"></div><div style="border-radius:var(--radius-xs);background:var(--green-3)" data-om-id="6c2ca063:20"></div><div style="border-radius:var(--radius-xs);background:var(--yellow-4)" data-om-id="6c2ca063:21"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="6c2ca063:22"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="6c2ca063:23">
+          <div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="6c2ca063:24"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="6c2ca063:25"></div><div style="border-radius:var(--radius-xs);background:var(--purple-4)" data-om-id="6c2ca063:26"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="6c2ca063:27"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="6c2ca063:28">
+          <div style="border-radius:var(--radius-xs);background:var(--yellow-2)" data-om-id="6c2ca063:29"></div><div style="border-radius:var(--radius-xs);background:var(--blue-4)" data-om-id="6c2ca063:30"></div><div style="border-radius:var(--radius-xs);background:var(--red-3)" data-om-id="6c2ca063:31"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="6c2ca063:32"></div>
+        </div>
+        <div data-item="folder-expanded" style="flex:none;width:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--space-4) 0" data-om-id="6c2ca063:33">
+          <div data-part="folder-icon" style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);display:flex;align-items:center;justify-content:center;color:var(--accent-2)" data-om-id="6c2ca063:34">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="6c2ca063:35"><path d="M2 5a2 2 0 0 1 2-2h5.17a2 2 0 0 1 1.42.59L12 5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5Z" data-om-id="6c2ca063:36"></path></svg>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:37">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);overflow:hidden" data-om-id="6c2ca063:38"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:39"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:40"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:41"></path></svg></div>
+          </div>
+          <div data-item="guild" data-state="selected" style="position:relative;width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:42">
+            <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2 - (var(--custom-guild-list-width) - var(--border-thickness) * 2 - var(--folder-size)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-selected-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-selected-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)" data-om-id="6c2ca063:43"></div>
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:44">Vc</div>
+          </div>
+          <div data-item="guild" data-state="unread" style="position:relative;width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:45">
+            <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2 - (var(--custom-guild-list-width) - var(--border-thickness) * 2 - var(--folder-size)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-unread-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-unread-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)" data-om-id="6c2ca063:46"></div>
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--purple-2);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:47">ny</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:48">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--yellow-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-code);font-size:var(--font-size-sm);font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:49">&lt;/&gt;</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:50">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--blue-1);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:51">3D</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:52">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:53">m</div>
+          </div>
+          <div data-item="guild" data-state="mention" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:54">
+            <div style="position:relative;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--red-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:55">wc
+              <div data-part="mention-badge" style="position:absolute;right:calc(var(--space-4) * -1);bottom:calc(var(--space-4) * -1);min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);box-shadow:0 0 0 var(--space-4) var(--bg-4);color:var(--text-0);font-size:var(--font-size-xs);font-weight:var(--font-weight-bold);line-height:var(--badge-size);text-align:center" data-om-id="6c2ca063:56">2</div>
+            </div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="6c2ca063:57">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:58">Ts</div>
+          </div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="6c2ca063:59">
+          <div style="border-radius:var(--radius-xs);background:var(--purple-3)" data-om-id="6c2ca063:60"></div><div style="border-radius:var(--radius-xs);background:var(--blue-2)" data-om-id="6c2ca063:61"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="6c2ca063:62"></div><div style="border-radius:var(--radius-xs);background:var(--green-2)" data-om-id="6c2ca063:63"></div>
+        </div>
+        <div data-item="add-server" style="flex:none;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--text-3)" data-om-id="6c2ca063:64">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:65"><path d="M12 5v14M5 12h14" data-om-id="6c2ca063:66"></path></svg>
+        </div>
+      </nav>
+      <div data-region="sidebar-column" style="flex:none;width:calc(var(--custom-guild-sidebar-width) - var(--custom-guild-list-width));display:flex;flex-direction:column;gap:var(--gap)" data-om-id="6c2ca063:67">
+        <div data-region="channel-sidebar" style="flex:1;min-height:0;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column" data-om-id="6c2ca063:68">
+          <div data-region="guild-header" style="flex:none;height:calc(var(--custom-channel-header-height) - var(--border-thickness));border-bottom:var(--border-thickness) solid var(--border);display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-8) 0 var(--space-16)" data-om-id="6c2ca063:69">
+            <div style="flex:1;min-width:0;display:flex;align-items:center;color:var(--text-2)" data-om-id="6c2ca063:70">
+              <div data-part="guild-icon" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);margin-right:var(--space-6);border-radius:var(--radius-xs);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-tag);font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:71">Vc</div>
+              <span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);white-space:nowrap" data-om-id="6c2ca063:72">Vencord</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);margin-left:var(--space-4)" data-om-id="6c2ca063:73"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:74"></path></svg>
+            </div>
+            <div data-part="invite" style="flex:none;width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:75">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:76"><circle cx="10" cy="7.5" r="4.5" data-om-id="6c2ca063:77"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z" data-om-id="6c2ca063:78"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z" data-om-id="6c2ca063:79"></path></svg>
+            </div>
+          </div>
+          <div data-region="channel-list" style="flex:1;min-height:0;overflow:hidden" data-om-id="6c2ca063:80">
+            <div data-item="category" style="padding-top:calc(var(--space-8) + var(--space-2))" data-om-id="6c2ca063:81">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="6c2ca063:82"><span data-om-id="6c2ca063:83">Support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="6c2ca063:84"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:85"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:86">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:87"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:88">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:89"><path d="M4 3h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8l-4 3.5V14a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" data-om-id="6c2ca063:90"></path><path d="M19 8h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2v2.5L17 19h-6a2 2 0 0 1-2-2v-1h6a4 4 0 0 0 4-4V8Z" data-om-id="6c2ca063:91"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:92">known-issues</span>
+                <span style="flex:none;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--accent-1)" data-om-id="6c2ca063:93">1 New</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:94">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:95"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:96">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:97"><path transform="translate(0 4) scale(.8)" d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:98"></path><path d="M18.5 1a4.5 4.5 0 0 0-3.9 6.75l-.55 1.85a.3.3 0 0 0 .37.37l1.85-.55A4.5 4.5 0 1 0 18.5 1Z" data-om-id="6c2ca063:99"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:100">🏥-vencord-support-🏥</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:101">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:102"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:103">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:104"><path transform="translate(0 4) scale(.8)" d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:105"></path><path d="M18.5 1a4.5 4.5 0 0 0-3.9 6.75l-.55 1.85a.3.3 0 0 0 .37.37l1.85-.55A4.5 4.5 0 1 0 18.5 1Z" data-om-id="6c2ca063:106"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:107">🖥️-vesktop-support-🖥️</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:108">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:109">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)" data-om-id="6c2ca063:110"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:111"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:112">theme-support</span>
+              </div>
+            </div>
+            <div data-item="category" style="padding-top:var(--space-16)" data-om-id="6c2ca063:113">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="6c2ca063:114"><span data-om-id="6c2ca063:115">💬 Chat (❌ NO SUPPORT)</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="6c2ca063:116"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:117"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:118">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:119">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)" data-om-id="6c2ca063:120"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:121"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:122">✍️-help-and-questions</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="selected unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:123">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:124"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--active);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:125">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:126"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:127"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="6c2ca063:128">😳-generagal</span>
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)" data-om-id="6c2ca063:129"><circle cx="10" cy="7.5" r="4.5" data-om-id="6c2ca063:130"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z" data-om-id="6c2ca063:131"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z" data-om-id="6c2ca063:132"></path></svg>
+              </div>
+            </div>
+            <div data-item="channel" data-state="hover unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:133">
+              <div data-part="unread-dot" style="position:absolute;left:var(--space-4);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:134"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8) 0 calc(var(--space-8) + var(--list-item-hover-shift));padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--hover);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:135">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:136"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:137"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:138">🇧🇪-deutsch-german</span>
+                <svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)" data-om-id="6c2ca063:139"><circle cx="10" cy="7.5" r="4.5" data-om-id="6c2ca063:140"></circle><path d="M2 20.5C2 16.4 5.6 13.5 10 13.5s8 2.9 8 7v.5H2v-.5Z" data-om-id="6c2ca063:141"></path><path d="M19 3a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0V8h-2a1 1 0 1 1 0-2h2V4a1 1 0 0 1 1-1Z" data-om-id="6c2ca063:142"></path></svg>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:143">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:144"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:145">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:146"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:147"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:148">🎇-progaming</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:149">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:150"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:151">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:152"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:153"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:154">🤖-bot-commands</span>
+              </div>
+            </div>
+            <div data-item="channel" data-state="read" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:155">
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:156">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-4)" data-om-id="6c2ca063:157"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:158"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:159">🍮-linecord</span>
+              </div>
+            </div>
+            <div data-item="category" style="padding-top:var(--space-16)" data-om-id="6c2ca063:160">
+              <div style="height:var(--category-row-height);margin:0 var(--space-8);padding:0 var(--space-6);display:flex;align-items:center;gap:var(--space-2);color:var(--text-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="6c2ca063:161"><span data-om-id="6c2ca063:162">📩 Modmail</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="6c2ca063:163"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:164"></path></svg></div>
+            </div>
+            <div data-item="channel" data-state="unread" style="position:relative;padding:var(--space-1) 0" data-om-id="6c2ca063:165">
+              <div data-part="unread-dot" style="position:absolute;left:calc(var(--unread-dot-size) / -2);top:calc(50% - var(--unread-dot-size) / 2);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--channel-unread-dot)" data-om-id="6c2ca063:166"></div>
+              <div style="height:var(--channel-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-6)" data-om-id="6c2ca063:167">
+                <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md);color:var(--text-3)" data-om-id="6c2ca063:168"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:169"></path></svg>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:170">📩-modmail</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section data-region="user-panel" style="flex:none;height:calc(var(--chatbar-height) + var(--space-8) + var(--border-thickness));overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8)" data-om-id="6c2ca063:171">
+          <div data-part="avatar" style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm)" data-om-id="6c2ca063:172">
+            <div style="width:100%;height:100%;border-radius:50%;background:var(--bg-2);overflow:hidden" data-om-id="6c2ca063:173"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:174"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2.5" data-om-id="6c2ca063:175"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2.5" data-om-id="6c2ca063:176"></path></svg></div>
+            <div data-part="status" data-status="invisible" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)" data-om-id="6c2ca063:177"></div>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap" data-om-id="6c2ca063:178">
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="6c2ca063:179">refact0r</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)" data-om-id="6c2ca063:180">Invisible</span>
+          </div>
+          <div data-part="mic" data-state="muted" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--accent-new)" data-om-id="6c2ca063:181">
+            <div style="width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:182">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:183"><path d="M15 9.4V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5 2.2" data-om-id="6c2ca063:184"></path><path d="M5 11a7 7 0 0 0 11.2 5.6M19 11a7 7 0 0 1-.6 2.8M12 18v3M3 3l18 18" data-om-id="6c2ca063:185"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:186">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="6c2ca063:187"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:188"></path></svg>
+            </div>
+          </div>
+          <div data-part="deafen" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--text-4)" data-om-id="6c2ca063:189">
+            <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:190">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:191"><path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z" data-om-id="6c2ca063:192"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:193">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="6c2ca063:194"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:195"></path></svg>
+            </div>
+          </div>
+          <div data-part="settings" style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:196">
+            <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:197"><path d="M10.6 2h2.8l.5 2.6 1.9.8 2.2-1.5 2 2-1.5 2.2.8 1.9 2.6.5v2.8l-2.6.5-.8 1.9 1.5 2.2-2 2-2.2-1.5-1.9.8-.5 2.6h-2.8l-.5-2.6-1.9-.8-2.2 1.5-2-2 1.5-2.2-.8-1.9-2.6-.5v-2.8l2.6-.5.8-1.9-1.5-2.2 2-2 2.2 1.5 1.9-.8.5-2.6ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" data-om-id="6c2ca063:198"></path></svg>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div data-region="page" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap)" data-om-id="6c2ca063:199">
+      <header data-region="channel-header" style="flex:none;height:var(--custom-channel-header-height);overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;align-items:center;padding-left:var(--space-8)" data-om-id="6c2ca063:200">
+        <div data-part="title" style="flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap" data-om-id="6c2ca063:201">
+          <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg);margin:0 var(--space-8) 0 var(--space-6);color:var(--text-4)" data-om-id="6c2ca063:202"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:203"></path></svg>
+          <span style="flex:none;font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="6c2ca063:204">😳-generagal</span>
+          <span style="flex:none;width:var(--space-4);height:var(--space-4);margin:0 var(--space-8);border-radius:50%;background:var(--text-5)" data-om-id="6c2ca063:205"></span>
+          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-5)" data-om-id="6c2ca063:206">key is a little bitch</span>
+        </div>
+        <div data-part="toolbar" style="flex:none;display:flex;align-items:center;gap:var(--space-8);padding-right:var(--space-12)" data-om-id="6c2ca063:207">
+          <div data-part="threads" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:208"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:209"><path d="M12 2.8a8.7 8.7 0 0 0-7.6 13l-1.3 4.3a.6.6 0 0 0 .8.8l4.3-1.3A8.7 8.7 0 1 0 12 2.8ZM8 9h8v2H8V9Zm0 4h5v2H8v-2Z" data-om-id="6c2ca063:210"></path></svg></div>
+          <div data-part="notifications" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:211"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:212"><path d="M12 2.5a6.5 6.5 0 0 0-6.5 6.5v3.38c0 .4-.12.8-.34 1.13L3.6 15.9a1 1 0 0 0 .83 1.6h15.14a1 1 0 0 0 .83-1.56l-1.56-2.4a2 2 0 0 1-.34-1.13V9A6.5 6.5 0 0 0 12 2.5ZM9.27 19a.5.5 0 0 0-.45.72 3.5 3.5 0 0 0 6.36 0 .5.5 0 0 0-.45-.72H9.27Z" data-om-id="6c2ca063:213"></path></svg></div>
+          <div data-part="pins" data-state="unread" style="position:relative;width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:214">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:215"><path d="M14.6 2.3a1 1 0 0 1 1.4 0l5.7 5.7a1 1 0 0 1 0 1.4l-.9.9a1.5 1.5 0 0 1-1.6.33l-3.5 3.5.4 3.3a1.5 1.5 0 0 1-.43 1.24l-.85.85a1 1 0 0 1-1.42 0L9.6 15.8l-5.3 5.3a1 1 0 0 1-1.4-1.4l5.3-5.3-3.8-3.8a1 1 0 0 1 0-1.42l.85-.85a1.5 1.5 0 0 1 1.24-.43l3.3.4 3.5-3.5a1.5 1.5 0 0 1 .33-1.6l.9-.9Z" data-om-id="6c2ca063:216"></path></svg>
+            <div data-part="badge" style="position:absolute;right:var(--space-4);bottom:var(--space-4);width:var(--unread-dot-size);height:var(--unread-dot-size);border-radius:50%;background:var(--accent-new);box-shadow:0 0 0 var(--space-2) var(--bg-4)" data-om-id="6c2ca063:217"></div>
+          </div>
+          <div data-part="member-list-toggle" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:218"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:219"><circle cx="9" cy="8" r="3.5" data-om-id="6c2ca063:220"></circle><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6v1H2v-1Z" data-om-id="6c2ca063:221"></path><circle cx="16.5" cy="7.5" r="3" data-om-id="6c2ca063:222"></circle><path d="M17.2 13.1c2.8.4 4.8 2.6 4.8 5.4V20h-4.2v-.5c0-2.6-1-4.8-2.7-6.2l.5-.2c.5-.05 1.1-.05 1.6 0Z" data-om-id="6c2ca063:223"></path></svg></div>
+          <div data-part="search" data-state="focused" style="margin-left:var(--space-4);width:calc(var(--search-width) + var(--space-56));height:var(--button-size);border-radius:var(--radius-sm);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-active);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-8);white-space:nowrap" data-om-id="6c2ca063:224">
+            <span data-part="filter-token" style="display:flex;align-items:center;gap:var(--space-4);height:calc(var(--space-20) + var(--space-2));padding:0 var(--space-6);border-radius:var(--radius-xs);background:var(--active);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:225">from:<span style="color:var(--text-2)" data-om-id="6c2ca063:226">refact0r</span></span>
+            <span style="flex:1;min-width:0;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:227">chatbar</span>
+            <span style="display:flex;color:var(--text-3)" data-om-id="6c2ca063:228"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="6c2ca063:229"><path d="M6 6l12 12M18 6 6 18" data-om-id="6c2ca063:230"></path></svg></span>
+          </div>
+        </div>
+        <div data-part="trailing" style="flex:none;display:flex;align-items:center;gap:var(--space-8);height:var(--button-size);padding-right:var(--space-8)" data-om-id="6c2ca063:231">
+          <div data-part="inbox" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="6c2ca063:232"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:233"><path d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm-1 3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8h-4.38a1 1 0 0 0-.9.55l-.44.9a1 1 0 0 1-.9.55h-2.76a1 1 0 0 1-.9-.55l-.44-.9a1 1 0 0 0-.9-.55H4V5Z" data-om-id="6c2ca063:234"></path></svg></div>
+          <div data-part="window-controls" style="display:flex;align-items:center;padding-right:var(--window-controls-padding)" data-om-id="6c2ca063:235">
+            <div style="flex:none;width:var(--space-8);height:var(--space-16);border-left:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:236"></div>
+            <div data-control="minimize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:237"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--idle)" data-om-id="6c2ca063:238"></div></div>
+            <div data-control="maximize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:239"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--online)" data-om-id="6c2ca063:240"></div></div>
+            <div data-control="close" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:241"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--dnd)" data-om-id="6c2ca063:242"></div></div>
+          </div>
+        </div>
+      </header>
+      <div data-region="content" style="flex:1;min-height:0;display:flex;gap:var(--gap)" data-om-id="6c2ca063:243">
+        <main data-region="chat" style="position:relative;flex:1;min-width:0;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column" data-om-id="6c2ca063:244">
+          <div data-part="new-messages-bar" style="position:absolute;z-index:1;top:var(--space-12);left:var(--space-12);right:var(--space-12);height:var(--new-messages-bar-height);padding:0 var(--space-8);border-radius:var(--radius-sm);border-top:var(--border-thickness) solid var(--border);background:var(--accent-3);color:var(--text-0);display:flex;align-items:center;justify-content:space-between;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="6c2ca063:245">
+            <span style="padding-left:var(--space-4)" data-om-id="6c2ca063:246">11 new messages since 5:11 PM</span>
+            <span style="display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:247">Mark As Read<svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:248"><path d="M12 2.8a8.7 8.7 0 0 0-7.6 13l-1.3 4.3a.6.6 0 0 0 .8.8l4.3-1.3A8.7 8.7 0 1 0 12 2.8Z" data-om-id="6c2ca063:249"></path><path d="M8.5 12.2l2.4 2.4 4.6-4.8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent-3)" data-om-id="6c2ca063:250"></path></svg></span>
+          </div>
+          <div data-part="timeline" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;font-size:var(--font-size-md);line-height:var(--line-height-md);color:var(--text-3)" data-om-id="6c2ca063:251">
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:252">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--purple-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:253">G</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:254">
+                <span style="font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="6c2ca063:255">GattoDev (please ping)</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:256"><span data-om-id="6c2ca063:257">🐰</span>COZY</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:258">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:259">la piss</div>
+            </div>
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:260">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:261"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:262"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:263"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:264"></path></svg></div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:265">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:266">refact0r</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center" data-om-id="6c2ca063:267">🐣</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:268">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:269">can someone ping me</div>
+            </div>
+
+            <div data-msg="group" data-state="mentioned" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md);background:var(--mention)" data-om-id="6c2ca063:270">
+              <div data-part="highlight-bar" style="position:absolute;left:calc(var(--radius-sm) / 2);top:var(--radius-sm);bottom:var(--radius-sm);width:var(--divider-thickness);border-radius:var(--divider-thickness);background:var(--accent-2)" data-om-id="6c2ca063:271"></div>
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--purple-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:272">G</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:273">
+                <span style="font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="6c2ca063:274">GattoDev (please ping)</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:275"><span data-om-id="6c2ca063:276">🐰</span>COZY</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:277">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:278"><span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)" data-om-id="6c2ca063:279">@refact0r</span> <span style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--mention-background);color:var(--mention-foreground);font-weight:var(--font-weight-medium)" data-om-id="6c2ca063:280">@refact0r</span></div>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:281">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap" data-om-id="6c2ca063:282">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)" data-om-id="6c2ca063:283"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--green-1)" data-om-id="6c2ca063:284"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--blue-1)" data-om-id="6c2ca063:285">@hungry</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)" data-om-id="6c2ca063:286">how is it already september</span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--red-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:287">n</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:288">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-2)" data-om-id="6c2ca063:289">nvhhr</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:290"><span data-om-id="6c2ca063:291">🐱</span>COS</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center" data-om-id="6c2ca063:292">🌸</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:293">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:294">time keeps marching forward</div>
+            </div>
+
+            <div data-msg="group" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:295">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:296"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:297"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:298"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:299"></path></svg></div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:300">
+                <span style="font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:301">refact0r</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center" data-om-id="6c2ca063:302">🐣</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:303">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:304">for theme reasons</div>
+            </div>
+            <div data-msg="follow-up" data-state="hover" style="position:relative;flex:none;margin:0 var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md);background:var(--message-hover)" data-om-id="6c2ca063:305">
+              <span data-part="hover-timestamp" style="position:absolute;left:0;top:var(--space-2);width:calc(var(--message-gutter) - var(--space-16));text-align:right;font-size:var(--font-size-timestamp-alt);line-height:var(--line-height-md);color:var(--text-5);white-space:nowrap" data-om-id="6c2ca063:306">4:21 PM</span>
+              <div data-om-id="6c2ca063:307">thanks</div>
+              <div data-part="reactions" style="display:flex;flex-wrap:wrap;gap:var(--space-4);padding:var(--space-2) 0" data-om-id="6c2ca063:308">
+                <div data-state="reacted" style="height:var(--reaction-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-6);border-radius:var(--radius-sm);border:var(--reaction-border-width) solid var(--reaction-border-reacted-default);background:var(--reaction-background-reacted-default)" data-om-id="6c2ca063:309"><span style="font-size:var(--font-size-md);line-height:var(--line-height-xs)" data-om-id="6c2ca063:310">🙏</span><span style="font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--reaction-text-reacted-default)" data-om-id="6c2ca063:311">3</span></div>
+                <div style="height:var(--reaction-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-6);border-radius:var(--radius-sm);border:var(--reaction-border-width) solid var(--reaction-border-default);background:var(--reaction-background-default)" data-om-id="6c2ca063:312"><span style="font-size:var(--font-size-md);line-height:var(--line-height-xs)" data-om-id="6c2ca063:313">💀</span><span style="font-size:var(--font-size-sm);line-height:var(--line-height-xs);font-weight:var(--font-weight-semibold);color:var(--reaction-text-default)" data-om-id="6c2ca063:314">1</span></div>
+              </div>
+              <div data-part="message-actions" style="position:absolute;top:calc(var(--space-16) * -1);right:var(--space-12);display:flex;background:var(--bg-3);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-sm);color:var(--text-4)" data-om-id="6c2ca063:315">
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:316"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:317"><path d="M21 12a9 9 0 1 1-9-9" data-om-id="6c2ca063:318"></path><path d="M19 2v6M16 5h6" data-om-id="6c2ca063:319"></path><path d="M8 14.5a4.5 4.5 0 0 0 8 0" data-om-id="6c2ca063:320"></path><circle cx="9" cy="10" r=".6" fill="currentColor" data-om-id="6c2ca063:321"></circle><circle cx="15" cy="10" r=".6" fill="currentColor" data-om-id="6c2ca063:322"></circle></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:323"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:324"><path d="M2.3 7.3a1 1 0 0 0 0 1.4l5 5a1 1 0 0 0 1.4-1.4L5.42 9H11a7 7 0 0 1 7 7v4a1 1 0 1 0 2 0v-4a9 9 0 0 0-9-9H5.41l3.3-3.3a1 1 0 0 0-1.42-1.4l-5 5Z" data-om-id="6c2ca063:325"></path></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:326"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:327"><path d="M21.7 7.3a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.4-1.4L18.58 9H13a7 7 0 0 0-7 7v4a1 1 0 1 1-2 0v-4a9 9 0 0 1 9-9h5.59l-3.3-3.3a1 1 0 0 1 1.42-1.4l5 5Z" data-om-id="6c2ca063:328"></path></svg></div>
+                <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:329"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:330"><circle cx="5" cy="12" r="2" data-om-id="6c2ca063:331"></circle><circle cx="12" cy="12" r="2" data-om-id="6c2ca063:332"></circle><circle cx="19" cy="12" r="2" data-om-id="6c2ca063:333"></circle></svg></div>
+              </div>
+            </div>
+
+            <div data-part="unread-divider" style="position:relative;flex:none;height:0;margin:var(--space-6) calc(var(--space-12) + var(--space-2)) 0 var(--space-16);border-top:var(--divider-thickness) solid var(--accent-new);border-radius:var(--divider-thickness)" data-om-id="6c2ca063:334">
+              <span style="position:absolute;right:0;top:calc((var(--divider-thickness) + (var(--unread-pill-height) - var(--divider-thickness)) / 2) * -1);height:var(--unread-pill-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--unread-pill-height);font-weight:var(--font-weight-bold);text-transform:uppercase" data-om-id="6c2ca063:335">New</span>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:calc(var(--message-group-gap) - var(--space-6) - var(--divider-thickness)) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:336">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap" data-om-id="6c2ca063:337">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)" data-om-id="6c2ca063:338"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--blue-2)" data-om-id="6c2ca063:339"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--blue-1)" data-om-id="6c2ca063:340">@coco</span>
+                <span style="flex:none;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:341"><span data-om-id="6c2ca063:342">☁️</span>rain</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)" data-om-id="6c2ca063:343">I've still got jailbreak the app is just gone after I restarted ...</span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--blue-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:344">d</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:345">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)" data-om-id="6c2ca063:346">doing okayish</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:347"><span data-om-id="6c2ca063:348">💜</span>NURO</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center" data-om-id="6c2ca063:349">🐈</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:350">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:351">uicache is finicky</div>
+            </div>
+
+            <div data-msg="group" data-state="reply" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:352">
+              <div data-part="reply-preview" style="position:relative;display:flex;align-items:center;gap:var(--space-4);height:var(--line-height-sm);margin-bottom:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);white-space:nowrap" data-om-id="6c2ca063:353">
+                <div data-part="spine" style="position:absolute;top:calc(var(--line-height-sm) / 2);left:calc(var(--space-16) + var(--avatar-size-md) / 2 - var(--reply-spine-width) / 2 - var(--message-gutter));width:calc(var(--message-gutter) - var(--space-4) - var(--space-16) - var(--avatar-size-md) / 2 + var(--reply-spine-width) / 2);height:calc(var(--line-height-sm) / 2 + var(--space-2));border-left:var(--reply-spine-width) solid var(--spine-default);border-top:var(--reply-spine-width) solid var(--spine-default);border-top-left-radius:var(--reply-spine-radius)" data-om-id="6c2ca063:354"></div>
+                <div style="flex:none;width:var(--avatar-size-xs);height:var(--avatar-size-xs);border-radius:50%;background:var(--purple-1)" data-om-id="6c2ca063:355"></div>
+                <span style="flex:none;font-weight:var(--font-weight-medium);color:var(--green-1)" data-om-id="6c2ca063:356">@sardine</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3)" data-om-id="6c2ca063:357">wasnt there a syntax that was like <code style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--background-code);border:var(--border-thickness) solid var(--border);font-family:var(--font-code);font-size:var(--font-size-inline-code)" data-om-id="6c2ca063:358">-readonly</code></span>
+              </div>
+              <div style="position:absolute;left:var(--space-16);top:calc(var(--space-4) + var(--line-height-sm) + var(--space-4));width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--blue-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold);box-shadow:0 0 0 var(--space-2) var(--text-1)" data-om-id="6c2ca063:359">e</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:360">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)" data-om-id="6c2ca063:361">edelweiß</span>
+                <span style="align-self:center;display:inline-flex;align-items:center;gap:var(--space-2);height:var(--tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--bg-2);color:var(--text-2);font-size:var(--font-size-xs);line-height:var(--tag-height);font-weight:var(--font-weight-semibold)" data-om-id="6c2ca063:362"><span data-om-id="6c2ca063:363">❄️</span>=ω=</span>
+                <span data-part="role-icon" style="align-self:center;width:var(--role-icon-size);height:var(--role-icon-size);font-size:var(--font-size-md);line-height:var(--role-icon-size);text-align:center" data-om-id="6c2ca063:364">🦊</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:365">4:21 PM</span>
+              </div>
+              <div data-om-id="6c2ca063:366">yes but idk what youre even trying to do with your type</div>
+            </div>
+            <div data-msg="follow-up" style="position:relative;flex:none;margin:0 var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:367">
+              <pre data-part="code-block" style="margin:var(--space-6) 0 0 0;max-width:90%;padding:calc(var(--font-size-sm) / 2);border-radius:var(--radius-md);background:var(--background-code);border:var(--border-thickness) solid var(--border);font-family:var(--font-code);font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-3);white-space:pre;overflow:hidden" data-om-id="6c2ca063:368">type M&lt;T&gt; = { -readonly [K in keyof T]: T[K] }</pre>
+            </div>
+
+            <div data-msg="group" data-author="bot" style="position:relative;flex:none;margin:var(--message-group-gap) var(--space-12) 0 var(--space-4);padding:var(--space-2) var(--message-padding-right) var(--space-2) var(--message-gutter);border-radius:var(--radius-md)" data-om-id="6c2ca063:369">
+              <div style="position:absolute;left:var(--space-16);top:var(--space-4);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:370">V</div>
+              <div style="display:flex;align-items:baseline;gap:var(--space-4);height:var(--line-height-md);white-space:nowrap" data-om-id="6c2ca063:371">
+                <span style="font-weight:var(--font-weight-medium);color:var(--purple-1)" data-om-id="6c2ca063:372">venapp</span>
+                <span data-part="bot-tag" style="align-self:center;height:var(--bot-tag-height);padding:0 var(--space-4);border-radius:var(--radius-xs);background:var(--accent-2);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--bot-tag-height);font-weight:var(--font-weight-semibold);text-transform:uppercase" data-om-id="6c2ca063:373">App</span>
+                <span style="font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:374">4:22 PM</span>
+              </div>
+              <div data-part="embed" style="max-width:var(--embed-max-width);margin:var(--space-2) 0;padding:var(--space-8) var(--space-16) var(--space-16) var(--space-12);border-radius:var(--radius-md);background:var(--bg-3);border:var(--border-thickness) solid var(--border);border-left:var(--embed-accent-width) solid var(--blue-2)" data-om-id="6c2ca063:375">
+                <div style="margin-top:var(--space-8);font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-semibold);color:var(--text-link)" data-om-id="6c2ca063:376">Modmail thread #412 opened for coco</div>
+              </div>
+            </div>
+          </div>
+          <div data-part="typing" style="flex:none;height:var(--typing-height);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-16);font-size:var(--font-size-sm);line-height:var(--line-height-sm);color:var(--text-3);white-space:nowrap" data-om-id="6c2ca063:377">
+            <span style="display:flex;align-items:center;gap:var(--space-2)" data-om-id="6c2ca063:378"><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3);opacity:0.4" data-om-id="6c2ca063:379"></span><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3);opacity:0.7" data-om-id="6c2ca063:380"></span><span style="width:var(--space-6);height:var(--space-6);border-radius:50%;background:var(--text-3)" data-om-id="6c2ca063:381"></span></span>
+            <span data-om-id="6c2ca063:382"><strong style="font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:383">zeousky</strong> is typing…</span>
+          </div>
+          <div data-part="composer" style="flex:none;height:var(--chatbar-height);margin:0 var(--space-8) var(--space-8) var(--space-8);border-radius:var(--radius-md);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-default);display:flex;align-items:center;color:var(--text-4)" data-om-id="6c2ca063:384">
+            <div data-part="attach" style="flex:none;width:calc(var(--space-16) * 2 + var(--icon-size-md));height:100%;display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:385"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:386"><path d="M12 4v16M4 12h16" data-om-id="6c2ca063:387"></path></svg></div>
+            <span style="flex:1;min-width:0;margin-left:var(--space-12);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-md);color:var(--input-placeholder-text-default)" data-om-id="6c2ca063:388">Message #😳-generagal</span>
+            <div data-part="buttons" style="flex:none;display:flex;align-items:center" data-om-id="6c2ca063:389">
+              <div style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:390"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:391"><path d="M3 8a1 1 0 0 1 1-1h7v4H3V8Zm10-1h7a1 1 0 0 1 1 1v3h-8V7ZM4 12.5h7V21H5a1 1 0 0 1-1-1v-7.5Zm9 0h7V20a1 1 0 0 1-1 1h-6v-8.5Z" data-om-id="6c2ca063:392"></path><path d="M12 7c-1-3-5-4-5-1.5S10 7 12 7Zm0 0c1-3 5-4 5-1.5S14 7 12 7Z" fill="none" stroke="currentColor" stroke-width="2" data-om-id="6c2ca063:393"></path></svg></div>
+              <div style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:394"><svg viewBox="0 0 24 24" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:395"><rect x="2" y="5" width="20" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2" data-om-id="6c2ca063:396"></rect><text x="12" y="15" text-anchor="middle" fill="currentColor" style="font-family:var(--font-primary);font-size:7.5px;font-weight:var(--font-weight-bold)" data-om-id="6c2ca063:397">GIF</text></svg></div>
+              <div style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:398"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:399"><path d="M5 3h9.6a2 2 0 0 1 1.4.6l4.4 4.4a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" data-om-id="6c2ca063:400"></path><path d="M14 3v4a2 2 0 0 0 2 2h5" data-om-id="6c2ca063:401"></path><path d="M8.5 14.5a4 4 0 0 0 7 0" data-om-id="6c2ca063:402"></path></svg></div>
+              <div style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:403"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:404"><circle cx="12" cy="12" r="9" data-om-id="6c2ca063:405"></circle><path d="M8 14a4.5 4.5 0 0 0 8 0" data-om-id="6c2ca063:406"></path><circle cx="9" cy="9.5" r=".8" fill="currentColor" data-om-id="6c2ca063:407"></circle><circle cx="15" cy="9.5" r=".8" fill="currentColor" data-om-id="6c2ca063:408"></circle></svg></div>
+              <div style="width:var(--button-size);height:var(--button-size);margin:0 var(--space-4);display:flex;align-items:center;justify-content:center" data-om-id="6c2ca063:409"><svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:410"><rect x="3" y="3" width="8" height="8" rx="2.5" data-om-id="6c2ca063:411"></rect><circle cx="17" cy="7" r="4" data-om-id="6c2ca063:412"></circle><rect x="3" y="13" width="8" height="8" rx="2.5" data-om-id="6c2ca063:413"></rect><rect x="13" y="13" width="8" height="8" rx="2.5" data-om-id="6c2ca063:414"></rect></svg></div>
+            </div>
+            <div style="flex:none;width:var(--border-thickness);height:var(--icon-size-lg);background:var(--border)" data-om-id="6c2ca063:415"></div>
+            <div data-part="send" style="flex:none;width:calc(var(--space-16) * 2 + var(--icon-size-md));height:100%;display:flex;align-items:center;justify-content:center;opacity:var(--disabled-opacity)" data-om-id="6c2ca063:416"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="6c2ca063:417"><path d="M2.8 2.9a.7.7 0 0 1 .8-.1l18 8.6a.7.7 0 0 1 0 1.2l-18 8.6a.7.7 0 0 1-1-.8L5 12 2.6 3.6a.7.7 0 0 1 .2-.7ZM6.7 11h6.3v2H6.7v-2Z" data-om-id="6c2ca063:418"></path></svg></div>
+          </div>
+        </main>
+        <aside data-region="search-results" style="flex:none;width:var(--search-results-width);background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column" data-om-id="6c2ca063:419">
+          <div data-part="header" style="flex:none;padding:var(--space-12) var(--space-16);display:flex;flex-direction:column;gap:var(--space-12);border-bottom:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:420">
+            <div style="display:flex;align-items:center;justify-content:space-between" data-om-id="6c2ca063:421"><span style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="6c2ca063:422">24 Results</span><span style="display:flex;align-items:center;gap:var(--space-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="6c2ca063:423">Newest<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="6c2ca063:424"><path d="M6 9l6 6 6-6" data-om-id="6c2ca063:425"></path></svg></span></div>
+            <div data-part="tabs" style="display:flex;gap:var(--space-4)" data-om-id="6c2ca063:426"><div style="height:calc(var(--space-24) + var(--space-4));display:flex;align-items:center;padding:0 var(--space-10);border-radius:var(--radius-sm);background:var(--active);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="6c2ca063:427">Messages</div><div style="height:calc(var(--space-24) + var(--space-4));display:flex;align-items:center;padding:0 var(--space-10);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:428">Media</div><div style="height:calc(var(--space-24) + var(--space-4));display:flex;align-items:center;padding:0 var(--space-10);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:429">Links</div><div style="height:calc(var(--space-24) + var(--space-4));display:flex;align-items:center;padding:0 var(--space-10);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:430">Files</div><div style="height:calc(var(--space-24) + var(--space-4));display:flex;align-items:center;padding:0 var(--space-10);border-radius:var(--radius-sm);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="6c2ca063:431">Pins</div></div>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:var(--space-8) var(--space-16);display:flex;flex-direction:column;gap:var(--space-8)" data-om-id="6c2ca063:432">
+            <div style="display:flex;align-items:center;gap:var(--space-6);padding:var(--space-8) var(--space-4) 0;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:433"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)" data-om-id="6c2ca063:434"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:435"></path></svg>😳-generagal</div>
+            <div data-part="search-result" style="position:relative;padding:var(--space-8) var(--space-12) var(--space-8) calc(var(--space-12) + var(--avatar-size-md) + var(--space-16));border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:436"><div style="position:absolute;left:var(--space-12);top:var(--space-8);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:437"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:438"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:439"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:440"></path></svg></div><div style="display:flex;align-items:baseline;gap:var(--space-6);white-space:nowrap" data-om-id="6c2ca063:441"><span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:442">refact0r</span><span style="font-size:var(--font-size-xs);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:443">10/24/2026 4:21 PM</span></div><div style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:444">set --<span data-part="highlight" style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--highlight-background);color:var(--highlight-text)" data-om-id="6c2ca063:445">chatbar</span>-height to 47 so it lines up with the user panel</div></div>
+            <div data-part="search-result" data-state="hover" style="position:relative;padding:var(--space-8) var(--space-12) var(--space-8) calc(var(--space-12) + var(--avatar-size-md) + var(--space-16));border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border-light)" data-om-id="6c2ca063:446"><div style="position:absolute;left:var(--space-12);top:var(--space-8);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:447"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:448"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:449"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:450"></path></svg></div><div style="display:flex;align-items:baseline;gap:var(--space-6);white-space:nowrap" data-om-id="6c2ca063:451"><span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:452">refact0r</span><span style="font-size:var(--font-size-xs);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:453">10/24/2026 3:58 PM</span></div><div style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:454">separated <span data-part="highlight" style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--highlight-background);color:var(--highlight-text)" data-om-id="6c2ca063:455">chatbar</span> looks better at 56px</div><div style="position:absolute;top:var(--space-8);right:var(--space-8)" data-om-id="6c2ca063:456"><div data-part="button" data-variant="secondary" style="flex:none;height:calc(var(--space-24));display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-6);border-radius:var(--radius-sm);background:var(--bg-2);border:var(--border-thickness) solid var(--border-light);color:var(--text-3);font-size:var(--font-size-xs);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="6c2ca063:457">Jump</div></div></div>
+            <div style="display:flex;align-items:center;gap:var(--space-6);padding:var(--space-8) var(--space-4) 0;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:458"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm);color:var(--text-4)" data-om-id="6c2ca063:459"><path d="M10.99 3.16A1 1 0 1 0 9 2.84L8.15 8H4a1 1 0 0 0 0 2h3.82l-.67 4H3a1 1 0 1 0 0 2h3.82l-.8 4.84a1 1 0 0 0 1.97.32L8.85 16h4.97l-.8 4.84a1 1 0 0 0 1.97.32l.86-5.16H20a1 1 0 1 0 0-2h-3.82l.67-4H21a1 1 0 1 0 0-2h-3.82l.8-4.84a1 1 0 1 0-1.97-.32L15.15 8h-4.97l.8-4.84ZM14.15 14l.67-4H9.85l-.67 4h4.97Z" data-om-id="6c2ca063:460"></path></svg>theme-support</div>
+            <div data-part="search-result" style="position:relative;padding:var(--space-8) var(--space-12) var(--space-8) calc(var(--space-12) + var(--avatar-size-md) + var(--space-16));border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:461"><div style="position:absolute;left:var(--space-12);top:var(--space-8);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:462"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:463"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:464"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:465"></path></svg></div><div style="display:flex;align-items:baseline;gap:var(--space-6);white-space:nowrap" data-om-id="6c2ca063:466"><span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:467">refact0r</span><span style="font-size:var(--font-size-xs);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:468">10/22/2026 11:04 AM</span></div><div style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:469">the custom <span data-part="highlight" style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--highlight-background);color:var(--highlight-text)" data-om-id="6c2ca063:470">chatbar</span> option is off by default in the vencord flavour</div></div>
+            <div data-part="search-result" style="position:relative;padding:var(--space-8) var(--space-12) var(--space-8) calc(var(--space-12) + var(--avatar-size-md) + var(--space-16));border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:471"><div style="position:absolute;left:var(--space-12);top:var(--space-8);width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:50%;background:var(--bg-3);overflow:hidden" data-om-id="6c2ca063:472"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="6c2ca063:473"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="6c2ca063:474"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="6c2ca063:475"></path></svg></div><div style="display:flex;align-items:baseline;gap:var(--space-6);white-space:nowrap" data-om-id="6c2ca063:476"><span style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--yellow-1)" data-om-id="6c2ca063:477">refact0r</span><span style="font-size:var(--font-size-xs);line-height:var(--line-height-md);font-weight:var(--font-weight-medium);color:var(--text-5)" data-om-id="6c2ca063:478">10/19/2026 9:12 PM</span></div><div style="font-size:var(--font-size-md);line-height:var(--line-height-md);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="6c2ca063:479"><span data-part="highlight" style="padding:0 var(--space-2);border-radius:var(--radius-xs);background:var(--highlight-background);color:var(--highlight-text)" data-om-id="6c2ca063:480">chatbar</span> icons use --text-4 and the send icon goes --accent-2 when active</div></div>
+          </div>
+          <div data-part="pagination" style="flex:none;display:flex;justify-content:center;gap:var(--space-4);padding:var(--space-12);border-top:var(--border-thickness) solid var(--border)" data-om-id="6c2ca063:481"><div style="min-width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:482"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="6c2ca063:483"><path d="M15 6l-6 6 6 6" data-om-id="6c2ca063:484"></path></svg></div><div style="min-width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);background:var(--accent-3);color:var(--text-0);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-0)" data-om-id="6c2ca063:485">1</div><div style="min-width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:486">2</div><div style="min-width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:487">3</div><div style="min-width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-3)" data-om-id="6c2ca063:488"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="6c2ca063:489"><path d="M9 6l6 6-6 6" data-om-id="6c2ca063:490"></path></svg></div></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
