@@ -4,7 +4,7 @@
 
 **Blocked by:** 25 (Timeline view), 09 (REST safety layer)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The composer matches oxidcord in the parity captures
 - [ ] Multiline input, IME and spellcheck work on Windows
