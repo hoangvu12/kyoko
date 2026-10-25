@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html data-src-ver="174f4ae8" lang="en" data-om-id="174f4ae8:0">
+<head data-om-id="174f4ae8:1">
+<style data-omelette-injected>html,body{background:transparent}</style>
+
+<meta charset="utf-8" data-om-id="174f4ae8:2">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-om-id="174f4ae8:3">
+<title>Discord · Midnight · Friends · Add Friend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-om-id="174f4ae8:4">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" data-om-id="174f4ae8:5">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" data-om-id="174f4ae8:6">
+<style>
+:root {
+  /* text */
+  --text-0: var(--bg-4);
+  --text-1: hsl(38, 47%, 90%);
+  --text-2: hsl(38, 47%, 80%);
+  --text-3: #d4be98;
+  --text-4: #a79a83;
+  --text-5: #d4be9866;
+  /* backgrounds */
+  --bg-1: hsl(20, 5%, 25%);
+  --bg-2: #3c3836;
+  --bg-3: hsl(20, 2%, 19%);
+  --bg-4: #282828;
+  --hover: hsla(20, 3%, 40%, 0.1);
+  --active: hsla(20, 3%, 40%, 0.2);
+  --active-2: hsla(20, 3%, 40%, 0.3);
+  --message-hover: hsla(0, 0%, 0%, 0.1);
+  /* accents */
+  --accent-1: var(--purple-1);
+  --accent-2: var(--purple-2);
+  --accent-3: var(--purple-3);
+  --accent-4: var(--purple-4);
+  --accent-5: var(--purple-5);
+  --accent-new: var(--accent-2);
+  --mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 90%) 40%, transparent);
+  --mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 95%) 40%, transparent);
+  --reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+  --reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+  /* status */
+  --online: var(--green-2);
+  --dnd: var(--red-2);
+  --idle: var(--yellow-2);
+  --streaming: var(--purple-2);
+  --offline: var(--text-4);
+  /* borders */
+  --border-light: var(--hover);
+  --border: var(--active);
+  --border-hover: var(--active);
+  --button-border: hsl(0, 0%, 100%, 0.1);
+  /* base scales */
+  --red-1: hsl(3, 76%, 70%); --red-2: #ea6962; --red-3: #ea6962; --red-4: hsl(3, 76%, 60%); --red-5: hsl(3, 76%, 55%);
+  --green-1: hsl(70, 36%, 60%); --green-2: #a8b665; --green-3: #a8b665; --green-4: hsl(70, 36%, 50%); --green-5: hsl(70, 36%, 45%);
+  --blue-1: hsl(167, 24%, 63%); --blue-2: #7caea3; --blue-3: #7caea3; --blue-4: hsl(167, 24%, 53%); --blue-5: hsl(167, 24%, 48%);
+  --yellow-1: hsl(37, 63%, 64%); --yellow-2: #d8a656; --yellow-3: #d8a656; --yellow-4: hsl(37, 63%, 54%); --yellow-5: hsl(37, 63%, 49%);
+  --purple-1: hsl(344, 47%, 73%); --purple-2: #d3869b; --purple-3: #d3869b; --purple-4: hsl(344, 47%, 63%); --purple-5: hsl(344, 47%, 58%);
+  /* Discord semantic colours as midnight.css maps them */
+  --mention-background: color-mix(in hsl, var(--accent-2), transparent 90%);
+  --mention-foreground: var(--accent-1);
+  --text-link: var(--accent-1);
+  --background-code: var(--bg-3);
+  --background-scrim: hsl(0, 0%, 0%, 0.7);
+  --background-feedback-critical: color-mix(in hsl, var(--red-2), transparent 80%);
+  --background-feedback-positive: color-mix(in hsl, var(--green-2), transparent 80%);
+  --input-background-error-default: color-mix(in hsl, var(--red-2), transparent 90%);
+  --highlight-background: var(--accent-3);
+  --highlight-text: var(--text-0);
+  --spine-default: var(--text-5);
+  --input-background-default: var(--bg-3);
+  --input-border-default: var(--border-light);
+  --input-border-hover: var(--border);
+  --input-border-active: var(--accent-2);
+  --input-border-error: var(--red-2);
+  --input-placeholder-text-default: var(--text-5);
+  --input-text-default: var(--text-3);
+  --reaction-background-default: var(--hover);
+  --reaction-border-default: var(--border-light);
+  --reaction-text-default: var(--text-3);
+  --reaction-background-reacted-default: color-mix(in hsl, var(--accent-2), transparent 80%);
+  --reaction-border-reacted-default: var(--accent-2);
+  --reaction-text-reacted-default: var(--text-1);
+  --user-panel-button-active-background: color-mix(in hsl, var(--accent-new), transparent 90%);
+  --switch-background-default: var(--bg-3);
+  --switch-border-default: var(--border);
+  --switch-background-selected: var(--accent-3);
+  --switch-border-selected: var(--button-border);
+  --switch-thumb-default: var(--text-3);
+  --switch-thumb-selected: var(--bg-4);
+  --switch-thumb-background: rgb(255, 255, 255);
+  --radio-background-default: var(--bg-2);
+  --radio-background-selected: var(--accent-2);
+  --slider-track-background: var(--bg-2);
+  --slider-fill-background: var(--accent-2);
+  --slider-grabber: var(--text-3);
+  --card-background-default: var(--bg-3);
+  --guild-pill: var(--text-2);
+  --channel-unread-dot: var(--text-3);
+  /* content-only colours (stand-ins for nameplate images, banners) */
+  --nameplate-1: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--blue-5), transparent 65%));
+  --nameplate-2: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--purple-5), transparent 60%));
+  --nameplate-3: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--bg-1), transparent 10%));
+  --nameplate-4: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--red-5), transparent 65%));
+  --desktop: #000;
+  /* type */
+  --font-primary: 'Inter', 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-code: 'gg mono', 'Source Code Pro', Consolas, Monaco, monospace;
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-optical-sizing: auto; /* Inter's opsz follows the font size, as on Windows at 100% */
+  --font-size-tag: 10px;
+  --font-size-timestamp-alt: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-inline-code: 0.85em;
+  --line-height-xs: 16px;
+  --line-height-sm: 18px;
+  --line-height-md: 22px;
+  --line-height-lg: 24px;
+  --line-height-xl: 30px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* theme sizes (theme.css) */
+  --gap: 12px;
+  --divider-thickness: 4px;
+  --border-thickness: 1px;
+  --chatbar-height: 47px;
+  --top-bar-height: var(--gap);
+  --window-control-size: 14px;
+  --window-controls-padding: calc(var(--gap) - (var(--window-control-size) / 2) + 1px);
+  --list-item-hover-shift: 10px;
+  --member-hover-shift: 18px;
+  /* Discord sizes Midnight builds on */
+  --space-1: 1px; --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-12: 12px; --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px; --space-40: 40px;
+  --space-xs: var(--space-8); --space-sm: var(--space-12); --space-md: var(--space-16); --space-lg: var(--space-24);
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --guildbar-avatar-size: 40px;
+  --custom-guild-list-padding: 12px;
+  --custom-guild-list-width: calc(var(--guildbar-avatar-size) + var(--custom-guild-list-padding) * 2 + var(--border-thickness) * 2);
+  --custom-guild-sidebar-width: calc(var(--custom-guild-list-width) + 280px);
+  --custom-channel-header-height: calc(var(--guildbar-avatar-size) + var(--space-xs) + var(--border-thickness) * 2);
+  --member-list-width: 264px;
+  --search-results-width: 420px;
+  --window-width: 1280px;
+  --window-height: 800px;
+  --icon-size-xs: 12px; --icon-size-sm: 16px; --icon-size-md: 20px; --icon-size-lg: 24px;
+  --button-size: 32px;
+  --button-height-sm: 32px; --button-height-md: 38px; --button-height-lg: 44px;
+  --input-height: 40px;
+  --avatar-size-xs: 16px; --avatar-size-sm: 32px; --avatar-size-md: 40px; --avatar-size-lg: 80px;
+  --status-size: 10px; --status-cutout: 3px;
+  --status-size-lg: 16px; --status-cutout-lg: 5px;
+  --role-icon-size: 20px;
+  --folder-size: 48px;
+  --guild-pill-width: 4px;
+  --guild-pill-selected-height: 36px;
+  --guild-pill-unread-height: 8px;
+  --guild-separator-width: 32px;
+  --badge-size: 16px;
+  --unread-dot-size: 8px;
+  --channel-row-height: 36px; /* measured: 38px pitch = 36 row + 1px padding top and bottom */
+  --category-row-height: 24px;
+  --member-row-height: 42px; /* measured: constant 44px pitch */
+  --dm-row-height: 42px;
+  --group-header-height: 40px;
+  --search-width: 240px;
+  --new-messages-bar-height: 32px;
+  --typing-height: 24px;
+  --message-gutter: 72px;
+  --message-group-gap: 17px;
+  --message-padding-right: 48px;
+  --reply-spine-width: 2px;
+  --reply-spine-radius: 6px;
+  --reaction-height: 24px;
+  --reaction-border-width: 2px;
+  --embed-max-width: 432px;
+  --embed-accent-width: 4px;
+  --tag-height: 16px;
+  --bot-tag-height: 15px;
+  --unread-pill-height: 13px;
+  --switch-width: 48px; --switch-height: 24px; --switch-thumb-size: 14px;
+  --radio-size: 20px;
+  --slider-track-height: 4px;
+  --menu-width: 220px; --menu-item-height: 32px;
+  --popout-width: 300px; --banner-height: 105px; --settings-banner-height: 100px;
+  --modal-width-sm: 440px; --modal-width-md: 570px;
+    --emoji-picker-width: 418px; --emoji-picker-height: 440px; --emoji-cell-size: 40px; --emoji-size: 32px;
+  --qr-size: 176px;
+  --disabled-opacity: 0.3;
+  --offline-opacity: 0.3;
+  /* settings dialog (measured from live captures) */
+  --settings-dialog-inset: calc(var(--space-40) + var(--top-bar-height));
+  --settings-dialog-max-width: 1400px;
+  --settings-nav-width: 254px;
+  --settings-topbar-height: 48px;
+  --settings-column-width: 696px;
+  --settings-item-height: 40px;
+  --settings-row-gap: 34px;
+  --settings-divider-margin: 56px;
+  --settings-page-padding-top: 64px;
+  --space-10: 10px; --space-14: 14px; --space-56: 56px;
+  --line-height-label: 20px;
+  --select-height: 40px;
+  --vc-switch-width: 40px; --vc-switch-thumb-size: 18px;
+  --radio-border-selected: 6px;
+  --slider-grabber-size: 16px;
+  --theme-swatch-size: 46px;
+  --disabled-opacity-control: 0.5;
+  --scrollbar-thin-thumb: var(--bg-1);
+  --background-feedback-warning: color-mix(in hsl, var(--yellow-2), transparent 80%);
+  --background-feedback-info: color-mix(in hsl, var(--blue-2), transparent 80%);
+  --border-feedback-warning: var(--yellow-1);
+  /* Discord's own theme-preview colours (light maps to --text-0 because midnight sets --white to it) */
+  --overlay-button-background: hsl(0, 0%, 0%, 0.5);
+  --avatar-size-xl: 120px; --status-size-xl: 24px; --status-cutout-xl: 7px;
+  --profile-dialog-width: 900px; --profile-dialog-height: 640px; --profile-banner-height: 160px; --profile-column-width: 340px;
+  --menu-item-hover-background: var(--hover); /* = --background-mod-subtle, the 2025 client's neutral menu hover */
+  --menu-item-hover-text: var(--text-3); /* = --interactive-text-hover */
+  --menu-item-danger-hover-background: var(--background-feedback-critical);
+  --checkbox-background-default: var(--bg-2); --checkbox-border-default: var(--border);
+  --checkbox-background-selected: var(--accent-2); --checkbox-border-selected: var(--button-border); --checkbox-size: 20px;
+  --context-menu-width: 220px; --status-menu-width: 240px;
+  --toast-width: 360px; --lightbox-max-width: 960px;
+  --forum-card-thumb: 96px; --thread-panel-width: 420px; --dm-profile-width: 340px;
+  --login-card-width: 784px; --login-card-narrow: 480px; --web-login-width: 480px; --web-login-height: 720px;
+  --placeholder-stripe-a: var(--bg-3); --placeholder-stripe-b: var(--bg-2);
+  --background-scrim-lightbox: hsl(0, 0%, 0%, 0.9);
+  --theme-preview-light: var(--text-0);
+  --theme-preview-ash: #323339;
+  --theme-preview-dark: #1d1d21;
+  --theme-preview-onyx: #000000;
+}
+html, body { margin: 0; padding: 0; background: var(--desktop); }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body data-om-id="174f4ae8:7">
+<div data-region="window" data-screen-label="Friends · Add Friend" style="position:relative;width:var(--window-width);height:var(--window-height);overflow:hidden;font-family:var(--font-primary);font-optical-sizing:var(--font-optical-sizing);font-weight:var(--font-weight-normal);color:var(--text-3);display:flex;flex-direction:column;background:var(--bg-3)" data-om-id="174f4ae8:8">
+  <div data-region="titlebar" style="flex:none;height:var(--top-bar-height)" data-om-id="174f4ae8:9"></div>
+  <div data-region="base" style="flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap) var(--gap)" data-om-id="174f4ae8:10">
+    <div data-region="sidebar" style="flex:none;display:flex;gap:var(--gap)" data-om-id="174f4ae8:11">
+      <nav data-region="server-rail" style="flex:none;width:var(--custom-guild-list-width);height:100%;overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--custom-guild-list-padding) 0" data-om-id="174f4ae8:12">
+        <div data-item="home" data-state="selected" style="position:relative;flex:none;width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:13">
+          <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-selected-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-selected-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)" data-om-id="174f4ae8:14"></div>
+          <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--accent-2);display:flex;align-items:center;justify-content:center;color:var(--text-0)" data-om-id="174f4ae8:15">
+            <svg viewBox="0 0 27 27" fill="currentColor" style="width:calc(var(--guildbar-avatar-size) * 0.585);height:calc(var(--guildbar-avatar-size) * 0.585)" data-om-id="174f4ae8:16"><path d="M0 0h7v1H6v1H5v1H4v1H3v1H2v1h5v1H0V6h1V5h1V4h1V3h1V2h1V1H0m13 2h5v1h-1v1h-1v1h-1v1h3v1h-5V7h1V6h1V5h1V4h-3m8 5h1v5h1v-1h1v1h-1v1h1v-1h1v1h-1v3h-1v1h-2v1h-1v1h1v-1h2v-1h1v2h-1v1h-2v1h-1v-1h-1v1h-6v-1h-1v-1h-1v-2h1v1h2v1h3v1h1v-1h-1v-1h-3v-1h-4v-4h1v-2h1v-1h1v-1h1v2h1v1h1v-1h1v1h-1v1h2v-2h1v-2h1v-1h1M8 14h2v1H9v4h1v2h1v1h1v1h1v1h4v1h-6v-1H5v-1H4v-5h1v-1h1v-2h2m17 3h1v3h-1v1h-1v1h-1v2h-2v-2h2v-1h1v-1h1m1 0h1v3h-1v1h-2v-1h1v-1h1" data-om-id="174f4ae8:17"></path></svg>
+          </div>
+        </div>
+        <div data-item="separator" style="flex:none;width:var(--guild-separator-width);height:var(--border-thickness);background:var(--border)" data-om-id="174f4ae8:18"></div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="174f4ae8:19">
+          <div style="border-radius:var(--radius-xs);background:var(--text-1)" data-om-id="174f4ae8:20"></div><div style="border-radius:var(--radius-xs);background:var(--green-3)" data-om-id="174f4ae8:21"></div><div style="border-radius:var(--radius-xs);background:var(--yellow-4)" data-om-id="174f4ae8:22"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="174f4ae8:23"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="174f4ae8:24">
+          <div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="174f4ae8:25"></div><div style="border-radius:var(--radius-xs);background:var(--bg-4)" data-om-id="174f4ae8:26"></div><div style="border-radius:var(--radius-xs);background:var(--purple-4)" data-om-id="174f4ae8:27"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="174f4ae8:28"></div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="174f4ae8:29">
+          <div style="border-radius:var(--radius-xs);background:var(--yellow-2)" data-om-id="174f4ae8:30"></div><div style="border-radius:var(--radius-xs);background:var(--blue-4)" data-om-id="174f4ae8:31"></div><div style="border-radius:var(--radius-xs);background:var(--red-3)" data-om-id="174f4ae8:32"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="174f4ae8:33"></div>
+        </div>
+        <div data-item="folder-expanded" style="flex:none;width:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:flex;flex-direction:column;align-items:center;gap:var(--space-8);padding:var(--space-4) 0" data-om-id="174f4ae8:34">
+          <div data-part="folder-icon" style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);display:flex;align-items:center;justify-content:center;color:var(--accent-2)" data-om-id="174f4ae8:35">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:36"><path d="M2 5a2 2 0 0 1 2-2h5.17a2 2 0 0 1 1.42.59L12 5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5Z" data-om-id="174f4ae8:37"></path></svg>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:38">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);overflow:hidden" data-om-id="174f4ae8:39"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="174f4ae8:40"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2" data-om-id="174f4ae8:41"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2" data-om-id="174f4ae8:42"></path></svg></div>
+          </div>
+          <div data-item="guild" style="position:relative;width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:43">
+            
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--accent-5);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="174f4ae8:44">Vc</div>
+          </div>
+          <div data-item="guild" data-state="unread" style="position:relative;width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:45">
+            <div data-part="pill" style="position:absolute;left:calc((var(--custom-guild-list-padding) - var(--guild-pill-width)) / 2 - (var(--custom-guild-list-width) - var(--border-thickness) * 2 - var(--folder-size)) / 2);top:calc((var(--guildbar-avatar-size) - var(--guild-pill-unread-height)) / 2);width:var(--guild-pill-width);height:var(--guild-pill-unread-height);border-radius:var(--guild-pill-width);background:var(--guild-pill)" data-om-id="174f4ae8:46"></div>
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--purple-2);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:47">ny</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:48">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--yellow-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-code);font-size:var(--font-size-sm);font-weight:var(--font-weight-bold)" data-om-id="174f4ae8:49">&lt;/&gt;</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:50">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--bg-4);color:var(--blue-1);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="174f4ae8:51">3D</div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:52">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--text-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-bold)" data-om-id="174f4ae8:53">m</div>
+          </div>
+          <div data-item="guild" data-state="mention" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:54">
+            <div style="position:relative;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--red-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:55">wc
+              <div data-part="mention-badge" style="position:absolute;right:calc(var(--space-4) * -1);bottom:calc(var(--space-4) * -1);min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);box-shadow:0 0 0 var(--space-4) var(--bg-4);color:var(--text-0);font-size:var(--font-size-xs);font-weight:var(--font-weight-bold);line-height:var(--badge-size);text-align:center" data-om-id="174f4ae8:56">2</div>
+            </div>
+          </div>
+          <div data-item="guild" style="width:100%;display:flex;justify-content:center" data-om-id="174f4ae8:57">
+            <div style="width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:58">Ts</div>
+          </div>
+        </div>
+        <div data-item="folder-collapsed" style="flex:none;width:var(--folder-size);height:var(--folder-size);border-radius:var(--radius-lg);background:var(--hover);display:grid;grid-template-columns:var(--icon-size-sm) var(--icon-size-sm);grid-auto-rows:var(--icon-size-sm);gap:var(--space-4);align-content:center;justify-content:center" data-om-id="174f4ae8:59">
+          <div style="border-radius:var(--radius-xs);background:var(--purple-3)" data-om-id="174f4ae8:60"></div><div style="border-radius:var(--radius-xs);background:var(--blue-2)" data-om-id="174f4ae8:61"></div><div style="border-radius:var(--radius-xs);background:var(--bg-1)" data-om-id="174f4ae8:62"></div><div style="border-radius:var(--radius-xs);background:var(--green-2)" data-om-id="174f4ae8:63"></div>
+        </div>
+        <div data-item="add-server" style="flex:none;width:var(--guildbar-avatar-size);height:var(--guildbar-avatar-size);border-radius:var(--radius-md);background:var(--hover);display:flex;align-items:center;justify-content:center;color:var(--text-3)" data-om-id="174f4ae8:64">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:65"><path d="M12 5v14M5 12h14" data-om-id="174f4ae8:66"></path></svg>
+        </div>
+      </nav>
+      <div data-region="sidebar-column" style="flex:none;width:calc(var(--custom-guild-sidebar-width) - var(--custom-guild-list-width));display:flex;flex-direction:column;gap:var(--gap)" data-om-id="174f4ae8:67">
+<div data-region="dm-sidebar" style="flex:1;min-height:0;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column" data-om-id="174f4ae8:68">
+  <div data-part="header" style="flex:none;height:calc(var(--custom-channel-header-height) - var(--border-thickness));border-bottom:var(--border-thickness) solid var(--border);display:flex;align-items:center;padding:0 var(--space-10)" data-om-id="174f4ae8:69"><div data-part="find-button" style="flex:1;height:var(--button-height-sm);display:flex;align-items:center;padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--bg-3);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:70">Find or start a conversation</div></div>
+  <div style="flex:1;min-height:0;overflow:hidden;padding-top:var(--space-8);display:flex;flex-direction:column;gap:var(--space-2)" data-om-id="174f4ae8:71">
+    <div data-item="dm-nav" data-state="selected" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--active);display:flex;align-items:center;gap:var(--space-12);color:var(--text-2);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="174f4ae8:72"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:73"><circle cx="12" cy="7" r="4" data-om-id="174f4ae8:74"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7v1H4v-1Z" data-om-id="174f4ae8:75"></path><path d="M19.5 3.5a3.5 3.5 0 0 1 0 7M22 20.5v-.5c0-2.8-1.6-5.2-4-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" data-om-id="174f4ae8:76"></path></svg><span style="flex:1" data-om-id="174f4ae8:77">Friends</span></div>
+    <div data-item="dm-nav" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12);color:var(--text-4);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:78"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:79"><circle cx="14" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2.5" data-om-id="174f4ae8:80"></circle><path d="M2 9h5v2H2zM3 13h4v2H3z" data-om-id="174f4ae8:81"></path></svg><span style="flex:1" data-om-id="174f4ae8:82">Nitro</span></div>
+    <div data-item="dm-nav" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12);color:var(--text-4);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:83"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:84"><path d="M4 7h16l-1.2 12.1a2 2 0 0 1-2 1.9H7.2a2 2 0 0 1-2-1.9L4 7Zm4 0a4 4 0 0 1 8 0h-2a2 2 0 0 0-4 0H8Z" data-om-id="174f4ae8:85"></path></svg><span style="flex:1" data-om-id="174f4ae8:86">Shop</span><span style="height:var(--tag-height);padding:0 var(--space-6);border-radius:var(--tag-height);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-tag);line-height:var(--tag-height);font-weight:var(--font-weight-bold)" data-om-id="174f4ae8:87">NEW</span></div>
+    <div data-item="dm-nav" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12);color:var(--text-4);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:88"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:89"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 3v1l8 5 8-5V7l-8 5-8-5Z" data-om-id="174f4ae8:90"></path></svg><span style="flex:1" data-om-id="174f4ae8:91">Message Requests</span><span style="min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-xs);line-height:var(--badge-size);font-weight:var(--font-weight-bold);text-align:center" data-om-id="174f4ae8:92">1</span></div>
+    <div data-item="dm-header" style="flex:none;display:flex;align-items:center;justify-content:space-between;margin:var(--space-16) var(--space-8) var(--space-4) var(--space-16);padding-right:var(--space-8);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:93">Direct Messages<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="174f4ae8:94"><path d="M12 5v14M5 12h14" data-om-id="174f4ae8:95"></path></svg></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:96"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:97">d<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--online)" data-om-id="174f4ae8:98"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:99"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="174f4ae8:100">doing okayish</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:101">🌸 Don't do something permanent</div></div><span style="min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-xs);line-height:var(--badge-size);font-weight:var(--font-weight-bold);text-align:center" data-om-id="174f4ae8:102">3</span></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:103"><div style="flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-4);color:var(--text-0);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:104"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="174f4ae8:105"><circle cx="12" cy="7" r="4" data-om-id="174f4ae8:106"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7v1H4v-1Z" data-om-id="174f4ae8:107"></path><path d="M19.5 3.5a3.5 3.5 0 0 1 0 7M22 20.5v-.5c0-2.8-1.6-5.2-4-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" data-om-id="174f4ae8:108"></path></svg></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:109"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:110">theme gang</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:111">4 Members</div></div></div>
+    <div data-item="dm" data-state="hover" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 calc(var(--space-8) + var(--member-hover-shift));padding:0 var(--space-8);border-radius:var(--radius-sm);background:var(--hover);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:112"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--green-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:113">h<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--online)" data-om-id="174f4ae8:114"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:115"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-3)" data-om-id="174f4ae8:116">hungry</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:117">Playing Outer Wilds</div></div><span style="display:flex;color:var(--text-4)" data-om-id="174f4ae8:118"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="174f4ae8:119"><path d="M6 6l12 12M18 6 6 18" data-om-id="174f4ae8:120"></path></svg></span></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:121"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:122">e<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375))" data-om-id="174f4ae8:123"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:124"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:125">edelweiß</div></div></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:126"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--red-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:127">n<div data-part="status" data-status="dnd" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--dnd);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:128"><div style="width:calc(var(--status-size) * 0.6);height:calc(var(--status-size) * 0.25);border-radius:var(--status-size);background:var(--bg-4)" data-om-id="174f4ae8:129"></div></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:130"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:131">nvhhr</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:132">time keeps marching forward</div></div></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:133"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-5);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:134">G<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--online)" data-om-id="174f4ae8:135"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:136"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:137">GattoDev (please ping)</div></div></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:138"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--bg-1);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:139">X<div data-part="status" data-status="idle" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:radial-gradient(circle at calc(var(--status-size) * 0.25) calc(var(--status-size) * 0.25), var(--bg-4) calc(var(--status-size) * 0.375), var(--idle) calc(var(--status-size) * 0.375))" data-om-id="174f4ae8:140"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:141"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:142">Xinto</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:143">⏰ The time has come and so have I</div></div></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:144"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--yellow-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:145">s<div data-part="status" data-status="offline" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline)" data-om-id="174f4ae8:146"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:147"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:148">sardine</div></div></div>
+    <div data-item="dm" style="flex:none;height:var(--dm-row-height);margin:0 var(--space-8) 0 var(--space-8);padding:0 var(--space-8);border-radius:var(--radius-sm);display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:149"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:150">z<div data-part="status" data-status="offline" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-4);background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline)" data-om-id="174f4ae8:151"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:152"><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:153">zeousky</div></div></div>
+  </div>
+</div>
+        <section data-region="user-panel" style="flex:none;height:calc(var(--chatbar-height) + var(--space-8) + var(--border-thickness));overflow:hidden;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8)" data-om-id="174f4ae8:154">
+          <div data-part="avatar" style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm)" data-om-id="174f4ae8:155">
+            <div style="width:100%;height:100%;border-radius:50%;background:var(--bg-2);overflow:hidden" data-om-id="174f4ae8:156"><svg viewBox="0 0 40 40" fill="none" stroke-linecap="round" style="display:block;width:100%;height:100%" data-om-id="174f4ae8:157"><path d="M14.5 11.5 25.5 28.5M25.5 11.5 14.5 28.5" style="stroke:var(--purple-2);stroke-width:2.5" data-om-id="174f4ae8:158"></path><path d="M10.5 20h19" style="stroke:var(--blue-2);stroke-width:2.5" data-om-id="174f4ae8:159"></path></svg></div>
+            <div data-part="status" data-status="invisible" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;background:var(--bg-4);border:calc(var(--status-size) / 4) solid var(--offline);box-shadow:0 0 0 var(--status-cutout) var(--bg-4)" data-om-id="174f4ae8:160"></div>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;white-space:nowrap" data-om-id="174f4ae8:161">
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:162">refact0r</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-xs);line-height:var(--line-height-xs);color:var(--text-4)" data-om-id="174f4ae8:163">Invisible</span>
+          </div>
+          <div data-part="mic" data-state="muted" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--accent-new)" data-om-id="174f4ae8:164">
+            <div style="width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:165">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:166"><path d="M15 9.4V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5 2.2" data-om-id="174f4ae8:167"></path><path d="M5 11a7 7 0 0 0 11.2 5.6M19 11a7 7 0 0 1-.6 2.8M12 18v3M3 3l18 18" data-om-id="174f4ae8:168"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--user-panel-button-active-background);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:169">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="174f4ae8:170"><path d="M6 9l6 6 6-6" data-om-id="174f4ae8:171"></path></svg>
+            </div>
+          </div>
+          <div data-part="deafen" style="flex:none;display:flex;gap:var(--border-thickness);color:var(--text-4)" data-om-id="174f4ae8:172">
+            <div style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:173">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:174"><path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z" data-om-id="174f4ae8:175"></path></svg>
+            </div>
+            <div style="width:calc(var(--space-16) - var(--border-thickness));height:var(--button-size);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:176">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="174f4ae8:177"><path d="M6 9l6 6 6-6" data-om-id="174f4ae8:178"></path></svg>
+            </div>
+          </div>
+          <div data-part="settings" style="flex:none;width:var(--button-size);height:var(--button-size);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="174f4ae8:179">
+            <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:180"><path d="M10.6 2h2.8l.5 2.6 1.9.8 2.2-1.5 2 2-1.5 2.2.8 1.9 2.6.5v2.8l-2.6.5-.8 1.9 1.5 2.2-2 2-2.2-1.5-1.9.8-.5 2.6h-2.8l-.5-2.6-1.9-.8-2.2 1.5-2-2 1.5-2.2-.8-1.9-2.6-.5v-2.8l2.6-.5.8-1.9-1.5-2.2 2-2 2.2 1.5 1.9-.8.5-2.6ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" data-om-id="174f4ae8:181"></path></svg>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div data-region="page" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap)" data-om-id="174f4ae8:182">
+<header data-region="friends-header" style="flex:none;height:var(--custom-channel-header-height);background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;align-items:center;padding-left:var(--space-16)" data-om-id="174f4ae8:183"><div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-8);white-space:nowrap" data-om-id="174f4ae8:184"><span style="display:flex;color:var(--text-4)" data-om-id="174f4ae8:185"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="174f4ae8:186"><circle cx="12" cy="7" r="4" data-om-id="174f4ae8:187"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7v1H4v-1Z" data-om-id="174f4ae8:188"></path><path d="M19.5 3.5a3.5 3.5 0 0 1 0 7M22 20.5v-.5c0-2.8-1.6-5.2-4-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" data-om-id="174f4ae8:189"></path></svg></span><span style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:190">Friends</span><span style="width:var(--space-4);height:var(--space-4);margin:0 var(--space-4);border-radius:50%;background:var(--text-5)" data-om-id="174f4ae8:191"></span><div data-part="tab" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-12);border-radius:var(--radius-sm);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:192">Online</div><div data-part="tab" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-12);border-radius:var(--radius-sm);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:193">All</div><div data-part="tab" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-12);border-radius:var(--radius-sm);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:194">Pending<span style="min-width:var(--badge-size);height:var(--badge-size);padding:0 var(--space-4);border-radius:var(--badge-size);background:var(--accent-new);color:var(--text-0);font-size:var(--font-size-xs);line-height:var(--badge-size);font-weight:var(--font-weight-bold);text-align:center" data-om-id="174f4ae8:195">2</span></div><div data-part="tab" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;gap:var(--space-6);padding:0 var(--space-12);border-radius:var(--radius-sm);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-4)" data-om-id="174f4ae8:196">Blocked</div><div data-part="button" data-variant="add-friend" data-state="selected" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;padding:0 var(--space-12);margin-left:var(--space-8);border-radius:var(--radius-sm);background:var(--accent-5);border:var(--border-thickness) solid var(--button-border);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-0)" data-om-id="174f4ae8:197">Add Friend</div></div><div style="flex:none;display:flex;align-items:center;padding-right:var(--space-12)" data-om-id="174f4ae8:198"><div style="flex:none;width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="174f4ae8:199"><svg viewBox="0 0 24 24" fill="currentColor" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:200"><path d="M11 3a8 8 0 0 0-6.9 12l-1 3.6a.6.6 0 0 0 .7.7l3.6-1A8 8 0 0 0 19 11h-2a6 6 0 1 1-6-6V3Zm7-1v3h3v2h-3v3h-2V7h-3V5h3V2h2Z" data-om-id="174f4ae8:201"></path></svg></div></div>        <div data-part="trailing" style="flex:none;display:flex;align-items:center;gap:var(--space-8);height:var(--button-size);padding-right:var(--space-8)" data-om-id="174f4ae8:202">
+          <div data-part="inbox" style="width:var(--button-size);height:var(--button-size);display:flex;align-items:center;justify-content:center;color:var(--text-4)" data-om-id="174f4ae8:203"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:204"><path d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm-1 3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8h-4.38a1 1 0 0 0-.9.55l-.44.9a1 1 0 0 1-.9.55h-2.76a1 1 0 0 1-.9-.55l-.44-.9a1 1 0 0 0-.9-.55H4V5Z" data-om-id="174f4ae8:205"></path></svg></div>
+          <div data-part="window-controls" style="display:flex;align-items:center;padding-right:var(--window-controls-padding)" data-om-id="174f4ae8:206">
+            <div style="flex:none;width:var(--space-8);height:var(--space-16);border-left:var(--border-thickness) solid var(--border)" data-om-id="174f4ae8:207"></div>
+            <div data-control="minimize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:208"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--idle)" data-om-id="174f4ae8:209"></div></div>
+            <div data-control="maximize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:210"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--online)" data-om-id="174f4ae8:211"></div></div>
+            <div data-control="close" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:212"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--dnd)" data-om-id="174f4ae8:213"></div></div>
+          </div>
+        </div>
+</header>
+      <div data-region="content" style="flex:1;min-height:0;display:flex;gap:var(--gap)" data-om-id="174f4ae8:214">
+<main data-region="friends-list" style="flex:1;min-width:0;background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;padding:var(--space-16) var(--space-20) 0 var(--space-20)" data-om-id="174f4ae8:215"><div data-part="add-friend" style="flex:none;display:flex;flex-direction:column;gap:var(--space-8);padding-bottom:var(--space-24);border-bottom:var(--border-thickness) solid var(--border)" data-om-id="174f4ae8:216"><div style="font-size:var(--font-size-lg);line-height:var(--line-height-lg);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:217">Add Friend</div><div style="font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:218">You can add friends with their Discord username.</div><div data-part="input" data-state="focused" style="margin-top:var(--space-8);height:calc(var(--space-56) - var(--space-4));display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-8) 0 var(--space-12);border-radius:var(--radius-sm);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-active)" data-om-id="174f4ae8:219"><span style="flex:1;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--text-2)" data-om-id="174f4ae8:220">kyokouser</span><div data-part="button" data-variant="primary" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--accent-3);border:var(--border-thickness) solid var(--button-border);color:var(--text-0);font-size:var(--font-size-sm);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="174f4ae8:221">Send Friend Request</div></div><div style="font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--green-1)" data-om-id="174f4ae8:222">Success! Your friend request to <b style="font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:223">kyokouser</b> was sent.</div></div><div style="flex:none;margin-top:var(--space-24);font-size:var(--font-size-lg);line-height:var(--line-height-lg);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:224">Other places to make friends</div><div style="margin-top:var(--space-12);display:flex;align-items:center;gap:var(--space-12);padding:var(--space-12) var(--space-16);border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border)" data-om-id="174f4ae8:225"><div style="width:var(--avatar-size-md);height:var(--avatar-size-md);border-radius:var(--radius-sm);background:var(--green-3);color:var(--text-0);display:flex;align-items:center;justify-content:center" data-om-id="174f4ae8:226"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:227"><circle cx="12" cy="12" r="9" data-om-id="174f4ae8:228"></circle><path d="M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5Z" data-om-id="174f4ae8:229"></path></svg></div><span style="flex:1;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:230">Explore Discoverable Servers</span><span style="display:flex;color:var(--text-4)" data-om-id="174f4ae8:231"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="174f4ae8:232"><path d="M9 6l6 6-6 6" data-om-id="174f4ae8:233"></path></svg></span></div></main>
+<aside data-region="active-now" style="flex:none;width:calc(var(--space-40) * 9);background:var(--bg-4);border:var(--border-thickness) solid var(--border);border-radius:var(--radius-lg);overflow:hidden;padding:var(--space-16);display:flex;flex-direction:column;gap:var(--space-16)" data-om-id="174f4ae8:234">
+  <div style="font-size:var(--font-size-lg);line-height:var(--line-height-lg);font-weight:var(--font-weight-bold);color:var(--text-2)" data-om-id="174f4ae8:235">Active Now</div>
+  <div data-part="activity-card" style="padding:var(--space-16);border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border);display:flex;flex-direction:column;gap:var(--space-12)" data-om-id="174f4ae8:236"><div style="display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:237"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--green-1);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:238">h<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-3);background:var(--online)" data-om-id="174f4ae8:239"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:240"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:241">hungry</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:242">Outer Wilds — 1h</div></div><div style="flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:var(--radius-sm);background:linear-gradient(135deg, var(--blue-4), var(--green-4))" data-om-id="174f4ae8:243"></div></div><div style="padding:var(--space-12);border-radius:var(--radius-sm);background:var(--bg-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="174f4ae8:244">Exploring Brittle Hollow<div style="color:var(--text-4)" data-om-id="174f4ae8:245">Loop 14</div></div></div>
+  <div data-part="activity-card" style="padding:var(--space-16);border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border);display:flex;flex-direction:column;gap:var(--space-12)" data-om-id="174f4ae8:246"><div style="display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:247"><div style="position:relative;flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-3);color:var(--text-0);display:flex;align-items:center;justify-content:center;font-size:calc(var(--avatar-size-sm) * 0.42);font-weight:var(--font-weight-semibold)" data-om-id="174f4ae8:248">d<div data-part="status" data-status="online" style="position:absolute;right:0;bottom:0;width:var(--status-size);height:var(--status-size);border-radius:50%;box-shadow:0 0 0 var(--status-cutout) var(--bg-3);background:var(--online)" data-om-id="174f4ae8:249"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:250"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:251">doing okayish</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:252">Visual Studio Code — 2h</div></div><div style="flex:none;width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:var(--radius-sm);background:linear-gradient(135deg, var(--blue-5), var(--purple-4))" data-om-id="174f4ae8:253"></div></div><div style="padding:var(--space-12);border-radius:var(--radius-sm);background:var(--bg-4);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="174f4ae8:254">Editing midnight.css<div style="color:var(--text-4)" data-om-id="174f4ae8:255">Workspace: midnight-discord</div></div></div>
+  <div data-part="activity-card" style="padding:var(--space-16);border-radius:var(--radius-sm);background:var(--card-background-default);border:var(--border-thickness) solid var(--border);display:flex;flex-direction:column;gap:var(--space-12)" data-om-id="174f4ae8:256"><div style="display:flex;align-items:center;gap:var(--space-12)" data-om-id="174f4ae8:257"><div style="flex:none;display:flex" data-om-id="174f4ae8:258"><div style="width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--purple-5);box-shadow:0 0 0 var(--space-2) var(--bg-3);" data-om-id="174f4ae8:259"></div><div style="width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--red-5);box-shadow:0 0 0 var(--space-2) var(--bg-3);margin-left:calc(var(--space-12) * -1)" data-om-id="174f4ae8:260"></div><div style="width:var(--avatar-size-sm);height:var(--avatar-size-sm);border-radius:50%;background:var(--blue-1);box-shadow:0 0 0 var(--space-2) var(--bg-3);margin-left:calc(var(--space-12) * -1)" data-om-id="174f4ae8:261"></div></div><div style="flex:1;min-width:0;white-space:nowrap" data-om-id="174f4ae8:262"><div style="font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="174f4ae8:263">In Voice</div><div style="overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="174f4ae8:264">Vencord · 🔊 back to work</div></div></div><div style="display:flex;gap:var(--space-8)" data-om-id="174f4ae8:265"><div data-part="button" data-variant="secondary" style="flex:none;height:var(--button-height-sm);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--bg-2);border:var(--border-thickness) solid var(--border-light);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="174f4ae8:266">Join Voice</div></div></div>
+</aside>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

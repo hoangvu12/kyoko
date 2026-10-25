@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html data-src-ver="199077ba" lang="en" data-om-id="199077ba:0">
+<head data-om-id="199077ba:1">
+<style data-omelette-injected>html,body{background:transparent}</style>
+
+<meta charset="utf-8" data-om-id="199077ba:2">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-om-id="199077ba:3">
+<title>Kyoko · Login - Email</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-om-id="199077ba:4">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" data-om-id="199077ba:5">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" data-om-id="199077ba:6">
+<style>
+:root {
+  /* text */
+  --text-0: var(--bg-4);
+  --text-1: hsl(38, 47%, 90%);
+  --text-2: hsl(38, 47%, 80%);
+  --text-3: #d4be98;
+  --text-4: #a79a83;
+  --text-5: #d4be9866;
+  /* backgrounds */
+  --bg-1: hsl(20, 5%, 25%);
+  --bg-2: #3c3836;
+  --bg-3: hsl(20, 2%, 19%);
+  --bg-4: #282828;
+  --hover: hsla(20, 3%, 40%, 0.1);
+  --active: hsla(20, 3%, 40%, 0.2);
+  --active-2: hsla(20, 3%, 40%, 0.3);
+  --message-hover: hsla(0, 0%, 0%, 0.1);
+  /* accents */
+  --accent-1: var(--purple-1);
+  --accent-2: var(--purple-2);
+  --accent-3: var(--purple-3);
+  --accent-4: var(--purple-4);
+  --accent-5: var(--purple-5);
+  --accent-new: var(--accent-2);
+  --mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 90%) 40%, transparent);
+  --mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 95%) 40%, transparent);
+  --reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+  --reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+  /* status */
+  --online: var(--green-2);
+  --dnd: var(--red-2);
+  --idle: var(--yellow-2);
+  --streaming: var(--purple-2);
+  --offline: var(--text-4);
+  /* borders */
+  --border-light: var(--hover);
+  --border: var(--active);
+  --border-hover: var(--active);
+  --button-border: hsl(0, 0%, 100%, 0.1);
+  /* base scales */
+  --red-1: hsl(3, 76%, 70%); --red-2: #ea6962; --red-3: #ea6962; --red-4: hsl(3, 76%, 60%); --red-5: hsl(3, 76%, 55%);
+  --green-1: hsl(70, 36%, 60%); --green-2: #a8b665; --green-3: #a8b665; --green-4: hsl(70, 36%, 50%); --green-5: hsl(70, 36%, 45%);
+  --blue-1: hsl(167, 24%, 63%); --blue-2: #7caea3; --blue-3: #7caea3; --blue-4: hsl(167, 24%, 53%); --blue-5: hsl(167, 24%, 48%);
+  --yellow-1: hsl(37, 63%, 64%); --yellow-2: #d8a656; --yellow-3: #d8a656; --yellow-4: hsl(37, 63%, 54%); --yellow-5: hsl(37, 63%, 49%);
+  --purple-1: hsl(344, 47%, 73%); --purple-2: #d3869b; --purple-3: #d3869b; --purple-4: hsl(344, 47%, 63%); --purple-5: hsl(344, 47%, 58%);
+  /* Discord semantic colours as midnight.css maps them */
+  --mention-background: color-mix(in hsl, var(--accent-2), transparent 90%);
+  --mention-foreground: var(--accent-1);
+  --text-link: var(--accent-1);
+  --background-code: var(--bg-3);
+  --background-scrim: hsl(0, 0%, 0%, 0.7);
+  --background-feedback-critical: color-mix(in hsl, var(--red-2), transparent 80%);
+  --background-feedback-positive: color-mix(in hsl, var(--green-2), transparent 80%);
+  --input-background-error-default: color-mix(in hsl, var(--red-2), transparent 90%);
+  --highlight-background: var(--accent-3);
+  --highlight-text: var(--text-0);
+  --spine-default: var(--text-5);
+  --input-background-default: var(--bg-3);
+  --input-border-default: var(--border-light);
+  --input-border-hover: var(--border);
+  --input-border-active: var(--accent-2);
+  --input-border-error: var(--red-2);
+  --input-placeholder-text-default: var(--text-5);
+  --input-text-default: var(--text-3);
+  --reaction-background-default: var(--hover);
+  --reaction-border-default: var(--border-light);
+  --reaction-text-default: var(--text-3);
+  --reaction-background-reacted-default: color-mix(in hsl, var(--accent-2), transparent 80%);
+  --reaction-border-reacted-default: var(--accent-2);
+  --reaction-text-reacted-default: var(--text-1);
+  --user-panel-button-active-background: color-mix(in hsl, var(--accent-new), transparent 90%);
+  --switch-background-default: var(--bg-3);
+  --switch-border-default: var(--border);
+  --switch-background-selected: var(--accent-3);
+  --switch-border-selected: var(--button-border);
+  --switch-thumb-default: var(--text-3);
+  --switch-thumb-selected: var(--bg-4);
+  --switch-thumb-background: rgb(255, 255, 255);
+  --radio-background-default: var(--bg-2);
+  --radio-background-selected: var(--accent-2);
+  --slider-track-background: var(--bg-2);
+  --slider-fill-background: var(--accent-2);
+  --slider-grabber: var(--text-3);
+  --card-background-default: var(--bg-3);
+  --guild-pill: var(--text-2);
+  --channel-unread-dot: var(--text-3);
+  /* content-only colours (stand-ins for nameplate images, banners) */
+  --nameplate-1: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--blue-5), transparent 65%));
+  --nameplate-2: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--purple-5), transparent 60%));
+  --nameplate-3: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--bg-1), transparent 10%));
+  --nameplate-4: linear-gradient(to right, transparent 20%, color-mix(in hsl, var(--red-5), transparent 65%));
+  --desktop: #000;
+  /* type */
+  --font-primary: 'Inter', 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-code: 'gg mono', 'Source Code Pro', Consolas, Monaco, monospace;
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  --font-optical-sizing: auto; /* Inter's opsz follows the font size, as on Windows at 100% */
+  --font-size-tag: 10px;
+  --font-size-timestamp-alt: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-inline-code: 0.85em;
+  --line-height-xs: 16px;
+  --line-height-sm: 18px;
+  --line-height-md: 22px;
+  --line-height-lg: 24px;
+  --line-height-xl: 30px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* theme sizes (theme.css) */
+  --gap: 12px;
+  --divider-thickness: 4px;
+  --border-thickness: 1px;
+  --chatbar-height: 47px;
+  --top-bar-height: var(--gap);
+  --window-control-size: 14px;
+  --window-controls-padding: calc(var(--gap) - (var(--window-control-size) / 2) + 1px);
+  --list-item-hover-shift: 10px;
+  --member-hover-shift: 18px;
+  /* Discord sizes Midnight builds on */
+  --space-1: 1px; --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-12: 12px; --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px; --space-40: 40px;
+  --space-xs: var(--space-8); --space-sm: var(--space-12); --space-md: var(--space-16); --space-lg: var(--space-24);
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --guildbar-avatar-size: 40px;
+  --custom-guild-list-padding: 12px;
+  --custom-guild-list-width: calc(var(--guildbar-avatar-size) + var(--custom-guild-list-padding) * 2 + var(--border-thickness) * 2);
+  --custom-guild-sidebar-width: calc(var(--custom-guild-list-width) + 280px);
+  --custom-channel-header-height: calc(var(--guildbar-avatar-size) + var(--space-xs) + var(--border-thickness) * 2);
+  --member-list-width: 264px;
+  --search-results-width: 420px;
+  --window-width: 1280px;
+  --window-height: 800px;
+  --icon-size-xs: 12px; --icon-size-sm: 16px; --icon-size-md: 20px; --icon-size-lg: 24px;
+  --button-size: 32px;
+  --button-height-sm: 32px; --button-height-md: 38px; --button-height-lg: 44px;
+  --input-height: 40px;
+  --avatar-size-xs: 16px; --avatar-size-sm: 32px; --avatar-size-md: 40px; --avatar-size-lg: 80px;
+  --status-size: 10px; --status-cutout: 3px;
+  --status-size-lg: 16px; --status-cutout-lg: 5px;
+  --role-icon-size: 20px;
+  --folder-size: 48px;
+  --guild-pill-width: 4px;
+  --guild-pill-selected-height: 36px;
+  --guild-pill-unread-height: 8px;
+  --guild-separator-width: 32px;
+  --badge-size: 16px;
+  --unread-dot-size: 8px;
+  --channel-row-height: 36px; /* measured: 38px pitch = 36 row + 1px padding top and bottom */
+  --category-row-height: 24px;
+  --member-row-height: 42px; /* measured: constant 44px pitch */
+  --dm-row-height: 42px;
+  --group-header-height: 40px;
+  --search-width: 240px;
+  --new-messages-bar-height: 32px;
+  --typing-height: 24px;
+  --message-gutter: 72px;
+  --message-group-gap: 17px;
+  --message-padding-right: 48px;
+  --reply-spine-width: 2px;
+  --reply-spine-radius: 6px;
+  --reaction-height: 24px;
+  --reaction-border-width: 2px;
+  --embed-max-width: 432px;
+  --embed-accent-width: 4px;
+  --tag-height: 16px;
+  --bot-tag-height: 15px;
+  --unread-pill-height: 13px;
+  --switch-width: 48px; --switch-height: 24px; --switch-thumb-size: 14px;
+  --radio-size: 20px;
+  --slider-track-height: 4px;
+  --menu-width: 220px; --menu-item-height: 32px;
+  --popout-width: 300px; --banner-height: 105px; --settings-banner-height: 100px;
+  --modal-width-sm: 440px; --modal-width-md: 570px;
+    --emoji-picker-width: 418px; --emoji-picker-height: 440px; --emoji-cell-size: 40px; --emoji-size: 32px;
+  --qr-size: 176px;
+  --disabled-opacity: 0.3;
+  --offline-opacity: 0.3;
+  /* settings dialog (measured from live captures) */
+  --settings-dialog-inset: calc(var(--space-40) + var(--top-bar-height));
+  --settings-dialog-max-width: 1400px;
+  --settings-nav-width: 254px;
+  --settings-topbar-height: 48px;
+  --settings-column-width: 696px;
+  --settings-item-height: 40px;
+  --settings-row-gap: 34px;
+  --settings-divider-margin: 56px;
+  --settings-page-padding-top: 64px;
+  --space-10: 10px; --space-14: 14px; --space-56: 56px;
+  --line-height-label: 20px;
+  --select-height: 40px;
+  --vc-switch-width: 40px; --vc-switch-thumb-size: 18px;
+  --radio-border-selected: 6px;
+  --slider-grabber-size: 16px;
+  --theme-swatch-size: 46px;
+  --disabled-opacity-control: 0.5;
+  --scrollbar-thin-thumb: var(--bg-1);
+  --background-feedback-warning: color-mix(in hsl, var(--yellow-2), transparent 80%);
+  --background-feedback-info: color-mix(in hsl, var(--blue-2), transparent 80%);
+  --border-feedback-warning: var(--yellow-1);
+  /* Discord's own theme-preview colours (light maps to --text-0 because midnight sets --white to it) */
+  --overlay-button-background: hsl(0, 0%, 0%, 0.5);
+  --avatar-size-xl: 120px; --status-size-xl: 24px; --status-cutout-xl: 7px;
+  --profile-dialog-width: 900px; --profile-dialog-height: 640px; --profile-banner-height: 160px; --profile-column-width: 340px;
+  --menu-item-hover-background: var(--hover); /* = --background-mod-subtle, the 2025 client's neutral menu hover */
+  --menu-item-hover-text: var(--text-3); /* = --interactive-text-hover */
+  --menu-item-danger-hover-background: var(--background-feedback-critical);
+  --checkbox-background-default: var(--bg-2); --checkbox-border-default: var(--border);
+  --checkbox-background-selected: var(--accent-2); --checkbox-border-selected: var(--button-border); --checkbox-size: 20px;
+  --context-menu-width: 220px; --status-menu-width: 240px;
+  --toast-width: 360px; --lightbox-max-width: 960px;
+  --forum-card-thumb: 96px; --thread-panel-width: 420px; --dm-profile-width: 340px;
+  --login-card-width: 784px; --login-card-narrow: 480px; --web-login-width: 480px; --web-login-height: 720px;
+  --placeholder-stripe-a: var(--bg-3); --placeholder-stripe-b: var(--bg-2);
+  --background-scrim-lightbox: hsl(0, 0%, 0%, 0.9);
+  --theme-preview-light: var(--text-0);
+  --theme-preview-ash: #323339;
+  --theme-preview-dark: #1d1d21;
+  --theme-preview-onyx: #000000;
+}
+html, body { margin: 0; padding: 0; background: var(--desktop); }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body data-om-id="199077ba:7">
+<div data-region="window" data-screen-label="Login - Email" style="position:relative;width:var(--window-width);height:var(--window-height);overflow:hidden;font-family:var(--font-primary);font-optical-sizing:var(--font-optical-sizing);font-weight:var(--font-weight-normal);color:var(--text-3);display:flex;flex-direction:column;background:var(--bg-3)" data-om-id="199077ba:8">
+  <div data-region="titlebar" style="flex:none;height:var(--top-bar-height)" data-om-id="199077ba:9"></div>
+  <div data-part="trailing" style="position:absolute;z-index:10;top:calc(var(--top-bar-height) + var(--space-8) + var(--border-thickness));right:calc(var(--gap) + var(--border-thickness));display:flex;align-items:center;gap:var(--space-8);height:var(--button-size);padding-right:var(--space-8)" data-om-id="199077ba:10">
+    <div data-part="window-controls" style="display:flex;align-items:center;padding-right:var(--window-controls-padding)" data-om-id="199077ba:11">
+    <div style="flex:none;width:var(--space-8);height:var(--space-16);border-left:var(--border-thickness) solid var(--border)" data-om-id="199077ba:12"></div>
+    <div data-control="minimize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="199077ba:13"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--idle)" data-om-id="199077ba:14"></div></div>
+    <div data-control="maximize" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="199077ba:15"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--online)" data-om-id="199077ba:16"></div></div>
+    <div data-control="close" style="flex:none;width:calc(var(--window-control-size) * 2);height:var(--top-bar-height);display:flex;align-items:center;justify-content:center" data-om-id="199077ba:17"><div style="flex:none;width:var(--window-control-size);height:var(--window-control-size);border-radius:50%;background:var(--dnd)" data-om-id="199077ba:18"></div></div>
+  </div>
+</div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--gap);padding:var(--gap)" data-om-id="199077ba:19"><div data-region="login-card" style="width:var(--login-card-width);display:flex;align-items:center;gap:calc(var(--space-32) * 2);padding:var(--space-32);border-radius:var(--radius-lg);background:var(--bg-4);border:var(--border-thickness) solid var(--border)" data-om-id="199077ba:20"><div data-part="email-form" style="flex:1;min-width:0;display:flex;flex-direction:column" data-om-id="199077ba:21">
+    <div style="text-align:center;font-size:var(--font-size-xl);line-height:var(--line-height-xl);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="199077ba:22">Welcome back!</div><div style="margin-top:var(--space-8);margin-bottom:var(--space-20);text-align:center;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="199077ba:23">We're so excited to see you again!</div>
+    <div style="display:flex;flex-direction:column;gap:var(--space-20)" data-om-id="199077ba:24">
+      <div data-part="field" data-om-id="199077ba:25"><div style="margin-bottom:var(--space-8);font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-bold);color:var(--text-4);text-transform:uppercase" data-om-id="199077ba:26">Email or phone number <span style="color:var(--red-2)" data-om-id="199077ba:27">*</span></div><div data-part="input" style="height:var(--input-height);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-12);border-radius:var(--radius-sm);background:var(--input-background-default);border:var(--border-thickness) solid var(--input-border-default)" data-om-id="199077ba:28"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--input-text-default)" data-om-id="199077ba:29">refact0r@refact0r.dev</span></div></div>
+      <div data-om-id="199077ba:30"><div data-part="field" data-om-id="199077ba:31"><div style="margin-bottom:var(--space-8);font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-bold);color:var(--text-4);text-transform:uppercase" data-om-id="199077ba:32">Password <span style="color:var(--red-2)" data-om-id="199077ba:33">*</span></div><div data-part="input" data-state="error" style="height:var(--input-height);display:flex;align-items:center;gap:var(--space-8);padding:0 var(--space-12);border-radius:var(--radius-sm);background:var(--input-background-error-default);border:var(--border-thickness) solid var(--input-border-error)" data-om-id="199077ba:34"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--input-text-default);letter-spacing:var(--space-2)" data-om-id="199077ba:35">••••••••••••••</span></div></div><div data-part="error" style="margin-top:var(--space-8);display:flex;align-items:flex-start;gap:var(--space-6);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--red-1)" data-om-id="199077ba:36"><span style="display:flex;padding-top:var(--space-1)" data-om-id="199077ba:37"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="199077ba:38"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 5h2v6h-2V7Zm0 8h2v2h-2v-2Z" data-om-id="199077ba:39"></path></svg></span><span data-om-id="199077ba:40">Login or password is invalid.</span></div><div style="font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-medium);color:var(--text-link);margin-top:var(--space-8)" data-om-id="199077ba:41">Forgot your password?</div></div>
+    </div>
+    <div style="margin-top:var(--space-20)" data-om-id="199077ba:42"><div data-part="button" data-variant="primary" style="flex:none;width:100%;height:var(--button-height-lg);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--accent-3);border:var(--border-thickness) solid var(--button-border);color:var(--text-0);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="199077ba:43">Log In</div></div>
+    <div data-part="other-methods" style="margin-top:var(--space-12);display:flex;gap:var(--space-8)" data-om-id="199077ba:44"><div data-part="button" data-variant="secondary" style="flex:1;min-width:0;height:var(--button-height-md);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--bg-2);border:var(--border-thickness) solid var(--border-light);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="199077ba:45"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="199077ba:46"><path d="M14.5 3a6.5 6.5 0 0 0-6.2 8.5L2 17.8V22h4.2v-2.2h2.2v-2.2h2.2l1.9-1.9A6.5 6.5 0 1 0 14.5 3Zm2 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z" data-om-id="199077ba:47"></path></svg>Sign in with a token</div><div data-part="button" data-variant="secondary" style="flex:1;min-width:0;height:var(--button-height-md);display:flex;align-items:center;justify-content:center;gap:var(--space-8);padding:0 var(--space-16);border-radius:var(--radius-sm);background:var(--bg-2);border:var(--border-thickness) solid var(--border-light);color:var(--text-3);font-size:var(--font-size-sm);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);white-space:nowrap" data-om-id="199077ba:48"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-sm);height:var(--icon-size-sm)" data-om-id="199077ba:49"><circle cx="12" cy="12" r="9" data-om-id="199077ba:50"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" data-om-id="199077ba:51"></path></svg>Sign in on discord.com</div></div>
+    <div data-part="note" style="margin-top:var(--space-16);font-size:var(--font-size-xs);line-height:var(--line-height-xs);font-weight:var(--font-weight-normal);color:var(--text-5)" data-om-id="199077ba:52">Kyoko keeps your token in Windows Credential Manager.</div>
+  </div><div data-part="qr-column" data-state="code" style="flex:none;width:calc(var(--qr-size) + var(--space-56));display:flex;flex-direction:column;align-items:center;text-align:center" data-om-id="199077ba:53"><div data-part="qr-code" style="position:relative;width:var(--qr-size);height:var(--qr-size);padding:var(--space-8);border-radius:var(--radius-sm);background:var(--text-1)" data-om-id="199077ba:54"><svg viewBox="0 0 25 25" style="display:block;width:100%;height:100%" shape-rendering="crispEdges" data-om-id="199077ba:55"><path d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM11 1h1v1h-1zM12 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM13 2h1v1h-1zM15 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM21 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM16 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM9 4h1v1h-1zM11 4h1v1h-1zM13 4h1v1h-1zM14 4h1v1h-1zM16 4h1v1h-1zM18 4h1v1h-1zM20 4h1v1h-1zM21 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM13 5h1v1h-1zM15 5h1v1h-1zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM11 6h1v1h-1zM13 6h1v1h-1zM14 6h1v1h-1zM15 6h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM15 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM13 8h1v1h-1zM14 8h1v1h-1zM15 8h1v1h-1zM18 8h1v1h-1zM19 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM23 8h1v1h-1zM0 9h1v1h-1zM3 9h1v1h-1zM4 9h1v1h-1zM5 9h1v1h-1zM6 9h1v1h-1zM16 9h1v1h-1zM17 9h1v1h-1zM20 9h1v1h-1zM22 9h1v1h-1zM23 9h1v1h-1zM24 9h1v1h-1zM0 10h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM8 10h1v1h-1zM16 10h1v1h-1zM17 10h1v1h-1zM1 11h1v1h-1zM2 11h1v1h-1zM5 11h1v1h-1zM6 11h1v1h-1zM7 11h1v1h-1zM16 11h1v1h-1zM22 11h1v1h-1zM1 12h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM7 12h1v1h-1zM16 12h1v1h-1zM17 12h1v1h-1zM18 12h1v1h-1zM19 12h1v1h-1zM22 12h1v1h-1zM23 12h1v1h-1zM1 13h1v1h-1zM2 13h1v1h-1zM4 13h1v1h-1zM8 13h1v1h-1zM18 13h1v1h-1zM19 13h1v1h-1zM21 13h1v1h-1zM23 13h1v1h-1zM24 13h1v1h-1zM3 14h1v1h-1zM5 14h1v1h-1zM7 14h1v1h-1zM21 14h1v1h-1zM23 14h1v1h-1zM24 14h1v1h-1zM2 15h1v1h-1zM3 15h1v1h-1zM4 15h1v1h-1zM8 15h1v1h-1zM16 15h1v1h-1zM17 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM21 15h1v1h-1zM1 16h1v1h-1zM9 16h1v1h-1zM10 16h1v1h-1zM13 16h1v1h-1zM15 16h1v1h-1zM16 16h1v1h-1zM17 16h1v1h-1zM18 16h1v1h-1zM19 16h1v1h-1zM20 16h1v1h-1zM21 16h1v1h-1zM22 16h1v1h-1zM24 16h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM14 17h1v1h-1zM15 17h1v1h-1zM16 17h1v1h-1zM19 17h1v1h-1zM22 17h1v1h-1zM23 17h1v1h-1zM24 17h1v1h-1zM0 18h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM3 18h1v1h-1zM4 18h1v1h-1zM5 18h1v1h-1zM6 18h1v1h-1zM11 18h1v1h-1zM13 18h1v1h-1zM15 18h1v1h-1zM19 18h1v1h-1zM22 18h1v1h-1zM23 18h1v1h-1zM24 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h1v1h-1zM10 19h1v1h-1zM14 19h1v1h-1zM15 19h1v1h-1zM16 19h1v1h-1zM19 19h1v1h-1zM20 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM12 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM15 20h1v1h-1zM16 20h1v1h-1zM17 20h1v1h-1zM18 20h1v1h-1zM19 20h1v1h-1zM20 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM0 21h1v1h-1zM2 21h1v1h-1zM3 21h1v1h-1zM4 21h1v1h-1zM6 21h1v1h-1zM11 21h1v1h-1zM14 21h1v1h-1zM20 21h1v1h-1zM22 21h1v1h-1zM23 21h1v1h-1zM24 21h1v1h-1zM0 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM6 22h1v1h-1zM12 22h1v1h-1zM13 22h1v1h-1zM19 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM8 23h1v1h-1zM13 23h1v1h-1zM14 23h1v1h-1zM15 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM21 23h1v1h-1zM22 23h1v1h-1zM24 23h1v1h-1zM0 24h1v1h-1zM1 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM5 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM12 24h1v1h-1zM16 24h1v1h-1zM18 24h1v1h-1zM19 24h1v1h-1zM20 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1z" style="fill:var(--text-0)" data-om-id="199077ba:56"></path></svg><div style="position:absolute;left:50%;top:50%;width:var(--space-40);height:var(--space-40);margin:calc(var(--space-20) * -1) 0 0 calc(var(--space-20) * -1);border-radius:var(--radius-sm);background:var(--text-0);color:var(--text-1);display:flex;align-items:center;justify-content:center" data-om-id="199077ba:57"><svg viewBox="0 0 27 27" fill="currentColor" style="width:var(--icon-size-lg);height:var(--icon-size-lg)" data-om-id="199077ba:58"><path d="M0 0h7v1H6v1H5v1H4v1H3v1H2v1h5v1H0V6h1V5h1V4h1V3h1V2h1V1H0m13 2h5v1h-1v1h-1v1h-1v1h3v1h-5V7h1V6h1V5h1V4h-3m8 5h1v5h1v-1h1v1h-1v1h1v-1h1v1h-1v3h-1v1h-2v1h-1v1h1v-1h2v-1h1v2h-1v1h-2v1h-1v-1h-1v1h-6v-1h-1v-1h-1v-2h1v1h2v1h3v1h1v-1h-1v-1h-3v-1h-4v-4h1v-2h1v-1h1v-1h1v2h1v1h1v-1h1v1h-1v1h2v-2h1v-2h1v-1h1M8 14h2v1H9v4h1v2h1v1h1v1h1v1h4v1h-6v-1H5v-1H4v-5h1v-1h1v-2h2m17 3h1v3h-1v1h-1v1h-1v2h-2v-2h2v-1h1v-1h1m1 0h1v3h-1v1h-2v-1h1v-1h1" data-om-id="199077ba:59"></path></svg></div></div><div style="margin-top:var(--space-32);font-size:var(--font-size-xl);line-height:var(--line-height-xl);font-weight:var(--font-weight-semibold);color:var(--text-2)" data-om-id="199077ba:60">Log in with QR Code</div><div style="margin-top:var(--space-8);font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-normal);color:var(--text-4)" data-om-id="199077ba:61">Scan this with the Discord mobile app to log in instantly.</div></div></div><div data-region="tos-notice" style="width:var(--login-card-width);display:flex;flex-direction:column;gap:var(--space-12);padding:var(--space-16) var(--space-20);border-radius:var(--radius-lg);background:var(--background-feedback-warning);border:var(--border-thickness) solid var(--border-feedback-warning)" data-om-id="199077ba:62">
+  <div style="display:flex;gap:var(--space-12);font-size:var(--font-size-sm);line-height:var(--line-height-sm);font-weight:var(--font-weight-normal);color:var(--text-3)" data-om-id="199077ba:63"><span style="display:flex;color:var(--yellow-1)" data-om-id="199077ba:64"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" style="flex:none;width:var(--icon-size-md);height:var(--icon-size-md)" data-om-id="199077ba:65"><path d="M12 3 2 21h20L12 3Zm-1 6h2v6h-2V9Zm0 8h2v2h-2v-2Z" data-om-id="199077ba:66"></path></svg></span><span data-om-id="199077ba:67">Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk.</span></div>
+  <div data-part="acknowledge" style="display:flex;align-items:center;gap:var(--space-10);padding-left:calc(var(--icon-size-md) + var(--space-12));font-size:var(--font-size-md);line-height:var(--line-height-label);font-weight:var(--font-weight-medium);color:var(--text-2)" data-om-id="199077ba:68"><div data-part="checkbox" data-state="checked" style="flex:none;width:var(--checkbox-size);height:var(--checkbox-size);border-radius:var(--radius-xs);background:var(--checkbox-background-selected);border:var(--border-thickness) solid var(--checkbox-border-selected);color:var(--text-0);display:flex;align-items:center;justify-content:center" data-om-id="199077ba:69"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;width:var(--icon-size-xs);height:var(--icon-size-xs)" data-om-id="199077ba:70"><path d="M5 12.5l4.5 4.5L19 7.5" data-om-id="199077ba:71"></path></svg></div>I understand</div>
+</div></div>
+  
+</div>
+</body>
+</html>
