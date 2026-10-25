@@ -158,6 +158,12 @@ Files go the web client's way: `POST /channels/{id}/attachments` with `{"files":
 
 Edits that fail publish `CommandRejected` ("Edit: ...").
 
+## GIFs and stickers
+
+GIF search uses Discord's own endpoints with the web client's parameters, in its order: `GET /gifs/trending?provider=tenor&locale=<l>&media_format=mp4` (categories and the featured GIF), `GET /gifs/search?q=<q>&media_format=mp4&provider=tenor&locale=<l>` and `GET /gifs/suggest?q=<q>&provider=tenor&limit=5&locale=<l>`, as `Command::LoadGifTrending`, `SearchGifs` and `SuggestGifs`. They are API requests, so they carry the session as every other. Results are kept in `State` per query (`gif_trending`, `gif_search`, `gif_suggestions`, the last 20 queries). The picker debounces typing (see "Expression pickers" in `docs/ui.md`). `POST /gifs/select` (`SelectGif`) is only sent when the user turned GIF usage sharing on.
+
+`Command::SendGif` sends the GIF's `url` as the message text and `Command::SendSticker` sends a message with `sticker_ids: [id]` and no text; both go through the same outbox as `SendMessage`: the lock check, a nonce, a pending message (a sticker's shows the sticker), the send pacing and the failed-send handling, so Retry sends the sticker again. Server stickers come from READY and GUILD_CREATE (`guild.stickers`) and GUILD_STICKERS_UPDATE; the standard packs from `GET /sticker-packs` (`LoadStickerPacks`), asked once when the sticker tab first shows.
+
 ## Application commands
 
 `Command::LoadApplicationCommands { channel_id }` fetches the command index the web client uses: `GET /guilds/{id}/application-command-index` in a server, `GET /channels/{id}/application-command-index` in a DM, merged with `GET /users/@me/application-command-index` (user-installed apps). It is fetched once per server or DM per session (again after 60 s if it failed) and kept as `State::command_index(channel_id)` (`Changes::commands`). The composer asks for it when the user types `/` at the start of a message.

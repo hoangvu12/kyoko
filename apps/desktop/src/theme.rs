@@ -73,6 +73,8 @@ pub const COLORS: &[(&str, &str)] = &[
 	("overlay", "rgba(0, 0, 0, 0.7)"),
 	("speaking_ring", "#23a559"),
 	("live_badge", "#f23f43"),
+	("brand_selected", "rgba(88, 101, 242, 0.16)"),
+	("gif_shade", "rgba(30, 31, 34, 0.55)"),
 ];
 
 pub const SIZES: &[(&str, f32)] = &[
@@ -201,6 +203,7 @@ const LIGHT: &[(&str, &str)] = &[
 	("button_secondary_hover", "#d7d9dc"),
 	("unread_pill", "#060607"),
 	("overlay", "rgba(0, 0, 0, 0.5)"),
+	("gif_shade", "rgba(227, 229, 232, 0.55)"),
 ];
 
 const AMOLED: &[(&str, &str)] = &[
@@ -215,6 +218,7 @@ const AMOLED: &[(&str, &str)] = &[
 	("divider", "#1e1f22"),
 	("input_background", "#141416"),
 	("overlay", "rgba(0, 0, 0, 0.85)"),
+	("gif_shade", "rgba(0, 0, 0, 0.55)"),
 ];
 
 const STANDARD: &[(&str, &str)] = &[

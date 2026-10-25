@@ -56,6 +56,8 @@ M.color = {
 	overlay = token("overlay"),
 	speaking_ring = token("speaking_ring"),
 	live_badge = token("live_badge"),
+	brand_selected = token("brand_selected"),
+	gif_shade = token("gif_shade"),
 }
 
 M.size = {

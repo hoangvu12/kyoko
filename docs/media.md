@@ -39,7 +39,7 @@ All sizes are device pixels: points times the display scale, rounded up.
 
 - Avatars, server icons, emoji, banners and role icons use the CDN's `size=`, a power of two from 16 to 4096 (`cdn::bucket`). Avatars and icons are `.webp`; an animated (`a_`) hash adds `animated=true` when the caller wants it animated, otherwise the CDN sends a still. Emoji add `quality=lossless`.
 - Attachments go through the media proxy (`proxy_url`, or a `cdn.discordapp.com/attachments` URL rewritten to `media.discordapp.net`). The image is fitted inside the box the caller passes, never upscaled, and asked for as `format=webp&quality=lossless&width=W&height=H`, keeping the signature. GIFs keep their format and only add the size; an attachment flagged animated adds `animated=true`.
-- The original-resolution setting (`settings.media.original_resolution`, `cdn::Quality::Original`) fetches the attachment's original `url` with no resize parameters. It replaces Vencord's FixImagesQuality. Memory stays bounded: the decoded image is still shrunk to the box when it is more than twice as large.
+- The original-resolution setting (`settings.media.original_resolution`, `cdn::Quality::Original`) fetches the attachment's original `url` with no resize parameters. It replaces Vencord's FixImagesQuality. Memory stays bounded: the decoded image is still shrunk to the box when it is more than twice as large. The lightbox always asks for the original (`bridge::lightbox_request`), with the window as the box.
 
 ## Animation
 

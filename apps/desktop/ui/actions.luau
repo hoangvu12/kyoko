@@ -152,6 +152,10 @@ function M.composer_dismiss()
 	ui.invoke("composer.dismiss")
 end
 
+function M.composer_picker(tab: string, toolbar: any)
+	ui.invoke("composer.picker", { tab = tab, toolbar = toolbar })
+end
+
 function M.composer_start_reply(message_id: string)
 	ui.invoke("composer.start_reply", message_id)
 end

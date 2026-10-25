@@ -60,17 +60,26 @@ fn image_attachment(entry: &MessageEntry, attachment: &Attachment, env: &Rc<RowE
 	let name = env
 		.pictures
 		.attachment(attachment, entry.message.channel_id, entry.message.id);
+	let target = bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.message.id);
 	div()
 		.mt(4.)
 		.size(width, height)
 		.rounded(tok("radius_md"))
 		.overflow_hidden()
+		.when_some(target, |frame, target| opens(frame, target, env))
 		.child(picture(
 			&env.pictures,
 			name,
 			attachment.placeholder.as_deref(),
 			ObjectFit::Cover,
 		))
+}
+
+fn opens(frame: View, target: bridge::LightboxImage, env: &Rc<RowEnv>) -> View {
+	let lightbox = env.lightbox.clone();
+	frame
+		.cursor(Cursor::Pointer)
+		.on_click(move || lightbox.open(target.clone()))
 }
 
 fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
@@ -159,11 +168,13 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 fn bare(media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, ATTACHMENT_BOX);
 	let name = env.pictures.embed_media(media, (width, height));
+	let target = bridge::LightboxImage::embed(media);
 	div()
 		.mt(4.)
 		.size(width, height)
 		.rounded(tok("radius_md"))
 		.overflow_hidden()
+		.when_some(target, |frame, target| opens(frame, target, env))
 		.child(picture(
 			&env.pictures,
 			name,
@@ -369,12 +380,14 @@ fn large(media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
 		.or_else(|| embed.video.as_ref().and_then(|video| video.url.clone()))
 		.filter(|_| playable);
 	let links = env.links.clone();
+	let target_image = bridge::LightboxImage::embed(media).filter(|_| !playable);
 	div()
 		.relative()
 		.mt(4.)
 		.size(width, height)
 		.rounded(tok("radius_sm"))
 		.overflow_hidden()
+		.when_some(target_image, |frame, target| opens(frame, target, env))
 		.child(picture(
 			&env.pictures,
 			name,

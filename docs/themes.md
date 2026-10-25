@@ -36,9 +36,9 @@ The themes directory is `<data dir>/themes`, see the README for where that is on
 | Surfaces | `background_primary` (main area), `background_secondary` (sidebars and panels), `background_tertiary` (deepest layer), `background_floating` (menus and popovers), `user_panel_background` |
 | Interaction | `modifier_hover`, `modifier_selected`, `modifier_active`, `interactive_normal`, `interactive_hover`, `interactive_active`, `interactive_muted` |
 | Text | `text_normal`, `text_muted`, `header_primary`, `header_secondary`, `text_on_brand` |
-| Accent | `brand`, `brand_hover`, `link`, `mention_background`, `mention_text`, `unread_pill`, `mention_badge`, `speaking_ring`, `live_badge` |
+| Accent | `brand`, `brand_hover`, `link`, `mention_background`, `mention_text`, `unread_pill`, `mention_badge`, `speaking_ring`, `live_badge`, `brand_selected` (the active picker tab) |
 | Status | `status_online`, `status_idle`, `status_dnd`, `status_offline`, `status_streaming`, `danger`, `danger_hover`, `success`, `warning` |
-| Controls | `input_background`, `button_secondary`, `button_secondary_hover`, `divider`, `overlay` |
+| Controls | `input_background`, `button_secondary`, `button_secondary_hover`, `divider`, `overlay`, `gif_shade` (the wash over GIF category tiles) |
 | Code and spoilers | `spoiler`, `code_background`, `code_border`, `scrollbar_thumb`, `scrollbar_track` |
 
 ## Size tokens

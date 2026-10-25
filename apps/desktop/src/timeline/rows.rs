@@ -115,6 +115,7 @@ pub struct RowEnv {
 	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
 	pub commands: Rc<Sender>,
 	pub actions: Rc<MessageActions>,
+	pub lightbox: Rc<super::lightbox::Lightbox>,
 }
 
 impl RowEnv {

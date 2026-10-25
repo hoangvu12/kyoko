@@ -17,8 +17,8 @@ use zgx::reactive::{Runtime, Signal};
 use super::dialogs::{Confirm, Dialogs};
 use super::icons::{glyph, icon};
 use super::links::Links;
-use super::picker::ReactionPicker;
 use super::rows::{Sender, tok};
+use crate::pickers::{ExpressionPicker, Tab};
 
 const MENU_WIDTH: f32 = 190.;
 const MENU_ITEM: f32 = 28.;
@@ -81,7 +81,7 @@ pub struct MessageActions {
 	context: Signal<Option<ContextMenu>>,
 	menus: Cell<u64>,
 	pub dialogs: Rc<Dialogs>,
-	pub picker: Rc<ReactionPicker>,
+	pub picker: Rc<ExpressionPicker>,
 	developer_mode: Cell<bool>,
 	links: Rc<Links>,
 	commands: Rc<Sender>,
@@ -98,7 +98,7 @@ pub struct MessageActions {
 
 pub struct Wiring {
 	pub dialogs: Rc<Dialogs>,
-	pub picker: Rc<ReactionPicker>,
+	pub picker: Rc<ExpressionPicker>,
 	pub links: Rc<Links>,
 	pub commands: Rc<Sender>,
 	pub developer_mode: bool,
@@ -363,11 +363,13 @@ impl MessageActions {
 		};
 		let actions = Rc::downgrade(self);
 		let entry = Rc::new(entry.clone());
-		self.picker.open(model, self.local_pointer(), move |cell| {
+		self.picker.set_emoji(model);
+		self.picker.on_emoji(move |cell| {
 			if let Some(actions) = actions.upgrade() {
 				actions.toggle_reaction(&entry, &cell.reaction);
 			}
 		});
+		self.picker.open(Tab::Emoji, self.local_pointer());
 	}
 
 	pub fn toggle_reaction(&self, entry: &MessageEntry, emoji: &str) {

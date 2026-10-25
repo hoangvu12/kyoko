@@ -152,10 +152,10 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `lightbox` | 32 | Default selection, then open the newest loaded image attachment in the lightbox. | no |
-| `emoji-picker` | 32 | Default selection, then open the composer's picker on the emoji tab at (1001, 755). | no |
-| `gif-picker` | 32 | As `emoji-picker`, on the GIF tab. | no |
-| `sticker-picker` | 32 | As `emoji-picker`, on the sticker tab. | no |
+| `lightbox` | 32 | Default selection, then open the newest loaded image attachment in the lightbox. | yes |
+| `emoji-picker` | 32 | Default selection, then open the composer's picker on the emoji tab at (1001, 755). | yes |
+| `gif-picker` | 32 | As `emoji-picker`, on the GIF tab, once the trending GIFs have loaded. | yes |
+| `sticker-picker` | 32 | As `emoji-picker`, on the sticker tab, once the sticker packs have loaded. | yes |
 
 ### 33 Threads and forums
 

@@ -5,8 +5,8 @@ mod dialogs;
 mod extras;
 pub(crate) mod icons;
 mod inline;
+mod lightbox;
 mod links;
-pub(crate) mod picker;
 pub(crate) mod pictures;
 mod rows;
 mod scroll;
@@ -35,13 +35,14 @@ pub use self::actions::Compose;
 use self::actions::{MessageActions, Wiring};
 use self::dialogs::Dialogs;
 pub(crate) use self::icons::icon;
+use self::lightbox::Lightbox;
 use self::links::Links;
-use self::picker::ReactionPicker;
 pub(crate) use self::pictures::Pictures;
 pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
 pub(crate) use self::rows::{TypeSize, tok};
 use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter, Resize};
+use crate::pickers::{ExpressionPicker, Mode};
 
 const OVERSCAN: usize = 4;
 const PAD_TOP: f32 = 8.;
@@ -99,6 +100,7 @@ pub struct TimelineView {
 	commands: Rc<Sender>,
 	visible_changed: Callback<()>,
 	actions: Rc<MessageActions>,
+	lightbox: Rc<Lightbox>,
 	pending_jump: Cell<Option<Snowflake>>,
 	pending_action: Cell<Option<MessageAction>>,
 }
@@ -118,12 +120,13 @@ impl TimelineView {
 			runtime,
 			Wiring {
 				dialogs: Rc::new(Dialogs::new(runtime, commands.clone())),
-				picker: Rc::new(ReactionPicker::new(runtime, pictures.clone())),
+				picker: ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction),
 				links: links.clone(),
 				commands: commands.clone(),
 				developer_mode: setup.developer_mode,
 			},
 		));
+		let lightbox = Rc::new(Lightbox::new(runtime, pictures.clone(), links.clone()));
 		let view = Rc::new(Self {
 			runtime: runtime.clone(),
 			offset: runtime.signal(0.),
@@ -142,6 +145,7 @@ impl TimelineView {
 				picks: RefCell::default(),
 				commands: commands.clone(),
 				actions: actions.clone(),
+				lightbox: lightbox.clone(),
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,
@@ -160,6 +164,7 @@ impl TimelineView {
 			commands,
 			visible_changed: RefCell::new(None),
 			actions,
+			lightbox,
 			pending_jump: Cell::new(None),
 			pending_action: Cell::new(None),
 		});
@@ -171,13 +176,39 @@ impl TimelineView {
 		});
 		let images = Rc::downgrade(&view);
 		view.actions.picker.on_images_changed(move || {
-			if let Some(view) = images.upgrade()
-				&& let Some(changed) = view.visible_changed.borrow().as_ref()
-			{
-				changed(());
+			if let Some(view) = images.upgrade() {
+				view.images_changed();
+			}
+		});
+		let images = Rc::downgrade(&view);
+		view.lightbox.on_changed(move || {
+			if let Some(view) = images.upgrade() {
+				view.images_changed();
 			}
 		});
 		view
+	}
+
+	fn images_changed(&self) {
+		if let Some(changed) = self.visible_changed.borrow().as_ref() {
+			changed(());
+		}
+	}
+
+	pub fn lightbox_view(&self) -> View {
+		self.lightbox.view()
+	}
+
+	pub fn close_lightbox(&self) -> bool {
+		self.lightbox.close()
+	}
+
+	pub fn open_lightbox(&self, image: bridge::LightboxImage) {
+		self.lightbox.open(image);
+	}
+
+	pub fn lightbox_settled(&self) -> bool {
+		self.lightbox.settled()
 	}
 
 	pub fn on_compose(&self, compose: impl Fn(Compose) + 'static) {
@@ -198,6 +229,7 @@ impl TimelineView {
 
 	pub fn set_window(&self, width: f32, height: f32) {
 		self.actions.set_window(width, height);
+		self.lightbox.set_window(width, height);
 	}
 
 	pub fn set_access(&self, access: Access) {
@@ -353,6 +385,7 @@ impl TimelineView {
 	pub fn visible_images(&self) -> Vec<ImageName> {
 		let mut names = self.visible_images.borrow().clone();
 		names.extend(self.actions.picker.images());
+		names.extend(self.lightbox.images());
 		names
 	}
 

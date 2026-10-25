@@ -17,7 +17,7 @@ use zgx::reactive::{Effect, Runtime, Signal};
 
 use self::custom_status::CustomStatusForm;
 pub use self::full::FullTab;
-use crate::timeline::picker::ReactionPicker;
+use crate::pickers::{ExpressionPicker, Mode, Tab};
 use crate::timeline::pictures::Pictures;
 
 const POPOUT_AVATAR: f64 = 80.;
@@ -122,7 +122,7 @@ impl PartialEq for MenuShown {
 pub struct ProfileLayer {
 	runtime: Runtime,
 	pictures: Rc<Pictures>,
-	picker: Rc<ReactionPicker>,
+	picker: Rc<ExpressionPicker>,
 	window: Signal<(f32, f32)>,
 	surface: Signal<Option<Surface>>,
 	shown: Signal<Option<Shown>>,
@@ -142,7 +142,7 @@ pub struct ProfileLayer {
 
 impl ProfileLayer {
 	pub fn new(runtime: &Runtime, pictures: Rc<Pictures>) -> Rc<Self> {
-		let picker = Rc::new(ReactionPicker::new(runtime, pictures.clone()));
+		let picker = ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction);
 		let layer = Rc::new(Self {
 			runtime: runtime.clone(),
 			custom: Rc::new(CustomStatusForm::new(runtime)),
@@ -417,13 +417,15 @@ impl ProfileLayer {
 
 	fn open_picker(self: &Rc<Self>, at: (f32, f32), model: EmojiPicker) {
 		let form = self.custom.clone();
-		self.picker.open(model, at, move |cell| {
+		self.picker.set_emoji(model);
+		self.picker.on_emoji(move |cell| {
 			if cell.custom.is_none()
 				&& let Some(glyph) = cell.glyph
 			{
 				form.set_emoji(Some(glyph));
 			}
 		});
+		self.picker.open(Tab::Emoji, at);
 	}
 
 	pub fn pick_emoji(self: &Rc<Self>, model: EmojiPicker) {

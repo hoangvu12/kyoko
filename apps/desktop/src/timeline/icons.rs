@@ -55,6 +55,9 @@ icon_files!(
 	"at_sign",
 	"group",
 	"home",
+	"gif",
+	"sticker",
+	"external_link",
 );
 
 thread_local! {

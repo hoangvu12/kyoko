@@ -41,6 +41,7 @@ pub(super) struct ComposerView {
 	focus_serial: Cell<u64>,
 	replaced: RefCell<Option<String>>,
 	text: RefCell<String>,
+	caret: Cell<usize>,
 	draft_due: Cell<Option<Instant>>,
 	images: RefCell<Vec<String>>,
 	thumbnails: RefCell<Vec<(u64, String)>>,
@@ -176,6 +177,7 @@ impl ComposerView {
 			focus_serial: Cell::new(0),
 			replaced: RefCell::new(None),
 			text: RefCell::new(String::new()),
+			caret: Cell::new(0),
 			draft_due: Cell::new(None),
 			images: RefCell::new(Vec::new()),
 			thumbnails: RefCell::new(Vec::new()),
@@ -375,6 +377,7 @@ impl Link {
 		let target = open.map(|open| open.channel_id);
 		let switched = self.composer.composer.borrow().channel() != target;
 		if switched {
+			self.close_expressions();
 			if self.composer.draft_due.get().is_some() {
 				self.flush_draft();
 			}
@@ -438,6 +441,7 @@ impl Link {
 		let serial = self.composer.serial.get() + 1;
 		self.composer.serial.set(serial);
 		*self.composer.text.borrow_mut() = replacement.clone();
+		self.composer.caret.set(caret);
 		*self.composer.replaced.borrow_mut() = Some(replacement.clone());
 		self.composer.replace.set(record([
 			("serial", (serial as f64).into()),
@@ -450,6 +454,35 @@ impl Link {
 		let serial = self.composer.focus_serial.get() + 1;
 		self.composer.focus_serial.set(serial);
 		self.composer.focus.set((serial as f64).into());
+	}
+
+	pub(super) fn composer_insert(&self, cell: &bridge::EmojiCell) {
+		let typed = self.composer.text.borrow().clone();
+		let caret = self.composer.caret.get();
+		let inserted = self
+			.composer
+			.composer
+			.borrow_mut()
+			.pick_emoji(&typed, caret, cell);
+		if inserted.is_some() {
+			self.composer.draft_due.set(Some(Instant::now() + DRAFT_DELAY));
+			self.replace_text(inserted);
+			self.request_focus();
+		}
+	}
+
+	pub(super) fn composer_expression(&self, pick: impl FnOnce(&mut Composer, &State) -> Outcome) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let outcome = pick(&mut self.composer.composer.borrow_mut(), &shared.read());
+		self.composer_send(outcome.commands);
+		self.publish_composer_all();
+	}
+
+	pub(super) fn composer_channel(&self) -> Option<(Option<Snowflake>, Snowflake)> {
+		let composer = self.composer.composer.borrow();
+		Some((composer.guild(), composer.channel()?))
 	}
 
 	fn composer_send(&self, commands: Vec<session::Command>) {
@@ -474,6 +507,7 @@ impl Link {
 		};
 		let echoed = self.composer.replaced.borrow().as_deref() == Some(typed.as_str());
 		*self.composer.text.borrow_mut() = typed.clone();
+		self.composer.caret.set(caret.min(typed.len()));
 		let commands = {
 			let state = shared.read();
 			let mut composer = self.composer.composer.borrow_mut();

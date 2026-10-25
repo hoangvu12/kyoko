@@ -5,7 +5,7 @@ use std::sync::Arc;
 use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, ReplyPreview, STICKER_SIDE};
 use markdown::Node;
 use media::cdn::Quality;
-use media::{Gallery, ImageName, ImageRequest, Status};
+use media::{Gallery, ImageName, ImageRequest, Shape, SizeHint, Status, Variant};
 use protocol::{
 	Attachment, Embed, EmbedKind, EmbedMedia, MessageFlags, PartialEmoji, Snowflake, StickerItem, User,
 };
@@ -142,8 +142,30 @@ impl Pictures {
 	}
 
 	pub fn sticker(&self, sticker: &StickerItem) -> Option<ImageName> {
-		let request = bridge::sticker_request(sticker, f64::from(STICKER_SIDE), self.scale.get())?;
+		self.sticker_cell(sticker, STICKER_SIDE)
+	}
+
+	pub fn sticker_cell(&self, sticker: &StickerItem, points: f32) -> Option<ImageName> {
+		let request = bridge::sticker_request(sticker, f64::from(points), self.scale.get())?;
 		Some(self.request(request))
+	}
+
+	pub fn remote(&self, url: &str, size: (f32, f32)) -> ImageName {
+		let scale = self.scale.get();
+		let hint = SizeHint::new(
+			media::cdn::device_pixels(f64::from(size.0), scale),
+			media::cdn::device_pixels(f64::from(size.1), scale),
+		);
+		self.request(ImageRequest::new(url, Variant::new(hint, Shape::Square)))
+	}
+
+	pub fn lightbox(&self, image: &bridge::LightboxImage, window: (f32, f32)) -> Option<ImageName> {
+		let request = bridge::lightbox_request(image, window, self.scale.get())?;
+		Some(self.request(request))
+	}
+
+	pub fn hover(&self, name: Option<&ImageName>) {
+		self.gallery.set_hovered(name.map(ImageName::as_str));
 	}
 
 	pub fn picture(&self, name: &ImageName) -> Picture {

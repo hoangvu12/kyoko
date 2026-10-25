@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::pickers::Tab;
+
 pub const UNKNOWN_SCREEN: u8 = 3;
 pub const WIDTH: f64 = 1280.;
 pub const HEIGHT: f64 = 800.;
@@ -12,6 +14,7 @@ pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
+pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -44,6 +47,8 @@ pub enum Screen {
 	FullProfile,
 	QuickSwitcher,
 	Search,
+	Lightbox,
+	Picker(Tab),
 }
 
 impl Screen {
@@ -70,6 +75,10 @@ impl Screen {
 			"full-profile" => Some(Screen::FullProfile),
 			"quick-switcher" => Some(Screen::QuickSwitcher),
 			"search" => Some(Screen::Search),
+			"lightbox" => Some(Screen::Lightbox),
+			"emoji-picker" => Some(Screen::Picker(Tab::Emoji)),
+			"gif-picker" => Some(Screen::Picker(Tab::Gif)),
+			"sticker-picker" => Some(Screen::Picker(Tab::Sticker)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
@@ -98,7 +107,9 @@ impl Screen {
 			| Screen::ProfilePopout
 			| Screen::FullProfile
 			| Screen::QuickSwitcher
-			| Screen::Search => Some(Opening::First),
+			| Screen::Search
+			| Screen::Lightbox
+			| Screen::Picker(_) => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

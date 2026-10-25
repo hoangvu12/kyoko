@@ -1,4 +1,5 @@
 mod composer;
+mod expressions;
 mod home;
 mod members;
 mod message_actions;
@@ -157,6 +158,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_composer_files());
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
+			cx.tasks.spawn(link.clone().follow_gif_search());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -176,6 +178,8 @@ pub fn run(
 			let slot = link.window.slot.clone();
 			let transcript = link.timeline_view.view();
 			let profiles = link.profile.view();
+			let lightbox = link.timeline_view.lightbox_view();
+			let expressions = link.expressions.view();
 			let escaped = Rc::downgrade(&link);
 			let switcher = link.finder.view();
 			let dropped = Rc::downgrade(&link);
@@ -198,6 +202,8 @@ pub fn run(
 					.child(timeline_slot(slot, transcript))
 					.child(profiles)
 					.child(switcher)
+					.child(expressions)
+					.child(lightbox)
 					.on_event(move |event| {
 						if event.phase == zgx::input::EventPhase::Capture {
 							if matches!(
@@ -334,6 +340,7 @@ pub(crate) struct Link {
 	panel_emoji: RefCell<Option<String>>,
 	pending_dm: Cell<Option<Snowflake>>,
 	composer: composer::ComposerView,
+	expressions: expressions::Expressions,
 	settings: settings::SettingsView,
 	finder: search::Finder,
 	plugins: plugins::PluginsView,
@@ -382,6 +389,7 @@ impl Link {
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
 		let profile = ProfileLayer::new(&window.runtime, timeline_view.pictures());
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
+		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -410,6 +418,7 @@ impl Link {
 			panel_emoji: RefCell::new(None),
 			pending_dm: Cell::new(None),
 			composer,
+			expressions,
 			settings,
 			finder,
 			plugins,
@@ -434,6 +443,7 @@ impl Link {
 		sidebar::install_actions(host, &link);
 		dm_sidebar::install_actions(host, &link);
 		Link::install_composer(host, &link);
+		Link::install_expressions(host, &link);
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
 		Link::install_settings(host, &link);
@@ -694,6 +704,16 @@ impl Link {
 				self.drive_search(capture::SEARCH_QUERY);
 				self.until_capture(|link| link.search_settled()).await;
 			}
+			capture::Screen::Lightbox => {
+				self.drive_lightbox();
+				self.until_capture(|link| link.timeline_view.lightbox_settled())
+					.await;
+			}
+			capture::Screen::Picker(tab) => {
+				let tab = *tab;
+				self.drive_expressions(tab);
+				self.until_capture(|link| link.expressions_settled(tab)).await;
+			}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -718,6 +738,21 @@ impl Link {
 				break;
 			}
 			zgx::timer::sleep(capture::POLL).await;
+		}
+	}
+
+	fn drive_lightbox(&self) {
+		let target = {
+			let timeline = self.timeline.borrow();
+			timeline.messages().rev().find_map(|entry| {
+				entry.message.attachments.iter().find_map(|attachment| {
+					bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.id)
+				})
+			})
+		};
+		match target {
+			Some(image) => self.timeline_view.open_lightbox(image),
+			None => tracing::warn!("no image to open in the lightbox"),
 		}
 	}
 
@@ -843,6 +878,7 @@ impl Link {
 				self.publish_dms(&state);
 			}
 			self.composer_apply(&state, changes);
+			self.expressions_apply(&state, changes);
 			self.publish_actions(&state, changes);
 			self.settings_apply(&state, changes);
 			self.publish_profiles(&state, changes);
@@ -1006,6 +1042,7 @@ impl Link {
 	fn refresh_visible(&self) {
 		let mut names: Vec<String> = self.luau_visible.borrow().clone();
 		names.extend(self.composer.images());
+		names.extend(self.expressions.images());
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
 		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());

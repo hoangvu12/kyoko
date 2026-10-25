@@ -8,6 +8,7 @@ mod frame;
 mod integration;
 mod member_list;
 mod notify;
+mod pickers;
 mod profile;
 mod rail;
 mod sidebar;

@@ -439,15 +439,32 @@ local function editor(text: any, box: any)
 end
 
 local function toolbar()
+	local bar: any = nil
+	local function opens(tab: string)
+		return function()
+			if bar ~= nil and bar.x ~= nil and bar.y ~= nil then
+				actions.composer_picker(tab, { x = bar.x, y = bar.y, w = bar.width, h = bar.height })
+			end
+		end
+	end
 	return ui.row {
 		h = FIELD,
 		pr = theme.size.space_8,
 		gap = 2,
 		items = "center",
 		shrink = 0,
-		icon_button { name = "gif", icon_size = 24, hit_size = 32, tooltip = "Open GIF picker" },
-		icon_button { name = "sticker", icon_size = 24, hit_size = 32, tooltip = "Open sticker picker" },
-		icon_button { name = "emoji", icon_size = 24, hit_size = 32, tooltip = "Select emoji" },
+		on_resize = function(_, element)
+			bar = element
+		end,
+		icon_button { name = "gif", icon_size = 24, hit_size = 32, tooltip = "Open GIF picker", on_click = opens("gif") },
+		icon_button {
+			name = "sticker",
+			icon_size = 24,
+			hit_size = 32,
+			tooltip = "Open sticker picker",
+			on_click = opens("sticker"),
+		},
+		icon_button { name = "emoji", icon_size = 24, hit_size = 32, tooltip = "Select emoji", on_click = opens("emoji") },
 	}
 end
 
