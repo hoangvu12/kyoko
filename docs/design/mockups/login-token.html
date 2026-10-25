@@ -207,13 +207,21 @@
   --reactions-list-height: 400px; --reactions-list-column-width: 120px; --reactions-list-item-height: 32px; --reactions-list-row-height: 44px;
   --gif-message-width: 240px;
   --emoji-size-text: 1.375em; --emoji-size-solo: 1em; --emoji-vertical-align: -0.3em; --emoji-vertical-align-solo: -0.125em;
+  --emoji-size-ui: 1em; --emoji-vertical-align-ui: -0.125em; /* emoji in channel names, headers, composer, member list */
   --command-picker-height: 420px; --command-rail-width: 48px; --command-row-height: 56px; --command-section-header-height: 32px; --command-chip-height: 18px;
   --command-option-height: 24px; --command-hint-height: 36px; --command-dropbox-height: 72px;
   --font-size-description: 13px; --line-height-description: 16px;
   --component-button-height: 32px; --component-select-width: 400px; --component-select-height: 40px; --component-select-row-height: 40px;
   --component-container-max-width: 520px; --component-thumbnail-size: 85px; --component-gallery-height: 220px;
   --app-modal-paragraph-height: 100px;
-  --apps-launcher-width: 410px; --apps-launcher-height: 560px; --app-tile-size: 48px; --app-row-height: 56px;
+  --apps-launcher-width: 498px; /* height: fills the chat above the composer */ --app-tile-size: 48px; --app-row-height: 56px;
+  --composer-bar-height: 36px; --composer-max-height: 50%; /* grows line by line to half the chat, then scrolls */
+  --upload-card-size: 216px; --upload-thumbnail-height: 160px; --upload-toolbar-button-size: 24px; --spoiler-filter: blur(16px);
+  --drop-card-width: 400px; --progress-height: 4px;
+  --poll-max-width: 440px; --poll-row-height: 48px;
+  --poll-fill: color-mix(in hsl, var(--accent-2), transparent 90%); --poll-fill-winner: color-mix(in hsl, var(--green-2), transparent 90%);
+  --voice-message-width: 300px; --voice-message-height: 48px; --waveform-bar-width: 2px; --waveform-bar-max-height: 20px;
+  --audio-card-width: 400px; --embed-image-height: 200px;
   --qr-size: 176px;
   --disabled-opacity: 0.3;
   --offline-opacity: 0.3;
