@@ -4,7 +4,7 @@
 
 **Blocked by:** 12 (Bounded state caches)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Read-state and guild-settings versions are tracked and persisted across launches
 - [ ] IDENTIFY's client_state is built from the persisted versions
