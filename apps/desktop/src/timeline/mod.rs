@@ -3,11 +3,11 @@ mod attachments;
 mod body;
 mod dialogs;
 mod extras;
-mod icons;
+pub(crate) mod icons;
 mod inline;
 mod links;
-mod picker;
-mod pictures;
+pub(crate) mod picker;
+pub(crate) mod pictures;
 mod rows;
 mod scroll;
 
@@ -37,6 +37,7 @@ use self::picker::ReactionPicker;
 use self::pictures::Pictures;
 pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
+pub(crate) use self::rows::{TypeSize, tok};
 use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter, Resize};
 
 const OVERSCAN: usize = 4;
@@ -178,7 +179,7 @@ impl TimelineView {
 		self.actions.on_compose(compose);
 	}
 
-	pub fn on_profile(&self, profile: impl Fn(Snowflake) + 'static) {
+	pub fn on_profile(&self, profile: impl Fn((Snowflake, (f32, f32))) + 'static) {
 		self.actions.on_profile(profile);
 	}
 
@@ -299,6 +300,10 @@ impl TimelineView {
 		self.apply(timeline, &delta, channel_name);
 		self.visible_images.borrow_mut().clear();
 		self.runtime.untracked(|| self.scrolled());
+	}
+
+	pub fn pictures(&self) -> Rc<Pictures> {
+		self.pictures.clone()
 	}
 
 	pub fn set_scale(&self, scale: f64) {

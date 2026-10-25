@@ -146,7 +146,7 @@ impl Link {
 		self.publish_sign_in();
 	}
 
-	fn sign_out(&self) {
+	pub(super) fn sign_out(&self) {
 		let sign_out = self.flow.borrow_mut().sign_out();
 		let Some(sign_out) = sign_out else {
 			return;

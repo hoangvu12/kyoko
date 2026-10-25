@@ -207,8 +207,12 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			Some(Value::Str(text)) => text.parse::<u64>().ok().map(Snowflake),
 			_ => None,
 		};
+		let at = (
+			number(&argument, "x").unwrap_or(0.),
+			number(&argument, "y").unwrap_or(0.),
+		);
 		if let (Some(link), Some(user_id)) = (actions.upgrade(), user_id) {
-			link.open_member_profile(user_id);
+			link.open_member_profile(user_id, at);
 		}
 	});
 }

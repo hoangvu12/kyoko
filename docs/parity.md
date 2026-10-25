@@ -135,11 +135,11 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `user-panel` | 30 | Default selection. | no |
-| `status-menu` | 30 | Default selection, then open the status menu from the user panel at (99, 774). | no |
-| `custom-status` | 30 | Default selection, then open the custom status dialog. | no |
-| `profile-popout` | 30 | Default selection, then open the profile popout of the newest other author at (348, 404), anchored top left. | no |
-| `full-profile` | 30 | Default selection, then open the full profile of the newest other author. | no |
+| `user-panel` | 30 | Default selection. | yes |
+| `status-menu` | 30 | Default selection, then open the status menu from the user panel at (99, 774). | yes |
+| `custom-status` | 30 | Default selection, then open the custom status dialog. | yes |
+| `profile-popout` | 30 | Default selection, then open the profile popout of the newest other author at (348, 404), anchored top left. | yes |
+| `full-profile` | 30 | Default selection, then open the full profile of the newest other author. | yes |
 
 ### 31 Quick switcher and search
 

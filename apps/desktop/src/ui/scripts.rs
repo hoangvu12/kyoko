@@ -103,6 +103,18 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"the user panel with a custom status",
+		"brb coffee",
+		&[(
+			"user.panel",
+			json!({
+				"name": "ada", "subtitle": "brb coffee", "emoji": "\u{2615}", "emoji_image": "",
+				"status": "dnd", "latency": "Latency: 42 ms",
+			}),
+		)],
+	);
+	shows(
+		&mut app,
 		"a home page",
 		"Coming in a later version.",
 		&[("sidebar.guild_id", json!("")), ("home.page", json!("friends"))],

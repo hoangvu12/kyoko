@@ -172,8 +172,12 @@ function M.member_search_remote(query: string)
 	ui.invoke("members.search_remote", query)
 end
 
-function M.open_member_profile(id: string)
-	ui.invoke("members.open_profile", { id = id })
+function M.open_member_profile(id: string, x: number, y: number)
+	ui.invoke("members.open_profile", { id = id, x = x, y = y })
+end
+
+function M.open_status_menu(x: number, y: number)
+	ui.invoke("user.status_menu", { x = x, y = y })
 end
 
 function M.open_settings(page: string?)

@@ -6,6 +6,7 @@ use protocol::Snowflake;
 
 use super::Link;
 use crate::capture;
+use crate::profile::Anchor;
 use crate::rail::Icons;
 
 impl Link {
@@ -81,9 +82,8 @@ impl Link {
 		}
 	}
 
-	pub(crate) fn open_member_profile(&self, user_id: Snowflake) {
-		let guild_id = self.members.panel().open().map(|open| open.guild_id);
-		tracing::debug!(%user_id, ?guild_id, "member profiles are not built yet");
+	pub(crate) fn open_member_profile(&self, user_id: Snowflake, at: (f32, f32)) {
+		self.open_profile(user_id, at, Anchor::TopRight);
 	}
 
 	fn members_settled(&self) -> bool {

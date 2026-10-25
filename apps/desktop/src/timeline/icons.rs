@@ -45,6 +45,9 @@ icon_files!(
 	"more",
 	"clock",
 	"lock",
+	"profile",
+	"account",
+	"log_out",
 );
 
 thread_local! {

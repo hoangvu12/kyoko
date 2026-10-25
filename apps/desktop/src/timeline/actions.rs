@@ -86,7 +86,7 @@ pub struct MessageActions {
 	commands: Rc<Sender>,
 	compose: Hook<Compose>,
 	jump: Hook<Snowflake>,
-	profile: Hook<Snowflake>,
+	profile: Hook<(Snowflake, (f32, f32))>,
 	emoji: Source<EmojiPicker>,
 	pointer: Cell<(f32, f32)>,
 	origin: Cell<(f32, f32)>,
@@ -140,7 +140,7 @@ impl MessageActions {
 		*self.jump.borrow_mut() = Some(Box::new(hook));
 	}
 
-	pub fn on_profile(&self, hook: impl Fn(Snowflake) + 'static) {
+	pub fn on_profile(&self, hook: impl Fn((Snowflake, (f32, f32))) + 'static) {
 		*self.profile.borrow_mut() = Some(Box::new(hook));
 	}
 
@@ -180,8 +180,8 @@ impl MessageActions {
 
 	pub fn profile(&self, user_id: Snowflake) {
 		match self.profile.borrow().as_ref() {
-			Some(profile) => profile(user_id),
-			None => tracing::debug!("profiles open from ticket 30"),
+			Some(profile) => profile((user_id, self.pointer.get())),
+			None => tracing::debug!(%user_id, "no profile hook"),
 		}
 	}
 

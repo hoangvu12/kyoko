@@ -9,6 +9,8 @@ pub const SETTLE: Duration = Duration::from_millis(1500);
 pub const LIMIT: Duration = Duration::from_secs(30);
 pub const SCROLL_PASSES: usize = 10;
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
+pub const USER_PANEL_AVATAR: (f32, f32) = (99., 774.);
+pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -34,6 +36,11 @@ pub enum Screen {
 	MemberList,
 	MemberListScrolled,
 	Settings(&'static str),
+	UserPanel,
+	StatusMenu,
+	CustomStatus,
+	ProfilePopout,
+	FullProfile,
 }
 
 impl Screen {
@@ -53,6 +60,11 @@ impl Screen {
 			"message-context-menu" => Some(Screen::MessageMenu),
 			"member-list" => Some(Screen::MemberList),
 			"member-list-scrolled" => Some(Screen::MemberListScrolled),
+			"user-panel" => Some(Screen::UserPanel),
+			"status-menu" => Some(Screen::StatusMenu),
+			"custom-status" => Some(Screen::CustomStatus),
+			"profile-popout" => Some(Screen::ProfilePopout),
+			"full-profile" => Some(Screen::FullProfile),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
@@ -74,7 +86,12 @@ impl Screen {
 			| Screen::MessageMenu
 			| Screen::MemberList
 			| Screen::MemberListScrolled
-			| Screen::Settings(_) => Some(Opening::First),
+			| Screen::Settings(_)
+			| Screen::UserPanel
+			| Screen::StatusMenu
+			| Screen::CustomStatus
+			| Screen::ProfilePopout
+			| Screen::FullProfile => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

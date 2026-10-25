@@ -21,9 +21,6 @@ impl Link {
 				}
 			}
 		});
-		link.timeline_view.on_profile(|user_id| {
-			tracing::debug!(%user_id, "profiles open from ticket 30");
-		});
 		let actions = Rc::downgrade(link);
 		link.timeline_view.on_emoji_catalog(move || {
 			let link = actions.upgrade()?;

@@ -2,6 +2,7 @@ mod composer;
 mod home;
 mod members;
 mod message_actions;
+mod profiles;
 #[cfg(test)]
 mod scripts;
 mod settings;
@@ -34,6 +35,7 @@ use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::integration::{Desktop, Integration};
 use crate::member_list::{self, MemberListView};
+use crate::profile::ProfileLayer;
 use crate::rail::{self, Icons, RailView};
 use crate::sidebar::{self, SidebarView};
 use crate::theme::Catalog;
@@ -151,6 +153,8 @@ pub fn run(
 				.then(|| Integration::install(cx, &host, &link, desktop));
 			let slot = link.window.slot.clone();
 			let transcript = link.timeline_view.view();
+			let profiles = link.profile.view();
+			let escaped = Rc::downgrade(&link);
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
 			cx.on_closed(move || {
@@ -167,8 +171,17 @@ pub fn run(
 					.h_full()
 					.child(host.view())
 					.child(timeline_slot(slot, transcript))
+					.child(profiles)
 					.on_event(move |event| {
 						if event.phase == zgx::input::EventPhase::Capture {
+							return;
+						}
+						if let zgx::input::InputEvent::KeyDown {
+							key: zgx::input::Key::Escape,
+							..
+						} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
+						{
+							event.stop_propagation();
 							return;
 						}
 						let hovering = match event.event {
@@ -261,6 +274,12 @@ pub(crate) struct Link {
 	reported_slot: Cell<Slot>,
 	timeline: RefCell<Timeline>,
 	timeline_view: Rc<TimelineView>,
+	profile: Rc<ProfileLayer>,
+	profile_effect: RefCell<Option<Effect>>,
+	panel: Shared,
+	panel_shown: RefCell<Option<[String; 6]>>,
+	panel_emoji: RefCell<Option<String>>,
+	pending_dm: Cell<Option<Snowflake>>,
 	composer: composer::ComposerView,
 	settings: settings::SettingsView,
 	luau_visible: RefCell<Vec<String>>,
@@ -305,6 +324,7 @@ impl Link {
 			},
 		);
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone());
+		let profile = ProfileLayer::new(&window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -326,6 +346,12 @@ impl Link {
 			reported_slot: Cell::new(Slot::default()),
 			timeline: RefCell::new(Timeline::default()),
 			timeline_view,
+			profile,
+			profile_effect: RefCell::new(None),
+			panel: host.shared("user.panel", profiles::empty_panel()),
+			panel_shown: RefCell::new(None),
+			panel_emoji: RefCell::new(None),
+			pending_dm: Cell::new(None),
 			composer,
 			settings,
 			luau_visible: RefCell::new(Vec::new()),
@@ -352,6 +378,7 @@ impl Link {
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
 		Link::install_settings(host, &link);
+		Link::install_profiles(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -592,6 +619,11 @@ impl Link {
 					zgx::timer::sleep(capture::POLL).await;
 				}
 			}
+			capture::Screen::StatusMenu
+			| capture::Screen::CustomStatus
+			| capture::Screen::ProfilePopout
+			| capture::Screen::FullProfile => self.drive_profiles(capture.screen).await,
+			capture::Screen::UserPanel => {}
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -736,6 +768,7 @@ impl Link {
 			self.composer_apply(&state, changes);
 			self.publish_actions(&state, changes);
 			self.settings_apply(&state, changes);
+			self.publish_profiles(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -900,6 +933,7 @@ impl Link {
 		names.extend(self.dm_avatars.borrow().iter().cloned());
 		names.extend(self.member_avatars.borrow().iter().cloned());
 		names.extend(self.settings_images());
+		names.extend(self.profile_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

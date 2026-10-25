@@ -64,7 +64,15 @@ impl Pictures {
 		}
 	}
 
-	fn request(&self, mut request: ImageRequest) -> ImageName {
+	pub fn scale(&self) -> f64 {
+		self.scale.get()
+	}
+
+	pub fn cdn(&self) -> &str {
+		&self.cdn
+	}
+
+	pub fn request(&self, mut request: ImageRequest) -> ImageName {
 		request.url = bridge::local_media(&request.url, self.mock_origin.as_deref());
 		self.gallery.request(request)
 	}

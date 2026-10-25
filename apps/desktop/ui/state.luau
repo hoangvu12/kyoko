@@ -83,6 +83,14 @@ export type MemberJump = {
 }
 export type SettingsAccount = { name: string, username: string, email: string, phone: string, accent: string, status: string, avatar: string }
 export type SettingsAbout = { data_dir: string, version: string }
+export type UserPanel = {
+	name: string,
+	subtitle: string,
+	emoji: string,
+	emoji_image: string,
+	status: string,
+	latency: string,
+}
 
 local M = {}
 
@@ -154,6 +162,14 @@ M.composer = {
 M.user = {
 	avatar = ui.shared("user.avatar", ""),
 	avatar_ready = ui.shared("user.avatar_ready", false),
+	panel = ui.shared("user.panel", {
+		name = "",
+		subtitle = "",
+		emoji = "",
+		emoji_image = "",
+		status = "online",
+		latency = "Connecting...",
+	} :: UserPanel),
 }
 
 M.members = {

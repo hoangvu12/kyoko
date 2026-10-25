@@ -143,8 +143,8 @@ local function member(row: any)
 		cursor = "pointer",
 		opacity = if row.status == "offline" then 0.5 else 1,
 		hover = { bg = theme.color.modifier_hover },
-		on_click = function()
-			actions.open_member_profile(row.id)
+		on_press = function(point: any)
+			actions.open_member_profile(row.id, point.x, point.y)
 		end,
 		avatar { src = row.avatar, size = AVATAR, status = row.status, cutout = theme.color.background_secondary },
 		ui.column {
