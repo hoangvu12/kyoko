@@ -87,10 +87,19 @@ impl Screen {
 fn settings_page(name: &str) -> Option<&'static str> {
 	match name {
 		"settings-my-account" => Some("my-account"),
+		"settings-profiles" => Some("profiles"),
+		"settings-privacy" => Some("privacy"),
+		"settings-devices" => Some("devices"),
+		"settings-connections" => Some("connections"),
+		"settings-clips" => Some("clips"),
+		"settings-friend-requests" => Some("friend-requests"),
 		"settings-appearance" => Some("appearance"),
 		"settings-accessibility" => Some("accessibility"),
 		"settings-chat" => Some("chat"),
 		"settings-notifications" => Some("notifications"),
+		"settings-keybinds" => Some("keybinds"),
+		"settings-language" => Some("language"),
+		"settings-streamer-mode" => Some("streamer-mode"),
 		"settings-advanced" => Some("advanced"),
 		_ => None,
 	}

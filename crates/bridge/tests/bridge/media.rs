@@ -468,6 +468,58 @@ async fn animations_play_only_while_visible_and_allowed() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_animation_and_reduced_motion_settings_hold_animations_still() {
+	let running = Running::start("media-setting-animation").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let url = format!("{}/avatars/3/a_still.gif?size=32", running.server.cdn_url());
+	let name = images.ready(square(url, 32)).await;
+	let start = Instant::now();
+	let frame_at = |updates: &[Update]| shown(updates, &name).map(|pixels| pixels.rgba.clone());
+	let first = frame_at(&images.gallery.drain(start)).expect("the first frame shows at once");
+	images.gallery.set_visible([name.as_str()]);
+	let mut settings = store::Settings::default();
+	images.gallery.set_playback(bridge::media_playback(&settings));
+	images.gallery.drain(start + FRAME);
+	assert!(
+		frame_at(&images.gallery.drain(start + FRAME * 2)).is_some(),
+		"animations play by default"
+	);
+
+	let changed = bridge::change_setting(&mut settings, "media.animation", &serde_json::json!("never"));
+	assert_eq!(changed, Some(bridge::SettingKey::Animation));
+	assert_eq!(
+		changed.map(bridge::SettingKey::applies),
+		Some(bridge::Applies::Now)
+	);
+	images.gallery.set_playback(bridge::media_playback(&settings));
+	images.gallery.drain(start + FRAME * 3);
+	assert!(images.gallery.drain(start + FRAME * 10).is_empty(), "never plays");
+
+	bridge::change_setting(&mut settings, "media.animation", &serde_json::json!("always"));
+	images.gallery.set_playback(bridge::media_playback(&settings));
+	let changed = bridge::change_setting(
+		&mut settings,
+		"accessibility.reduced_motion",
+		&serde_json::Value::Bool(true),
+	);
+	assert_eq!(changed, Some(bridge::SettingKey::ReducedMotion));
+	assert_eq!(
+		changed.map(bridge::SettingKey::applies),
+		Some(bridge::Applies::Now)
+	);
+	images
+		.gallery
+		.set_reduced_motion(settings.accessibility.reduced_motion);
+	let reset = images.gallery.drain(start + FRAME * 11);
+	assert!(
+		frame_at(&reset).is_none_or(|frame| frame == first),
+		"reduced motion rests on the first frame"
+	);
+	assert!(images.gallery.drain(start + FRAME * 20).is_empty());
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_original_resolution_setting_fetches_the_original_attachment() {
 	let mut running = Running::start("media-setting-quality").await;
 	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);

@@ -188,6 +188,25 @@ Member-list updates are coalesced apart from the timeline: a change to the guild
 - Applied at once: theme (`Catalog::apply`), reduced motion (with the system's), animation playback, image quality, inline media, link previews, reactions, the link warning and trusted sites (`TimelineView::set_prefs` re-renders the rows), the typing dots, developer mode (Copy ID in 28's menus), streamer mode on the account card, notifications and the tray (read when used), the show/hide keybind (re-registered by `Integration`), start at login and the discord:// handler (`apply_startup_settings`). After a restart: safety locks and language. Saved for later versions: compact messages, DPI and font scaling, saturation, 24-hour time, emoji autocomplete, hiding invites and GIF usage.
 - Overlay rule: while a page is open the host collapses the timeline slot, as the home pages do, and gives it back on close unless a home page still covers it.
 
+Registering a page: whoever owns the page adds it to the registry before `shell/frame.luau` builds the shell, because `shell/settings.luau` builds the page list once, then. The `@settings` alias reaches `ui/settings/`. A page shows its `title` above what `build` returns, `build` runs each time the page opens, and the page opens with `actions.open_settings(key)`; capture steps reach it by mapping a screen name to the key in `settings_page` in `src/capture.rs`.
+
+```lua
+local pages = require("@settings/pages")
+local widgets = require("@settings/widgets")
+
+pages.add_section({ key = "plugins", title = "Plugins", pages = {} })
+pages.add_page("plugins", {
+	key = "plugins",
+	title = "Plugins",
+	icon = "plugins",
+	build = function()
+		return ui.column { w_full = true, widgets.toggle_row("plugins.safe_mode", "Safe mode", "Start with every plugin off.") }
+	end,
+})
+```
+
+`widgets.toggle_row`, `widgets.toggle` and `widgets.setting_radios` read `settings.values` and write through `settings.set`, so a key they use must exist in `bridge::SettingKey`; a page with state of its own publishes its own `<area>.<name>` values instead.
+
 ## Shared values and host actions
 
 Names are `<area>.<name>` in snake case, with the area the region or service that owns them. Plugins (45) will get `plugin.<id>.<name>`.

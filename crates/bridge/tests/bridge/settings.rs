@@ -1,4 +1,4 @@
-use bridge::{Applies, SettingKey, change_setting};
+use bridge::{Applies, LinkAction, SettingKey, change_setting};
 use serde_json::{Value, json};
 use store::{Paths, Settings};
 
@@ -73,6 +73,45 @@ fn unknown_keys_and_bad_values_change_nothing() {
 		Some(SettingKey::TrustedLinkHosts)
 	);
 	assert_eq!(settings.trusted_link_hosts, vec!["example.com".to_owned()]);
+}
+
+#[test]
+fn the_link_warning_setting_decides_whether_unknown_hosts_confirm() {
+	let mut settings = Settings::default();
+	let action = |settings: &Settings, url: &str| {
+		bridge::link_action(url, &settings.trusted_link_hosts).warned(settings.chat.link_warning)
+	};
+	let unknown = "https://example.com/page";
+	assert_eq!(
+		action(&settings, unknown),
+		LinkAction::Confirm {
+			host: "example.com".to_owned()
+		}
+	);
+	assert_eq!(action(&settings, "https://github.com/x"), LinkAction::Open);
+
+	let changed = change_setting(&mut settings, "trusted_link_hosts", &json!(["Example.com"]));
+	assert_eq!(changed.map(SettingKey::applies), Some(Applies::Now));
+	assert_eq!(
+		action(&settings, unknown),
+		LinkAction::Open,
+		"a trusted site opens at once"
+	);
+
+	change_setting(&mut settings, "trusted_link_hosts", &json!([]));
+	let changed = change_setting(&mut settings, "chat.link_warning", &json!(false));
+	assert_eq!(changed, Some(SettingKey::LinkWarning));
+	assert_eq!(changed.map(SettingKey::applies), Some(Applies::Now));
+	assert_eq!(
+		action(&settings, unknown),
+		LinkAction::Open,
+		"no warning, no dialog"
+	);
+	assert_eq!(
+		action(&settings, "file:///c:/x"),
+		LinkAction::Ignore,
+		"turning the warning off never opens other schemes"
+	);
 }
 
 #[test]

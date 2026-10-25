@@ -59,4 +59,4 @@ Confirmations are only ever a user gesture. Plugins must not send `ConfirmRisky`
 
 ## The setting
 
-`Settings::safety_locks` in the store's `settings.json`, `true` by default. When `false`, no lock applies. The session reads it once at start, so a change takes effect after a restart (or sign-in). The settings page shows it as "Safety locks" with the warning that turning it off is at the user's own risk.
+`Settings::safety_locks` in the store's `settings.json`, `true` by default. When `false`, no lock applies. The session reads it once at start, so a change takes effect after a restart (or sign-in). The Privacy & Safety settings page shows it under "Safety Locks" as "Hold risky actions", with the warning that turning it off is at the user's own risk and applies after a restart.

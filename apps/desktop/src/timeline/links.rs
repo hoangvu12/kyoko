@@ -58,9 +58,8 @@ impl Links {
 	}
 
 	pub fn open(&self, url: &str) {
-		match bridge::link_action(url, &self.trusted.borrow()) {
+		match bridge::link_action(url, &self.trusted.borrow()).warned(self.warn.get()) {
 			LinkAction::Open => self.launch(url),
-			LinkAction::Confirm { .. } if !self.warn.get() => self.launch(url),
 			LinkAction::Confirm { host } => {
 				self.pending.set(Some(Pending {
 					url: url.to_owned(),

@@ -206,24 +206,24 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 ### 37 Account and settings pages
 
-The voice and video, plugins and updates pages are left out, as ticket 37 says.
+The voice and video, plugins and updates pages are left out, as ticket 37 says. Kyoko has no Themes page until ticket 57 adds one through the settings page registry, and no Developer page: its developer mode switch is on Advanced.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `settings-my-account` | 37 | Default selection, then open settings on My Account. | yes |
-| `settings-profiles` | 37 | As above, on Profiles. | no |
-| `settings-privacy` | 37 | As above, on Privacy and Safety. | no |
-| `settings-devices` | 37 | As above, on Devices. | no |
-| `settings-connections` | 37 | As above, on Connections. | no |
-| `settings-clips` | 37 | As above, on Clips. | no |
-| `settings-friend-requests` | 37 | As above, on Friend Requests. | no |
+| `settings-profiles` | 37 | As above, on Profiles. | yes |
+| `settings-privacy` | 37 | As above, on Privacy and Safety. | yes |
+| `settings-devices` | 37 | As above, on Devices. | yes |
+| `settings-connections` | 37 | As above, on Connections. | yes |
+| `settings-clips` | 37 | As above, on Clips. | yes |
+| `settings-friend-requests` | 37 | As above, on Friend Requests. | yes |
 | `settings-appearance` | 37 | As above, on Appearance. | yes |
 | `settings-accessibility` | 37 | As above, on Accessibility. | yes |
 | `settings-chat` | 37 | As above, on Chat. | yes |
 | `settings-notifications` | 37 | As above, on Notifications. | yes |
-| `settings-keybinds` | 37 | As above, on Keybinds. | no |
-| `settings-language` | 37 | As above, on Language. | no |
-| `settings-streamer-mode` | 37 | As above, on Streamer Mode. | no |
+| `settings-keybinds` | 37 | As above, on Keybinds. | yes |
+| `settings-language` | 37 | As above, on Language. | yes |
+| `settings-streamer-mode` | 37 | As above, on Streamer Mode. | yes |
 | `settings-advanced` | 37 | As above, on Advanced. | yes |
 | `settings-themes` | 37 | As above, on Themes. | no |
 | `settings-developer` | 37 | As above, on Developer. | no |

@@ -542,6 +542,15 @@ pub enum LinkAction {
 	Ignore,
 }
 
+impl LinkAction {
+	pub fn warned(self, warn: bool) -> LinkAction {
+		match self {
+			LinkAction::Confirm { .. } if !warn => LinkAction::Open,
+			action => action,
+		}
+	}
+}
+
 pub fn link_action(url: &str, trusted: &[String]) -> LinkAction {
 	let Ok(parsed) = Url::parse(url) else {
 		return LinkAction::Ignore;
