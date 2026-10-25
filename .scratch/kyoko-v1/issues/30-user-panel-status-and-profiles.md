@@ -4,7 +4,7 @@
 
 **Blocked by:** 20 (Theme, fonts, icons and app frame)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The user panel, popout and full profile match oxidcord in the parity captures
 - [ ] Changing status and custom status works
