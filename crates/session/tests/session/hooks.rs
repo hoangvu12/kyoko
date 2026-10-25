@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, bail};
 use protocol::{DispatchEvent, Snowflake};
-use session::{Command, SessionHooks};
+use session::{Command, Rewrite, SessionHooks};
 
 use crate::harness::{Options, Running};
 
@@ -16,8 +16,8 @@ impl SessionHooks for Rewriter {
 		HOOK_NAME
 	}
 
-	fn before_send(&self, _channel_id: Snowflake, content: &str) -> Result<Option<String>> {
-		Ok(Some(content.to_uppercase()))
+	fn before_send(&self, _channel_id: Snowflake, content: &str) -> Result<Option<Rewrite>> {
+		Ok(Some(content.to_uppercase().into()))
 	}
 }
 
@@ -27,7 +27,7 @@ struct Broken {
 }
 
 impl SessionHooks for Broken {
-	fn before_send(&self, _channel_id: Snowflake, _content: &str) -> Result<Option<String>> {
+	fn before_send(&self, _channel_id: Snowflake, _content: &str) -> Result<Option<Rewrite>> {
 		panic!("broken before_send");
 	}
 

@@ -16,7 +16,7 @@ pub use catalog::{ThemeCatalog, ThemeEntry};
 pub use command::Command;
 pub use config::{NotifyFn, SessionConfig};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
-pub use hooks::SessionHooks;
+pub use hooks::{Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};
 pub use rest::{RestTuning, UploadFile};
 pub use search::{SearchFailure, SearchResults, SearchStatus};

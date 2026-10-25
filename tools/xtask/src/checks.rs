@@ -32,6 +32,8 @@ pub fn test() -> Result<()> {
 		"kyoko-gateway",
 		"-p",
 		"mockcord",
+		"-p",
+		"kyoko-plugins",
 	])?;
 	cargo(&["test", "-p", "kyoko", "--bin", "kyoko", "ui::scripts"])
 }

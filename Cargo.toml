@@ -23,6 +23,7 @@ session = { path = "crates/session", package = "kyoko-session" }
 login = { path = "crates/login", package = "kyoko-login" }
 mockcord = { path = "tools/mockcord" }
 bridge = { path = "crates/bridge", package = "kyoko-bridge" }
+plugins = { path = "crates/plugins", package = "kyoko-plugins" }
 
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }

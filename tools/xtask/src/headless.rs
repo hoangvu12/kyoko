@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
 use mockcord::{FixtureSummary, MockConfig, Server};
+use plugins::{HostConfig, PluginHost};
 use protocol::{Channel, ChannelType, Snowflake, Token};
 use serde_json::json;
 use session::{Command, Session, SessionConfig, SessionHooks};
@@ -36,8 +37,17 @@ const REACTION: &str = "\u{1F44D}";
 const HISTORY_PAGES: usize = 2;
 const DIRTY_LINK: &str = "https://example.com/x?utm_source=a&b=1";
 const CLEAN_LINK: &str = "https://example.com/x?b=1";
-const LINK_HOOK: &str = "headless.link-cleaner";
-const BROKEN_HOOK_TEXT: &str = "headless hook panics";
+const CLEAR_URLS: &str = "clear-urls";
+const CLEAR_URLS_NAME: &str = "ClearURLs";
+const BROKEN_PLUGIN: &str = "headless-broken";
+const BROKEN_HOOK_TEXT: &str = "headless hook fails";
+const BROKEN_MANIFEST: &str = "id = \"headless-broken\"
+name = \"Headless Broken\"
+version = \"1.0.0\"
+api = 1
+permissions = [\"hook:send\"]
+";
+const BROKEN_LOGIC: &str = "return { before_send = function(message) if message.content == \"headless hook fails\" then error(\"headless hook failure\") end return nil end }";
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -138,25 +148,27 @@ impl Counts {
 	}
 }
 
-struct LinkHook {
-	rewrites: AtomicU64,
-}
-
-impl SessionHooks for LinkHook {
-	fn name(&self) -> &str {
-		LINK_HOOK
+fn plugin_host(root: &Path) -> Result<PluginHost> {
+	let development = root.join("plugins-dev");
+	let broken = development.join(BROKEN_PLUGIN);
+	fs::create_dir_all(&broken).context("could not create the test plugin")?;
+	fs::write(broken.join("logic.luau"), BROKEN_LOGIC)?;
+	fs::write(broken.join("plugin.toml"), BROKEN_MANIFEST)?;
+	let mut config = HostConfig::for_data_dir(root);
+	config.user_dir = None;
+	config.development_dirs = vec![development];
+	let host = PluginHost::new(config);
+	for id in [CLEAR_URLS, BROKEN_PLUGIN] {
+		let declared = host
+			.snapshot()
+			.into_iter()
+			.find(|plugin| plugin.id == id)
+			.map(|plugin| plugin.permissions)
+			.with_context(|| format!("the plugin {id} did not load"))?;
+		host.approve(id, &declared)
+			.map_err(|error| anyhow::anyhow!("the plugin {id} did not start: {error}"))?;
 	}
-
-	fn before_send(&self, _channel_id: Snowflake, content: &str) -> Result<Option<String>> {
-		if content == BROKEN_HOOK_TEXT {
-			panic!("headless hook panic");
-		}
-		if content == DIRTY_LINK {
-			self.rewrites.fetch_add(1, Ordering::Relaxed);
-			return Ok(Some(CLEAN_LINK.to_owned()));
-		}
-		Ok(None)
-	}
+	Ok(host)
 }
 
 struct Harness {
@@ -323,15 +335,14 @@ async fn scenario(
 	settings.storage.plaintext_token = true;
 	settings.save(&paths)?;
 	let store = Arc::new(Store::open(paths)?);
-	let link_hook = Arc::new(LinkHook {
-		rewrites: AtomicU64::new(0),
-	});
+	let plugins = plugin_host(root)?;
 	let harness = Harness::start(
 		store.clone(),
 		server.rest_base_url(),
 		server.gateway_url(),
-		Some(link_hook.clone()),
+		Some(Arc::new(plugins.clone())),
 	)?;
+	plugins.attach(harness.state.clone(), harness.session.commander());
 
 	harness
 		.until("the gateway to become ready", |state| {
@@ -388,8 +399,8 @@ async fn scenario(
 		.await?;
 	let cleaned_id = harness.round_trip_as(channel_id, DIRTY_LINK, CLEAN_LINK).await?;
 	ensure!(
-		harness.state.read().altered_by(cleaned_id) == Some(LINK_HOOK),
-		"the cleaned message is not marked as altered by the link hook"
+		harness.state.read().altered_by(cleaned_id) == Some(CLEAR_URLS_NAME),
+		"the cleaned message is not marked as altered by ClearURLs"
 	);
 	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
 
@@ -482,7 +493,11 @@ async fn scenario(
 			"threads_created": text.threads_created,
 			"moderation_ok": text.moderation_ok,
 			"expressions_ok": text.expressions_ok,
-			"hook_rewrites": link_hook.rewrites.load(Ordering::Relaxed),
+			"plugins": plugins
+				.snapshot()
+				.iter()
+				.map(|plugin| (plugin.id.clone(), json!(plugin.status.name())))
+				.collect::<serde_json::Map<_, _>>(),
 		})
 	);
 	ensure!(

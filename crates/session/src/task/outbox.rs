@@ -6,7 +6,7 @@ use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
 use state::{LocalEvent, MAX_ATTACHMENTS, SendFailure};
 
-use crate::hooks::{Hooks, guarded_blocking};
+use crate::hooks::{Hooks, Rewrite, guarded_blocking};
 
 use super::{Core, Internal, failures};
 
@@ -155,7 +155,7 @@ impl Core {
 			})
 			.await
 			.flatten()
-			.filter(|rewritten| *rewritten != outgoing.content);
+			.filter(|rewritten| rewritten.content != outgoing.content);
 			let _ = internal.send(Internal::BeforeSend {
 				nonce,
 				outgoing: Box::new(outgoing),
@@ -164,18 +164,24 @@ impl Core {
 		});
 	}
 
-	pub(super) fn on_before_send(&mut self, nonce: Nonce, mut outgoing: Outgoing, rewritten: Option<String>) {
+	pub(super) fn on_before_send(
+		&mut self,
+		nonce: Nonce,
+		mut outgoing: Outgoing,
+		rewritten: Option<Rewrite>,
+	) {
 		if let Some(rewritten) = rewritten {
-			let by = self
-				.hooks
-				.as_deref()
-				.map_or_else(String::new, |hooks| hooks.name().to_owned());
+			let by = rewritten.by.unwrap_or_else(|| {
+				self.hooks
+					.as_deref()
+					.map_or_else(String::new, |hooks| hooks.name().to_owned())
+			});
 			self.apply_local(LocalEvent::PendingAltered {
 				nonce: nonce.clone(),
-				content: rewritten.clone(),
+				content: rewritten.content.clone(),
 				by,
 			});
-			outgoing.content = rewritten;
+			outgoing.content = rewritten.content;
 		}
 		self.dispatch_send(nonce, outgoing);
 	}

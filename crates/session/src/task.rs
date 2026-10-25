@@ -28,7 +28,7 @@ use url::Url;
 use crate::alerts::{Alert, AlertPacing, AlertQueue, Pacing};
 use crate::catalog::ThemeCatalogs;
 use crate::command::Command;
-use crate::hooks::{Hooks, guarded, guarded_blocking};
+use crate::hooks::{Hooks, Rewrite, guarded, guarded_blocking};
 use crate::identity;
 use crate::notifier::Notifier;
 use crate::persist::{self, Job, Persistor};
@@ -103,7 +103,7 @@ pub(crate) enum Internal {
 	BeforeSend {
 		nonce: Nonce,
 		outgoing: Box<outbox::Outgoing>,
-		rewritten: Option<String>,
+		rewritten: Option<Rewrite>,
 	},
 	CommandIndex {
 		scope: Snowflake,

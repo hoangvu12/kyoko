@@ -1,0 +1,14 @@
+id = "clear-urls"
+name = "ClearURLs"
+version = "1.0.0"
+api = 1
+description = "Strips tracking parameters from the links you send and edit. The rules ship with Kyoko; nothing is downloaded."
+authors = ["Kyoko"]
+permissions = ["hook:send"]
+
+[[settings]]
+key = "referrals"
+type = "boolean"
+label = "Remove referral tags"
+description = "Also remove affiliate and referral tags, such as Amazon's tag parameter."
+default = true

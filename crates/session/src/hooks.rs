@@ -4,12 +4,33 @@ use std::sync::Arc;
 use anyhow::Result;
 use protocol::{DispatchEvent, Message, Snowflake};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rewrite {
+	pub content: String,
+	pub by: Option<String>,
+}
+
+impl Rewrite {
+	pub fn by(content: String, by: impl Into<String>) -> Self {
+		Self {
+			content,
+			by: Some(by.into()),
+		}
+	}
+}
+
+impl From<String> for Rewrite {
+	fn from(content: String) -> Self {
+		Self { content, by: None }
+	}
+}
+
 pub trait SessionHooks: Send + Sync {
 	fn name(&self) -> &str {
 		"hooks"
 	}
 
-	fn before_send(&self, _channel_id: Snowflake, _content: &str) -> Result<Option<String>> {
+	fn before_send(&self, _channel_id: Snowflake, _content: &str) -> Result<Option<Rewrite>> {
 		Ok(None)
 	}
 
