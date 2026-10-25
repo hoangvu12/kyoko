@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
-use bridge::{Flow, Gate, Inbox, Remember, StartSession, changes_notifier};
+use bridge::{Flow, Gate, Inbox, Remember, Start, StartSession, changes_notifier};
 use capture::{Capture, Opening, Screen};
 use clap::Parser;
 use integration::{APP_ID, Desktop, MOCK_APP_ID};
@@ -370,33 +370,38 @@ fn session_starter(
 ) -> StartSession {
 	let plugin_host = plugin_host.clone();
 	let retention = session::Retention::for_settings(&store.settings.read().storage);
-	let store = store.clone();
 	let notify = changes_notifier(inbox.clone());
 	let runtime = runtime.clone();
 	let rest_base = backend.rest_base.clone();
 	let gateway_url = backend.gateway_url.clone();
 	let build_source = backend.build_source.clone();
-	Box::new(move |token, remember| {
-		let session = Session::start(SessionConfig {
-			identity: identity.clone(),
-			retention,
-			build_source: build_source.clone(),
-			store: store.clone(),
-			rest_base: rest_base.clone(),
-			gateway_url: gateway_url.clone(),
-			token,
-			runtime: Some(runtime.clone()),
-			notify: notify.clone(),
-			hooks: Some(Arc::new(plugin_host.clone())),
-			gateway: Default::default(),
-			rest: Default::default(),
-			caches: Default::default(),
-			alerts: Default::default(),
-			remember_account: remember == Remember::Account,
-		})?;
-		plugin_host.attach(session.state().clone(), session.commander());
-		Ok(session)
-	})
+	Box::new(
+		move |Start {
+		          token,
+		          remember,
+		          store,
+		      }| {
+			let session = Session::start(SessionConfig {
+				identity: identity.clone(),
+				retention,
+				build_source: build_source.clone(),
+				store,
+				rest_base: rest_base.clone(),
+				gateway_url: gateway_url.clone(),
+				token,
+				runtime: Some(runtime.clone()),
+				notify: notify.clone(),
+				hooks: Some(Arc::new(plugin_host.clone())),
+				gateway: Default::default(),
+				rest: Default::default(),
+				caches: Default::default(),
+				alerts: Default::default(),
+				remember_account: remember == Remember::Account,
+			})?;
+			plugin_host.attach(session.state().clone(), session.commander());
+			Ok(session)
+		},
+	)
 }
 
 fn plugin_host(cli: &Cli, data_dir: &std::path::Path) -> PluginHost {

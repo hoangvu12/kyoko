@@ -164,7 +164,6 @@ pub fn run(
 			);
 			link.opening.set(opening);
 			link.attach_ui(cx.ui.downgrade());
-			link.rail.restore(desktop.store.clone());
 			let drain = link.clone();
 			cx.tasks.spawn(async move { drain.drain().await });
 			cx.tasks.spawn(link.clone().follow_sign_in());
@@ -797,6 +796,7 @@ impl Link {
 				}
 			}
 			capture::Screen::StatusMenu
+			| capture::Screen::AccountSwitcher
 			| capture::Screen::CustomStatus
 			| capture::Screen::ProfilePopout
 			| capture::Screen::FullProfile => self.drive_profiles(capture.screen).await,
@@ -1118,6 +1118,10 @@ impl Link {
 				.or_else(|| displays.iter().find(|display| display.primary))
 				.map_or(1., |display| display.scale_factor)
 		})
+	}
+
+	pub(crate) fn session_generation(&self) -> u64 {
+		self.flow.borrow().generation()
 	}
 
 	pub(crate) fn state(&self) -> Option<state::SharedState> {

@@ -3,10 +3,13 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
+use axum::http::header::AUTHORIZATION;
 use protocol::{Channel, ChannelType, LenientVec, Snowflake, User};
 use serde_json::{Value, json};
 
 use super::admin;
+use crate::alt;
 use crate::error::{ApiError, ApiResult};
 use crate::fixtures::CURRENT_USER_ID;
 use crate::json::{parse_id, to_json};
@@ -16,7 +19,14 @@ pub async fn gateway_url(State(shared): State<Arc<Shared>>) -> Json<Value> {
 	Json(json!({ "url": shared.urls.gateway }))
 }
 
-pub async fn me(State(shared): State<Arc<Shared>>) -> Json<Value> {
+pub async fn me(State(shared): State<Arc<Shared>>, headers: HeaderMap) -> Json<Value> {
+	let alt = headers
+		.get(AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.is_some_and(|token| shared.is_alt_token(token));
+	if alt {
+		return Json(alt::user());
+	}
 	Json(to_json(&shared.store.lock().current_user))
 }
 

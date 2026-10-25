@@ -76,6 +76,8 @@ icon_files!(
 	"headphones",
 	"headphones_off",
 	"chevron_right",
+	"chevron_left",
+	"user_cog",
 	"friend_requests",
 	"phone_off",
 	"circle_x",

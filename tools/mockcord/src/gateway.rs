@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
+use crate::alt;
 use crate::fixtures::CURRENT_USER_ID;
 use crate::hub::{Link, Outgoing};
 use crate::json::{parse_id, to_json};
@@ -261,6 +262,9 @@ impl Connection {
 			return false;
 		}
 		let capabilities = data["capabilities"].as_u64().unwrap_or_default();
+		let alt = data["token"]
+			.as_str()
+			.is_some_and(|token| self.shared.is_alt_token(token));
 		let hub = &self.shared.hub;
 		let session_id = hub.create_session(
 			Link {
@@ -268,9 +272,13 @@ impl Connection {
 				tx: self.tx.clone(),
 			},
 			capabilities,
+			alt,
 		);
-		let (mut ready, supplemental) =
-			ready::build(&self.shared, &session_id, data, capabilities, self.version);
+		let (mut ready, supplemental) = if alt {
+			alt::ready(&self.shared, &session_id, self.version)
+		} else {
+			ready::build(&self.shared, &session_id, data, capabilities, self.version)
+		};
 		if let Some(transform) = self.shared.scenario.ready() {
 			transform(data, &mut ready);
 		}

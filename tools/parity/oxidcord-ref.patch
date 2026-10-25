@@ -188,12 +188,25 @@ index 3decd26..3bf6214 100644
  mod full_profile;
  mod groups;
  pub mod pages;
+diff --git a/crates/ui/src/shell/account/status.rs b/crates/ui/src/shell/account/status.rs
+index dccf862..f4de628 100644
+--- a/crates/ui/src/shell/account/status.rs
++++ b/crates/ui/src/shell/account/status.rs
+@@ -72,7 +72,7 @@ impl StatusMenu {
+ 		menu
+ 	}
+ 
+-	fn show_accounts(&mut self, cx: &mut Context<Self>) {
++	pub(crate) fn show_accounts(&mut self, cx: &mut Context<Self>) {
+ 		self.reload_accounts(cx);
+ 		self.managing = false;
+ 		self.view = View::Accounts;
 diff --git a/crates/ui/src/shell/capture.rs b/crates/ui/src/shell/capture.rs
 new file mode 100644
-index 0000000..ec3e520
+index 0000000..a4e8211
 --- /dev/null
 +++ b/crates/ui/src/shell/capture.rs
-@@ -0,0 +1,637 @@
+@@ -0,0 +1,644 @@
 +use std::path::PathBuf;
 +use std::sync::Arc;
 +use std::time::{Duration, Instant};
@@ -393,6 +406,13 @@ index 0000000..ec3e520
 +			shell
 +				.user_panel
 +				.update(cx, |panel, cx| panel.toggle_menu(at(USER_PANEL_AVATAR), cx));
++			Ok(())
++		})?,
++		"account-switcher" => act(&shell, cx, |shell, _, cx| {
++			shell.user_panel.update(cx, |panel, cx| {
++				panel.toggle_menu(at(USER_PANEL_AVATAR), cx);
++				panel.show_accounts(cx);
++			});
 +			Ok(())
 +		})?,
 +		"custom-status" => act(&shell, cx, |shell, window, cx| {
@@ -932,7 +952,7 @@ index 814a75c..1d0f5a5 100644
  		self.show_page(Page::VoiceVideo, window, cx);
  	}
 diff --git a/crates/ui/src/shell/user_panel.rs b/crates/ui/src/shell/user_panel.rs
-index f0ddf02..2196e15 100644
+index f0ddf02..1da88eb 100644
 --- a/crates/ui/src/shell/user_panel.rs
 +++ b/crates/ui/src/shell/user_panel.rs
 @@ -82,7 +82,7 @@ pub struct UserPanel {
@@ -944,3 +964,16 @@ index f0ddf02..2196e15 100644
  		if self.menu.take().is_some() {
  			self._menu_events = None;
  			cx.notify();
+@@ -104,6 +104,12 @@ impl UserPanel {
+ 		cx.notify();
+ 	}
+ 
++	pub(crate) fn show_accounts(&mut self, cx: &mut Context<Self>) {
++		if let Some((menu, _)) = &self.menu {
++			menu.update(cx, |menu, cx| menu.show_accounts(cx));
++		}
++	}
++
+ 	fn menu_element(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+ 		let (menu, at) = self.menu.clone()?;
+ 		let raised = point(at.x, at.y - theme.pixels(theme.space_20));

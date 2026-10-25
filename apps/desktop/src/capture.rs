@@ -47,6 +47,7 @@ pub enum Screen {
 	Settings(&'static str),
 	UserPanel,
 	StatusMenu,
+	AccountSwitcher,
 	CustomStatus,
 	ProfilePopout,
 	FullProfile,
@@ -95,6 +96,7 @@ impl Screen {
 			"member-list-scrolled" => Some(Screen::MemberListScrolled),
 			"user-panel" => Some(Screen::UserPanel),
 			"status-menu" => Some(Screen::StatusMenu),
+			"account-switcher" => Some(Screen::AccountSwitcher),
 			"custom-status" => Some(Screen::CustomStatus),
 			"profile-popout" => Some(Screen::ProfilePopout),
 			"full-profile" => Some(Screen::FullProfile),
@@ -147,6 +149,7 @@ impl Screen {
 			| Screen::Settings(_)
 			| Screen::UserPanel
 			| Screen::StatusMenu
+			| Screen::AccountSwitcher
 			| Screen::CustomStatus
 			| Screen::ProfilePopout
 			| Screen::FullProfile

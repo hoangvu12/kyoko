@@ -119,7 +119,9 @@ mockcord also stands in for the parts of the web client's identity that Discord 
 
 ## Tokens and capabilities
 
-mockcord accepts one token at a time for REST, IDENTIFY and RESUME. It starts as `MockConfig::token`, which `Server::token()` returns. A READY whose transform sets `auth_token` issues that token: mockcord accepts only the new one from then on, so a client still using the old token gets a 401 or a 4004 close. mockcord drops `auth_token` from READY when IDENTIFY did not advertise AUTH_TOKEN_REFRESH.
+mockcord also accepts a second account's token, `MockConfig::alt_token` (`Server::alt_token()`, `mock-alt-token`). It signs in as `ALT_USER_ID` (`mockalt`) with no servers, DMs or friends: `GET /users/@me` answers with that user, READY carries only it, and broadcast events never reach its gateway sessions. Other routes answer with the main account's data. Tests use it to switch between two accounts.
+
+For the main account, mockcord accepts one token at a time for REST, IDENTIFY and RESUME. It starts as `MockConfig::token`, which `Server::token()` returns. A READY whose transform sets `auth_token` issues that token: mockcord accepts only the new one from then on, so a client still using the old token gets a 401 or a 4004 close. mockcord drops `auth_token` from READY when IDENTIFY did not advertise AUTH_TOKEN_REFRESH.
 
 mockcord shapes its replies by the capabilities in IDENTIFY, so tests prove each bit's effect:
 

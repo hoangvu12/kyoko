@@ -1,9 +1,10 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use bridge::{Checked, Flow, Inbox, Screen, Status};
+use bridge::{Arrival, Checked, Flow, Handover, Inbox, Screen, Status};
+use protocol::Snowflake;
 use session::Session;
-use state::{Changes, SecretStorage};
+use state::{Changes, SecretStorage, State};
 use tokio::runtime::Handle;
 use zgx_script::{ScriptHost, Shared};
 
@@ -19,6 +20,8 @@ pub struct SignIn {
 enum Event {
 	Checked(Box<Checked>),
 	SignedOut,
+	Arrived(Box<Arrival>),
+	AccountsChanged,
 }
 
 pub(super) struct Account {
@@ -32,6 +35,7 @@ pub(super) struct Account {
 	message: Shared,
 	error: Shared,
 	unsaved: Shared,
+	adding: Shared,
 	storage_warning: Shared,
 }
 
@@ -48,6 +52,7 @@ impl Account {
 			message: host.shared("login.message", ""),
 			error: host.shared("login.error", false),
 			unsaved: host.shared("login.unsaved", false),
+			adding: host.shared("login.adding", false),
 			storage_warning: host.shared("session.storage_warning", ""),
 		}
 	}
@@ -80,6 +85,13 @@ impl Link {
 				link.sign_out();
 			}
 		});
+		let actions = Rc::downgrade(link);
+		host.action("login.cancel_add", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.flow.borrow_mut().cancel_add();
+				link.after_flow_change();
+			}
+		});
 		link.after_flow_change();
 	}
 
@@ -89,6 +101,11 @@ impl Link {
 				match event {
 					Event::Checked(checked) => self.flow.borrow_mut().checked(*checked),
 					Event::SignedOut => self.flow.borrow_mut().signed_out(),
+					Event::Arrived(arrival) => {
+						self.flow.borrow_mut().arrived(*arrival);
+						self.announce_switch();
+					}
+					Event::AccountsChanged => self.show_accounts(),
 				}
 				self.after_flow_change();
 			}
@@ -162,6 +179,78 @@ impl Link {
 		self.after_flow_change();
 	}
 
+	pub(super) fn switch_account(&self, user_id: Snowflake) {
+		let handover = self.flow.borrow_mut().switch(user_id);
+		if let Some(handover) = handover {
+			tracing::info!("switching accounts");
+			self.hand_over(handover);
+		}
+	}
+
+	pub(super) fn add_account(&self) {
+		let handover = self.flow.borrow_mut().add_account();
+		if let Some(handover) = handover {
+			tracing::info!("adding an account");
+			self.hand_over(handover);
+		}
+	}
+
+	pub(super) fn remove_account(&self, user_id: Snowflake) {
+		let Some(removal) = self.flow.borrow().remove_account(user_id) else {
+			return;
+		};
+		let events = self.account.events.clone();
+		self.account.runtime.spawn_blocking(move || {
+			removal.finish();
+			events.push(Event::AccountsChanged);
+		});
+	}
+
+	pub(super) fn show_accounts(&self) {
+		let accounts = self.flow.borrow().accounts();
+		self.profile.show_accounts(accounts);
+	}
+
+	fn announce_switch(&self) {
+		let flow = self.flow.borrow();
+		if *flow.screen() != Screen::Main {
+			return;
+		}
+		let name = flow
+			.accounts()
+			.into_iter()
+			.find(|entry| entry.current)
+			.map(|entry| entry.account.username);
+		if let Some(name) = name {
+			crate::toasts::show(bridge::ToastKind::Success, &format!("Switched to {name}"));
+		}
+	}
+
+	fn hand_over(&self, handover: Handover) {
+		self.close_account_views();
+		self.release_media();
+		self.window.runtime.batch(|| self.reset_session_views());
+		let events = self.account.events.clone();
+		self.account.runtime.spawn_blocking(move || {
+			let arrival = handover.finish();
+			events.push(Event::Arrived(Box::new(arrival)));
+		});
+		self.after_flow_change();
+	}
+
+	fn close_account_views(&self) {
+		self.close_settings();
+		self.close_server_settings();
+		self.close_thread_pane(false);
+		self.close_expressions();
+		self.profile.close_all();
+		self.community.close();
+		self.moderation.close_menu();
+		self.timeline_view.close_lightbox();
+		self.finder.reset();
+		self.joins.reset();
+	}
+
 	fn release_media(&self) {
 		let gallery = &self.images.gallery;
 		self.luau_visible.borrow_mut().clear();
@@ -186,45 +275,54 @@ impl Link {
 		if let Some(commander) = self.flow.borrow().session().map(Session::commander) {
 			gallery.set_refresher(move |origin| commander.send(bridge::refresh_command(origin)));
 		}
-		self.timeline.borrow_mut().close();
+		if let Some(store) = self.flow.borrow().store().cloned() {
+			self.rail.restore(store);
+		}
 		self.community.close();
 		self.community.attach(self.state());
+		self.window.runtime.batch(|| self.reset_session_views());
+	}
+
+	fn reset_session_views(&self) {
+		self.timeline.borrow_mut().close();
 		*self.avatar.borrow_mut() = None;
 		self.avatar_requested_at.set(None);
 		self.avatar_shown.set(false);
-		self.window.runtime.batch(|| {
-			self.rail.reset();
-			self.rail_icons.borrow_mut().clear();
-			self.sidebar.reset();
-			self.sidebar_avatars.borrow_mut().clear();
-			self.dms.reset();
-			self.dm_avatars.borrow_mut().clear();
-			self.friends.reset();
-			self.members.reset();
-			self.member_avatars.borrow_mut().clear();
-			for value in [
-				&self.open_channel,
-				&self.channel_name,
-				&self.channel_topic,
-				&self.avatar_name,
-				&self.account.storage_warning,
-			] {
-				value.set("".into());
-			}
-			self.avatar_ready.set(false.into());
-			self.status.set("Connecting".into());
-			self.reset_connection();
-			if let Some(shared) = self.state() {
-				self.publish_timeline(&shared.read());
-			}
-		});
+		self.rail.reset();
+		self.rail_icons.borrow_mut().clear();
+		self.sidebar.reset();
+		self.sidebar_avatars.borrow_mut().clear();
+		self.dms.reset();
+		self.dm_avatars.borrow_mut().clear();
+		self.friends.reset();
+		self.members.reset();
+		self.member_avatars.borrow_mut().clear();
+		for value in [
+			&self.open_channel,
+			&self.channel_name,
+			&self.channel_topic,
+			&self.avatar_name,
+			&self.account.storage_warning,
+		] {
+			value.set("".into());
+		}
+		self.avatar_ready.set(false.into());
+		self.status.set("Connecting".into());
+		self.reset_connection();
+		self.panel.set(super::profiles::empty_panel());
+		self.panel_shown.borrow_mut().take();
+		self.profile.set_panel(None);
+		match self.state() {
+			Some(shared) => self.publish_timeline(&shared.read()),
+			None => self.publish_timeline(&State::default()),
+		}
 	}
 
 	fn publish_sign_in(&self) {
 		let flow = self.flow.borrow();
 		let (screen, status) = match flow.screen() {
 			Screen::Login(status) => ("login", Some(status)),
-			Screen::Main => ("main", None),
+			Screen::Main | Screen::Switching => ("main", None),
 			Screen::SigningOut => ("signing_out", None),
 		};
 		if screen != "main" {
@@ -243,6 +341,7 @@ impl Link {
 			account
 				.unsaved
 				.set(matches!(status, Some(Status::Unsaved(_))).into());
+			account.adding.set(flow.adding().into());
 		});
 	}
 }

@@ -7,9 +7,9 @@ mod status_menu;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use bridge::{EmojiPicker, PanelUser, ProfileCard};
+use bridge::{AccountEntry, EmojiPicker, PanelUser, ProfileCard};
 use media::ImageName;
-use protocol::Snowflake;
+use protocol::{Snowflake, User};
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
@@ -23,6 +23,7 @@ use crate::timeline::pictures::Pictures;
 const POPOUT_AVATAR: f64 = 80.;
 const FULL_AVATAR: f64 = 120.;
 const MENU_AVATAR: f64 = 40.;
+const ACCOUNT_AVATAR: f64 = 20.;
 const STATUS_EMOJI: f64 = 16.;
 const LIST_ICON: f64 = 40.;
 const SNAP_MARGIN: f32 = 8.;
@@ -52,6 +53,9 @@ pub enum Request {
 	FullProfile(Snowflake),
 	EditProfile,
 	SwitchAccounts,
+	SwitchTo(Snowflake),
+	AddAccount,
+	RemoveAccount(Snowflake),
 	SignOut,
 	Picker,
 }
@@ -111,6 +115,21 @@ pub struct MenuShown {
 	at: (f32, f32),
 	pub panel: Rc<PanelUser>,
 	pub avatar: Option<ImageName>,
+	pub accounts: Option<Rc<AccountsShown>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountRow {
+	pub user_id: Snowflake,
+	pub name: String,
+	pub current: bool,
+	pub avatar: Option<ImageName>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountsShown {
+	pub rows: Vec<AccountRow>,
+	pub managing: bool,
 }
 
 impl PartialEq for MenuShown {
@@ -265,8 +284,70 @@ impl ProfileLayer {
 			at: (at.0, at.1 - MENU_RAISE),
 			panel,
 			avatar,
+			accounts: None,
 		}));
 		self.refresh_images();
+	}
+
+	pub fn accounts_shown(&self) -> Option<Rc<AccountsShown>> {
+		self.menu
+			.with_untracked(|menu| menu.as_ref().and_then(|menu| menu.accounts.clone()))
+	}
+
+	pub fn show_accounts(&self, accounts: Vec<AccountEntry>) {
+		let managing = self.accounts_shown().is_some_and(|shown| shown.managing);
+		let rows = accounts
+			.into_iter()
+			.map(|entry| self.account_row(entry))
+			.collect();
+		self.replace_accounts(Some(Rc::new(AccountsShown { rows, managing })));
+	}
+
+	pub fn toggle_managing(&self) {
+		if let Some(shown) = self.accounts_shown() {
+			self.replace_accounts(Some(Rc::new(AccountsShown {
+				rows: shown.rows.clone(),
+				managing: !shown.managing,
+			})));
+		}
+	}
+
+	pub fn close_accounts(&self) {
+		self.replace_accounts(None);
+	}
+
+	fn replace_accounts(&self, accounts: Option<Rc<AccountsShown>>) {
+		let Some(mut shown) = self.menu.with_untracked(Clone::clone) else {
+			return;
+		};
+		shown.serial = self.serial();
+		shown.accounts = accounts;
+		self.menu_size.set((0., 0.));
+		self.menu.set(Some(shown));
+		self.refresh_images();
+	}
+
+	fn account_row(&self, entry: AccountEntry) -> AccountRow {
+		let user = User {
+			id: entry.account.user_id,
+			username: entry.account.username.clone(),
+			avatar: entry.account.avatar.clone(),
+			..User::default()
+		};
+		let avatar = bridge::avatar_request(
+			self.pictures.cdn(),
+			&user,
+			ACCOUNT_AVATAR,
+			self.pictures.scale(),
+			false,
+		)
+		.map(|request| self.pictures.request(request));
+		AccountRow {
+			user_id: entry.account.user_id,
+			name: entry.account.username,
+			current: entry.current,
+			avatar,
+		}
 	}
 
 	pub fn open_custom_status(&self) {
@@ -384,6 +465,11 @@ impl ProfileLayer {
 		names.extend(
 			self.menu
 				.with_untracked(|menu| menu.as_ref().and_then(|menu| menu.avatar.clone())),
+		);
+		names.extend(
+			self.accounts_shown()
+				.iter()
+				.flat_map(|shown| shown.rows.iter().filter_map(|row| row.avatar.clone())),
 		);
 		if *self.images.borrow() != names {
 			*self.images.borrow_mut() = names;

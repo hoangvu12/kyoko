@@ -11,10 +11,13 @@ mod secrets;
 mod settings;
 mod token;
 
+use std::fs;
+use std::io::ErrorKind;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use protocol::Snowflake;
+use zeroize::Zeroizing;
 
 pub use accounts::{Account, AccountStore};
 pub use atomic::write_atomic;
@@ -38,15 +41,34 @@ use crate::secrets::{SecretSlot, Secrets};
 
 const ACCOUNTS_FILE: &str = "accounts.json";
 const ACCOUNT_TOKENS_DIR: &str = "account-tokens";
+const DATABASE_SUFFIXES: [&str; 3] = ["", "-wal", "-shm"];
+
+struct CacheOpener {
+	key: Zeroizing<[u8; 32]>,
+	in_memory: bool,
+}
+
+impl CacheOpener {
+	fn open(&self, path: &std::path::Path) -> Result<Database> {
+		if self.in_memory {
+			Database::open_in_memory(&self.key)
+		} else {
+			Database::open(path, &self.key)
+		}
+	}
+}
 
 pub struct Store {
 	pub paths: Paths,
-	pub settings: RwLock<Settings>,
-	pub db: Database,
-	pub tokens: TokenStore,
-	pub accounts: AccountStore,
+	pub settings: Arc<RwLock<Settings>>,
+	pub db: Arc<Database>,
+	pub tokens: Arc<TokenStore>,
+	pub accounts: Arc<AccountStore>,
+	device: Arc<Database>,
+	account: Option<Snowflake>,
 	secrets: Arc<Secrets>,
-	cache_key: SecretSlot,
+	cache_key: Arc<SecretSlot>,
+	opener: Arc<CacheOpener>,
 }
 
 impl Store {
@@ -58,13 +80,18 @@ impl Store {
 		let settings = Settings::load(&paths);
 		let secrets = Arc::new(Secrets::new(keyring, settings.storage.plaintext_token));
 		let cache_key = seal::cache_key_slot(paths.cache_key_path());
-		let db = match seal::load_or_create_key(&cache_key, &secrets) {
-			CacheKey::Stored(key) => Database::open(&paths.database_path(), &key)?,
+		let opener = match seal::load_or_create_key(&cache_key, &secrets) {
+			CacheKey::Stored(key) => CacheOpener {
+				key,
+				in_memory: false,
+			},
 			CacheKey::Ephemeral(key) => {
 				secrets.set_cache_in_memory();
-				Database::open_in_memory(&key)?
+				CacheOpener { key, in_memory: true }
 			}
 		};
+		let device = Arc::new(opener.open(&paths.database_path())?);
+		identity::settle_layout(&device)?;
 		let tokens = TokenStore::new(paths.token_path(), secrets.clone());
 		let accounts = AccountStore::new(
 			paths.data_dir().join(ACCOUNTS_FILE),
@@ -73,13 +100,50 @@ impl Store {
 		);
 		Ok(Self {
 			paths,
-			settings: RwLock::new(settings),
-			db,
-			tokens,
-			accounts,
+			settings: Arc::new(RwLock::new(settings)),
+			db: device.clone(),
+			tokens: Arc::new(tokens),
+			accounts: Arc::new(accounts),
+			device,
+			account: None,
 			secrets,
-			cache_key,
+			cache_key: Arc::new(cache_key),
+			opener: Arc::new(opener),
 		})
+	}
+
+	pub fn for_account(&self, user_id: Snowflake) -> Result<Store> {
+		let db = self.opener.open(&self.paths.account_database_path(user_id))?;
+		Ok(Self {
+			paths: self.paths.clone(),
+			settings: self.settings.clone(),
+			db: Arc::new(db),
+			tokens: self.tokens.clone(),
+			accounts: self.accounts.clone(),
+			device: self.device.clone(),
+			account: Some(user_id),
+			secrets: self.secrets.clone(),
+			cache_key: self.cache_key.clone(),
+			opener: self.opener.clone(),
+		})
+	}
+
+	pub fn account(&self) -> Option<Snowflake> {
+		self.account
+	}
+
+	pub fn remove_account_database(&self, user_id: Snowflake) -> Result<()> {
+		let path = self.paths.account_database_path(user_id);
+		for suffix in DATABASE_SUFFIXES {
+			let mut file = path.clone().into_os_string();
+			file.push(suffix);
+			match fs::remove_file(&file) {
+				Ok(()) => {}
+				Err(error) if error.kind() == ErrorKind::NotFound => {}
+				Err(error) => return Err(error.into()),
+			}
+		}
+		Ok(())
 	}
 
 	pub fn secret_health(&self) -> SecretHealth {

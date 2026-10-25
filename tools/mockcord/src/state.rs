@@ -238,7 +238,11 @@ impl Shared {
 	}
 
 	pub fn accepts_token(&self, token: &str) -> bool {
-		*self.token.lock() == token
+		*self.token.lock() == token || self.is_alt_token(token)
+	}
+
+	pub fn is_alt_token(&self, token: &str) -> bool {
+		self.config.alt_token == token
 	}
 
 	pub fn replace_token(&self, token: &str) {

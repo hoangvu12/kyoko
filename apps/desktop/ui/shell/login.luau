@@ -234,6 +234,17 @@ local function token_column(token: any)
 				on_click = actions.login_continue,
 			}
 		),
+		ui.show(
+			state.login.adding,
+			button {
+				text = "Back to your account",
+				primary = false,
+				disabled = function()
+					return state.login.checking:get()
+				end,
+				on_click = actions.login_cancel_add,
+			}
+		),
 		ui.column {
 			gap = theme.size.space_8,
 			button {

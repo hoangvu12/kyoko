@@ -108,6 +108,10 @@ function M.login_continue()
 	ui.invoke("login.continue")
 end
 
+function M.login_cancel_add()
+	ui.invoke("login.cancel_add")
+end
+
 function M.sign_out()
 	return ui.action("login.sign_out")
 end

@@ -51,6 +51,19 @@ impl Finder {
 	pub(super) fn view(&self) -> View {
 		self.switcher.view()
 	}
+
+	pub(super) fn reset(&self) {
+		self.switcher.close();
+		*self.recent.borrow_mut() = RecentTargets::default();
+		self.last_open.set(None);
+		self.friend.set(None);
+		self.shown.borrow_mut().take();
+		self.chips.borrow_mut().clear();
+		self.avatars.borrow_mut().clear();
+		self.panel.set(closed_panel());
+		self.hits.set(empty());
+		self.chips_value.set(empty());
+	}
 }
 
 fn empty() -> Value {

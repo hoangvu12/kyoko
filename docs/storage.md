@@ -93,7 +93,7 @@ Deleted rows still take room in the channel window while hidden, so a channel wh
 
 The wipe is generic: `Database::wipe_account_data` lists the tables from `sqlite_schema` and empties all of them. A table added by a later migration is account data and is wiped without registering anything, which covers the `kept_deleted` and `kept_versions` tables. Ticket 13's kv keys (`client_state.read_state_version`, `client_state.user_guild_settings`) and its `read_state` rows are account data and go with the rest; the session's sign-out is the only path that clears them. The only rows kept are the device-level `kv` keys in `store::identity::DEVICE_KEYS` (the installation id and the cookie jar) and the cache canary. A new kv key is wiped unless it is added there.
 
-Kept: settings, themes, plugins, logs, the cache key, the installation id and the cookies. The installation id and the cookies describe this browser installation, not the account; Discord's web client keeps both across a logout, and making a fresh device on every sign-out would stand out. Other saved accounts keep their tokens and index entries, but the shared cache is emptied (see "Several accounts").
+Kept: settings, themes, plugins, logs, the cache key, the installation id and the cookies. The installation id and the cookies describe this browser installation, not the account; Discord's web client keeps both across a logout, and making a fresh device on every sign-out would stand out. Other saved accounts keep their tokens, index entries and their own cache databases (see "Several accounts"). Once the session has let go of it, the signed-out account's emptied database file is deleted too.
 
 ## A rejected token
 
@@ -101,4 +101,8 @@ A 401 or gateway close 4004 stops every request and publishes `Disconnected(Auth
 
 ## Several accounts
 
-The cache database is shared by every account. Until ticket 41, signing out of one account empties the whole cache. When accounts become switchable, give each account its own database file (for example `kyoko-<user id>.db`) so `sign_out` can delete one file and switching opens another; `wipe_account_data` already treats the whole database as one account's data.
+Each saved account has its own cache database, `kyoko-<user id>.db` in the data directory, opened with the same cache key by `Store::for_account(user_id)`. That returns a `Store` sharing paths, settings, secrets and the account index with the device store, differing only in `db`. Each account's client-state versions, read states, cached READY, messages, drafts and kept messages live in its own file, so switching never mixes one account's cache into another's, and switching back starts from that account's warm cache. Sessions whose user is unknown at start (a developer token, or the old single session token) use the device database `kyoko.db`.
+
+`kyoko.db` is the device database: the installation id, the cookie jar and the layout marker live there, and `Store::installation_id` and `cookie_jar` always read it, whichever account is signed in. The first open of a store without the marker (`store.layout`) empties the account data in `kyoko.db`, which before ticket 41 was the cache shared by all accounts, then sets the marker.
+
+Removing an account in Manage Accounts deletes its token, index entry and database file. Sign-out wipes the account's database with the same generic `wipe_account_data`, then deletes the file. The on-disk media cache holds only CDN images keyed by URL, is shared by all accounts and is emptied by any sign-out. When the cache key is unavailable, every database, account ones included, is opened in memory for the run.

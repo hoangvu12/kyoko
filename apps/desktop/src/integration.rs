@@ -116,6 +116,7 @@ pub struct Integration {
 	hotkeys: RefCell<Option<Hotkeys>>,
 	visible: Cell<bool>,
 	viewing: Cell<Option<bool>>,
+	generation: Cell<u64>,
 	quitting: Cell<bool>,
 	attention_due: Cell<bool>,
 	own_launch_links: Cell<bool>,
@@ -151,6 +152,7 @@ impl Integration {
 			tray: RefCell::new(tray),
 			visible: Cell::new(true),
 			viewing: Cell::new(None),
+			generation: Cell::new(link.session_generation()),
 			quitting: Cell::new(false),
 			attention_due: Cell::new(false),
 			own_launch_links: Cell::new(launch_has_links()),
@@ -378,17 +380,23 @@ impl Integration {
 	}
 
 	fn show_attention(&self) {
-		let Some(state) = self.link.state() else {
-			return;
-		};
-		let attention = state.read().attention();
+		let attention = self
+			.link
+			.state()
+			.map(|state| state.read().attention())
+			.unwrap_or_default();
 		if let Some(tray) = self.tray.borrow().as_ref() {
 			tray.show(attention);
 		}
 	}
 
 	fn update_viewing(&self, viewing: bool) {
-		if self.viewing.replace(Some(viewing)) != Some(viewing) {
+		let generation = self.link.session_generation();
+		let new_session = self.generation.replace(generation) != generation;
+		if new_session {
+			self.show_attention();
+		}
+		if self.viewing.replace(Some(viewing)) != Some(viewing) || new_session {
 			self.link.send(Command::SetViewing(viewing));
 		}
 	}

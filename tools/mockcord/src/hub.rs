@@ -26,6 +26,7 @@ pub struct Link {
 
 struct SessionRecord {
 	capabilities: u64,
+	alt: bool,
 	seq: u64,
 	buffer: VecDeque<(u64, Arc<str>)>,
 	link: Option<Link>,
@@ -57,7 +58,7 @@ impl Hub {
 		self.next_link.fetch_add(1, Ordering::Relaxed)
 	}
 
-	pub fn create_session(&self, link: Link, capabilities: u64) -> String {
+	pub fn create_session(&self, link: Link, capabilities: u64, alt: bool) -> String {
 		let session_id = format!("{:032x}", rand::rng().random::<u128>());
 		let mut sessions = self.sessions.lock();
 		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
@@ -65,6 +66,7 @@ impl Hub {
 			session_id.clone(),
 			SessionRecord {
 				capabilities,
+				alt,
 				seq: 0,
 				buffer: VecDeque::new(),
 				link: Some(link),
@@ -85,7 +87,7 @@ impl Hub {
 		let text = data.to_string();
 		let mut sessions = self.sessions.lock();
 		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
-		for record in sessions.values_mut() {
+		for record in sessions.values_mut().filter(|record| !record.alt) {
 			record.push_event(name, &text);
 		}
 	}
@@ -95,7 +97,7 @@ impl Hub {
 		let without_text = without.1.to_string();
 		let mut sessions = self.sessions.lock();
 		sessions.retain(|_, record| record.detached_at.is_none_or(|at| at.elapsed() < DETACHED_TTL));
-		for record in sessions.values_mut() {
+		for record in sessions.values_mut().filter(|record| !record.alt) {
 			if has(record.capabilities, capability) {
 				record.push_event(with.0, &with_text);
 			} else {

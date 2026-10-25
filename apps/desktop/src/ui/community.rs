@@ -23,6 +23,14 @@ pub(super) struct Joins {
 }
 
 impl Joins {
+	pub(super) fn reset(&self) {
+		self.seen.set(0);
+		self.arriving.set(None);
+		self.wanted.set(None);
+		self.offered.set(None);
+		self.requested.borrow_mut().clear();
+	}
+
 	fn ask(&self, guild_id: Snowflake, gate: MemberGate) -> bool {
 		let mut requested = self.requested.borrow_mut();
 		if requested.contains(&(guild_id, gate)) {

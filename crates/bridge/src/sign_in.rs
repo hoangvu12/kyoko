@@ -7,10 +7,16 @@ use protocol::{Snowflake, Token, User};
 use rest::ClientIdentity;
 use session::{Command, Session};
 use state::{ConnectionStatus, DisconnectReason, State};
-use store::Store;
+use store::{Account, Store};
 use url::Url;
 
-pub type StartSession = Box<dyn Fn(Token, Remember) -> io::Result<Session>>;
+pub type StartSession = Box<dyn Fn(Start) -> io::Result<Session>>;
+
+pub struct Start {
+	pub token: Token,
+	pub remember: Remember,
+	pub store: Arc<Store>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Remember {
@@ -85,19 +91,16 @@ impl Gate {
 	}
 
 	pub fn stored_token(&self) -> Option<Token> {
-		let accounts = &self.store.accounts;
-		let current = accounts
+		self.stored_sign_in().map(|(token, _)| token)
+	}
+
+	fn stored_sign_in(&self) -> Option<(Token, Option<Snowflake>)> {
+		let current = self
+			.store
+			.accounts
 			.current()
-			.and_then(|user_id| match accounts.token_for(user_id) {
-				Ok(token) => token,
-				Err(error) => {
-					tracing::warn!(%error, "the saved sign-in could not be read");
-					None
-				}
-			});
-		current
-			.map(Token::new)
-			.or_else(|| login::persist::load_token(&self.store))
+			.and_then(|user_id| account_token(&self.store, user_id).map(|token| (token, Some(user_id))));
+		current.or_else(|| login::persist::load_token(&self.store).map(|token| (token, None)))
 	}
 
 	pub fn acknowledged(&self) -> bool {
@@ -140,24 +143,25 @@ impl Gate {
 }
 
 fn keep(store: &Store, user: &User, token: &Token) -> store::Result<()> {
-	forget_other_account(store, user.id);
 	store
 		.accounts
 		.save(user.id, &user.username, user.avatar.as_deref(), token.as_str())?;
 	store.accounts.set_current(user.id)
 }
 
-fn forget_other_account(store: &Store, user_id: Snowflake) {
-	if store
-		.accounts
-		.current()
-		.is_none_or(|previous| previous == user_id)
-	{
-		return;
+fn account_token(store: &Store, user_id: Snowflake) -> Option<Token> {
+	match store.accounts.token_for(user_id) {
+		Ok(token) => token.map(Token::new),
+		Err(error) => {
+			tracing::warn!(%error, "the saved sign-in could not be read");
+			None
+		}
 	}
-	tracing::info!("signing in as another account, clearing the previous account's cache");
-	if let Err(error) = store.wipe_account_data() {
-		tracing::warn!(%error, "the previous account's cache was not cleared");
+}
+
+fn drop_account_database(store: &Store, user_id: Snowflake) {
+	if let Err(error) = store.remove_account_database(user_id) {
+		tracing::debug!(%error, "the account's emptied cache file stays until it is closed");
 	}
 }
 
@@ -170,6 +174,7 @@ pub enum Status {
 	Expired,
 	SignedOut,
 	Unavailable,
+	SignInAgain,
 }
 
 impl Status {
@@ -183,13 +188,20 @@ impl Status {
 			)),
 			Status::Expired => Some("Your session expired. Sign in again to continue.".to_owned()),
 			Status::Unavailable => Some("The session could not start. Try again.".to_owned()),
+			Status::SignInAgain => {
+				Some("That account's saved sign-in is gone. Sign in to it again to add it back.".to_owned())
+			}
 		}
 	}
 
 	pub fn is_error(&self) -> bool {
 		matches!(
 			self,
-			Status::Failed(_) | Status::Unsaved(_) | Status::Expired | Status::Unavailable
+			Status::Failed(_)
+				| Status::Unsaved(_)
+				| Status::Expired
+				| Status::Unavailable
+				| Status::SignInAgain
 		)
 	}
 }
@@ -199,23 +211,85 @@ pub enum Screen {
 	Login(Status),
 	Main,
 	SigningOut,
+	Switching,
 }
 
 pub struct SignOut {
 	session: Session,
 	store: Arc<Store>,
+	device: Arc<Store>,
 }
 
 impl SignOut {
 	pub fn finish(self) {
 		self.session.shutdown();
-		let Some(user_id) = self.store.accounts.current() else {
-			return;
-		};
-		if let Err(error) = self.store.sign_out(Some(user_id)) {
+		let account = self.store.account();
+		if let Some(user_id) = self.store.accounts.current()
+			&& let Err(error) = self.store.sign_out(Some(user_id))
+		{
 			tracing::warn!(%error, "sign-out did not wipe everything");
 		}
+		drop(self.store);
+		if let Some(user_id) = account {
+			drop_account_database(&self.device, user_id);
+		}
 	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Next {
+	Account(Snowflake),
+	Login,
+}
+
+pub struct Handover {
+	session: Session,
+	store: Arc<Store>,
+	next: Next,
+}
+
+impl Handover {
+	pub fn finish(self) -> Arrival {
+		self.session.shutdown();
+		let token = match self.next {
+			Next::Account(user_id) => account_token(&self.store, user_id),
+			Next::Login => None,
+		};
+		if let (Next::Account(user_id), Some(_)) = (self.next, &token)
+			&& let Err(error) = self.store.accounts.set_current(user_id)
+		{
+			tracing::warn!(%error, "the account switched to was not remembered as current");
+		}
+		Arrival {
+			next: self.next,
+			token,
+		}
+	}
+}
+
+pub struct Arrival {
+	next: Next,
+	token: Option<Token>,
+}
+
+pub struct Removal {
+	store: Arc<Store>,
+	user_id: Snowflake,
+}
+
+impl Removal {
+	pub fn finish(self) {
+		if let Err(error) = self.store.accounts.remove(self.user_id) {
+			tracing::warn!(%error, "the account was not removed completely");
+		}
+		drop_account_database(&self.store, self.user_id);
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountEntry {
+	pub account: Account,
+	pub current: bool,
 }
 
 pub struct Flow {
@@ -223,7 +297,9 @@ pub struct Flow {
 	start: StartSession,
 	screen: Screen,
 	session: Option<Session>,
+	store: Option<Arc<Store>>,
 	unsaved: Option<Verified>,
+	adding: bool,
 	generation: u64,
 }
 
@@ -234,18 +310,23 @@ impl Flow {
 			start,
 			screen: Screen::Login(Status::Ready),
 			session: None,
+			store: None,
 			unsaved: None,
+			adding: false,
 			generation: 0,
 		}
 	}
 
 	pub fn launch(&mut self, developer_token: Option<Token>) {
 		let launch = match developer_token {
-			Some(token) => Some((token, Remember::SessionOnly)),
-			None => self.gate.stored_token().map(|token| (token, Remember::Account)),
+			Some(token) => Some((token, Remember::SessionOnly, None)),
+			None => self
+				.gate
+				.stored_sign_in()
+				.map(|(token, account)| (token, Remember::Account, account)),
 		};
-		if let Some((token, remember)) = launch {
-			self.begin(token, remember);
+		if let Some((token, remember, account)) = launch {
+			self.begin(token, remember, account);
 		}
 	}
 
@@ -261,8 +342,61 @@ impl Flow {
 		self.session.as_ref()
 	}
 
+	pub fn store(&self) -> Option<&Arc<Store>> {
+		self.store.as_ref()
+	}
+
 	pub fn generation(&self) -> u64 {
 		self.generation
+	}
+
+	pub fn adding(&self) -> bool {
+		self.adding
+	}
+
+	pub fn current_account(&self) -> Option<Snowflake> {
+		let signed_in = self
+			.session
+			.as_ref()
+			.and_then(|session| session.state().read().current_user_id());
+		signed_in.or_else(|| self.store.as_ref().and_then(|store| store.account()))
+	}
+
+	pub fn accounts(&self) -> Vec<AccountEntry> {
+		let current = self.current_account();
+		let mut entries: Vec<AccountEntry> = self
+			.gate
+			.store
+			.accounts
+			.list()
+			.into_iter()
+			.map(|account| AccountEntry {
+				current: Some(account.user_id) == current,
+				account,
+			})
+			.collect();
+		if !entries.iter().any(|entry| entry.current)
+			&& let Some(account) = self.signed_in_account()
+		{
+			entries.insert(
+				0,
+				AccountEntry {
+					account,
+					current: true,
+				},
+			);
+		}
+		entries
+	}
+
+	fn signed_in_account(&self) -> Option<Account> {
+		let state = self.session.as_ref()?.state().read();
+		let user = state.current_user()?;
+		Some(Account {
+			user_id: user.id,
+			username: user.username.clone(),
+			avatar: user.avatar.clone(),
+		})
 	}
 
 	pub fn submit(&mut self, pasted: String) -> Option<impl Future<Output = Checked> + Send + 'static> {
@@ -280,7 +414,10 @@ impl Flow {
 			return;
 		}
 		match checked {
-			Checked::Saved(verified) => self.begin(verified.token, Remember::Account),
+			Checked::Saved(verified) => {
+				let account = Some(verified.user.id);
+				self.begin(verified.token, Remember::Account, account);
+			}
 			Checked::Unsaved { verified, reason } => {
 				self.unsaved = Some(verified);
 				self.screen = Screen::Login(Status::Unsaved(reason));
@@ -291,8 +428,67 @@ impl Flow {
 
 	pub fn continue_unsaved(&mut self) {
 		if let Some(verified) = self.unsaved.take() {
-			self.begin(verified.token, Remember::SessionOnly);
+			let account = Some(verified.user.id);
+			self.begin(verified.token, Remember::SessionOnly, account);
 		}
+	}
+
+	pub fn switch(&mut self, user_id: Snowflake) -> Option<Handover> {
+		let known = self
+			.gate
+			.store
+			.accounts
+			.list()
+			.iter()
+			.any(|account| account.user_id == user_id);
+		if !known || self.current_account() == Some(user_id) {
+			return None;
+		}
+		self.hand_over(Next::Account(user_id))
+	}
+
+	pub fn add_account(&mut self) -> Option<Handover> {
+		self.hand_over(Next::Login)
+	}
+
+	pub fn arrived(&mut self, arrival: Arrival) {
+		if self.screen != Screen::Switching {
+			return;
+		}
+		match (arrival.next, arrival.token) {
+			(Next::Account(user_id), Some(token)) => self.begin(token, Remember::Account, Some(user_id)),
+			(Next::Account(_), None) => {
+				self.adding = true;
+				self.screen = Screen::Login(Status::SignInAgain);
+			}
+			(Next::Login, _) => {
+				self.adding = true;
+				self.screen = Screen::Login(Status::Ready);
+			}
+		}
+	}
+
+	pub fn cancel_add(&mut self) {
+		let idle = matches!(&self.screen, Screen::Login(status) if *status != Status::Checking);
+		if !self.adding || !idle {
+			return;
+		}
+		self.adding = false;
+		self.unsaved = None;
+		match self.gate.stored_sign_in() {
+			Some((token, account)) => self.begin(token, Remember::Account, account),
+			None => self.screen = Screen::Login(Status::Ready),
+		}
+	}
+
+	pub fn remove_account(&self, user_id: Snowflake) -> Option<Removal> {
+		if self.screen != Screen::Main || self.current_account() == Some(user_id) {
+			return None;
+		}
+		Some(Removal {
+			store: self.gate.store.clone(),
+			user_id,
+		})
 	}
 
 	pub fn observe(&mut self, state: &State) -> Option<Session> {
@@ -303,6 +499,7 @@ impl Flow {
 		}
 		tracing::info!("the token was rejected, returning to the sign-in screen");
 		self.screen = Screen::Login(Status::Expired);
+		self.store = None;
 		self.session.take()
 	}
 
@@ -315,7 +512,8 @@ impl Flow {
 		self.screen = Screen::SigningOut;
 		Some(SignOut {
 			session,
-			store: self.gate.store.clone(),
+			store: self.store.take().unwrap_or_else(|| self.gate.store.clone()),
+			device: self.gate.store.clone(),
 		})
 	}
 
@@ -327,13 +525,43 @@ impl Flow {
 
 	pub fn shutdown(&mut self) -> Option<Session> {
 		self.unsaved = None;
+		self.store = None;
 		self.session.take()
 	}
 
-	fn begin(&mut self, token: Token, remember: Remember) {
-		match (self.start)(token, remember) {
-			Ok(session) => {
+	fn hand_over(&mut self, next: Next) -> Option<Handover> {
+		if self.screen != Screen::Main {
+			return None;
+		}
+		let session = self.session.take()?;
+		self.store = None;
+		self.unsaved = None;
+		self.screen = Screen::Switching;
+		Some(Handover {
+			session,
+			store: self.gate.store.clone(),
+			next,
+		})
+	}
+
+	fn begin(&mut self, token: Token, remember: Remember, account: Option<Snowflake>) {
+		let store = match account {
+			Some(user_id) => self.gate.store.for_account(user_id).map(Arc::new),
+			None => Ok(self.gate.store.clone()),
+		};
+		let started = store.map_err(io::Error::other).and_then(|store| {
+			let session = (self.start)(Start {
+				token,
+				remember,
+				store: store.clone(),
+			})?;
+			Ok((session, store))
+		});
+		match started {
+			Ok((session, store)) => {
 				self.session = Some(session);
+				self.store = Some(store);
+				self.adding = false;
 				self.generation += 1;
 				self.screen = Screen::Main;
 			}

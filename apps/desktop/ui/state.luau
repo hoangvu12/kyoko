@@ -246,6 +246,7 @@ M.login = {
 	message = ui.shared("login.message", ""),
 	error = ui.shared("login.error", false),
 	unsaved = ui.shared("login.unsaved", false),
+	adding = ui.shared("login.adding", false),
 }
 
 M.rail = {

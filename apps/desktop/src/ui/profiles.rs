@@ -167,7 +167,10 @@ impl Link {
 			Request::FullProfile(user_id) => self.open_full_profile(user_id),
 			Request::SignOut => self.sign_out(),
 			Request::EditProfile => self.open_settings("profiles"),
-			Request::SwitchAccounts => tracing::debug!("account switching arrives with ticket 41"),
+			Request::SwitchAccounts => self.show_accounts(),
+			Request::SwitchTo(user_id) => self.switch_account(user_id),
+			Request::AddAccount => self.add_account(),
+			Request::RemoveAccount(user_id) => self.remove_account(user_id),
 			Request::Picker => {
 				let Some(shared) = self.state() else {
 					return;
@@ -203,6 +206,11 @@ impl Link {
 			capture::Screen::StatusMenu => {
 				let (x, y) = capture::USER_PANEL_AVATAR;
 				self.press_at(x, y).await;
+			}
+			capture::Screen::AccountSwitcher => {
+				let (x, y) = capture::USER_PANEL_AVATAR;
+				self.press_at(x, y).await;
+				self.show_accounts();
 			}
 			capture::Screen::CustomStatus => self.profile.open_custom_status(),
 			capture::Screen::ProfilePopout => {

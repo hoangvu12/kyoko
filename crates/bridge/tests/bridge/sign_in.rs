@@ -2,10 +2,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{Failure, Flow, Gate, Remember, Screen, StartSession, Status};
-use mockcord::{MockConfig, Reply, Server};
-use protocol::Token;
-use session::{Session, SessionConfig};
+use bridge::{Failure, Flow, Gate, Handover, Remember, Screen, Start, StartSession, Status};
+use mockcord::{ALT_USER_ID, MockConfig, Reply, Server};
+use protocol::{Opcode, Snowflake};
+use session::{Command, Session, SessionConfig};
+use state::{RiskyReason, RiskyTarget};
 use store::{Keyring, MemoryKeyring, Paths, Store};
 use tokio::time::Instant;
 use url::Url;
@@ -79,6 +80,35 @@ impl Desk {
 		self.flow.session().expect("a session is running")
 	}
 
+	fn user_id(&self) -> Snowflake {
+		self.session()
+			.state()
+			.read()
+			.current_user_id()
+			.expect("a signed-in user")
+	}
+
+	async fn hand_over(&mut self, handover: Handover) {
+		assert_eq!(self.flow.screen(), &Screen::Switching);
+		assert!(self.flow.session().is_none());
+		let arrival = tokio::task::spawn_blocking(move || handover.finish())
+			.await
+			.expect("the old session stops");
+		self.flow.arrived(arrival);
+	}
+
+	async fn add_alt_account(&mut self) {
+		let handover = self.flow.add_account().expect("an account to add from");
+		self.hand_over(handover).await;
+		assert_eq!(self.flow.screen(), &Screen::Login(Status::Ready));
+		assert!(self.flow.adding());
+		let alt = self.server.alt_token().to_owned();
+		self.submit(&alt).await;
+		assert_eq!(self.flow.screen(), &Screen::Main);
+		assert!(!self.flow.adding());
+		self.connected().await;
+	}
+
 	async fn connected(&self) {
 		let state = self.session().state().clone();
 		eventually("the session to connect", || {
@@ -105,6 +135,44 @@ impl Desk {
 	}
 }
 
+fn cached_ready(store: &Store, user_id: Snowflake) -> bool {
+	if !store.paths.account_database_path(user_id).exists() {
+		return false;
+	}
+	let account = store.for_account(user_id).expect("the account cache opens");
+	account.db.kv_get("session.ready").ok().flatten().is_some()
+}
+
+fn guild_count(session: &Session) -> usize {
+	session.state().read().guilds().count()
+}
+
+fn identify_connections(server: &Server) -> Vec<(u64, serde_json::Value)> {
+	server
+		.control()
+		.recording()
+		.frames_with(Opcode::Identify)
+		.map(|frame| (frame.connection, frame.data["properties"].clone()))
+		.collect()
+}
+
+fn without_installation(properties: &serde_json::Value) -> serde_json::Value {
+	let mut properties = properties.clone();
+	if let Some(fields) = properties.as_object_mut() {
+		fields.remove("installation_id");
+	}
+	properties
+}
+
+fn closed_normally(server: &Server, connection: u64) -> bool {
+	server
+		.control()
+		.recording()
+		.closes
+		.iter()
+		.any(|close| close.connection == connection && close.code == Some(1000))
+}
+
 fn open_store(scratch: &Path, keyring: &Arc<MemoryKeyring>) -> Arc<Store> {
 	let paths = Paths::at(scratch).expect("scratch paths");
 	Arc::new(Store::open_with(paths, keyring.clone()).expect("store opens"))
@@ -114,25 +182,31 @@ fn flow_for(server: &Server, store: Arc<Store>, rest_base: Url) -> Flow {
 	let identity = session::client_identity(&store);
 	let gate = Gate::new(store.clone(), identity.clone(), rest_base.clone());
 	let gateway_url = server.gateway_url().to_owned();
-	let start: StartSession = Box::new(move |token: Token, remember: Remember| {
-		Session::start(SessionConfig {
-			identity: identity.clone(),
-			build_source: None,
-			store: store.clone(),
-			rest_base: rest_base.clone(),
-			gateway_url: gateway_url.clone(),
-			token,
-			runtime: None,
-			notify: Arc::new(|_| {}),
-			hooks: None,
-			gateway: Default::default(),
-			rest: Default::default(),
-			caches: Default::default(),
-			alerts: Default::default(),
-			retention: Default::default(),
-			remember_account: remember == Remember::Account,
-		})
-	});
+	let start: StartSession = Box::new(
+		move |Start {
+		          token,
+		          remember,
+		          store,
+		      }| {
+			Session::start(SessionConfig {
+				identity: identity.clone(),
+				build_source: None,
+				store,
+				rest_base: rest_base.clone(),
+				gateway_url: gateway_url.clone(),
+				token,
+				runtime: None,
+				notify: Arc::new(|_| {}),
+				hooks: None,
+				gateway: Default::default(),
+				rest: Default::default(),
+				caches: Default::default(),
+				alerts: Default::default(),
+				retention: Default::default(),
+				remember_account: remember == Remember::Account,
+			})
+		},
+	);
 	Flow::new(gate, start)
 }
 
@@ -348,10 +422,7 @@ async fn signing_out_wipes_the_account_and_returns_to_the_login_screen() {
 		.current_user_id()
 		.expect("a signed-in user");
 	let store = desk.store.clone();
-	eventually("the session to cache READY", || {
-		store.db.kv_get("session.ready").ok().flatten().is_some()
-	})
-	.await;
+	eventually("the session to cache READY", || cached_ready(&store, user_id)).await;
 	let sign_out = desk.flow.sign_out().expect("a session to sign out of");
 	assert_eq!(desk.flow.screen(), &Screen::SigningOut);
 	tokio::task::spawn_blocking(move || sign_out.finish())
@@ -362,10 +433,137 @@ async fn signing_out_wipes_the_account_and_returns_to_the_login_screen() {
 	assert!(desk.flow.session().is_none());
 	assert!(desk.store.accounts.list().is_empty());
 	assert!(desk.store.accounts.token_for(user_id).ok().flatten().is_none());
-	assert!(desk.store.db.kv_get("session.ready").ok().flatten().is_none());
+	assert!(!cached_ready(&desk.store, user_id));
 	assert!(desk.secrets_without_cache_key().is_empty());
 	assert!(desk.flow.gate().acknowledged());
 	desk.relaunch();
 	assert_eq!(desk.flow.screen(), &Screen::Login(Status::Ready));
+	desk.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn switching_accounts_reconnects_as_the_other_user_with_nothing_shared() {
+	let mut desk = Desk::open("switch").await;
+	desk.acknowledge();
+	let token = desk.token();
+	desk.submit(&token).await;
+	desk.connected().await;
+	let main = desk.user_id();
+	let store = desk.store.clone();
+	eventually("the first account to cache READY", || cached_ready(&store, main)).await;
+	assert!(guild_count(desk.session()) > 0);
+	let confirmed = (RiskyTarget::User(Snowflake(42)), RiskyReason::StrangerDm);
+	desk.session().send(Command::ConfirmRisky {
+		target: confirmed.0,
+		reason: confirmed.1,
+	});
+	let state = desk.session().state().clone();
+	eventually("the confirmation to apply", || {
+		state.read().is_risky_confirmed(confirmed.0, confirmed.1)
+	})
+	.await;
+
+	desk.add_alt_account().await;
+	let alt = desk.user_id();
+	assert_eq!(alt, Snowflake(ALT_USER_ID));
+	assert_eq!(guild_count(desk.session()), 0);
+	assert!(desk.session().state().read().dm_rows().is_empty());
+	assert!(
+		!desk
+			.session()
+			.state()
+			.read()
+			.is_risky_confirmed(confirmed.0, confirmed.1)
+	);
+	eventually("the second account to cache READY", || cached_ready(&store, alt)).await;
+	assert_eq!(store.accounts.current(), Some(alt));
+	let identifies = identify_connections(&desk.server);
+	assert_eq!(identifies.len(), 2);
+	assert_eq!(
+		without_installation(&identifies[0].1),
+		without_installation(&identifies[1].1)
+	);
+	assert!(closed_normally(&desk.server, identifies[0].0));
+	for user_id in [main, alt] {
+		assert!(
+			desk.keyring
+				.secret(&format!("account-{user_id}"))
+				.is_some_and(|stored| !stored.is_empty())
+		);
+	}
+	assert!(files_containing(&desk.scratch, &token).is_empty());
+	assert!(files_containing(&desk.scratch, desk.server.alt_token()).is_empty());
+
+	let entries = desk.flow.accounts();
+	assert_eq!(entries.len(), 2);
+	assert!(
+		entries
+			.iter()
+			.any(|entry| entry.current && entry.account.user_id == alt)
+	);
+	assert!(desk.flow.switch(alt).is_none());
+	desk.store
+		.update_settings(|settings| settings.safety_locks = false)
+		.expect("the setting saves");
+	let handover = desk.flow.switch(main).expect("the first account to switch to");
+	desk.hand_over(handover).await;
+	assert_eq!(desk.flow.screen(), &Screen::Main);
+	desk.connected().await;
+	assert_eq!(desk.user_id(), main);
+	assert!(guild_count(desk.session()) > 0);
+	let (still_confirmed, locks) = {
+		let state = desk.session().state().read();
+		(
+			state.is_risky_confirmed(confirmed.0, confirmed.1),
+			state.safety_locks(),
+		)
+	};
+	assert!(!still_confirmed);
+	assert!(!locks);
+	assert_eq!(store.accounts.current(), Some(main));
+	let identifies = identify_connections(&desk.server);
+	assert_eq!(identifies.len(), 3);
+	assert_eq!(identifies[1].1, identifies[2].1);
+	assert!(closed_normally(&desk.server, identifies[1].0));
+	desk.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_removed_account_loses_its_token_and_cache_and_adding_can_be_cancelled() {
+	let mut desk = Desk::open("remove").await;
+	desk.acknowledge();
+	let token = desk.token();
+	desk.submit(&token).await;
+	desk.connected().await;
+	let main = desk.user_id();
+	desk.add_alt_account().await;
+	let alt = desk.user_id();
+	let store = desk.store.clone();
+	eventually("the second account to cache READY", || cached_ready(&store, alt)).await;
+	let handover = desk.flow.switch(main).expect("the first account to switch to");
+	desk.hand_over(handover).await;
+	desk.connected().await;
+	assert!(desk.flow.remove_account(main).is_none());
+	let removal = desk
+		.flow
+		.remove_account(alt)
+		.expect("the other account to remove");
+	tokio::task::spawn_blocking(move || removal.finish())
+		.await
+		.expect("the removal finishes");
+	assert!(desk.keyring.secret(&format!("account-{alt}")).is_none());
+	assert!(!store.paths.account_database_path(alt).exists());
+	let entries = desk.flow.accounts();
+	assert_eq!(entries.len(), 1);
+	assert_eq!(entries[0].account.user_id, main);
+	assert!(entries[0].current);
+
+	let handover = desk.flow.add_account().expect("an account to add from");
+	desk.hand_over(handover).await;
+	assert!(desk.flow.adding());
+	desk.flow.cancel_add();
+	assert_eq!(desk.flow.screen(), &Screen::Main);
+	desk.connected().await;
+	assert_eq!(desk.user_id(), main);
 	desk.stop().await;
 }

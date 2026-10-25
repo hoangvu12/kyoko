@@ -97,6 +97,10 @@ impl Server {
 		&self.shared.config.token
 	}
 
+	pub fn alt_token(&self) -> &str {
+		&self.shared.config.alt_token
+	}
+
 	pub fn fixtures(&self) -> &Fixtures {
 		&self.shared.fixtures
 	}
