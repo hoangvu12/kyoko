@@ -1,6 +1,8 @@
+mod caps;
 mod changes;
 mod dispatch;
 mod event;
+mod eviction;
 mod expressions;
 mod guild;
 mod loaded;
@@ -17,6 +19,7 @@ mod threads;
 mod views;
 mod voice;
 
+pub use caps::{CacheLimits, Recent};
 pub use changes::{Changes, IdSet};
 pub use event::{Event, LoadDirection, LocalEvent};
 pub use expressions::{
@@ -28,7 +31,7 @@ pub use loaded::{
 	Loaded, ProfileBadge, UserProfile, audit_action_label,
 };
 pub use member_list::{MemberList, MemberSlot};
-pub use messages::{ChannelMessages, MESSAGE_CAP, PendingMessage, SendFailure};
+pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport};
 pub use permissions::DM_PERMISSIONS;
 pub use settings::{GuildFolder, RailEntry, guild_folders_settings};
 pub use state::{

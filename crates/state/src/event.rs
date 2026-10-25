@@ -4,7 +4,7 @@ use std::time::Duration;
 use protocol::{DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, User};
 
 use crate::loaded::Loaded;
-use crate::messages::SendFailure;
+use crate::messages::{SendFailure, Viewport};
 use crate::state::ConnectionStatus;
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
@@ -54,6 +54,10 @@ pub enum LocalEvent {
 	ChannelSelected {
 		guild_id: Option<Snowflake>,
 		channel_id: Snowflake,
+	},
+	ViewportChanged {
+		channel_id: Snowflake,
+		viewport: Viewport,
 	},
 	CategoryCollapsed {
 		channel_id: Snowflake,

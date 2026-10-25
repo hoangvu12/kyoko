@@ -4,7 +4,7 @@ use gateway::GatewayTuning;
 use protocol::Token;
 use rest::ClientIdentity;
 use rest::RestTuning;
-use state::Changes;
+use state::{CacheLimits, Changes};
 use tokio::runtime::Handle;
 use url::Url;
 
@@ -24,5 +24,6 @@ pub struct SessionConfig {
 	pub hooks: Option<Arc<dyn SessionHooks>>,
 	pub gateway: GatewayTuning,
 	pub rest: RestTuning,
+	pub caches: CacheLimits,
 	pub remember_account: bool,
 }

@@ -5,6 +5,7 @@ use protocol::{
 use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
+use state::Viewport;
 
 #[derive(Debug)]
 pub enum Command {
@@ -21,6 +22,10 @@ pub enum Command {
 	LoadAround {
 		channel_id: Snowflake,
 		message_id: Snowflake,
+	},
+	SetViewport {
+		channel_id: Snowflake,
+		viewport: Viewport,
 	},
 	SendMessage {
 		channel_id: Snowflake,

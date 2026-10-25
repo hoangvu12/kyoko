@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use protocol::{Channel, ChannelType, Emoji, Guild, Member, Role, Snowflake, VoiceState};
 
+use crate::caps::Recent;
 use crate::member_list::MemberList;
 
 #[derive(Debug, Default)]
@@ -22,7 +23,7 @@ pub struct GuildState {
 	pub channels: IndexMap<Snowflake, Channel>,
 	pub threads: IndexMap<Snowflake, Channel>,
 	pub roles: IndexMap<Snowflake, Role>,
-	pub members: HashMap<Snowflake, Member>,
+	pub members: Recent<Snowflake, Member>,
 	pub emojis: Vec<Emoji>,
 	pub voice_states: HashMap<Snowflake, VoiceState>,
 	pub member_list: MemberList,

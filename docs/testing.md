@@ -34,6 +34,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `hooks(..)` installs session hooks.
 - `heartbeat_ms(ms)` shortens mockcord's heartbeat interval.
 - `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
+- `caches(CacheLimits { .. })` shrinks the cache limits (see `docs/caches.md`), so tests reach them with a few channels and pages.
 - `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
 - `rest(RestTuning { .. })` sets the REST pacing gaps and breaker timings (see `docs/rest.md`). Tests that don't measure pacing can zero the gaps.
 - `buckets(limit, window)` sets mockcord's rate-limit headers: every route allows `limit` requests per `window` (5 per 2 s by default, `MockConfig::bucket_limit` and `bucket_window`). mockcord reports the headers but does not enforce them.

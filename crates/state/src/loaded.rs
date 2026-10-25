@@ -10,6 +10,7 @@ use protocol::{
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::caps::Recent;
 use crate::changes::Changes;
 use crate::expressions::{EXPRESSIONS_KEY, EmojiRef, Expressions};
 use crate::state::{State, intern_user};
@@ -190,7 +191,7 @@ pub(crate) struct ArchivedThreads {
 pub(crate) struct Lazy {
 	pub(crate) pins: HashMap<Snowflake, Vec<Arc<Message>>>,
 	pub(crate) archived: HashMap<Snowflake, ArchivedThreads>,
-	pub(crate) profiles: HashMap<Snowflake, UserProfile>,
+	pub(crate) profiles: Recent<Snowflake, UserProfile>,
 	pub(crate) invites_created: HashMap<Snowflake, InviteInfo>,
 	pub(crate) invite_previews: HashMap<String, InvitePreview>,
 	pub(crate) guild_invites: HashMap<Snowflake, Vec<InviteInfo>>,

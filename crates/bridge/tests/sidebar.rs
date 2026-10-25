@@ -47,6 +47,7 @@ impl Running {
 			hooks: None,
 			gateway: Default::default(),
 			rest: Default::default(),
+			caches: Default::default(),
 			remember_account: false,
 		})
 		.expect("session starts");

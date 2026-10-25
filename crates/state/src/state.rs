@@ -9,6 +9,7 @@ use protocol::{Channel, Message, Presence, ReadState, Relationship, Snowflake, U
 use serde_json::Value;
 use smallvec::SmallVec;
 
+use crate::caps::{CacheLimits, Recent};
 use crate::changes::Changes;
 use crate::event::{Event, LoadDirection, LocalEvent};
 use crate::guild::GuildState;
@@ -70,7 +71,7 @@ pub struct State {
 	pub(crate) guilds: IndexMap<Snowflake, GuildState>,
 	pub(crate) private_channels: IndexMap<Snowflake, Channel>,
 	pub(crate) channel_guilds: HashMap<Snowflake, Option<Snowflake>>,
-	pub(crate) users: HashMap<Snowflake, Arc<User>>,
+	pub(crate) users: Recent<Snowflake, Arc<User>>,
 	pub(crate) presences: HashMap<Snowflake, Presence>,
 	pub(crate) relationships: IndexMap<Snowflake, Relationship>,
 	pub(crate) read_states: HashMap<Snowflake, ReadState>,
@@ -97,6 +98,8 @@ pub struct State {
 	pub(crate) streams: HashMap<String, StreamSummary>,
 	pub(crate) rejection: Option<Rejection>,
 	pub(crate) rejection_count: u64,
+	pub(crate) limits: CacheLimits,
+	pub(crate) warm: Vec<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,11 +108,12 @@ pub struct Rejection {
 	pub reason: String,
 }
 
-pub(crate) fn intern_user(users: &mut HashMap<Snowflake, Arc<User>>, user: &User) {
+pub(crate) fn intern_user(users: &mut Recent<Snowflake, Arc<User>>, user: &User) {
 	if user.username.is_empty() {
 		return;
 	}
 	if users.get(&user.id).is_some_and(|existing| **existing == *user) {
+		users.touch(&user.id);
 		return;
 	}
 	users.insert(user.id, Arc::new(user.clone()));
@@ -120,11 +124,32 @@ impl State {
 		Self::default()
 	}
 
+	pub fn with_limits(limits: CacheLimits) -> Self {
+		Self {
+			limits,
+			..Self::default()
+		}
+	}
+
 	pub fn shared() -> SharedState {
-		Arc::new(RwLock::new(Self::new()))
+		Self::shared_with(CacheLimits::default())
+	}
+
+	pub fn shared_with(limits: CacheLimits) -> SharedState {
+		Arc::new(RwLock::new(Self::with_limits(limits)))
+	}
+
+	pub fn limits(&self) -> &CacheLimits {
+		&self.limits
 	}
 
 	pub fn apply(&mut self, event: &Event<'_>) -> Changes {
+		let mut changes = self.apply_event(event);
+		self.enforce_caps(&mut changes);
+		changes
+	}
+
+	fn apply_event(&mut self, event: &Event<'_>) -> Changes {
 		match event {
 			Event::Ready(ready) => self.apply_ready(ready),
 			Event::ReadySupplemental(supplemental) => self.apply_supplemental(supplemental),
@@ -323,13 +348,18 @@ impl State {
 		let channel_last = self
 			.channel(channel_id)
 			.and_then(|channel| channel.last_message_id);
+		let open = self.is_open(channel_id);
+		let mut changes = Changes::default();
+		self.warm_up(channel_id, &mut changes);
+		let limits = self.limits;
 		self.messages.entry(channel_id).or_default().merge_loaded(
 			loaded,
 			direction,
 			reached_start,
 			channel_last,
+			open,
+			&limits,
 		);
-		let mut changes = Changes::default();
 		changes.messages.insert(channel_id);
 		changes
 	}
@@ -354,6 +384,7 @@ impl State {
 					nonce: Some(nonce.clone()),
 					..Message::default()
 				};
+				self.warm_up(*channel_id, &mut changes);
 				self.messages.entry(*channel_id).or_default().add_pending(
 					Arc::new(message),
 					by_plugin.clone(),
@@ -421,11 +452,19 @@ impl State {
 				changes.drafts.insert(*channel_id);
 			}
 			LocalEvent::ChannelSelected { guild_id, channel_id } => {
+				let previous = self.selected.map(|selected| selected.channel_id);
 				self.selected = Some(Selection {
 					guild_id: *guild_id,
 					channel_id: *channel_id,
 				});
 				changes.selection = true;
+				if let Some(previous) = previous.filter(|previous| previous != channel_id) {
+					self.leave_channel(previous, &mut changes);
+				}
+				self.warm_up(*channel_id, &mut changes);
+			}
+			LocalEvent::ViewportChanged { channel_id, viewport } => {
+				self.viewport_changed(*channel_id, *viewport, &mut changes)
 			}
 			LocalEvent::CategoryCollapsed {
 				channel_id,

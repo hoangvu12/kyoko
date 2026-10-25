@@ -201,7 +201,7 @@ impl State {
 			let pending = message.nonce.as_ref().and_then(|nonce| cache.take_pending(nonce));
 			let confirmed = pending.is_some();
 			let shared = Arc::new(message.clone());
-			if cache.push_live(Arc::clone(&shared)) {
+			if cache.push_live(Arc::clone(&shared), &self.limits) {
 				self.unrendered.push(shared);
 				changes.messages.insert(channel_id);
 			} else if confirmed {
@@ -641,7 +641,6 @@ impl State {
 		};
 		guild
 			.members
-			.entry(typing.user_id)
-			.or_insert_with(|| stripped_member(member));
+			.get_or_insert_with(typing.user_id, || stripped_member(member));
 	}
 }

@@ -126,6 +126,7 @@ fn main() -> Result<()> {
 		hooks: None,
 		gateway: Default::default(),
 		rest: Default::default(),
+		caches: Default::default(),
 		remember_account: backend.remember_account,
 	})
 	.context("start the session")?;

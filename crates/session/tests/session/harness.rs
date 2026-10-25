@@ -6,7 +6,7 @@ use chrono::DateTime;
 use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
 use protocol::Opcode;
 use protocol::{ChannelType, Snowflake, Token};
-use session::{Command, GatewayTuning, RestTuning, Session, SessionConfig, SessionHooks};
+use session::{CacheLimits, Command, GatewayTuning, RestTuning, Session, SessionConfig, SessionHooks};
 use state::State;
 use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
@@ -26,6 +26,7 @@ pub struct Options {
 	hooks: Option<Arc<dyn SessionHooks>>,
 	gateway: GatewayTuning,
 	rest: RestTuning,
+	caches: CacheLimits,
 	prepare: Option<Prepare>,
 	remember_account: bool,
 }
@@ -42,6 +43,7 @@ impl Options {
 			hooks: None,
 			gateway: GatewayTuning::default(),
 			rest: RestTuning::default(),
+			caches: CacheLimits::default(),
 			prepare: None,
 			remember_account: true,
 		}
@@ -75,6 +77,11 @@ impl Options {
 	pub fn buckets(mut self, limit: u32, window: Duration) -> Self {
 		self.mock.bucket_limit = limit;
 		self.mock.bucket_window = window;
+		self
+	}
+
+	pub fn caches(mut self, limits: CacheLimits) -> Self {
+		self.caches = limits;
 		self
 	}
 
@@ -113,6 +120,7 @@ impl Running {
 			hooks: options.hooks,
 			gateway: options.gateway,
 			rest: options.rest,
+			caches: options.caches,
 			remember_account: options.remember_account,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
@@ -275,6 +283,7 @@ struct Launch {
 	hooks: Option<Arc<dyn SessionHooks>>,
 	gateway: GatewayTuning,
 	rest: RestTuning,
+	caches: CacheLimits,
 	remember_account: bool,
 }
 
@@ -302,6 +311,7 @@ fn open_session(
 		hooks: launch.hooks.clone(),
 		gateway: launch.gateway,
 		rest: launch.rest,
+		caches: launch.caches,
 		remember_account: launch.remember_account,
 	})
 	.expect("session starts");

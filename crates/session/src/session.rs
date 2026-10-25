@@ -72,7 +72,7 @@ impl Session {
 		let (gateway_start, gateway_started) = oneshot::channel();
 		let (gateway, gateway_events) =
 			Gateway::spawn_when(async move { gateway_started.await.ok() }, handle.clone());
-		let state = State::shared();
+		let state = State::shared_with(config.caches);
 		let search = SharedSearch::default();
 		let stats = Arc::new(Stats::default());
 		let themes = Arc::new(ThemeCatalogs::default());

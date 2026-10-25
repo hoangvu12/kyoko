@@ -4,10 +4,16 @@ use std::time::Duration;
 
 use protocol::{Message, MessageUpdate, Nonce, PartialEmoji, Reaction, Snowflake};
 
+use crate::caps::CacheLimits;
 use crate::event::LoadDirection;
 use crate::views::RenderedMessage;
 
-pub const MESSAGE_CAP: usize = 500;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Viewport {
+	pub first: Snowflake,
+	pub last: Snowflake,
+	pub at_bottom: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendFailure {
@@ -38,6 +44,14 @@ pub struct ChannelMessages {
 	pub pending: Vec<PendingMessage>,
 	pub gaps: Vec<(Snowflake, Snowflake)>,
 	detached: bool,
+	window: usize,
+	viewport: Option<Viewport>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum End {
+	Oldest,
+	Newest,
 }
 
 impl ChannelMessages {
@@ -45,18 +59,42 @@ impl ChannelMessages {
 		self.ordered.last().map(|message| message.id)
 	}
 
+	pub fn oldest_id(&self) -> Option<Snowflake> {
+		self.ordered.first().map(|message| message.id)
+	}
+
+	pub fn resident(&self) -> Option<(Snowflake, Snowflake)> {
+		Some((self.oldest_id()?, self.newest_id()?))
+	}
+
+	pub fn is_resident(&self, first: Snowflake, last: Snowflake) -> bool {
+		self.resident()
+			.is_some_and(|(oldest, newest)| oldest <= first && last <= newest)
+	}
+
+	pub fn viewport(&self) -> Option<Viewport> {
+		self.viewport
+	}
+
+	pub fn window(&self, limits: &CacheLimits) -> usize {
+		self.window.clamp(limits.window(), limits.ceiling())
+	}
+
 	pub fn is_detached(&self) -> bool {
 		self.detached
 	}
 
-	pub fn push_live(&mut self, message: Arc<Message>) -> bool {
+	pub fn push_live(&mut self, message: Arc<Message>, limits: &CacheLimits) -> bool {
 		if self.detached {
 			self.extend_tail_gap(message.id);
 			return false;
 		}
+		let id = message.id;
 		self.insert(message);
-		self.evict_oldest();
-		true
+		let pinned = self.ordered.len() - self.room(End::Oldest);
+		self.window = self.window(limits).max(pinned.min(limits.ceiling()));
+		self.trim(self.window, End::Oldest);
+		self.by_id.contains_key(&id)
 	}
 
 	pub fn merge_loaded(
@@ -65,6 +103,8 @@ impl ChannelMessages {
 		direction: LoadDirection,
 		reached_start: bool,
 		channel_last: Option<Snowflake>,
+		open: bool,
+		limits: &CacheLimits,
 	) {
 		let was_empty = self.ordered.is_empty();
 		let received = messages.len();
@@ -73,29 +113,126 @@ impl ChannelMessages {
 			self.by_id.clear();
 			self.rendered.clear();
 			self.gaps.clear();
+			self.window = 0;
 		}
 		for message in messages {
 			self.insert(message);
 		}
+		let widened = if open && !was_empty {
+			self.ordered.len().clamp(limits.window(), limits.ceiling())
+		} else {
+			self.window(limits)
+		};
 		match direction {
 			LoadDirection::History => {
 				self.reached_start = reached_start;
 				if was_empty {
 					self.detached = false;
 				}
-				self.evict_newest();
+				if open && !was_empty {
+					self.window = widened;
+					self.trim(widened, End::Newest);
+				} else {
+					self.trim(widened, End::Oldest);
+				}
 			}
 			LoadDirection::Around => {
 				self.reached_start = reached_start;
 				self.detached = self.behind(channel_last);
-				self.evict_newest();
+				let end = if self.detached { End::Newest } else { End::Oldest };
+				self.trim(self.window(limits), end);
 			}
 			LoadDirection::Newer => {
 				self.detached = received != 0 && self.behind(channel_last);
-				self.evict_oldest();
+				self.window = widened;
+				self.trim(widened, End::Oldest);
 			}
 		}
 		self.reset_tail_gap(channel_last);
+	}
+
+	pub fn set_viewport(&mut self, viewport: Viewport, limits: &CacheLimits) -> bool {
+		self.viewport = Some(viewport);
+		if viewport.at_bottom && !self.detached {
+			return self.shrink(limits);
+		}
+		false
+	}
+
+	pub fn leave(&mut self, limits: &CacheLimits) -> bool {
+		self.viewport = None;
+		self.shrink(limits)
+	}
+
+	fn shrink(&mut self, limits: &CacheLimits) -> bool {
+		self.window = 0;
+		let before = self.ordered.len();
+		self.trim(limits.window(), End::Oldest);
+		self.ordered.len() != before
+	}
+
+	fn protected_span(&self) -> Option<(usize, usize)> {
+		let viewport = self.viewport?;
+		let start = self
+			.ordered
+			.partition_point(|message| message.id < viewport.first);
+		let end = self
+			.ordered
+			.partition_point(|message| message.id <= viewport.last);
+		(start < end).then_some((start, end))
+	}
+
+	fn room(&self, end: End) -> usize {
+		let len = self.ordered.len();
+		match (self.protected_span(), end) {
+			(None, _) => len,
+			(Some((start, _)), End::Oldest) => start,
+			(Some((_, stop)), End::Newest) => len - stop,
+		}
+	}
+
+	fn trim(&mut self, limit: usize, prefer: End) {
+		let other = match prefer {
+			End::Oldest => End::Newest,
+			End::Newest => End::Oldest,
+		};
+		for end in [prefer, other] {
+			let excess = self.ordered.len().saturating_sub(limit);
+			if excess == 0 {
+				return;
+			}
+			let count = excess.min(self.room(end));
+			match end {
+				End::Oldest => self.drop_oldest(count),
+				End::Newest => self.drop_newest(count),
+			}
+		}
+	}
+
+	fn drop_oldest(&mut self, count: usize) {
+		if count == 0 {
+			return;
+		}
+		for message in self.ordered.drain(..count) {
+			self.by_id.remove(&message.id);
+			self.rendered.remove(&message.id);
+		}
+		self.reached_start = false;
+	}
+
+	fn drop_newest(&mut self, count: usize) {
+		if count == 0 {
+			return;
+		}
+		let keep = self.ordered.len() - count;
+		let mut newest_dropped = Snowflake::default();
+		for message in self.ordered.drain(keep..) {
+			self.by_id.remove(&message.id);
+			self.rendered.remove(&message.id);
+			newest_dropped = newest_dropped.max(message.id);
+		}
+		self.detached = true;
+		self.extend_tail_gap(newest_dropped);
 	}
 
 	pub fn remove(&mut self, id: Snowflake) -> bool {
@@ -191,29 +328,6 @@ impl ChannelMessages {
 			(Some(newest), Some(last)) => newest < last,
 			_ => false,
 		}
-	}
-
-	fn evict_oldest(&mut self) {
-		let excess = self.ordered.len().saturating_sub(MESSAGE_CAP);
-		if excess == 0 {
-			return;
-		}
-		for message in self.ordered.drain(..excess) {
-			self.by_id.remove(&message.id);
-			self.rendered.remove(&message.id);
-		}
-		self.reached_start = false;
-	}
-
-	fn evict_newest(&mut self) {
-		if self.ordered.len() <= MESSAGE_CAP {
-			return;
-		}
-		for message in self.ordered.drain(MESSAGE_CAP..) {
-			self.by_id.remove(&message.id);
-			self.rendered.remove(&message.id);
-		}
-		self.detached = true;
 	}
 
 	fn extend_tail_gap(&mut self, id: Snowflake) {

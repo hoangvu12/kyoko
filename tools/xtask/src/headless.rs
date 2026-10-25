@@ -186,6 +186,7 @@ impl Harness {
 			hooks,
 			gateway: Default::default(),
 			rest: Default::default(),
+			caches: Default::default(),
 			remember_account: true,
 		})
 		.context("session did not start")?;
