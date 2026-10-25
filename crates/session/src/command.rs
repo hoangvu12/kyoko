@@ -120,6 +120,8 @@ pub enum Command {
 		channel_id: Option<Snowflake>,
 		query: SearchQuery,
 	},
+	SearchMore,
+	CloseSearch,
 	ToggleCategory {
 		guild_id: Snowflake,
 		category_id: Snowflake,

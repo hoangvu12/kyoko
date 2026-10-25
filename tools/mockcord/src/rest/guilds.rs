@@ -6,7 +6,7 @@ use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::channels::search_in;
+use super::channels::{SearchFilter, search_in};
 use crate::error::{ApiError, ApiResult};
 use crate::fixtures::GuildFixture;
 use crate::json::to_json;
@@ -112,7 +112,7 @@ pub async fn member(State(shared): State<Arc<Shared>>, Path((id, user_id)): Path
 pub async fn search_messages(
 	State(shared): State<Arc<Shared>>,
 	Path(id): Path<u64>,
-	Query(params): Query<HashMap<String, String>>,
+	Query(pairs): Query<Vec<(String, String)>>,
 ) -> ApiResult {
 	let guild = find_guild(&shared, id)?;
 	let store = shared.store.lock();
@@ -122,5 +122,9 @@ pub async fn search_messages(
 			.into_iter()
 			.map(|thread| thread.id.0),
 	);
-	Ok(Json(search_in(&store, &channel_ids, &params)))
+	Ok(Json(search_in(
+		&store,
+		&channel_ids,
+		&SearchFilter::from_pairs(&pairs),
+	)))
 }

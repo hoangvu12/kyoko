@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use crate::cdn;
 use crate::error::{ApiError, ApiResult};
 use crate::fixtures::CURRENT_USER_ID;
-use crate::json::{message_id, parse_id, to_json};
+use crate::json::{author_id, mentions_user, message_id, parse_id, to_json};
 use crate::ops::{Draft, UploadedFile};
 use crate::state::{Shared, Store};
 use crate::threads::ThreadRequest;
@@ -260,42 +260,111 @@ pub async fn ack(
 	Ok(Json(json!({ "token": null })))
 }
 
-pub fn search_in(store: &Store, channel_ids: &[u64], params: &HashMap<String, String>) -> Value {
-	let content = params.get("content").map(|content| content.to_lowercase());
-	let author = params
-		.get("author_id")
-		.and_then(|author| author.parse::<u64>().ok());
-	let only_channel = params
-		.get("channel_id")
-		.and_then(|channel| channel.parse::<u64>().ok());
+#[derive(Debug, Default)]
+pub struct SearchFilter {
+	content: Option<String>,
+	author: Option<u64>,
+	mentions: Option<u64>,
+	has: Vec<String>,
+	min_id: Option<u64>,
+	max_id: Option<u64>,
+	channel: Option<u64>,
+	pinned: Option<bool>,
+	offset: usize,
+	limit: usize,
+}
+
+impl SearchFilter {
+	pub fn from_pairs(pairs: &[(String, String)]) -> Self {
+		let mut filter = Self {
+			limit: DEFAULT_SEARCH_PAGE_SIZE,
+			..Self::default()
+		};
+		for (key, value) in pairs {
+			let id = value.parse::<u64>().ok();
+			match key.as_str() {
+				"content" => filter.content = Some(value.to_lowercase()),
+				"author_id" => filter.author = id,
+				"mentions" => filter.mentions = id,
+				"has" => filter.has.push(value.to_lowercase()),
+				"min_id" => filter.min_id = id,
+				"max_id" => filter.max_id = id,
+				"channel_id" => filter.channel = id,
+				"pinned" => filter.pinned = value.parse().ok(),
+				"offset" => filter.offset = value.parse().unwrap_or(0),
+				"limit" => {
+					filter.limit = value
+						.parse()
+						.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE)
+						.clamp(1, DEFAULT_SEARCH_PAGE_SIZE);
+				}
+				_ => {}
+			}
+		}
+		filter
+	}
+
+	fn matches(&self, message: &Value) -> bool {
+		let id = message_id(message);
+		self.content.as_ref().is_none_or(|needle| {
+			message["content"]
+				.as_str()
+				.is_some_and(|text| text.to_lowercase().contains(needle.as_str()))
+		}) && self.author.is_none_or(|author| author_id(message) == author)
+			&& self.mentions.is_none_or(|user| mentions_user(message, user))
+			&& self.min_id.is_none_or(|min| id > min)
+			&& self.max_id.is_none_or(|max| id < max)
+			&& self
+				.pinned
+				.is_none_or(|pinned| message["pinned"].as_bool().unwrap_or(false) == pinned)
+			&& self.has.iter().all(|kind| has_kind(message, kind))
+	}
+}
+
+fn non_empty(value: &Value) -> bool {
+	value.as_array().is_some_and(|items| !items.is_empty())
+}
+
+fn attachment_like(message: &Value, prefix: &str) -> bool {
+	message["attachments"].as_array().is_some_and(|attachments| {
+		attachments.iter().any(|attachment| {
+			attachment["content_type"]
+				.as_str()
+				.is_some_and(|kind| kind.starts_with(prefix))
+		})
+	})
+}
+
+fn has_kind(message: &Value, kind: &str) -> bool {
+	match kind {
+		"image" => attachment_like(message, "image/"),
+		"video" => attachment_like(message, "video/"),
+		"sound" => attachment_like(message, "audio/"),
+		"file" => non_empty(&message["attachments"]),
+		"embed" => non_empty(&message["embeds"]),
+		"sticker" => non_empty(&message["sticker_items"]),
+		"poll" => message["poll"].is_object(),
+		"link" => message["content"]
+			.as_str()
+			.is_some_and(|text| text.contains("http://") || text.contains("https://")),
+		_ => false,
+	}
+}
+
+pub fn search_in(store: &Store, channel_ids: &[u64], filter: &SearchFilter) -> Value {
 	let mut hits: Vec<&Value> = channel_ids
 		.iter()
-		.filter(|id| only_channel.is_none_or(|only| only == **id))
+		.filter(|id| filter.channel.is_none_or(|only| only == **id))
 		.filter_map(|id| store.messages.get(id))
 		.flat_map(BTreeMap::values)
-		.filter(|message| {
-			content.as_ref().is_none_or(|needle| {
-				message["content"]
-					.as_str()
-					.is_some_and(|text| text.to_lowercase().contains(needle.as_str()))
-			}) && author.is_none_or(|author| parse_id(&message["author"]["id"]) == Some(author))
-		})
+		.filter(|message| filter.matches(message))
 		.collect();
 	hits.sort_by_key(|message| Reverse(message_id(message)));
 	let total = hits.len();
-	let offset = params
-		.get("offset")
-		.and_then(|offset| offset.parse().ok())
-		.unwrap_or(0);
-	let limit = params
-		.get("limit")
-		.and_then(|limit| limit.parse().ok())
-		.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE)
-		.clamp(1, DEFAULT_SEARCH_PAGE_SIZE);
 	let messages: Vec<Value> = hits
 		.into_iter()
-		.skip(offset)
-		.take(limit)
+		.skip(filter.offset)
+		.take(filter.limit)
 		.map(|message| {
 			let mut hit = message.clone();
 			hit["hit"] = Value::Bool(true);
@@ -308,11 +377,11 @@ pub fn search_in(store: &Store, channel_ids: &[u64], params: &HashMap<String, St
 pub async fn search_messages(
 	State(shared): State<Arc<Shared>>,
 	Path(id): Path<u64>,
-	Query(params): Query<HashMap<String, String>>,
+	Query(pairs): Query<Vec<(String, String)>>,
 ) -> ApiResult {
 	let store = shared.store.lock();
 	require_channel(&store, id)?;
-	Ok(Json(search_in(&store, &[id], &params)))
+	Ok(Json(search_in(&store, &[id], &SearchFilter::from_pairs(&pairs))))
 }
 
 fn thread_request(body: &Value, starter: Option<Draft>) -> Result<ThreadRequest, ApiError> {

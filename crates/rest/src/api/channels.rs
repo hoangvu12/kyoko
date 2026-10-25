@@ -1,5 +1,6 @@
 use protocol::rest::{AttachmentDescriptor, CreateMessage, EditMessage, MessagesQuery};
 use protocol::{Channel, LenientVec, Message, Snowflake, ThreadMember, User};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -18,7 +19,15 @@ pub struct SearchQuery {
 	pub has: Vec<String>,
 	pub before: Option<Snowflake>,
 	pub after: Option<Snowflake>,
+	pub channel_id: Option<Snowflake>,
+	pub pinned: Option<bool>,
 	pub offset: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SearchReply {
+	Found(Value),
+	Indexing { retry_after: Option<f64> },
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -64,11 +73,14 @@ fn search_pairs(query: SearchQuery, channel_id: Option<Snowflake>) -> Vec<(&'sta
 	if let Some(after) = query.after {
 		pairs.push(("min_id", after.to_string()));
 	}
-	if let Some(offset) = query.offset {
-		pairs.push(("offset", offset.to_string()));
-	}
-	if let Some(channel_id) = channel_id {
+	if let Some(channel_id) = query.channel_id.or(channel_id) {
 		pairs.push(("channel_id", channel_id.to_string()));
+	}
+	if let Some(pinned) = query.pinned {
+		pairs.push(("pinned", pinned.to_string()));
+	}
+	if let Some(offset) = query.offset.filter(|offset| *offset > 0) {
+		pairs.push(("offset", offset.to_string()));
 	}
 	pairs
 }
@@ -235,14 +247,21 @@ impl RestClient {
 		guild_id: Option<Snowflake>,
 		channel_id: Option<Snowflake>,
 		query: SearchQuery,
-	) -> Result<Value> {
+	) -> Result<SearchReply> {
 		let (path, channel_filter) = match (guild_id, channel_id) {
 			(Some(guild_id), channel_id) => (format!("/guilds/{guild_id}/messages/search"), channel_id),
 			(None, Some(channel_id)) => (format!("/channels/{channel_id}/messages/search"), None),
 			(None, None) => return Err(RestError::InvalidRequest),
 		};
-		self.send(Request::get(path).query(&search_pairs(query, channel_filter)))
-			.await
+		let request = Request::get(path).query(&search_pairs(query, channel_filter));
+		let (status, body) = self.execute_with_status(request).await?;
+		let value: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+		if status == StatusCode::ACCEPTED {
+			return Ok(SearchReply::Indexing {
+				retry_after: value["retry_after"].as_f64(),
+			});
+		}
+		Ok(SearchReply::Found(value))
 	}
 
 	pub async fn threads_active(&self, guild_id: Snowflake) -> Result<ThreadList> {

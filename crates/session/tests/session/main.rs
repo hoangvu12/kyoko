@@ -17,6 +17,7 @@ mod locks;
 mod members;
 mod reads;
 mod safety;
+mod search;
 mod status;
 mod storage;
 mod versions;

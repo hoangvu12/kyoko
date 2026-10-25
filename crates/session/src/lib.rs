@@ -19,7 +19,7 @@ pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::SessionHooks;
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};
 pub use rest::{RestTuning, UploadFile};
-pub use search::SearchResults;
+pub use search::{SearchFailure, SearchResults, SearchStatus};
 pub use session::{Commander, Session};
 pub use state::{CacheLimits, RiskyLock, RiskyReason, RiskyTarget, Viewport};
 pub use store::Retention;

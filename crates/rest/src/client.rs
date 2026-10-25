@@ -372,6 +372,10 @@ impl RestClient {
 	}
 
 	async fn execute(&self, request: Request) -> Result<Bytes> {
+		self.execute_with_status(request).await.map(|(_, body)| body)
+	}
+
+	pub(crate) async fn execute_with_status(&self, request: Request) -> Result<(StatusCode, Bytes)> {
 		let url = self.build_url(&request)?;
 		let route = route_key(&request.method, &request.path);
 		let pace = Pace::of(&request.method, &route);
@@ -412,7 +416,7 @@ impl RestClient {
 				continue;
 			}
 			if status.is_success() {
-				return Ok(body);
+				return Ok((status, body));
 			}
 			return Err(classify(status, &body));
 		}

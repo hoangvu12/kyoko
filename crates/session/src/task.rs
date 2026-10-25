@@ -14,7 +14,6 @@ use protocol::{
 	Channel, ChannelType, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited, Message,
 	MessageAck, MessagesQuery, Nonce, Opcode, Snowflake, Token, User,
 };
-use rest::api::SearchQuery;
 use rest::{RestClient, RestTuning};
 use state::{
 	Changes, ConnectionStatus, DeleteStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent,
@@ -52,6 +51,7 @@ mod outbox;
 mod profiles;
 mod reactions;
 mod reads;
+mod search;
 mod status;
 mod storage;
 mod subscriptions;
@@ -87,7 +87,11 @@ pub(crate) enum Internal {
 	},
 	LoadFinished(Snowflake, Page),
 	SendFailed(Nonce, SendFailure, Box<outbox::Outgoing>),
-	Search(SearchResults),
+	Searched {
+		serial: u64,
+		offset: u32,
+		outcome: search::Outcome,
+	},
 	DmOpened(Box<Channel>),
 	ThreadOpened(Box<Channel>),
 	Loaded(Loaded),
@@ -194,6 +198,7 @@ pub(crate) struct Core {
 	acks: reads::Acks,
 	layout: layout::LayoutWriter,
 	collapse: collapse::CollapseWriter,
+	searcher: search::Searcher,
 	viewing: bool,
 	manual_unread: HashSet<Snowflake>,
 	deletes: mpsc::UnboundedSender<deletes::DeleteJob>,
@@ -270,6 +275,7 @@ impl Core {
 			acks: reads::Acks::new(&parts.tuning),
 			layout: layout::LayoutWriter::new(&parts.tuning),
 			collapse: collapse::CollapseWriter::new(&parts.tuning),
+			searcher: search::Searcher::new(&parts.tuning),
 			viewing: true,
 			manual_unread: HashSet::new(),
 			deletes,
@@ -601,13 +607,11 @@ impl Core {
 			}
 			Internal::SendFailed(nonce, reason, outgoing) => self.send_failed(nonce, reason, *outgoing),
 			Internal::CommandIndex { scope, index } => self.command_index_arrived(scope, index),
-			Internal::Search(results) => {
-				*self.search.lock() = Some(Arc::new(results));
-				self.notifier.push(Changes {
-					search: true,
-					..Changes::default()
-				});
-			}
+			Internal::Searched {
+				serial,
+				offset,
+				outcome,
+			} => self.on_searched(serial, offset, outcome),
 			Internal::DmOpened(channel) => {
 				let channel_id = channel.id;
 				self.apply_dispatch(&DispatchEvent::ChannelCreate(channel));
@@ -811,6 +815,8 @@ impl Core {
 				channel_id,
 				query,
 			} => self.search(guild_id, channel_id, query),
+			Command::SearchMore => self.search_more(),
+			Command::CloseSearch => self.close_search(),
 			Command::ToggleCategory {
 				guild_id,
 				category_id,
@@ -1126,6 +1132,7 @@ impl Core {
 			self.collapse.deadline(),
 			self.status.deadline(),
 			self.status_deadline(),
+			self.searcher.deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1148,6 +1155,9 @@ impl Core {
 			self.flush_status();
 		}
 		self.expire_custom_status();
+		if self.searcher.deadline().is_some_and(|due| due <= now) {
+			self.flush_search();
+		}
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {
 				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),
@@ -1209,19 +1219,6 @@ impl Core {
 					let _ = internal.send(Internal::DmOpened(Box::new(channel)));
 				}
 				Err(error) => tracing::warn!(%error, "could not open the conversation"),
-			}
-		});
-	}
-
-	fn search(&self, guild_id: Option<Snowflake>, channel_id: Option<Snowflake>, query: SearchQuery) {
-		let rest = self.rest.clone();
-		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
-			match rest.search_messages(guild_id, channel_id, query).await {
-				Ok(response) => {
-					let _ = internal.send(Internal::Search(SearchResults::from_response(&response)));
-				}
-				Err(error) => tracing::warn!(%error, "search failed"),
 			}
 		});
 	}
