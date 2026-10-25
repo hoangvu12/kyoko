@@ -129,6 +129,8 @@ pub(crate) struct Core {
 	themes: Arc<ThemeCatalogs>,
 	locale: String,
 	token: Arc<Token>,
+	remember_account: bool,
+	signed_in: Arc<Mutex<bool>>,
 	account_saved: bool,
 	select_created_guild: bool,
 }
@@ -191,6 +193,8 @@ impl Core {
 			themes: parts.themes,
 			locale: parts.locale,
 			token: parts.token,
+			remember_account: parts.remember_account,
+			signed_in: Arc::new(Mutex::new(true)),
 			account_saved: !parts.remember_account,
 			select_created_guild: false,
 		}
@@ -601,8 +605,11 @@ impl Core {
 			}
 			Command::Reconnect => self.gateway.reconnect(),
 			Command::Logout => {
+				let mut signed_in = self.signed_in.lock();
+				*signed_in = false;
 				self.store.tokens.clear();
 				self.forget_account();
+				drop(signed_in);
 				persist::clear_cache(&self.store);
 				self.rest.clear_token();
 				return false;

@@ -15,7 +15,12 @@ impl Core {
 		self.account_saved = true;
 		let store = self.store.clone();
 		let token = self.token.clone();
+		let signed_in = self.signed_in.clone();
 		self.runtime.spawn_blocking(move || {
+			let signed_in = signed_in.lock();
+			if !*signed_in {
+				return;
+			}
 			let saved = store
 				.accounts
 				.save(user.id, &user.username, user.avatar.as_deref(), token.as_str())
@@ -29,10 +34,18 @@ impl Core {
 	pub(super) fn adopt_token(&mut self, token: Token) {
 		self.rest.set_token(Token::new(token.as_str()));
 		self.token = Arc::new(token);
+		if !self.remember_account {
+			return;
+		}
 		self.account_saved = false;
 		let store = self.store.clone();
 		let token = self.token.clone();
+		let signed_in = self.signed_in.clone();
 		self.runtime.spawn_blocking(move || {
+			let signed_in = signed_in.lock();
+			if !*signed_in {
+				return;
+			}
 			if let Err(error) = store.tokens.save(token.as_str()) {
 				tracing::warn!(%error, "refreshed token was not saved");
 			}

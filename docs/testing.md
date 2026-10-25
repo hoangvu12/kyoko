@@ -34,6 +34,7 @@ let running = Running::start_with(Options::new("unique-name").hooks(hooks)).awai
 - `hooks(..)` installs session hooks.
 - `heartbeat_ms(ms)` shortens mockcord's heartbeat interval.
 - `gateway(GatewayTuning { backoff, send_budget })` shrinks the reconnect backoff or the send window, so tests can reach the cap or fill the window in under a second.
+- `remember_account(false)` starts the session the way the app does for a `KYOKO_TOKEN` sign-in: nothing is saved to the store.
 - `prepare(|mock| ..)` runs against mockcord's `Control` before the session starts, for example `transform_ready` for the very first READY.
 
 ## Waiting

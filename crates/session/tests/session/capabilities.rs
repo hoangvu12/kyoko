@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use gateway::ADVERTISED_CAPABILITIES;
-use mockcord::{Control, Fixtures};
+use mockcord::{Control, Fixtures, GatewayFrame};
 use parking_lot::Mutex;
 use protocol::capability::{
 	AUTH_TOKEN_REFRESH, AUTO_CALL_CONNECT, AUTO_LOBBY_CONNECT, CHANNEL_OBFUSCATION, CLIENT_STATE_V2,
@@ -75,11 +75,7 @@ async fn identify_advertises_only_handled_capabilities() {
 	running.stop().await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_refreshed_token_reaches_rest_the_gateway_and_the_store() {
-	let running =
-		Running::start_with(Options::new("capabilities-refresh").prepare(refresh_token_on_ready)).await;
-	let channel_id = running.open_text_channel().await;
+fn assert_history_uses_refreshed_token(running: &Running, channel_id: Snowflake) {
 	let history = format!("/channels/{channel_id}/messages");
 	let history_tokens: Vec<bool> = running
 		.mock()
@@ -92,22 +88,9 @@ async fn a_refreshed_token_reaches_rest_the_gateway_and_the_store() {
 		history_tokens.iter().all(|refreshed| *refreshed),
 		"history requests after READY carry the refreshed token"
 	);
+}
 
-	let user_id = running
-		.session()
-		.state()
-		.read()
-		.current_user_id()
-		.expect("a current user after READY");
-	let store = running.store();
-	running
-		.eventually("the refreshed token to be stored", || {
-			let stored = store.tokens.load().ok().flatten();
-			let account = store.accounts.token_for(user_id).ok().flatten();
-			stored.as_deref() == Some(REFRESHED_TOKEN) && account.as_deref() == Some(REFRESHED_TOKEN)
-		})
-		.await;
-
+async fn resume_with_refreshed_token(running: &Running, channel_id: Snowflake) -> GatewayFrame {
 	let first = running.identified_connection().await;
 	running.mock().close_gateway(RESUMABLE_CLOSE);
 	let resume = running
@@ -125,7 +108,36 @@ async fn a_refreshed_token_reaches_rest_the_gateway_and_the_store() {
 	running
 		.send_and_wait(channel_id, "after refresh", "after refresh")
 		.await;
+	resume
+}
 
+fn current_user_id(running: &Running) -> Snowflake {
+	running
+		.session()
+		.state()
+		.read()
+		.current_user_id()
+		.expect("a current user after READY")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refreshed_token_reaches_rest_the_gateway_and_the_store() {
+	let running =
+		Running::start_with(Options::new("capabilities-refresh").prepare(refresh_token_on_ready)).await;
+	let channel_id = running.open_text_channel().await;
+	assert_history_uses_refreshed_token(&running, channel_id);
+
+	let user_id = current_user_id(&running);
+	let store = running.store();
+	running
+		.eventually("the refreshed token to be stored", || {
+			let stored = store.tokens.load().ok().flatten();
+			let account = store.accounts.token_for(user_id).ok().flatten();
+			stored.as_deref() == Some(REFRESHED_TOKEN) && account.as_deref() == Some(REFRESHED_TOKEN)
+		})
+		.await;
+
+	let resume = resume_with_refreshed_token(&running, channel_id).await;
 	running.mock().invalidate_session(false);
 	let identify = running
 		.until_wire("an IDENTIFY after the session ended", |recording| {
@@ -139,6 +151,42 @@ async fn a_refreshed_token_reaches_rest_the_gateway_and_the_store() {
 		identify.data["token"].as_str() == Some(REFRESHED_TOKEN),
 		"a later IDENTIFY carries the refreshed token"
 	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_unremembered_session_keeps_a_refreshed_token_in_memory() {
+	let running = Running::start_with(
+		Options::new("capabilities-refresh-memory")
+			.remember_account(false)
+			.prepare(refresh_token_on_ready),
+	)
+	.await;
+	let channel_id = running.open_text_channel().await;
+	assert_history_uses_refreshed_token(&running, channel_id);
+	resume_with_refreshed_token(&running, channel_id).await;
+	let store = running.store();
+	assert!(store.tokens.load().ok().flatten().is_none());
+	assert!(store.accounts.list().is_empty());
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn signing_out_after_a_refresh_leaves_no_token_behind() {
+	let running =
+		Running::start_with(Options::new("capabilities-refresh-sign-out").prepare(refresh_token_on_ready))
+			.await;
+	running.connected().await;
+	let user_id = current_user_id(&running);
+	running.session().send(Command::Logout);
+	let store = running.store();
+	running
+		.eventually("sign-out to remove the account", || {
+			store.accounts.list().is_empty()
+		})
+		.await;
+	assert!(store.tokens.load().ok().flatten().is_none());
+	assert!(store.accounts.token_for(user_id).ok().flatten().is_none());
 	running.stop().await;
 }
 

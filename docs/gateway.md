@@ -39,7 +39,8 @@ When READY carries a non-empty string `auth_token`, it replaces the token everyw
 
 - The gateway swaps `GatewayConfig.token` before it handles READY, so every later RESUME and IDENTIFY uses the new token.
 - It then emits `GatewayEvent::TokenRefreshed` ahead of `GatewayEvent::Ready`. The session hands the token to the REST client before it applies READY, so every request after READY uses it.
-- The session saves it with `store.tokens` (keyring, or the opted-in plaintext file) and re-saves the account entry under `store.accounts`.
+- When `SessionConfig::remember_account` is true, the session saves it with `store.tokens` (keyring, or the opted-in plaintext file) and re-saves the account entry under `store.accounts`. When it is false, the refreshed token stays in memory, like the original, and nothing reaches the store.
+- Saves and sign-out share one lock and a signed-in flag. Sign-out clears the flag before it removes the token and the account, so a save that runs after sign-out writes nothing.
 
 `auth_token` is read on its own with `protocol::refreshed_token`. A missing, empty or non-string value is ignored and never fails READY. The token is never logged.
 

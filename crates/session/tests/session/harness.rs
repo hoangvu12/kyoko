@@ -27,6 +27,7 @@ pub struct Options {
 	hooks: Option<Arc<dyn SessionHooks>>,
 	gateway: GatewayTuning,
 	prepare: Option<Prepare>,
+	remember_account: bool,
 }
 
 impl Options {
@@ -41,7 +42,13 @@ impl Options {
 			hooks: None,
 			gateway: GatewayTuning::default(),
 			prepare: None,
+			remember_account: true,
 		}
+	}
+
+	pub fn remember_account(mut self, remember: bool) -> Self {
+		self.remember_account = remember;
+		self
 	}
 
 	pub fn hooks(mut self, hooks: Arc<dyn SessionHooks>) -> Self {
@@ -106,7 +113,7 @@ impl Running {
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks: options.hooks,
 			gateway: options.gateway,
-			remember_account: true,
+			remember_account: options.remember_account,
 		})
 		.expect("session starts");
 		Running {
