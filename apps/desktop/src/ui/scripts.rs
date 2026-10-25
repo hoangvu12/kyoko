@@ -90,6 +90,7 @@ fn the_interface_loads_and_builds_every_screen() {
 				json!({ "data_dir": "C:\\kyoko", "version": "0.0.0" }),
 			),
 			("settings.page", json!("my-account")),
+			("plugins.list", plugin_list()),
 		],
 	);
 	for (page, marker) in SETTINGS_PAGES {
@@ -100,6 +101,15 @@ fn the_interface_loads_and_builds_every_screen() {
 		"the closed settings view",
 		"Playing Chess",
 		&[("settings.page", json!(""))],
+	);
+	shows(
+		&mut app,
+		"a plugin notice",
+		"ClearURLs was stopped because it ran past its time limit.",
+		&[(
+			"plugins.notice",
+			json!({ "plugin": "clear-urls", "text": "ClearURLs was stopped because it ran past its time limit." }),
+		)],
 	);
 	shows(
 		&mut app,
@@ -143,7 +153,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 }
 
-const SETTINGS_PAGES: [(&str, &str); 15] = [
+const SETTINGS_PAGES: [(&str, &str); 16] = [
 	("my-account", "Edit User Profile"),
 	("profiles", "Your profile is edited in Discord's web app for now."),
 	("privacy", "Warn before opening links"),
@@ -162,7 +172,57 @@ const SETTINGS_PAGES: [(&str, &str); 15] = [
 	("language", "English (US)"),
 	("streamer-mode", "Hide sensitive details while you stream."),
 	("advanced", "Open Kyoko on Login"),
+	("plugins", "Strips tracking parameters from the links you send."),
 ];
+
+#[test]
+fn the_plugins_page_asks_before_a_plugin_is_enabled() {
+	let approved: std::rc::Rc<std::cell::RefCell<Vec<String>>> = std::rc::Rc::default();
+	let seen = approved.clone();
+	let mut app = TestApp::new(move |runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host.action("plugins.approve", move |argument| {
+			seen.borrow_mut().push(argument.to_json())
+		});
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let mut list = plugin_list();
+	list[0]["enabled"] = json!(false);
+	shows(
+		&mut app,
+		"the plugins page",
+		"Strips tracking parameters from the links you send.",
+		&[
+			("login.screen", json!("main")),
+			("settings.values", setting_values(true)),
+			("settings.page", json!("plugins")),
+			("plugins.list", list),
+		],
+	);
+	assert!(
+		!app.texts().iter().any(|text| text == "Review Permissions"),
+		"a plugin that was never enabled asks on its switch, not with a banner button"
+	);
+	app.click("plugin_switch_clear-urls");
+	shows(&mut app, "the permission prompt", "Allow ClearURLs?", &[]);
+	assert!(app.texts().iter().any(|text| text == "THIS PLUGIN ASKS FOR"));
+	app.click("plugin_allow");
+	app.frames(2);
+	assert_eq!(
+		approved.borrow().as_slice(),
+		[json!({ "id": "clear-urls", "permissions": ["hook:send"] }).to_string()],
+		"approving sends exactly the permissions the prompt showed"
+	);
+	app.click("plugin_settings_clear-urls");
+	shows(&mut app, "the plugin's settings", "Remove referral tags", &[]);
+	assert!(app.texts().iter().any(|text| text == "hook:send"));
+}
 
 const TYPING: &str = "ada is typing...";
 const DOT_DIM: f32 = 0.35;
@@ -253,6 +313,23 @@ fn search_hits() -> serde_json::Value {
 			"place": "", "text": "the docs are missing a section",
 		},
 	])
+}
+
+fn plugin_list() -> serde_json::Value {
+	json!([{
+		"id": "clear-urls", "name": "ClearURLs", "version": "1.0.0",
+		"description": "Strips tracking parameters from the links you send.", "authors": "Kyoko",
+		"origin": "bundled", "origin_label": "Built in", "status": "approval", "status_label": "Needs approval",
+		"enabled": true, "needs_approval": true, "notice": "", "error": "",
+		"settings": [{
+			"key": "referrals", "type": "boolean", "label": "Remove referral tags", "description": "",
+			"value": true, "min": 0, "max": 0, "step": 0, "multiline": false, "options": [],
+		}],
+		"permissions": [{
+			"name": "hook:send", "text": "Read and rewrite the messages you send and edit, before they leave.",
+			"sensitive": true, "reserved": false,
+		}],
+	}])
 }
 
 fn settings_account() -> serde_json::Value {

@@ -29,6 +29,7 @@ use clap::Parser;
 use integration::{APP_ID, Desktop, MOCK_APP_ID};
 use media::{Gallery, Limits, MediaService};
 use mockcord::{MockConfig, Server};
+use plugins::{HostConfig, PluginHost};
 use protocol::Token;
 use session::{Session, SessionConfig};
 use state::Changes;
@@ -38,6 +39,7 @@ use url::Url;
 
 const TOKEN_VARIABLE: &str = "KYOKO_TOKEN";
 const MIB: usize = 1024 * 1024;
+const PLUGIN_WATCH: Duration = Duration::from_millis(500);
 
 #[derive(Parser)]
 #[command(name = "kyoko", version, about = "A native Discord client")]
@@ -118,6 +120,12 @@ struct Cli {
 		help = "Store settings and cache under this directory instead of a scratch one"
 	)]
 	data_dir: Option<PathBuf>,
+	#[arg(
+		long,
+		value_name = "PATH",
+		help = "Load plugins from this folder too, overriding bundled ones with the same id, and reload them on change"
+	)]
+	plugins_dir: Vec<PathBuf>,
 	#[arg(long, help = "Start hidden in the tray, as a launch at sign-in does")]
 	background: bool,
 	#[arg(
@@ -277,10 +285,11 @@ fn main() -> Result<ExitCode> {
 	)?;
 	let prefs = timeline::Prefs::of(&store.settings.read());
 	let store = Arc::new(store);
+	let plugin_host = plugin_host(&cli, store.paths.data_dir());
 	let gate = Gate::new(store.clone(), identity.clone(), backend.rest_base.clone());
 	let mut flow = Flow::new(
 		gate,
-		session_starter(&backend, identity, &store, &inbox, runtime.handle()),
+		session_starter(&backend, identity, &store, &inbox, runtime.handle(), &plugin_host),
 	);
 	let signs_in = !cli.login && capture.as_ref().is_none_or(|capture| !capture.screen.is_login());
 	flow.launch(backend.token.filter(|_| signs_in));
@@ -311,7 +320,11 @@ fn main() -> Result<ExitCode> {
 			prefs,
 		},
 		appearance,
-		ui::Launch { opening, capture },
+		ui::Launch {
+			opening,
+			capture,
+			plugins: plugin_host,
+		},
 		Desktop {
 			store,
 			requests: Inbox::new(),
@@ -346,7 +359,9 @@ fn session_starter(
 	store: &Arc<Store>,
 	inbox: &Inbox<Changes>,
 	runtime: &tokio::runtime::Handle,
+	plugin_host: &PluginHost,
 ) -> StartSession {
+	let plugin_host = plugin_host.clone();
 	let retention = session::Retention::for_settings(&store.settings.read().storage);
 	let store = store.clone();
 	let notify = changes_notifier(inbox.clone());
@@ -355,7 +370,7 @@ fn session_starter(
 	let gateway_url = backend.gateway_url.clone();
 	let build_source = backend.build_source.clone();
 	Box::new(move |token, remember| {
-		Session::start(SessionConfig {
+		let session = Session::start(SessionConfig {
 			identity: identity.clone(),
 			retention,
 			build_source: build_source.clone(),
@@ -365,14 +380,26 @@ fn session_starter(
 			token,
 			runtime: Some(runtime.clone()),
 			notify: notify.clone(),
-			hooks: None,
+			hooks: Some(Arc::new(plugin_host.clone())),
 			gateway: Default::default(),
 			rest: Default::default(),
 			caches: Default::default(),
 			alerts: Default::default(),
 			remember_account: remember == Remember::Account,
-		})
+		})?;
+		plugin_host.attach(session.state().clone(), session.commander());
+		Ok(session)
 	})
+}
+
+fn plugin_host(cli: &Cli, data_dir: &std::path::Path) -> PluginHost {
+	let mut config = HostConfig::for_data_dir(data_dir);
+	config.development_dirs = cli.plugins_dir.clone();
+	let host = PluginHost::new(config);
+	if cfg!(debug_assertions) || !cli.plugins_dir.is_empty() {
+		host.watch(PLUGIN_WATCH);
+	}
+	host
 }
 
 fn mock_backend(server: &Server) -> Result<Backend> {

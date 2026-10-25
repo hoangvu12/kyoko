@@ -10,6 +10,7 @@ local composer = require("./composer")
 local member_list = require("./member_list")
 local login = require("./login")
 local storage_notice = require("./storage_notice")
+local plugin_notice = require("./plugin_notice")
 local home_page = require("./home_page")
 local settings = require("./settings")
 local search_panel = require("./search_panel")
@@ -37,6 +38,7 @@ return function()
 		font = theme.font.ui,
 		title_bar(),
 		storage_notice(),
+		plugin_notice(),
 		ui.row {
 			w_full = true,
 			grow = 1,

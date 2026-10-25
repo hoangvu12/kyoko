@@ -2,6 +2,7 @@ mod composer;
 mod home;
 mod members;
 mod message_actions;
+mod plugins;
 mod profiles;
 #[cfg(test)]
 mod scripts;
@@ -73,9 +74,15 @@ pub struct Appearance {
 	pub user_themes: PathBuf,
 }
 
+struct Views {
+	settings: settings::SettingsView,
+	plugins: plugins::PluginsView,
+}
+
 pub struct Launch {
 	pub opening: Option<Opening>,
 	pub capture: Option<Capture>,
+	pub plugins: ::plugins::PluginHost,
 }
 
 pub fn run(
@@ -87,7 +94,11 @@ pub fn run(
 	desktop: Desktop,
 	after_close: impl Fn() + 'static,
 ) -> Result<()> {
-	let Launch { opening, capture } = launch;
+	let Launch {
+		opening,
+		capture,
+		plugins: plugin_host,
+	} = launch;
 	let script = ui_dir().join("app.luau");
 	let (width, height) = match capture {
 		Some(_) => (capture::WIDTH, capture::HEIGHT),
@@ -127,7 +138,16 @@ pub fn run(
 				store: capture.is_none().then(|| desktop.store.clone()),
 			};
 			let settings = settings::SettingsView::new(&host, desktop.store.clone(), catalog);
-			let link = Link::install(&host, window, sign_in, inbox.clone(), images, messages, settings);
+			let plugins = plugins::PluginsView::new(&host, plugin_host.clone(), sign_in.runtime.clone());
+			let link = Link::install(
+				&host,
+				window,
+				sign_in,
+				inbox.clone(),
+				images,
+				messages,
+				Views { settings, plugins },
+			);
 			link.opening.set(opening);
 			link.attach_ui(cx.ui.downgrade());
 			link.rail.restore(desktop.store.clone());
@@ -136,6 +156,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_sign_in());
 			cx.tasks.spawn(link.clone().follow_composer_files());
 			cx.tasks.spawn(link.clone().tick_composer());
+			cx.tasks.spawn(link.clone().follow_plugins());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -160,6 +181,7 @@ pub fn run(
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
 			let keys = Rc::downgrade(&link);
+			let pressed = Rc::downgrade(&link);
 			cx.on_closed(move || {
 				frame::wake_until_loop_ends();
 				if let Some(integration) = integration {
@@ -178,6 +200,14 @@ pub fn run(
 					.child(switcher)
 					.on_event(move |event| {
 						if event.phase == zgx::input::EventPhase::Capture {
+							if matches!(
+								event.event,
+								zgx::input::InputEvent::PointerDown { .. }
+									| zgx::input::InputEvent::KeyDown { .. }
+							) && let Some(link) = pressed.upgrade()
+							{
+								link.plugin_input();
+							}
 							return;
 						}
 						if let zgx::input::InputEvent::KeyDown {
@@ -306,6 +336,7 @@ pub(crate) struct Link {
 	composer: composer::ComposerView,
 	settings: settings::SettingsView,
 	finder: search::Finder,
+	plugins: plugins::PluginsView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -330,8 +361,9 @@ impl Link {
 		inbox: Inbox<Changes>,
 		images: Images,
 		messages: Messages,
-		settings: settings::SettingsView,
+		views: Views,
 	) -> Rc<Link> {
+		let Views { settings, plugins } = views;
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
 		images.gallery.set_waker(move || wakes.push(()));
@@ -380,6 +412,7 @@ impl Link {
 			composer,
 			settings,
 			finder,
+			plugins,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -404,6 +437,7 @@ impl Link {
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
 		Link::install_settings(host, &link);
+		Link::install_plugins(host, &link);
 		Link::install_profiles(host, &link);
 		Link::install_search(host, &link);
 		let actions = Rc::downgrade(&link);
@@ -996,6 +1030,7 @@ impl Link {
 		if let Some(session) = session {
 			session.shutdown();
 		}
+		self.plugins.host().detach();
 		tracing::debug!("session stopped");
 	}
 }

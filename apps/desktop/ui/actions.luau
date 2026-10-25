@@ -216,4 +216,8 @@ function M.result_menu(id: string, x: number, y: number)
 	ui.invoke("search.menu", { id = id, x = x, y = y })
 end
 
+function M.plugin_action(name: string, argument: any?)
+	ui.invoke("plugins." .. name, argument)
+end
+
 return M

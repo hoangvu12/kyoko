@@ -83,6 +83,38 @@ export type MemberJump = {
 }
 export type SettingsAccount = { name: string, username: string, email: string, phone: string, accent: string, status: string, avatar: string }
 export type SettingsAbout = { data_dir: string, version: string }
+export type PluginChoice = { value: string, label: string }
+export type PluginSetting = {
+	key: string,
+	type: string,
+	label: string,
+	description: string,
+	value: any,
+	min: number,
+	max: number,
+	step: number,
+	multiline: boolean,
+	options: { PluginChoice },
+}
+export type PluginPermission = { name: string, text: string, sensitive: boolean, reserved: boolean }
+export type Plugin = {
+	id: string,
+	name: string,
+	version: string,
+	description: string,
+	authors: string,
+	origin: string,
+	origin_label: string,
+	status: string,
+	status_label: string,
+	enabled: boolean,
+	needs_approval: boolean,
+	notice: string,
+	error: string,
+	settings: { PluginSetting },
+	permissions: { PluginPermission },
+}
+export type PluginNotice = { plugin: string, text: string }
 export type UserPanel = {
 	name: string,
 	subtitle: string,
@@ -212,6 +244,12 @@ M.search = {
 	} :: SearchPanel),
 	hits = ui.shared("search.hits", {} :: { SearchHit }),
 	chips = ui.shared("search.chips", {} :: { string }),
+}
+
+M.plugins = {
+	list = ui.shared("plugins.list", {} :: { Plugin }),
+	notice = ui.shared("plugins.notice", nil :: PluginNotice?),
+	folder = ui.shared("plugins.folder", ""),
 }
 
 return M

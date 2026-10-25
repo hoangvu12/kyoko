@@ -92,8 +92,9 @@ function M.row(title: any, note: any?, control: any?)
 	}
 end
 
-M.switch = ui.component(function(props: { checked: () -> boolean, on_change: (boolean) -> (), label: string? })
+M.switch = ui.component(function(props: { checked: () -> boolean, on_change: (boolean) -> (), label: string?, id: string? })
 	return ui.button {
+		id = props.id,
 		relative = true,
 		w = SWITCH_WIDTH,
 		h = SWITCH_HEIGHT,
@@ -311,7 +312,7 @@ M.slider = ui.component(function(props: {
 			else nil,
 	}
 end)
-M.button = ui.component(function(props: { text: string, tone: string?, small: boolean?, on_click: () -> () })
+M.button = ui.component(function(props: { text: string, tone: string?, small: boolean?, on_click: () -> (), id: string? })
 	local hovered = ui.use_state(false)
 	local tone = props.tone or "secondary"
 	local function fill(): string
@@ -326,6 +327,7 @@ M.button = ui.component(function(props: { text: string, tone: string?, small: bo
 		return if hover then theme.color.button_secondary_hover else theme.color.button_secondary
 	end
 	return ui.button {
+		id = props.id,
 		h = if props.small then SMALL_BUTTON else BUTTON,
 		px = if props.small then theme.size.space_8 else theme.size.space_12,
 		shrink = 0,

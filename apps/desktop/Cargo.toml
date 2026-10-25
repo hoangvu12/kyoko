@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 bridge.workspace = true
+plugins.workspace = true
 media.workspace = true
 markdown.workspace = true
 platform.workspace = true
