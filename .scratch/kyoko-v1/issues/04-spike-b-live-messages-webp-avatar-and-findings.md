@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (Spike A: zgx window with a live server/channel list)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Opening a channel shows its recent messages and adds new ones live, on both mockcord and real Discord
 - [ ] One WebP avatar is fetched, decoded in Rust and shown as a host-supplied image
