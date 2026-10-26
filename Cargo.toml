@@ -24,6 +24,7 @@ login = { path = "crates/login", package = "kyoko-login" }
 mockcord = { path = "tools/mockcord" }
 bridge = { path = "crates/bridge", package = "kyoko-bridge" }
 plugins = { path = "crates/plugins", package = "kyoko-plugins" }
+twemoji = { path = "crates/twemoji", package = "kyoko-twemoji" }
 
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
@@ -42,6 +43,8 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 keyring = "4.2"
 flate2 = "1.1"
+zstd = { version = "0.14", default-features = false }
+tar = { version = "0.4", default-features = false }
 thiserror = "2.0"
 anyhow = "1.0"
 tracing = "0.1"

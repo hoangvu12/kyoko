@@ -1,4 +1,5 @@
 mod checks;
+mod emoji_pack;
 mod headless;
 mod parity;
 mod release;
@@ -21,6 +22,7 @@ enum Task {
 	Parity(parity::Args),
 	Release(release::ReleaseArgs),
 	Theme(theme::ThemeArgs),
+	Twemoji(emoji_pack::TwemojiArgs),
 	FmtCheck,
 	Lint,
 	Test,
@@ -34,6 +36,7 @@ fn main() -> ExitCode {
 		Task::Parity(args) => parity::run(args),
 		Task::Release(args) => release::run(args),
 		Task::Theme(args) => theme::run(args),
+		Task::Twemoji(args) => emoji_pack::run(args),
 		Task::FmtCheck => checks::fmt_check(),
 		Task::Lint => checks::lint(),
 		Task::Test => checks::test(),

@@ -46,7 +46,7 @@ What kyoko changes:
 - **Platforms.** v1 targets Windows only. Voice, the self-updater and the macOS and Linux packages are dropped.
 - **Identity.** Kyoko uses its own name, app id, data folders and icon, and trusts none of oxidcord's signing keys or update and catalog endpoints.
 
-Third-party data bundled with kyoko, such as the emoji shortcode table from GitHub's gemoji, is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Third-party data bundled with kyoko, such as the emoji shortcode table from GitHub's gemoji and the Twemoji emoji graphics (CC-BY 4.0), is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## First run
 

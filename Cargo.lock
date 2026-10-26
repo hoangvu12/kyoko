@@ -1993,6 +1993,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3321,6 +3331,7 @@ dependencies = [
  "kyoko-session",
  "kyoko-state",
  "kyoko-store",
+ "kyoko-twemoji",
  "mlua",
  "mockcord",
  "serde_json",
@@ -3567,6 +3578,15 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "kyoko-twemoji"
+version = "0.2.0-beta.1"
+dependencies = [
+ "kyoko-bridge",
+ "kyoko-protocol",
+ "zstd",
 ]
 
 [[package]]
@@ -6594,6 +6614,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8511,15 +8541,20 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "clap",
+ "flate2",
+ "hex",
  "image",
  "kyoko-plugins",
  "kyoko-protocol",
  "kyoko-session",
  "kyoko-state",
  "kyoko-store",
+ "kyoko-twemoji",
  "mockcord",
  "rand 0.9.5",
  "serde_json",
+ "sha2 0.10.9",
+ "tar",
  "tokio",
  "tokio-tungstenite 0.30.0",
  "toml 1.1.8+spec-1.1.0",

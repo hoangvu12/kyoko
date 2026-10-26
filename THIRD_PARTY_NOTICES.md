@@ -31,6 +31,39 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+## Twemoji
+
+Kyoko draws Unicode emoji with [Twemoji](https://github.com/jdecked/twemoji), maintained by Jason Sofonia and Justine De Caires after Twitter. `crates/twemoji/assets/twemoji.pack` holds the 4,009 SVG files of `assets/svg/` in the jdecked/twemoji v17.0.3 release (`https://github.com/jdecked/twemoji/archive/refs/tags/v17.0.3.tar.gz`, SHA-256 `a0855654b633045ae2337537e77f1bb4361162f7fcd910e613eaab1d6d9c5fca`), unchanged, compressed with zstd by `cargo xtask twemoji`. Nothing is fetched at run time.
+
+Copyright 2014–2021 Twitter, 2022–present Jason Sofonia and Justine De Caires, and other contributors. The graphics are licensed under the Creative Commons Attribution 4.0 International licence (CC-BY 4.0), <https://creativecommons.org/licenses/by/4.0/>. Kyoko's own code that finds the file for an emoji sequence follows Twemoji's file naming and copies no Twemoji code; Twemoji's code is distributed under the following licence:
+
+```
+MIT License
+
+Copyright (c) 2022–present Jason Sofonia & Justine De Caires
+Copyright (c) 2014–2021 Twitter
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Settings → Advanced → Credits names Twemoji and its licence in the app.
+
 ## Lucide icons
 
 `apps/desktop/ui/icons/` holds the icon set oxidcord 0.2.0-beta.1 uses, taken from the `gpui-kit-assets` 0.8.0 crate that bundles them. Each file is named after oxidcord's `IconKind` in snake case, except `circle_x`, `circle_check` and `info`, the icons gpui-component's in-app notifications draw, which oxidcord's toasts use. 121 of the 125 files are [Lucide](https://lucide.dev) 1.43.0 icons, unchanged. The SilentTyping plugin's `plugins/silent-typing/keyboard.svg` and `keyboard_off.svg` are Lucide's `keyboard` and `keyboard-off`, unchanged. Lucide is distributed under the ISC licence, and the icons Lucide derived from Feather under the MIT licence:

@@ -12,6 +12,8 @@ pub const TONES: [&str; 6] = [
 	"\u{1F3FF}",
 ];
 pub const TONE_SAMPLE: &str = "\u{1F44B}";
+const HANDSHAKE: char = '\u{1F91D}';
+const PEOPLE: [char; 3] = ['\u{1F9D1}', '\u{1F468}', '\u{1F469}'];
 const SECTION_GLYPHS: [&str; 8] = [
 	"\u{1F600}",
 	"\u{1F43B}",
@@ -102,10 +104,20 @@ pub fn toned(glyph: &str, tone: usize) -> String {
 		return String::new();
 	};
 	let rest: String = chars.collect();
-	let mut out = String::with_capacity(glyph.len() + modifier.len());
+	let rest = rest.strip_prefix('\u{FE0F}').unwrap_or(&rest);
+	let mut out = String::with_capacity(glyph.len() + modifier.len() * 2);
 	out.push(first);
 	out.push_str(modifier);
-	out.push_str(rest.strip_prefix('\u{FE0F}').unwrap_or(&rest));
+	if rest.contains(HANDSHAKE) {
+		for c in rest.chars() {
+			out.push(c);
+			if PEOPLE.contains(&c) {
+				out.push_str(modifier);
+			}
+		}
+	} else {
+		out.push_str(rest);
+	}
 	out
 }
 

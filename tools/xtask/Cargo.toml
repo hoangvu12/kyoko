@@ -26,4 +26,9 @@ base64.workspace = true
 chrono.workspace = true
 toml.workspace = true
 image.workspace = true
+twemoji.workspace = true
+flate2.workspace = true
+tar.workspace = true
+sha2.workspace = true
+hex.workspace = true
 windows = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_Storage_Xps", "Win32_UI_HiDpi"] }
