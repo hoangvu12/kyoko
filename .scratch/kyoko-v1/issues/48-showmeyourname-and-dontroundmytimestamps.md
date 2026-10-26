@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 26 (Message rendering)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A display-name formatting hook exists, and ShowMeYourName uses it
 - [ ] A relative-timestamp formatting hook exists, and DontRoundMyTimestamps uses it
