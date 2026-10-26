@@ -5,7 +5,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bridge::{Composer, FileEdit, Inbox, Mark, Notice, OpenChannel, Outcome, Suggestion, Visual};
+use bridge::{
+	ActiveCommand, CommandApp, CommandPicker, Composer, FileEdit, Inbox, Mark, Notice, OpenChannel, Outcome,
+	Suggestion, Visual,
+};
 use chrono::Utc;
 use protocol::{Nonce, Snowflake};
 use rest::UploadFile;
@@ -21,6 +24,9 @@ use crate::composer_layer::{PlusMenu, Request};
 const DRAFT_DELAY: Duration = Duration::from_millis(500);
 const TICK: Duration = Duration::from_millis(250);
 const SUGGESTION_POINTS: f64 = 24.;
+const APP_ICON_POINTS: f64 = 32.;
+const HEADER_ICON_POINTS: f64 = 16.;
+const COMMAND_ICON_POINTS: f64 = 24.;
 const THUMBNAIL_PIXELS: u32 = 400;
 const WAITING: &str = "Waiting for connection...";
 type Handler = fn(&Link, Pane);
@@ -116,6 +122,15 @@ pub(super) struct Names {
 	spoiler: &'static str,
 	edit_file: &'static str,
 	pick: &'static str,
+	picker: &'static str,
+	command: &'static str,
+	command_section: &'static str,
+	option_changed: &'static str,
+	option_key: &'static str,
+	option_focus: &'static str,
+	toggle_optional: &'static str,
+	add_optional: &'static str,
+	cancel_command: &'static str,
 }
 
 pub(super) const MAIN: Names = Names {
@@ -152,6 +167,15 @@ pub(super) const MAIN: Names = Names {
 	spoiler: "composer.spoiler",
 	edit_file: "composer.edit_file",
 	pick: "composer.pick",
+	picker: "composer.picker_state",
+	command: "composer.command",
+	command_section: "composer.command_section",
+	option_changed: "composer.option_changed",
+	option_key: "composer.option_key",
+	option_focus: "composer.option_focus",
+	toggle_optional: "composer.toggle_optional",
+	add_optional: "composer.add_optional",
+	cancel_command: "composer.cancel_command",
 };
 
 pub(super) const THREAD: Names = Names {
@@ -188,6 +212,15 @@ pub(super) const THREAD: Names = Names {
 	spoiler: "thread_composer.spoiler",
 	edit_file: "thread_composer.edit_file",
 	pick: "thread_composer.pick",
+	picker: "thread_composer.picker_state",
+	command: "thread_composer.command",
+	command_section: "thread_composer.command_section",
+	option_changed: "thread_composer.option_changed",
+	option_key: "thread_composer.option_key",
+	option_focus: "thread_composer.option_focus",
+	toggle_optional: "thread_composer.toggle_optional",
+	add_optional: "thread_composer.add_optional",
+	cancel_command: "thread_composer.cancel_command",
 };
 
 enum Loaded {
@@ -232,6 +265,9 @@ pub(super) struct ComposerView {
 	open: Shared,
 	pick: Shared,
 	pick_serial: Cell<u64>,
+	picker: Shared,
+	command: Shared,
+	command_focus: Cell<u64>,
 }
 
 pub(super) fn content_type(name: &str) -> &'static str {
@@ -385,6 +421,13 @@ fn caret_of(value: &Value) -> usize {
 	}
 }
 
+fn position(value: &Value) -> Option<usize> {
+	match value {
+		Value::Num(index) if index.is_finite() && *index >= 1. => Some(*index as usize - 1),
+		_ => None,
+	}
+}
+
 fn flag(value: &Value, key: &str) -> bool {
 	matches!(field(value, key), Some(Value::Bool(true)))
 }
@@ -427,6 +470,9 @@ impl ComposerView {
 			open: host.shared(names.open, false),
 			pick: host.shared(names.pick, 0.0),
 			pick_serial: Cell::new(0),
+			picker: host.shared(names.picker, record([("open", false.into())])),
+			command: host.shared(names.command, record([("active", false.into())])),
+			command_focus: Cell::new(0),
 		}
 	}
 
@@ -637,6 +683,7 @@ impl Link {
 				link.composer_outcome(pane, outcome);
 			}
 		});
+		Link::install_command_actions(host, link, pane);
 		let simple: [(&str, Handler); 4] = [
 			(names.cancel_reply, |link, pane| {
 				link.pane_composer(pane).composer.borrow_mut().cancel_reply();
@@ -660,6 +707,154 @@ impl Link {
 				}
 			});
 		}
+	}
+
+	fn install_command_actions(host: &ScriptHost, link: &Rc<Link>, pane: Pane) {
+		let names = link.pane_composer(pane).names;
+		let actions = Rc::downgrade(link);
+		host.action(names.command_section, move |argument| {
+			if let (Some(link), Some(section)) = (actions.upgrade(), position(&argument))
+				&& link
+					.pane_composer(pane)
+					.composer
+					.borrow_mut()
+					.choose_section(section)
+			{
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.option_changed, move |argument| {
+			if let (Some(link), Some(index)) =
+				(actions.upgrade(), field(&argument, "index").and_then(position))
+			{
+				let value = field(&argument, "value").and_then(text).unwrap_or_default();
+				if link
+					.pane_composer(pane)
+					.composer
+					.borrow_mut()
+					.edit_option(index, value)
+				{
+					link.publish_composer_all(pane);
+				}
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.function(names.option_key, move |argument| {
+			let consumed = actions
+				.upgrade()
+				.is_some_and(|link| link.option_key(pane, &argument));
+			Value::Bool(consumed)
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.option_focus, move |argument| {
+			if let (Some(link), Some(index)) = (actions.upgrade(), position(&argument))
+				&& link.pane_composer(pane).composer.borrow_mut().focus_option(index)
+			{
+				link.focus_command(pane);
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.toggle_optional, move |_| {
+			if let Some(link) = actions.upgrade()
+				&& link.pane_composer(pane).composer.borrow_mut().toggle_optional()
+			{
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.add_optional, move |argument| {
+			if let Some(link) = actions.upgrade()
+				&& link
+					.pane_composer(pane)
+					.composer
+					.borrow_mut()
+					.add_optional(position(&argument))
+			{
+				link.focus_command(pane);
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.cancel_command, move |_| {
+			if let Some(link) = actions.upgrade()
+				&& link.pane_composer(pane).composer.borrow_mut().cancel_command()
+			{
+				link.replace_text(pane, Some((String::new(), 0)));
+				link.request_focus(pane);
+				link.publish_composer_all(pane);
+			}
+		});
+	}
+
+	fn focus_command(&self, pane: Pane) {
+		let view = self.pane_composer(pane);
+		view.command_focus.set(view.command_focus.get() + 1);
+	}
+
+	fn option_key(&self, pane: Pane, event: &Value) -> bool {
+		let Some(shared) = self.state() else {
+			return false;
+		};
+		let view = self.pane_composer(pane);
+		let key = field(event, "key").and_then(text).unwrap_or_default();
+		let shift = flag(event, "shift");
+		let empty = field(event, "value").and_then(text).is_none_or(str::is_empty);
+		let index = field(event, "index").and_then(position);
+		let (optional_open, focused, required) = {
+			let composer = view.composer.borrow();
+			let Some(command) = composer.command() else {
+				return false;
+			};
+			(
+				command.optional_open,
+				index.unwrap_or(command.focused),
+				command
+					.fields
+					.get(index.unwrap_or(command.focused))
+					.is_none_or(|field| field.option.is_required()),
+			)
+		};
+		let mut composer = view.composer.borrow_mut();
+		let handled = match key {
+			"ArrowDown" | "ArrowUp" if optional_open => {
+				composer.move_selection(if key == "ArrowDown" { 1 } else { -1 });
+				true
+			}
+			"Enter" if optional_open && !shift => composer.add_optional(None),
+			"Enter" if !shift => {
+				let outcome = composer.submit(&shared.read(), "", Utc::now());
+				drop(composer);
+				self.composer_outcome(pane, outcome);
+				self.focus_command(pane);
+				self.publish_composer_all(pane);
+				return true;
+			}
+			"Tab" => {
+				let moved = composer.step_option(if shift { -1 } else { 1 });
+				moved || (!shift && composer.toggle_optional())
+			}
+			"Escape" => composer.dismiss(),
+			"Backspace" if empty && !required => composer.remove_option(focused),
+			"Backspace" if empty && focused > 0 => composer.step_option(-1),
+			"Backspace" if empty => {
+				let restored = composer.leave_command();
+				drop(composer);
+				let left = restored.is_some();
+				self.replace_text(pane, restored);
+				self.request_focus(pane);
+				self.publish_composer_all(pane);
+				return left;
+			}
+			_ => return false,
+		};
+		drop(composer);
+		if handled {
+			self.focus_command(pane);
+			self.publish_composer_all(pane);
+		}
+		handled || key == "Tab"
 	}
 
 	pub(super) async fn follow_composer_files(self: Rc<Self>, pane: Pane) {
@@ -915,6 +1110,11 @@ impl Link {
 			}
 		};
 		self.composer_send(commands);
+		let picked = !echoed && view.composer.borrow_mut().exact_command(&shared.read(), &typed);
+		if picked {
+			self.replace_text(pane, Some((String::new(), 0)));
+			self.focus_command(pane);
+		}
 		self.publish_composer_suggestions(pane, &shared.read());
 	}
 
@@ -926,12 +1126,17 @@ impl Link {
 		let key = field(event, "key").and_then(text).unwrap_or_default();
 		let typed = field(event, "text").and_then(text).unwrap_or_default().to_owned();
 		let shift = flag(event, "shift");
-		let suggesting = !view.composer.borrow().suggestions().is_empty();
+		let suggesting = {
+			let composer = view.composer.borrow();
+			!composer.suggestions().is_empty()
+				|| composer.picker().is_some_and(|picker| !picker.rows.is_empty())
+		};
 		match key {
 			"ArrowDown" | "ArrowUp" if suggesting => {
 				let delta = if key == "ArrowDown" { 1 } else { -1 };
 				view.composer.borrow_mut().move_selection(delta);
 				self.publish_composer_selected(pane);
+				self.publish_composer_command(pane, &shared.read());
 				true
 			}
 			"Tab" | "Enter" if suggesting && !shift => {
@@ -970,6 +1175,9 @@ impl Link {
 			.composer
 			.borrow_mut()
 			.choose(typed, index);
+		if self.pane_composer(pane).composer.borrow().command().is_some() {
+			self.focus_command(pane);
+		}
 		self.replace_text(pane, chosen);
 		if let Some(shared) = self.state() {
 			self.publish_composer_suggestions(pane, &shared.read());
@@ -1275,11 +1483,184 @@ impl Link {
 		]));
 		view.suggestions.set(Value::List(items.into()));
 		view.selected.set((selected as f64).into());
+		images.extend(self.publish_composer_command(pane, state));
 		let changed = *view.images.borrow() != images;
 		if changed {
 			*view.images.borrow_mut() = images;
 			self.refresh_visible();
 		}
+	}
+
+	fn app_visual(&self, app: Option<&CommandApp>, points: f64, images: &mut Vec<String>) -> Value {
+		let Some(app) = app else {
+			return record([("kind", "frequent".into())]);
+		};
+		if app.built_in() {
+			return record([("kind", "built_in".into())]);
+		}
+		let image = match (app.id, app.icon.as_deref()) {
+			(Some(id), Some(hash)) => {
+				let request =
+					bridge::app_icon_request(&self.images.cdn, id, hash, points, self.scale_factor());
+				let name = self.images.gallery.request(request).to_string();
+				images.push(name.clone());
+				format!("host:{name}")
+			}
+			_ => String::new(),
+		};
+		let letter: String = app.name.chars().take(1).flat_map(char::to_uppercase).collect();
+		record([
+			("kind", "app".into()),
+			("letter", letter.as_str().into()),
+			("hue", (app.hue as f64).into()),
+			("image", image.as_str().into()),
+		])
+	}
+
+	fn picker_record(&self, picker: &CommandPicker, images: &mut Vec<String>) -> Value {
+		let mut items = Vec::new();
+		for (number, section) in picker.sections.iter().enumerate() {
+			items.push(record([
+				("key", format!("section:{number}").as_str().into()),
+				("kind", "header".into()),
+				("title", section.title.as_str().into()),
+				(
+					"app",
+					self.app_visual(section.app.as_ref(), HEADER_ICON_POINTS, images),
+				),
+			]));
+			for index in section.first..section.first + section.count {
+				let entry = &picker.rows[index];
+				let chips: Vec<Value> = entry
+					.required()
+					.map(|option| {
+						record([
+							("key", option.name.as_str().into()),
+							("name", option.name.as_str().into()),
+						])
+					})
+					.collect();
+				items.push(record([
+					("key", format!("row:{number}:{}", entry.key).as_str().into()),
+					("kind", "row".into()),
+					("index", ((index + 1) as f64).into()),
+					("name", format!("/{}", entry.name()).as_str().into()),
+					("description", entry.description.as_str().into()),
+					("app_name", entry.app.name.as_str().into()),
+					("frequent", section.app.is_none().into()),
+					("app", self.app_visual(Some(&entry.app), APP_ICON_POINTS, images)),
+					("chips", Value::List(chips.into())),
+				]));
+			}
+		}
+		let rail: Vec<Value> = picker
+			.sections
+			.iter()
+			.enumerate()
+			.map(|(number, section)| {
+				record([
+					("key", format!("rail:{number}:{}", section.title).as_str().into()),
+					("index", ((number + 1) as f64).into()),
+					("title", section.title.as_str().into()),
+					(
+						"app",
+						self.app_visual(section.app.as_ref(), APP_ICON_POINTS, images),
+					),
+				])
+			})
+			.collect();
+		record([
+			("open", true.into()),
+			("items", Value::List(items.into())),
+			("rail", Value::List(rail.into())),
+			("selected", ((picker.selected + 1) as f64).into()),
+			(
+				"section",
+				(picker.selected_section().map_or(0, |section| section + 1) as f64).into(),
+			),
+		])
+	}
+
+	fn command_record(
+		&self,
+		view: &ComposerView,
+		command: &ActiveCommand,
+		images: &mut Vec<String>,
+	) -> Value {
+		let fields: Vec<Value> = command
+			.fields
+			.iter()
+			.enumerate()
+			.map(|(index, field)| {
+				record([
+					("key", field.option.name.as_str().into()),
+					("index", ((index + 1) as f64).into()),
+					("name", field.option.name.as_str().into()),
+					("value", field.value.as_str().into()),
+					("focused", (index == command.focused).into()),
+					("invalid", field.error.is_some().into()),
+				])
+			})
+			.collect();
+		let optional: Vec<Value> = command
+			.optional()
+			.into_iter()
+			.map(|option| {
+				record([
+					("key", option.name.as_str().into()),
+					("name", option.name.as_str().into()),
+					(
+						"description",
+						option.description.as_deref().unwrap_or_default().into(),
+					),
+				])
+			})
+			.collect();
+		let hint = command.hint();
+		record([
+			("active", true.into()),
+			("serial", (view.command_focus.get() as f64).into()),
+			(
+				"app",
+				self.app_visual(Some(&command.entry.app), COMMAND_ICON_POINTS, images),
+			),
+			("name", format!("/{}", command.entry.name()).as_str().into()),
+			("focused", ((command.focused + 1) as f64).into()),
+			("fields", Value::List(fields.into())),
+			(
+				"hint",
+				record([
+					("name", hint.name.as_str().into()),
+					("description", hint.description.as_str().into()),
+					("error", hint.error.into()),
+				]),
+			),
+			("optional_count", (optional.len() as f64).into()),
+			("optional_open", command.optional_open.into()),
+			(
+				"optional_selected",
+				((command.optional_selected + 1) as f64).into(),
+			),
+			("optional", Value::List(optional.into())),
+		])
+	}
+
+	fn publish_composer_command(&self, pane: Pane, _state: &State) -> Vec<String> {
+		let view = self.pane_composer(pane);
+		let composer = view.composer.borrow();
+		let mut images = Vec::new();
+		let picker = match composer.picker().filter(|picker| !picker.rows.is_empty()) {
+			Some(picker) => self.picker_record(picker, &mut images),
+			None => record([("open", false.into())]),
+		};
+		let command = match composer.command() {
+			Some(command) => self.command_record(view, command, &mut images),
+			None => record([("active", false.into())]),
+		};
+		drop(composer);
+		view.picker.set(picker);
+		view.command.set(command);
+		images
 	}
 
 	fn publish_composer_notice(&self, pane: Pane) {
@@ -1363,6 +1744,11 @@ impl Link {
 					.await;
 			}
 			capture::ComposerShot::Uploads => self.drive_uploads().await,
+			capture::ComposerShot::CommandPicker
+			| capture::ComposerShot::CommandOptions
+			| capture::ComposerShot::CommandOptional
+			| capture::ComposerShot::CommandRemind
+			| capture::ComposerShot::CommandInvalid => self.drive_command(shot).await,
 			capture::ComposerShot::Drop => self.files_hovering(true),
 			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
 			capture::ComposerShot::PlusMenu => {
@@ -1389,6 +1775,50 @@ impl Link {
 				.await;
 			}
 		}
+	}
+
+	async fn drive_command(&self, shot: capture::ComposerShot) {
+		let Some(channel_id) = self.composer.composer.borrow().channel() else {
+			return;
+		};
+		self.send(session::Command::LoadApplicationCommands { channel_id });
+		self.replace_text(Pane::Main, Some(("/".to_owned(), 1)));
+		self.request_focus(Pane::Main);
+		let frequent = shot == capture::ComposerShot::CommandPicker;
+		self.until_capture(move |link| {
+			link.composer.composer.borrow().picker().is_some_and(|picker| {
+				picker.rows.iter().any(|row| row.app.name == "Remindy")
+					&& (!frequent
+						|| picker
+							.sections
+							.first()
+							.is_some_and(|section| section.app.is_none()))
+			})
+		})
+		.await;
+		let (name, value, optional) = match shot {
+			capture::ComposerShot::CommandOptions => ("roll", "", false),
+			capture::ComposerShot::CommandOptional => ("roll", "20", true),
+			capture::ComposerShot::CommandRemind => ("remind", "", false),
+			capture::ComposerShot::CommandInvalid => ("roll", "1000", false),
+			_ => return,
+		};
+		{
+			let mut composer = self.composer.composer.borrow_mut();
+			let index = composer
+				.picker()
+				.and_then(|picker| picker.rows.iter().position(|row| row.name() == name));
+			composer.choose("", index);
+			composer.edit_option(0, value);
+			if optional {
+				composer.toggle_optional();
+			}
+		}
+		self.focus_command(Pane::Main);
+		self.replace_text(Pane::Main, Some((String::new(), 0)));
+		self.publish_composer_all(Pane::Main);
+		self.until_capture(|link| link.composer.composer.borrow().command().is_some())
+			.await;
 	}
 
 	async fn drive_uploads(&self) {

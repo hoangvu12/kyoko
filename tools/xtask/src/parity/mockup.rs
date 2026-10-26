@@ -96,6 +96,11 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("link-preview-while-typing", "link-preview-while-typing"),
 	("reactions", "reactions"),
 	("reactions-list", "reactions-list"),
+	("command-picker", "command-picker"),
+	("command-options", "command-options"),
+	("command-options-optional", "command-options-optional"),
+	("command-options-remind", "command-options-remind"),
+	("command-choices-invalid", "command-choices-invalid"),
 ];
 
 pub struct Pairing {

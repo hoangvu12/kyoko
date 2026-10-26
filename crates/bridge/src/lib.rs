@@ -58,9 +58,11 @@ pub use community::{
 	rank_forward,
 };
 pub use composer::{
-	Attachment, Composer, FileEdit, LineState, Mark, Marked, Notice, Outcome, Query, Reply, Slash,
-	Suggestion, Trigger, Visual, apply_suggestion, failure_text, line_marks, parse_slash, placeholder,
-	query_at, suggestion_heading, suggestions, text_marks, too_big, typing_line,
+	ActiveCommand, Attachment, BuiltIn, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
+	CommandSource, Composer, FileEdit, LineState, Mark, Marked, Notice, OptionField, Outcome, Prepared,
+	Query, Reply, Suggestion, Trigger, Visual, apply_suggestion, command_catalog, command_picker,
+	exact_command, failure_text, interaction_options, line_marks, option_value, placeholder, query_at,
+	suggestion_heading, suggestions, text_marks, too_big, typing_line,
 };
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
@@ -95,9 +97,9 @@ pub use hidden::{
 	HiddenChannel, ModeratorNotes, Overwriter, channel_kind_label, hidden_channel, moderator_notes,
 };
 pub use images::{
-	attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request, embed_request,
-	emoji_request, guild_icon_request, is_image, is_video, local_media, media_fetcher, refresh_command,
-	sticker_request,
+	app_icon_request, attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request,
+	embed_request, emoji_request, guild_icon_request, is_image, is_video, local_media, media_fetcher,
+	refresh_command, sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};

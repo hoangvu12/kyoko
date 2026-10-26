@@ -562,6 +562,9 @@ pub enum Command {
 		entry: String,
 		favorite: bool,
 	},
+	CountCommandUse {
+		key: String,
+	},
 	SuppressEmbeds {
 		channel_id: Snowflake,
 		message_id: Snowflake,

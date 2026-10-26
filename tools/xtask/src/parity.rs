@@ -518,6 +518,7 @@ fn mockcord_flags(screen: &str) -> &'static [&'static str] {
 	match screen {
 		"emoji-picker-no-nitro" => &["--no-nitro"],
 		"emoji-autocomplete" => &["--no-nitro", "--autocomplete-emoji"],
+		"command-picker" => &["--frequent-commands"],
 		_ => &[],
 	}
 }

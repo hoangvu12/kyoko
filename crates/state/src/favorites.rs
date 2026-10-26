@@ -1,10 +1,15 @@
 use protocol::expressions::unicode::by_shortcode;
-use protocol::{FavoriteGif, Snowflake, decode_favorite_emojis, decode_favorite_gifs};
+use protocol::{
+	CommandUse, FavoriteGif, Snowflake, decode_command_frecency, decode_favorite_emojis, decode_favorite_gifs,
+};
 
 use crate::changes::Changes;
 use crate::state::State;
 
 const VARIATION_SELECTOR: char = '\u{fe0f}';
+const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+const RECENT_USES: usize = 10;
+const RECENCY_WEIGHTS: [(u64, u32); 5] = [(3, 100), (15, 70), (30, 50), (45, 30), (80, 10)];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Favorite {
@@ -38,6 +43,7 @@ pub(crate) struct Favorites {
 	entries: Vec<String>,
 	resolved: Vec<Favorite>,
 	gifs: Vec<FavoriteGif>,
+	commands: Vec<CommandUse>,
 	loaded: bool,
 	generation: u64,
 }
@@ -114,6 +120,7 @@ impl State {
 		self.lazy.expressions.favorites.loaded = true;
 		let mut changes = self.set_favorites(favorites);
 		changes.merge(self.set_favorite_gifs(gifs));
+		changes.merge(self.set_command_uses(decode_command_frecency(encoded).unwrap_or_default()));
 		changes
 	}
 
@@ -128,7 +135,28 @@ impl State {
 			None if !partial => self.set_favorite_gifs(Vec::new()),
 			None => Changes::default(),
 		});
+		changes.merge(match decode_command_frecency(encoded) {
+			Some(uses) => self.set_command_uses(uses),
+			None if !partial => self.set_command_uses(Vec::new()),
+			None => Changes::default(),
+		});
 		changes
+	}
+
+	pub fn command_uses(&self) -> &[CommandUse] {
+		&self.lazy.expressions.favorites.commands
+	}
+
+	pub(crate) fn set_command_uses(&mut self, uses: Vec<CommandUse>) -> Changes {
+		let favorites = &mut self.lazy.expressions.favorites;
+		if favorites.commands == uses {
+			return Changes::default();
+		}
+		favorites.commands = uses;
+		Changes {
+			commands: true,
+			..Changes::default()
+		}
 	}
 
 	pub(crate) fn favorite_gifs_changed(&mut self, gifs: Vec<FavoriteGif>) -> Changes {
@@ -176,5 +204,64 @@ impl State {
 
 	pub fn is_favorite_emoji(&self, id: Option<Snowflake>, unicode: Option<&str>) -> bool {
 		self.favorite_position(id, unicode).is_some()
+	}
+}
+
+fn recency_weight(at: u64, now_ms: u64) -> u32 {
+	let days = now_ms.saturating_sub(at) / DAY_MS;
+	RECENCY_WEIGHTS
+		.iter()
+		.find(|(within, _)| days <= *within)
+		.map_or(0, |(_, weight)| *weight)
+}
+
+pub fn command_frecency(used: &CommandUse, now_ms: u64) -> i32 {
+	if used.recent_uses.is_empty() {
+		return 0;
+	}
+	let total: u64 = used
+		.recent_uses
+		.iter()
+		.map(|at| u64::from(recency_weight(*at, now_ms)))
+		.sum();
+	let average = total / used.recent_uses.len() as u64;
+	i32::try_from(u64::from(used.total_uses) * average).unwrap_or(i32::MAX)
+}
+
+pub fn command_used(uses: &[CommandUse], key: &str, now_ms: u64) -> Vec<CommandUse> {
+	let mut next = uses.to_vec();
+	let position = match next.iter().position(|used| used.key == key) {
+		Some(position) => position,
+		None => {
+			next.push(CommandUse {
+				key: key.to_owned(),
+				..CommandUse::default()
+			});
+			next.len() - 1
+		}
+	};
+	let used = &mut next[position];
+	used.total_uses = used.total_uses.saturating_add(1);
+	used.recent_uses.insert(0, now_ms);
+	used.recent_uses.truncate(RECENT_USES);
+	used.frecency = command_frecency(used, now_ms);
+	used.score = used.frecency;
+	next
+}
+
+impl State {
+	pub fn frequent_commands(&self, now_ms: u64) -> Vec<&CommandUse> {
+		let mut ranked: Vec<(i32, &CommandUse)> = self
+			.command_uses()
+			.iter()
+			.filter(|used| used.total_uses > 0)
+			.map(|used| (command_frecency(used, now_ms), used))
+			.collect();
+		ranked.sort_by(|(left, left_use), (right, right_use)| {
+			right
+				.cmp(left)
+				.then(right_use.total_uses.cmp(&left_use.total_uses))
+		});
+		ranked.into_iter().map(|(_, used)| used).collect()
 	}
 }

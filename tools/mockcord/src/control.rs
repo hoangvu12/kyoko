@@ -208,12 +208,16 @@ impl Control {
 		self.set_favorite_emojis(favorites);
 		let encoded = {
 			let store = self.shared.store.lock();
-			protocol::encode_frecency(&store.favorite_emojis, &store.favorite_gifs)
+			protocol::encode_frecency(&store.favorite_emojis, &store.favorite_gifs, &store.command_uses)
 		};
 		self.shared.hub.broadcast(
 			"USER_SETTINGS_PROTO_UPDATE",
 			&json!({ "settings": { "type": 2, "proto": encoded }, "partial": false }),
 		);
+	}
+
+	pub fn command_uses(&self) -> Vec<protocol::CommandUse> {
+		self.shared.store.lock().command_uses.clone()
 	}
 
 	pub fn scan_qr_code(&self) {

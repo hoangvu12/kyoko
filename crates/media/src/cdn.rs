@@ -123,6 +123,14 @@ pub fn guild_icon_url(cdn: &str, guild_id: u64, hash: &str, size: u32, animate: 
 	)
 }
 
+pub fn app_icon_url(cdn: &str, application_id: u64, hash: &str, size: u32) -> String {
+	format!(
+		"{}/app-icons/{application_id}/{}",
+		cdn.trim_end_matches('/'),
+		webp(hash, size, false)
+	)
+}
+
 pub fn emoji_url(cdn: &str, id: u64, animated: bool, size: u32) -> String {
 	let animated = if animated { "&animated=true" } else { "" };
 	format!(

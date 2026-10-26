@@ -36,6 +36,13 @@ const GIF_FORMAT_VIDEO: u64 = 2;
 const FRECENCY_FAVORITE_EMOJIS: u32 = 5;
 const FAVORITE_EMOJIS: u32 = 1;
 const FAVORITE_LIMIT: usize = 512;
+const FRECENCY_APPLICATION_COMMANDS: u32 = 7;
+const APPLICATION_COMMANDS: u32 = 1;
+const USE_TOTAL: u32 = 1;
+const USE_RECENT: u32 = 2;
+const USE_FRECENCY: u32 = 3;
+const USE_SCORE: u32 = 4;
+const RECENT_LIMIT: usize = 32;
 
 const LENIENT: GeneralPurpose = GeneralPurpose::new(
 	&STANDARD_ALPHABET,
@@ -88,6 +95,15 @@ pub struct FavoriteGif {
 	pub height: u32,
 	pub video: bool,
 	pub order: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CommandUse {
+	pub key: String,
+	pub total_uses: u32,
+	pub recent_uses: Vec<u64>,
+	pub frecency: i32,
+	pub score: i32,
 }
 
 #[derive(Clone, Copy)]
@@ -322,10 +338,112 @@ pub fn encode_favorite_emojis(favorites: &[String]) -> String {
 	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
 }
 
-pub fn encode_frecency(favorites: &[String], gifs: &[FavoriteGif]) -> String {
+pub fn encode_frecency(favorites: &[String], gifs: &[FavoriteGif], commands: &[CommandUse]) -> String {
 	let mut settings = Writer::new();
 	favorite_gif_field(&mut settings, gifs);
 	favorite_emoji_field(&mut settings, favorites);
+	if !commands.is_empty() {
+		command_use_field(&mut settings, commands);
+	}
+	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
+}
+
+fn signed(value: u64) -> i32 {
+	value as u32 as i32
+}
+
+fn push_recent(recent: &mut Vec<u64>, wire: Wire) {
+	match wire {
+		Wire::Varint(at) => recent.push(at),
+		Wire::Bytes(packed) => {
+			let mut fields = Fields::new(packed);
+			while let Some(at) = fields.varint() {
+				recent.push(at);
+			}
+		}
+		Wire::Fixed64(_) | Wire::Skipped => {}
+	}
+}
+
+fn decode_command_use(key: String, bytes: &[u8]) -> CommandUse {
+	let mut used = CommandUse {
+		key,
+		..CommandUse::default()
+	};
+	for (number, wire) in Fields::new(bytes) {
+		match (number, wire) {
+			(USE_TOTAL, Wire::Varint(total)) => used.total_uses = small(total),
+			(USE_RECENT, wire) => push_recent(&mut used.recent_uses, wire),
+			(USE_FRECENCY, Wire::Varint(frecency)) => used.frecency = signed(frecency),
+			(USE_SCORE, Wire::Varint(score)) => used.score = signed(score),
+			_ => {}
+		}
+	}
+	used.recent_uses.truncate(RECENT_LIMIT);
+	used
+}
+
+fn decode_command_entry(bytes: &[u8]) -> Option<CommandUse> {
+	let mut key = None;
+	let mut value: &[u8] = &[];
+	for (number, wire) in Fields::new(bytes) {
+		match (number, wire) {
+			(MAP_KEY, Wire::Bytes(raw)) => key = std::str::from_utf8(raw).ok().map(str::to_owned),
+			(MAP_VALUE, Wire::Bytes(inner)) => value = inner,
+			_ => {}
+		}
+	}
+	let key = key.filter(|key| !key.is_empty())?;
+	Some(decode_command_use(key, value))
+}
+
+fn decode_command_uses(bytes: &[u8]) -> Vec<CommandUse> {
+	let mut uses: Vec<CommandUse> = Vec::new();
+	for (number, wire) in Fields::new(bytes) {
+		if let (APPLICATION_COMMANDS, Wire::Bytes(entry)) = (number, wire)
+			&& let Some(used) = decode_command_entry(entry)
+			&& uses.len() < FAVORITE_LIMIT
+		{
+			uses.retain(|known| known.key != used.key);
+			uses.push(used);
+		}
+	}
+	uses
+}
+
+pub fn decode_command_frecency(encoded: &str) -> Option<Vec<CommandUse>> {
+	let bytes = LENIENT.decode(encoded.trim()).ok()?;
+	Fields::new(&bytes).find_map(|(number, wire)| match (number, wire) {
+		(FRECENCY_APPLICATION_COMMANDS, Wire::Bytes(inner)) => Some(decode_command_uses(inner)),
+		_ => None,
+	})
+}
+
+fn command_use_field(settings: &mut Writer, uses: &[CommandUse]) {
+	let mut inner = Writer::new();
+	for used in uses {
+		let mut value = Writer::new();
+		value.varint_field(USE_TOTAL, u64::from(used.total_uses));
+		if !used.recent_uses.is_empty() {
+			let mut packed = Writer::new();
+			for at in &used.recent_uses {
+				packed.varint(*at);
+			}
+			value.bytes_field(USE_RECENT, &packed.bytes);
+		}
+		value.varint_field(USE_FRECENCY, i64::from(used.frecency) as u64);
+		value.varint_field(USE_SCORE, i64::from(used.score) as u64);
+		let mut entry = Writer::new();
+		entry.bytes_field(MAP_KEY, used.key.as_bytes());
+		entry.bytes_field(MAP_VALUE, &value.bytes);
+		inner.bytes_field(APPLICATION_COMMANDS, &entry.bytes);
+	}
+	settings.bytes_field(FRECENCY_APPLICATION_COMMANDS, &inner.bytes);
+}
+
+pub fn encode_command_frecency(uses: &[CommandUse]) -> String {
+	let mut settings = Writer::new();
+	command_use_field(&mut settings, uses);
 	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
 }
 

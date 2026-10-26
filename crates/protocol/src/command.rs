@@ -48,6 +48,14 @@ pub struct CommandOption {
 	pub choices: LenientVec<CommandChoice>,
 	pub options: LenientVec<CommandOption>,
 	pub autocomplete: Option<bool>,
+	#[serde(deserialize_with = "crate::lenient::optional_number")]
+	pub min_value: Option<f64>,
+	#[serde(deserialize_with = "crate::lenient::optional_number")]
+	pub max_value: Option<f64>,
+	#[serde(deserialize_with = "crate::lenient::optional_int")]
+	pub min_length: Option<i64>,
+	#[serde(deserialize_with = "crate::lenient::optional_int")]
+	pub max_length: Option<i64>,
 }
 
 impl CommandOption {

@@ -346,6 +346,15 @@ pub fn optional_int<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option
 	})
 }
 
+pub fn optional_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<f64>, D::Error> {
+	Ok(match serde_json::Value::deserialize(deserializer)? {
+		serde_json::Value::Number(number) => number.as_f64(),
+		serde_json::Value::String(text) => text.parse().ok(),
+		_ => None,
+	}
+	.filter(|number: &f64| number.is_finite()))
+}
+
 pub fn present<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
 	IgnoredAny::deserialize(deserializer).map(|_| true)
 }

@@ -70,6 +70,7 @@ pub(crate) fn interaction_body(
 
 impl Core {
 	pub(super) fn load_commands(&mut self, channel_id: Snowflake) {
+		self.want_frecency();
 		let (scope, guild_id, known) = {
 			let state = self.state.read();
 			let guild_id = state.channel_guild(channel_id);

@@ -226,6 +226,38 @@ function M.composer_edit_file(id: string, area: string?)
 end
 
 
+function M.composer_command_section(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".command_section", index)
+end
+
+function M.composer_option_changed(index: number, value: string, area: string?)
+	ui.invoke(area_of(area) .. ".option_changed", { index = index, value = value })
+end
+
+function M.composer_option_key(event: any, index: number, value: string, area: string?): boolean
+	return ui.call_sync(area_of(area) .. ".option_key", {
+		key = event.key,
+		shift = event.shift,
+		index = index,
+		value = value,
+	}) == true
+end
+
+function M.composer_option_focus(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".option_focus", index)
+end
+
+function M.composer_toggle_optional(area: string?)
+	ui.invoke(area_of(area) .. ".toggle_optional")
+end
+
+function M.composer_add_optional(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".add_optional", index)
+end
+
+function M.composer_cancel_command(area: string?)
+	ui.invoke(area_of(area) .. ".cancel_command")
+end
 function M.composer_backgrounds(text: string): { any }
 	local result = ui.call_sync("composer.backgrounds", text)
 	return if type(result) == "table" then result else {}

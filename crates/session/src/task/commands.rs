@@ -106,6 +106,7 @@ impl Core {
 			Command::LoadFavorites => self.want_frecency(),
 			Command::SetGifFavorite { gif, favorite } => self.set_gif_favorite(gif, favorite),
 			Command::SetEmojiFavorite { entry, favorite } => self.set_emoji_favorite(entry, favorite),
+			Command::CountCommandUse { key } => self.count_command_use(key),
 			Command::SuppressEmbeds {
 				channel_id,
 				message_id,

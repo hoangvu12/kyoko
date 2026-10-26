@@ -1,5 +1,5 @@
+mod command;
 mod marks;
-mod slash;
 mod suggest;
 
 use std::time::Instant;
@@ -13,8 +13,12 @@ use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
 use crate::emoji_picker::EmojiCell;
 use crate::sticker_picker::StickerCell;
 
+pub use command::{
+	ActiveCommand, BuiltIn, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
+	CommandSource, OptionField, Prepared, command_catalog, command_picker, exact_command,
+	interaction_options, option_value,
+};
 pub use marks::{LineState, Mark, Marked, line_marks, text_marks};
-pub use slash::{Slash, parse_slash};
 pub use suggest::{
 	Query, Suggestion, Trigger, Visual, apply_suggestion, emoji_candidates, placeholder, query_at,
 	suggestion_heading, suggestions, typing_line,
@@ -85,6 +89,8 @@ pub struct Composer {
 	member_query: Option<String>,
 	ranked_for: Option<(String, u64)>,
 	dirty: bool,
+	picker: Option<CommandPicker>,
+	command: Option<ActiveCommand>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -110,6 +116,10 @@ fn leaves_draft(command: &Command) -> bool {
 		Command::SendMessage { content, .. } => content.is_empty(),
 		_ => false,
 	}
+}
+
+fn now_ms() -> u64 {
+	u64::try_from(Utc::now().timestamp_millis()).unwrap_or_default()
 }
 
 pub fn failure_text(failure: &SendFailure) -> String {
@@ -170,6 +180,105 @@ impl Composer {
 		self.dirty
 	}
 
+	pub fn picker(&self) -> Option<&CommandPicker> {
+		self.picker.as_ref()
+	}
+
+	pub fn command(&self) -> Option<&ActiveCommand> {
+		self.command.as_ref()
+	}
+
+	fn fresh_picker(&self, state: &State) -> Option<CommandPicker> {
+		let channel_id = self.channel_id?;
+		let query = self
+			.query
+			.as_ref()
+			.filter(|query| query.trigger == Trigger::Command && self.command.is_none())?;
+		Some(command_picker(
+			state,
+			self.guild_id,
+			channel_id,
+			&query.text,
+			now_ms(),
+		))
+	}
+
+	fn activate(&mut self, entry: CommandEntry) {
+		self.command = Some(ActiveCommand::new(entry));
+		self.picker = None;
+		self.query = None;
+		self.suggestions.clear();
+		self.selected = 0;
+		self.dirty = true;
+	}
+
+	pub fn exact_command(&mut self, state: &State, text: &str) -> bool {
+		if self.command.is_some() || self.editing.is_some() {
+			return false;
+		}
+		let Some(channel_id) = self.channel_id else {
+			return false;
+		};
+		match exact_command(state, self.guild_id, channel_id, text) {
+			Some(entry) => {
+				self.activate(entry);
+				true
+			}
+			None => false,
+		}
+	}
+
+	pub fn choose_section(&mut self, section: usize) -> bool {
+		self.picker.as_mut().is_some_and(|picker| picker.jump(section))
+	}
+
+	pub fn cancel_command(&mut self) -> bool {
+		self.command.take().is_some()
+	}
+
+	pub fn leave_command(&mut self) -> Option<(String, usize)> {
+		let command = self.command.take()?;
+		let text = format!("/{}", command.entry.name());
+		let caret = text.len();
+		Some((text, caret))
+	}
+
+	pub fn edit_option(&mut self, index: usize, value: &str) -> bool {
+		self.command
+			.as_mut()
+			.is_some_and(|command| command.edit(index, value))
+	}
+
+	pub fn focus_option(&mut self, index: usize) -> bool {
+		self.command.as_mut().is_some_and(|command| {
+			let moved = command.focus(index);
+			if moved {
+				command.optional_open = false;
+			}
+			moved
+		})
+	}
+
+	pub fn step_option(&mut self, delta: i32) -> bool {
+		self.command.as_mut().is_some_and(|command| command.step(delta))
+	}
+
+	pub fn toggle_optional(&mut self) -> bool {
+		self.command.as_mut().is_some_and(ActiveCommand::toggle_optional)
+	}
+
+	pub fn add_optional(&mut self, index: Option<usize>) -> bool {
+		self.command
+			.as_mut()
+			.is_some_and(|command| command.add_optional(index))
+	}
+
+	pub fn remove_option(&mut self, index: usize) -> bool {
+		self.command
+			.as_mut()
+			.is_some_and(|command| command.remove_field(index))
+	}
+
 	pub fn open(
 		&mut self,
 		state: &State,
@@ -217,6 +326,7 @@ impl Composer {
 			(Some(query), Some(channel_id)) => suggestions(state, self.guild_id, channel_id, query),
 			_ => Vec::new(),
 		};
+		self.picker = self.fresh_picker(state);
 	}
 
 	pub fn changed(&mut self, state: &State, text: &str, caret: usize) -> Vec<Command> {
@@ -270,6 +380,24 @@ impl Composer {
 	}
 
 	pub fn refresh_suggestions(&mut self, state: &State) -> bool {
+		if let Some(mut fresh) = self.fresh_picker(state) {
+			let same_rows = self.picker.as_ref().is_some_and(|picker| {
+				picker.rows.len() == fresh.rows.len()
+					&& picker
+						.rows
+						.iter()
+						.zip(&fresh.rows)
+						.all(|(old, new)| old.key == new.key)
+			});
+			if same_rows {
+				fresh.selected = self.picker.as_ref().map_or(0, |picker| picker.selected);
+			}
+			if self.picker.as_ref() == Some(&fresh) {
+				return false;
+			}
+			self.picker = Some(fresh);
+			return true;
+		}
 		let (Some(channel_id), Some(query)) = (self.channel_id, &self.query) else {
 			return false;
 		};
@@ -283,6 +411,14 @@ impl Composer {
 	}
 
 	pub fn move_selection(&mut self, delta: i32) {
+		if let Some(picker) = &mut self.picker {
+			picker.move_selection(delta);
+			return;
+		}
+		if let Some(command) = self.command.as_mut().filter(|command| command.optional_open) {
+			command.move_optional(delta);
+			return;
+		}
 		let count = self.suggestions.len();
 		if count == 0 {
 			return;
@@ -296,6 +432,11 @@ impl Composer {
 	}
 
 	pub fn choose(&mut self, text: &str, index: Option<usize>) -> Option<(String, usize)> {
+		if let Some(picker) = &self.picker {
+			let entry = picker.rows.get(index.unwrap_or(picker.selected))?.clone();
+			self.activate(entry);
+			return Some((String::new(), 0));
+		}
 		let suggestion = self
 			.suggestions
 			.get(index.unwrap_or(self.selected))
@@ -308,6 +449,14 @@ impl Composer {
 	}
 
 	pub fn dismiss(&mut self) -> bool {
+		if self.picker.take().is_some() {
+			self.query = None;
+			return true;
+		}
+		if let Some(command) = self.command.as_mut().filter(|command| command.optional_open) {
+			command.optional_open = false;
+			return true;
+		}
 		if !self.suggestions.is_empty() {
 			self.suggestions.clear();
 			self.query = None;
@@ -365,6 +514,8 @@ impl Composer {
 		self.reply = None;
 		self.suggestions.clear();
 		self.query = None;
+		self.picker = None;
+		self.command = None;
 		let content = message.content.clone();
 		let caret = content.len();
 		Some((content, caret))
@@ -539,6 +690,11 @@ impl Composer {
 			}
 			Some(held) => {
 				commands.push(held);
+				if let Some(command) = self.command.take() {
+					commands.push(Command::CountCommandUse {
+						key: command.entry.key,
+					});
+				}
 				self.reply = None;
 				self.files.clear();
 				Outcome::cleared(commands)
@@ -570,6 +726,9 @@ impl Composer {
 		};
 		self.refusal = None;
 		self.acted_at = Some(now);
+		if self.command.is_some() {
+			return self.submit_command(state, channel_id, now);
+		}
 		let content = text.trim();
 		if let Some(message_id) = self.editing {
 			if content.is_empty() {
@@ -598,21 +757,7 @@ impl Composer {
 			));
 			return Outcome::default();
 		}
-		let command = match self.files.is_empty() {
-			true => match parse_slash(state.command_index(channel_id).map(AsRef::as_ref), content) {
-				Slash::Run { command_id, options } => Command::RunApplicationCommand {
-					channel_id,
-					command_id,
-					options,
-				},
-				Slash::Invalid(reason) => {
-					self.refusal = Some(reason);
-					return Outcome::default();
-				}
-				Slash::Text => self.message(channel_id, content),
-			},
-			false => self.message(channel_id, content),
-		};
+		let command = self.message(channel_id, content);
 		if self.lock(state, now).is_some() {
 			self.held = Some(command);
 			return Outcome::default();
@@ -624,6 +769,61 @@ impl Composer {
 		self.dirty = false;
 		Outcome::cleared(vec![
 			command,
+			Command::SetDraft {
+				channel_id,
+				content: String::new(),
+			},
+		])
+	}
+
+	fn submit_command(&mut self, state: &State, channel_id: Snowflake, now: DateTime<Utc>) -> Outcome {
+		let Some(active) = self.command.as_mut() else {
+			return Outcome::default();
+		};
+		let values = match active.prepare() {
+			Prepared::Run(values) => values,
+			Prepared::Invalid => return Outcome::default(),
+		};
+		let command = match &active.entry.source {
+			CommandSource::Application { command_id, .. } => Command::RunApplicationCommand {
+				channel_id,
+				command_id: *command_id,
+				options: interaction_options(&active.entry, values),
+			},
+			CommandSource::BuiltIn(kind) => {
+				let text = values
+					.iter()
+					.find(|(option, _)| option.name == "message")
+					.and_then(|(_, value)| value.as_str())
+					.unwrap_or_default();
+				match kind.message(text) {
+					Some(content) => Command::SendMessage {
+						channel_id,
+						content,
+						reply_to: None,
+						ping_reply: true,
+						files: Vec::new(),
+					},
+					None => {
+						active.refusal = Some(format!("kyoko can't run /{} yet", active.entry.name()));
+						return Outcome::default();
+					}
+				}
+			}
+		};
+		if self.lock(state, now).is_some() {
+			self.held = Some(command);
+			return Outcome::default();
+		}
+		let key = self
+			.command
+			.take()
+			.map(|active| active.entry.key)
+			.unwrap_or_default();
+		self.dirty = false;
+		Outcome::cleared(vec![
+			command,
+			Command::CountCommandUse { key },
 			Command::SetDraft {
 				channel_id,
 				content: String::new(),

@@ -49,6 +49,7 @@ pub struct Fixtures {
 	pub read_states: Vec<ReadState>,
 	pub user_guild_settings: Vec<UserGuildSettings>,
 	pub messages: BTreeMap<u64, BTreeMap<u64, Value>>,
+	pub command_uses: Vec<protocol::CommandUse>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -108,6 +109,11 @@ impl Fixtures {
 			read_states,
 			user_guild_settings,
 			messages: builder.messages,
+			command_uses: if config.frequent_commands {
+				crate::rest::frequent_commands(anchor)
+			} else {
+				Vec::new()
+			},
 		}
 	}
 

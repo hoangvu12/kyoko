@@ -140,6 +140,11 @@ pub enum ComposerShot {
 	UploadFailed,
 	PlusMenu,
 	EmojiAutocomplete,
+	CommandPicker,
+	CommandOptions,
+	CommandOptional,
+	CommandRemind,
+	CommandInvalid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,6 +234,11 @@ impl Screen {
 			"composer-upload-failed" => Some(Screen::ComposerShot(ComposerShot::UploadFailed)),
 			"composer-plus-menu" => Some(Screen::ComposerShot(ComposerShot::PlusMenu)),
 			"emoji-autocomplete" => Some(Screen::ComposerShot(ComposerShot::EmojiAutocomplete)),
+			"command-picker" => Some(Screen::ComposerShot(ComposerShot::CommandPicker)),
+			"command-options" => Some(Screen::ComposerShot(ComposerShot::CommandOptions)),
+			"command-options-optional" => Some(Screen::ComposerShot(ComposerShot::CommandOptional)),
+			"command-options-remind" => Some(Screen::ComposerShot(ComposerShot::CommandRemind)),
+			"command-choices-invalid" => Some(Screen::ComposerShot(ComposerShot::CommandInvalid)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),

@@ -117,6 +117,7 @@ pub enum Loaded {
 	Frecency(String),
 	FavoriteGifs(Vec<protocol::FavoriteGif>),
 	FavoriteEmojis(Vec<String>),
+	CommandUses(Vec<protocol::CommandUse>),
 	EmojiRanked(crate::favorites::EmojiRanking),
 	UserSettings(Value),
 	AuthSessions(Value),
@@ -706,6 +707,7 @@ impl State {
 			Loaded::Frecency(encoded) => return self.frecency_loaded(encoded),
 			Loaded::FavoriteGifs(gifs) => return self.favorite_gifs_changed(gifs.clone()),
 			Loaded::FavoriteEmojis(entries) => return self.favorite_emojis_changed(entries.clone()),
+			Loaded::CommandUses(uses) => return self.set_command_uses(uses.clone()),
 			Loaded::EmojiRanked(ranking) => return self.emoji_ranked(ranking),
 		}
 		changes

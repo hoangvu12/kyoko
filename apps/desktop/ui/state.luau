@@ -145,6 +145,9 @@ export type ComposerFile = { id: string, name: string, size: string, image: stri
 export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string, svg: string?, lock: string? }
 export type SuggestionHeading = { title: string, query: string }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
+export type CommandVisual = { kind: string, letter: string?, hue: number?, image: string? }
+export type CommandPickerState = { open: boolean, items: { any }?, rail: { any }?, selected: number?, section: number? }
+export type CommandState = { active: boolean, serial: number?, app: CommandVisual?, name: string?, focused: number?, fields: { any }?, hint: { name: string, description: string, error: boolean }?, optional_count: number?, optional_open: boolean?, optional_selected: number?, optional: { any }? }
 export type MemberWindow = {
 	first: number,
 	rows: { any },
@@ -442,6 +445,8 @@ M.composer = {
 	drop_hover = ui.shared("composer.drop_hover", false),
 	limit = ui.shared("composer.limit", 2000),
 	pick = ui.shared("composer.pick", 0),
+	picker = ui.shared("composer.picker_state", { open = false } :: CommandPickerState),
+	command = ui.shared("composer.command", { active = false } :: CommandState),
 }
 
 M.user = {
@@ -528,6 +533,8 @@ M.thread_composer = {
 	drop_hover = ui.shared("thread_composer.drop_hover", false),
 	limit = ui.shared("thread_composer.limit", 2000),
 	pick = ui.shared("thread_composer.pick", 0),
+	picker = ui.shared("thread_composer.picker_state", { open = false } :: CommandPickerState),
+	command = ui.shared("thread_composer.command", { active = false } :: CommandState),
 }
 
 M.threads = {

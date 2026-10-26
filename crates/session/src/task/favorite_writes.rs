@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use protocol::{FavoriteGif, encode_favorite_emojis, encode_favorite_gifs};
+use protocol::{
+	CommandUse, FavoriteGif, encode_command_frecency, encode_favorite_emojis, encode_favorite_gifs,
+};
 use rest::RestTuning;
 use state::Loaded;
 use tokio::time::Instant;
@@ -11,6 +13,7 @@ use super::{Core, Internal};
 pub(crate) enum FavoriteKind {
 	Gifs,
 	Emojis,
+	Commands,
 }
 
 pub(super) struct Writer<T> {
@@ -59,6 +62,8 @@ impl<T: Clone + PartialEq> Writer<T> {
 pub(super) struct FavoriteWrites {
 	gifs: Writer<FavoriteGif>,
 	emojis: Writer<String>,
+	commands: Writer<CommandUse>,
+	used: Vec<String>,
 }
 
 impl FavoriteWrites {
@@ -66,14 +71,20 @@ impl FavoriteWrites {
 		Self {
 			gifs: Writer::new(tuning.settings_delay),
 			emojis: Writer::new(tuning.settings_delay),
+			commands: Writer::new(tuning.settings_delay),
+			used: Vec::new(),
 		}
 	}
 
 	pub(super) fn deadline(&self) -> Option<Instant> {
-		[self.gifs.deadline(), self.emojis.deadline()]
-			.into_iter()
-			.flatten()
-			.min()
+		[
+			self.gifs.deadline(),
+			self.emojis.deadline(),
+			self.commands.deadline(),
+		]
+		.into_iter()
+		.flatten()
+		.min()
 	}
 
 	fn due(&self, now: Instant) -> Vec<FavoriteKind> {
@@ -83,6 +94,9 @@ impl FavoriteWrites {
 		}
 		if self.emojis.deadline().is_some_and(|at| at <= now) {
 			due.push(FavoriteKind::Emojis);
+		}
+		if self.commands.deadline().is_some_and(|at| at <= now) {
+			due.push(FavoriteKind::Commands);
 		}
 		due
 	}
@@ -113,6 +127,7 @@ fn rejected(kind: FavoriteKind) -> &'static str {
 	match kind {
 		FavoriteKind::Gifs => "The favourite GIFs could not be saved",
 		FavoriteKind::Emojis => "The favourite emoji could not be saved",
+		FavoriteKind::Commands => "Frequently used commands could not be saved",
 	}
 }
 
@@ -139,6 +154,26 @@ impl Core {
 			return;
 		}
 		self.apply_emoji_favorite(&entry, favorite);
+	}
+
+	pub(super) fn count_command_use(&mut self, key: String) {
+		if key.is_empty() {
+			return;
+		}
+		if !self.state.read().favorites_loaded() {
+			self.favorite_writes.used.push(key);
+			self.want_frecency();
+			return;
+		}
+		self.apply_command_use(&key);
+	}
+
+	fn apply_command_use(&mut self, key: &str) {
+		let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or_default();
+		let current = self.state.read().command_uses().to_vec();
+		let next = state::command_used(&current, key, now_ms);
+		self.favorite_writes.commands.changed(current);
+		self.on_loaded(Loaded::CommandUses(next));
 	}
 
 	fn apply_gif_favorite(&mut self, gif: FavoriteGif, favorite: bool) {
@@ -168,6 +203,9 @@ impl Core {
 		for (entry, favorite) in std::mem::take(&mut self.favorite_writes.emojis.waiting) {
 			self.apply_emoji_favorite(&entry, favorite);
 		}
+		for key in std::mem::take(&mut self.favorite_writes.used) {
+			self.apply_command_use(&key);
+		}
 	}
 
 	pub(super) fn flush_favorites(&mut self) {
@@ -193,6 +231,13 @@ impl Core {
 					let favorites = state.favorite_emojis().to_vec();
 					let settings = encode_favorite_emojis(&favorites);
 					writes.emojis.sent = Some(favorites);
+					settings
+				}
+				FavoriteKind::Commands => {
+					writes.commands.due = None;
+					let uses = state.command_uses().to_vec();
+					let settings = encode_command_frecency(&uses);
+					writes.commands.sent = Some(uses);
 					settings
 				}
 			}
@@ -223,6 +268,11 @@ impl Core {
 				.emojis
 				.settled(saved)
 				.map(|previous| previous.map(Loaded::FavoriteEmojis)),
+			FavoriteKind::Commands => self
+				.favorite_writes
+				.commands
+				.settled(saved)
+				.map(|previous| previous.map(Loaded::CommandUses)),
 		};
 		let Some(previous) = failed else {
 			return;

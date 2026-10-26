@@ -7,7 +7,10 @@ mod users;
 
 pub use channels::MODERATED_PHRASE;
 pub(crate) use expressions::ready_stickers;
-pub use interactions::{BROKEN_UPLOAD, MOCKBOT_ID, STALLED_UPLOAD};
+pub use interactions::{
+	BROKEN_UPLOAD, MOCKBOT_ID, POLLY_ID, REMIND_COMMAND, REMINDY_ID, ROLL_COMMAND, SHRUG_COMMAND, SNAPPER_ID,
+	STALLED_UPLOAD, frequent_commands,
+};
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

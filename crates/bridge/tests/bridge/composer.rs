@@ -207,65 +207,431 @@ async fn locked_emoji_are_listed_last_and_never_inserted() {
 	running.stop().await;
 }
 
+fn picked(composer: &mut Composer, running: &Running, query: &str, name: &str) {
+	typed(composer, running, query);
+	let index = composer
+		.picker()
+		.and_then(|picker| picker.rows.iter().position(|row| row.name() == name))
+		.unwrap_or_else(|| panic!("/{name} is listed for {query}"));
+	assert_eq!(composer.choose("", Some(index)), Some((String::new(), 0)));
+	assert_eq!(
+		composer.command().map(|command| command.entry.name()),
+		Some(name.to_owned())
+	);
+	assert!(composer.picker().is_none());
+}
+
+fn hint(composer: &Composer) -> (String, String, bool) {
+	let hint = composer.command().expect("a command is open").hint();
+	(hint.name, hint.description, hint.error)
+}
+
+fn sections(composer: &Composer) -> Vec<(String, Vec<String>)> {
+	let picker = composer.picker().expect("the picker is open");
+	picker
+		.sections
+		.iter()
+		.map(|section| {
+			let rows = picker.rows[section.first..section.first + section.count]
+				.iter()
+				.map(|row| row.name())
+				.collect();
+			(section.title.clone(), rows)
+		})
+		.collect()
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn slash_commands_complete_and_parse_their_options() {
-	let (mut running, mut composer, channel_id) = opened("composer-slash").await;
+async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
+	let config = MockConfig {
+		frequent_commands: true,
+		..MockConfig::default()
+	};
+	let (mut running, mut composer, channel_id) = opened_with("composer-picker", config).await;
 	with_commands(&mut running, &mut composer, channel_id).await;
-	typed(&mut composer, &running, "/ec");
-	assert_eq!(composer.suggestions()[0].label, "/echo");
+	running
+		.until_state("the frequently used commands", |state| {
+			state.command_uses().len() == 3
+		})
+		.await;
+	typed(&mut composer, &running, "/");
+	let listed = sections(&composer);
+	let titles: Vec<&str> = listed.iter().map(|(title, _)| title.as_str()).collect();
 	assert_eq!(
-		composer.suggestions()[0].detail.as_deref(),
-		Some("Repeat some text · Mockbot")
+		titles,
+		[
+			"Frequently Used",
+			"Mockbot",
+			"Remindy",
+			"Polly",
+			"Snapper",
+			"Built-In"
+		]
 	);
-
-	for text in ["/echo text:hi there", "/echo hi there"] {
-		let outcome = submitted(&mut composer, &running, text);
-		match outcome.commands.first() {
-			Some(Command::RunApplicationCommand {
-				command_id, options, ..
-			}) => {
-				assert_eq!(*command_id, ECHO_ID);
-				assert_eq!(options[0].kind, CommandOptionType::String);
-				assert_eq!(options[0].value, Some(json!("hi there")));
-			}
-			other => panic!("{text}: expected a command, got {other:?}"),
-		}
-		assert_eq!(outcome.replace, Some((String::new(), 0)));
+	assert_eq!(listed[0].1, ["remind", "roll", "shrug"]);
+	assert_eq!(listed[1].1, ["broken", "echo", "ping", "roll"]);
+	let built_in = &listed[5].1;
+	for name in [
+		"gif",
+		"me",
+		"msg",
+		"schedule",
+		"shrug",
+		"spoiler",
+		"sticker",
+		"tableflip",
+		"unflip",
+	] {
+		assert!(
+			built_in.iter().any(|row| row == name),
+			"/{name} is built in: {built_in:?}"
+		);
 	}
+	let mut sorted = built_in.clone();
+	sorted.sort();
+	assert_eq!(*built_in, sorted, "built-ins are alphabetical");
+	let picker = composer.picker().expect("open");
+	let remind = &picker.rows[0];
+	assert_eq!(remind.app.name, "Remindy");
+	let chips: Vec<&str> = remind.required().map(|option| option.name.as_str()).collect();
+	assert_eq!(chips, ["when", "message"]);
 
-	let outcome = submitted(&mut composer, &running, "/roll sides:twenty");
-	assert!(matches!(
-		outcome.commands.first(),
-		Some(Command::RunApplicationCommand { command_id, options, .. })
-			if *command_id == ROLL_ID && options[0].value == Some(json!(20))
-	));
-
-	let outcome = submitted(&mut composer, &running, "/roll sides:7");
-	assert!(outcome.commands.is_empty());
-	assert!(outcome.replace.is_none());
-	let state = running.session().state().clone();
+	composer.move_selection(-1);
 	assert_eq!(
-		composer.notice(&state.read(), Utc::now()),
-		Some(Notice::Refused(
-			"/roll: sides must be one of six, twenty".to_owned()
-		))
+		composer.picker().map(|picker| picker.selected),
+		Some(picker_len(&composer) - 1)
+	);
+	assert!(composer.choose_section(1));
+	assert_eq!(
+		composer
+			.picker()
+			.and_then(|picker| picker.selected_entry())
+			.map(|row| row.name()),
+		Some("broken".to_owned())
 	);
 
-	let outcome = submitted(&mut composer, &running, "/echo");
-	assert!(outcome.commands.is_empty());
+	typed(&mut composer, &running, "/rol");
+	let listed = sections(&composer);
+	assert_eq!(listed, [("Mockbot".to_owned(), vec!["roll".to_owned()])]);
+	typed(&mut composer, &running, "/ro");
 	assert_eq!(
-		composer.notice(&state.read(), Utc::now()),
-		Some(Notice::Refused("/echo needs text".to_owned()))
+		sections(&composer)[0].1,
+		["roll", "broken"],
+		"prefix matches come first"
 	);
-
-	let outcome = submitted(&mut composer, &running, "/shrug not a command");
-	assert!(matches!(
-		outcome.commands.first(),
-		Some(Command::SendMessage { content, .. }) if content == "/shrug not a command"
-	));
+	assert!(composer.dismiss());
+	assert!(composer.picker().is_none());
 	running.stop().await;
 }
 
+fn picker_len(composer: &Composer) -> usize {
+	composer.picker().map_or(0, |picker| picker.rows.len())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn required_options_are_checked_before_sending_and_the_reason_shows_in_the_hint() {
+	let (mut running, mut composer, channel_id) = opened("composer-options").await;
+	with_commands(&mut running, &mut composer, channel_id).await;
+	picked(&mut composer, &running, "/rol", "roll");
+	assert_eq!(
+		hint(&composer),
+		("sides".to_owned(), "How many sides the die has".to_owned(), false)
+	);
+	let command = composer.command().expect("open");
+	assert_eq!(command.fields.len(), 1);
+	assert_eq!(
+		command
+			.optional()
+			.iter()
+			.map(|option| option.name.as_str())
+			.collect::<Vec<_>>(),
+		["count"]
+	);
+
+	let outcome = submitted(&mut composer, &running, "");
+	assert!(outcome.commands.is_empty(), "nothing is sent without sides");
+	assert!(outcome.replace.is_none());
+	assert_eq!(
+		hint(&composer),
+		("sides".to_owned(), "This option is required".to_owned(), true)
+	);
+
+	assert!(composer.edit_option(0, "1000"));
+	assert_eq!(
+		hint(&composer),
+		(
+			"sides".to_owned(),
+			"Must be a number between 1 and 100".to_owned(),
+			true
+		)
+	);
+	assert!(
+		composer
+			.command()
+			.is_some_and(|command| command.fields[0].error.is_some())
+	);
+	assert!(submitted(&mut composer, &running, "").commands.is_empty());
+	assert!(composer.edit_option(0, "2.5"));
+	assert!(hint(&composer).2, "an integer option refuses a fraction");
+	assert!(composer.edit_option(0, "20"));
+	assert_eq!(
+		hint(&composer),
+		("sides".to_owned(), "How many sides the die has".to_owned(), false)
+	);
+
+	assert!(composer.toggle_optional());
+	assert!(composer.command().is_some_and(|command| command.optional_open));
+	assert!(composer.add_optional(None));
+	let command = composer.command().expect("open");
+	assert!(!command.optional_open);
+	assert_eq!(command.focused, 1);
+	assert_eq!(hint(&composer).0, "count");
+	assert!(composer.edit_option(1, "3"));
+
+	let outcome = submitted(&mut composer, &running, "");
+	match outcome.commands.as_slice() {
+		[
+			Command::RunApplicationCommand {
+				command_id, options, ..
+			},
+			Command::CountCommandUse { key },
+			..,
+		] => {
+			assert_eq!(*command_id, ROLL_ID);
+			assert_eq!(*key, ROLL_ID.to_string());
+			assert_eq!(options.len(), 2);
+			assert_eq!(
+				(options[0].name.as_str(), options[0].kind),
+				("sides", CommandOptionType::Integer)
+			);
+			assert_eq!(options[0].value, Some(json!(20)));
+			assert_eq!(options[1].value, Some(json!(3)));
+		}
+		other => panic!("expected the roll to run, got {other:?}"),
+	}
+	assert_eq!(outcome.replace, Some((String::new(), 0)));
+	assert!(composer.command().is_none());
+
+	picked(&mut composer, &running, "/ec", "echo");
+	assert!(composer.edit_option(0, "hi there"));
+	assert!(composer.step_option(1));
+	assert!(composer.edit_option(1, "German"));
+	assert_eq!(
+		hint(&composer),
+		(
+			"language".to_owned(),
+			"Choose one of English, French, Japanese".to_owned(),
+			true
+		)
+	);
+	assert!(composer.edit_option(1, "french"));
+	let outcome = submitted(&mut composer, &running, "");
+	assert!(matches!(
+		outcome.commands.first(),
+		Some(Command::RunApplicationCommand { command_id, options, .. })
+			if *command_id == ECHO_ID
+				&& options[0].value == Some(json!("hi there"))
+				&& options[1].value == Some(json!("fr"))
+	));
+
+	picked(&mut composer, &running, "/shr", "shrug");
+	assert!(
+		composer
+			.command()
+			.is_some_and(|command| command.fields.is_empty())
+	);
+	let outcome = submitted(&mut composer, &running, "");
+	assert!(matches!(
+		outcome.commands.as_slice(),
+		[Command::SendMessage { content, .. }, Command::CountCommandUse { key }, ..]
+			if content == "¯\\\\\\_(ツ)\\_/¯" && key == "-1"
+	));
+
+	picked(&mut composer, &running, "/stick", "sticker");
+	assert!(submitted(&mut composer, &running, "").commands.is_empty());
+	assert_eq!(
+		hint(&composer),
+		(
+			"/sticker".to_owned(),
+			"kyoko can't run /sticker yet".to_owned(),
+			true
+		)
+	);
+	assert_eq!(composer.leave_command(), Some(("/sticker".to_owned(), 8)));
+	running.stop().await;
+}
+
+#[test]
+fn option_values_parse_and_validate_by_kind() {
+	use bridge::option_value;
+	use protocol::CommandOption;
+	let option = |kind: CommandOptionType| CommandOption {
+		kind,
+		name: "value".to_owned(),
+		..CommandOption::default()
+	};
+	assert_eq!(
+		option_value(&option(CommandOptionType::Integer), " 12 "),
+		Ok(json!(12))
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::Integer), "twelve"),
+		Err("Must be a whole number".to_owned())
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::Number), "2.5"),
+		Ok(json!(2.5))
+	);
+	let ranged = CommandOption {
+		min_value: Some(0.5),
+		..option(CommandOptionType::Number)
+	};
+	assert_eq!(
+		option_value(&ranged, "0.1"),
+		Err("Must be at least 0.5".to_owned())
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::Boolean), "yes"),
+		Ok(json!(true))
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::User), "<@!42>"),
+		Ok(json!("42"))
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::Channel), "<#7>"),
+		Ok(json!("7"))
+	);
+	assert_eq!(
+		option_value(&option(CommandOptionType::Role), "<@&9>"),
+		Ok(json!("9"))
+	);
+	assert!(option_value(&option(CommandOptionType::Role), "<@9>").is_err());
+	let short = CommandOption {
+		min_length: Some(2),
+		max_length: Some(4),
+		..option(CommandOptionType::String)
+	};
+	assert_eq!(
+		option_value(&short, "abcdef"),
+		Err("Must be between 2 and 4 characters".to_owned())
+	);
+	assert_eq!(option_value(&short, "abc"), Ok(json!("abc")));
+	assert!(option_value(&option(CommandOptionType::Attachment), "file").is_err());
+}
+
+#[test]
+fn subcommands_are_listed_as_their_own_rows_and_nest_their_options() {
+	use bridge::{CommandSource, interaction_options};
+	let index: protocol::ApplicationCommandIndex = serde_json::from_value(json!({
+		"applications": [{ "id": "5", "name": "Configo" }],
+		"application_commands": [{
+			"id": "50", "type": 1, "application_id": "5", "name": "config", "description": "Settings",
+			"options": [
+				{ "type": 2, "name": "role", "description": "Roles", "options": [
+					{ "type": 1, "name": "set", "description": "Pick the role", "options": [
+						{ "type": 8, "name": "role", "description": "Which role", "required": true },
+					]},
+				]},
+				{ "type": 1, "name": "reset", "description": "Start over" },
+				{ "type": 99, "name": "future", "description": "Unknown option kind" },
+			],
+		}],
+	}))
+	.expect("the index decodes");
+	let mut state = State::new();
+	state.apply(&state::Event::Local(state::LocalEvent::CommandIndexLoaded {
+		scope: Snowflake(1),
+		index: std::sync::Arc::new(index),
+	}));
+	let catalog = bridge::command_catalog(&state, None, Snowflake(1));
+	let names: Vec<String> = catalog
+		.iter()
+		.filter(|entry| entry.app.name == "Configo")
+		.map(bridge::CommandEntry::name)
+		.collect();
+	assert_eq!(names, ["config reset", "config role set"]);
+	let set = catalog
+		.iter()
+		.find(|entry| entry.name() == "config role set")
+		.expect("the leaf");
+	assert_eq!(set.key, "50\u{0}role set");
+	assert!(
+		matches!(set.source, CommandSource::Application { command_id, .. } if command_id == Snowflake(50))
+	);
+	let role = set.options[0].clone();
+	let nested = interaction_options(set, vec![(role, json!("9"))]);
+	let payload = serde_json::to_value(&nested).expect("serialises");
+	assert_eq!(
+		payload,
+		json!([{ "type": 2, "name": "role", "options": [
+			{ "type": 1, "name": "set", "options": [{ "type": 8, "name": "role", "value": "9" }] },
+		]}])
+	);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn frequently_used_commands_are_saved_to_the_account_and_come_back() {
+	let (mut running, mut composer, channel_id) = opened("composer-frequent").await;
+	with_commands(&mut running, &mut composer, channel_id).await;
+	running
+		.until_state("the account's frecency settings", State::favorites_loaded)
+		.await;
+	typed(&mut composer, &running, "/");
+	assert!(
+		composer
+			.picker()
+			.is_some_and(|picker| picker.sections.iter().all(|section| section.app.is_some())),
+		"nothing is frequently used yet"
+	);
+	picked(&mut composer, &running, "/rol", "roll");
+	assert!(composer.edit_option(0, "6"));
+	let outcome = submitted(&mut composer, &running, "");
+	for command in outcome.commands {
+		running.session().send(command);
+	}
+	running
+		.until_state("the use counted", |state| {
+			state
+				.command_uses()
+				.iter()
+				.any(|used| used.key == ROLL_ID.to_string() && used.total_uses == 1)
+		})
+		.await;
+	let deadline = std::time::Instant::now() + Duration::from_secs(10);
+	while !running
+		.server
+		.control()
+		.command_uses()
+		.iter()
+		.any(|used| used.key == ROLL_ID.to_string() && used.total_uses == 1 && used.recent_uses.len() == 1)
+	{
+		assert!(
+			std::time::Instant::now() < deadline,
+			"the use reaches the account's settings"
+		);
+		tokio::time::sleep(Duration::from_millis(50)).await;
+	}
+
+	let _ = std::fs::remove_dir_all(running.scratch.join("accounts"));
+	running.restart().await;
+	let guild_id = running.view.sidebar.selected();
+	if let Some(command) = running.open_channel(channel_id) {
+		running.session().send(command);
+	}
+	let mut composer = Composer::default();
+	composer.open(&running.session().state().read(), guild_id, Some(channel_id));
+	with_commands(&mut running, &mut composer, channel_id).await;
+	running
+		.until_state("the uses from the account", |state| {
+			!state.command_uses().is_empty()
+		})
+		.await;
+	typed(&mut composer, &running, "/");
+	let listed = sections(&composer);
+	assert_eq!(listed[0], ("Frequently Used".to_owned(), vec!["roll".to_owned()]));
+	running.stop().await;
+}
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_reply_carries_the_ping_choice_and_clears_after_sending() {
 	let (running, mut composer, channel_id) = opened("composer-reply").await;

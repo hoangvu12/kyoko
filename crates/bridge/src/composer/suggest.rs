@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use protocol::expressions::unicode::search_unicode;
-use protocol::{ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, ChannelType, Snowflake};
+use protocol::{ChannelType, Snowflake};
 use state::{EmojiCandidate, MemberListRow, State};
 
 use crate::emoji_picker::emoji_lock;
@@ -352,45 +352,6 @@ pub fn emoji_candidates(state: &State, guild_id: Option<Snowflake>, query: &Quer
 		.collect()
 }
 
-pub(super) fn chat_commands(index: &ApplicationCommandIndex) -> impl Iterator<Item = &ApplicationCommand> {
-	index
-		.application_commands
-		.iter()
-		.filter(|command| command.kind == ApplicationCommandType::ChatInput)
-}
-
-fn commands(index: Option<&ApplicationCommandIndex>, query: &str) -> Vec<(u8, Suggestion)> {
-	let Some(index) = index else {
-		return Vec::new();
-	};
-	chat_commands(index)
-		.filter_map(|command| {
-			let hit = rank(&command.name, query)?;
-			let application = index
-				.application(command.application_id)
-				.map(|application| application.name.clone());
-			let detail = match (command.description.as_deref(), application) {
-				(Some(description), Some(application)) if !description.is_empty() => {
-					format!("{description} · {application}")
-				}
-				(Some(description), None) => description.to_owned(),
-				(_, Some(application)) => application,
-				(None, None) => String::new(),
-			};
-			Some((
-				hit,
-				Suggestion {
-					label: format!("/{}", command.name),
-					detail: (!detail.is_empty()).then_some(detail),
-					insert: format!("/{} ", command.name),
-					visual: Visual::Icon("plugins"),
-					lock: None,
-				},
-			))
-		})
-		.collect()
-}
-
 pub fn suggestions(
 	state: &State,
 	guild_id: Option<Snowflake>,
@@ -404,7 +365,7 @@ pub fn suggestions(
 			let matches = emoji_matches(state, guild_id, &query.text);
 			return ranked(matches, state.emoji_ranking(guild_id, &query.text));
 		}
-		Trigger::Command => commands(state.command_index(channel_id).map(AsRef::as_ref), &query.text),
+		Trigger::Command => Vec::new(),
 	};
 	found.sort_by_key(|(hit, _)| *hit);
 	found

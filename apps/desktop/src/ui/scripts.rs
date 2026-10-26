@@ -1204,6 +1204,116 @@ fn emoji_members_and_channels_share_the_suggestion_container() {
 	assert!(app.texts().iter().any(|text| text == "#ge"));
 }
 
+fn command_app(letter: &str, hue: f64) -> serde_json::Value {
+	json!({ "kind": "app", "letter": letter, "hue": hue, "image": "" })
+}
+
+fn command_picker_state() -> serde_json::Value {
+	json!({
+		"open": true,
+		"selected": 1,
+		"section": 1,
+		"rail": [
+			{ "key": "rail:0", "index": 1, "title": "Frequently Used", "app": { "kind": "frequent" } },
+			{ "key": "rail:1", "index": 2, "title": "Mockbot", "app": command_app("M", 0.) },
+			{ "key": "rail:2", "index": 3, "title": "Built-In", "app": { "kind": "built_in" } },
+		],
+		"items": [
+			{ "key": "section:0", "kind": "header", "title": "Frequently Used", "app": { "kind": "frequent" } },
+			{
+				"key": "row:0:1", "kind": "row", "index": 1, "name": "/remind", "description": "Set a reminder",
+				"app_name": "Remindy", "frequent": true, "app": command_app("R", 1.),
+				"chips": [{ "key": "when", "name": "when" }, { "key": "message", "name": "message" }],
+			},
+			{ "key": "section:1", "kind": "header", "title": "Mockbot", "app": command_app("M", 0.) },
+			{
+				"key": "row:1:2", "kind": "row", "index": 2, "name": "/roll", "description": "Roll a die",
+				"app_name": "Mockbot", "frequent": false, "app": command_app("M", 0.),
+				"chips": [{ "key": "sides", "name": "sides" }],
+			},
+			{ "key": "section:2", "kind": "header", "title": "Built-In", "app": { "kind": "built_in" } },
+			{
+				"key": "row:2:-1", "kind": "row", "index": 3, "name": "/shrug",
+				"description": "Appends ¯\\_(ツ)_/¯ to your message.", "app_name": "Built-In", "frequent": false,
+				"app": { "kind": "built_in" }, "chips": [],
+			},
+		],
+	})
+}
+
+fn command_state(value: &str, invalid: bool, open: bool) -> serde_json::Value {
+	let description = if invalid {
+		"Must be a number between 1 and 100"
+	} else {
+		"How many sides the die has"
+	};
+	json!({
+		"active": true,
+		"serial": 1,
+		"app": command_app("M", 0.),
+		"name": "/roll",
+		"focused": 1,
+		"fields": [{ "key": "sides", "index": 1, "name": "sides", "value": value, "focused": true, "invalid": invalid }],
+		"hint": { "name": "sides", "description": description, "error": invalid },
+		"optional_count": 1,
+		"optional_open": open,
+		"optional_selected": 1,
+		"optional": [{ "key": "count", "name": "count", "description": "How many dice to roll" }],
+	})
+}
+
+#[test]
+fn the_command_picker_and_option_states_load() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let mut picker = vec![
+		("login.screen", json!("main")),
+		("rail.items", rail_items()),
+		("sidebar.guild_id", json!("10")),
+		("sidebar.guild_name", json!("Kyoko")),
+		("sidebar.rows", sidebar_rows()),
+		("timeline.channel_id", json!("20")),
+		("timeline.channel_name", json!("general")),
+		("composer.open", json!(true)),
+	];
+	picker.push(("composer.picker_state", command_picker_state()));
+	shows(&mut app, "the command picker", "Frequently Used", &picker);
+	assert!(app.texts().iter().any(|text| text == "/remind"));
+	assert!(app.texts().iter().any(|text| text == "Remindy"));
+	shows(
+		&mut app,
+		"a picked command",
+		"How many sides the die has",
+		&[
+			("composer.picker_state", json!({ "open": false })),
+			("composer.command", command_state("", false, false)),
+		],
+	);
+	assert!(app.texts().iter().any(|text| text == "+1 optional"));
+	assert!(app.texts().iter().any(|text| text == "/roll"));
+	shows(
+		&mut app,
+		"the optional options",
+		"OPTIONAL",
+		&[("composer.command", command_state("20", false, true))],
+	);
+	assert!(app.texts().iter().any(|text| text == "How many dice to roll"));
+	shows(
+		&mut app,
+		"an invalid value",
+		"Must be a number between 1 and 100",
+		&[("composer.command", command_state("1000", true, false))],
+	);
+}
+
 fn watch_dots(app: &mut TestApp, span: Duration) -> Vec<[f32; 3]> {
 	let deadline = Instant::now() + span;
 	let mut seen = Vec::new();

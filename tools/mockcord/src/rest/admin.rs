@@ -6,9 +6,9 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
 use protocol::{
-	decode_favorite_emojis, decode_favorite_gifs, decode_guild_folders, decode_status_settings,
-	encode_favorite_emojis, encode_favorite_gifs, encode_frecency, encode_guild_folders,
-	encode_status_settings,
+	decode_command_frecency, decode_favorite_emojis, decode_favorite_gifs, decode_guild_folders,
+	decode_status_settings, encode_command_frecency, encode_favorite_emojis, encode_favorite_gifs,
+	encode_frecency, encode_guild_folders, encode_status_settings,
 };
 use serde_json::{Value, json};
 
@@ -104,18 +104,28 @@ pub async fn patch_settings_proto(
 	if kind == FRECENCY_SETTINGS {
 		let favorites = decode_favorite_emojis(encoded);
 		let gifs = decode_favorite_gifs(encoded);
-		let stored = match (favorites, gifs) {
-			(Some(favorites), _) => {
+		let commands = decode_command_frecency(encoded);
+		let stored = match (favorites, gifs, commands) {
+			(Some(favorites), _, _) => {
 				let stored = encode_favorite_emojis(&favorites);
 				shared.store.lock().favorite_emojis = favorites;
 				stored
 			}
-			(None, Some(gifs)) => {
+			(None, Some(gifs), _) => {
 				let stored = encode_favorite_gifs(&gifs);
 				shared.store.lock().favorite_gifs = gifs;
 				stored
 			}
-			(None, None) => return Err(ApiError::invalid_body("Only favourite emoji and GIFs are kept")),
+			(None, None, Some(commands)) => {
+				let stored = encode_command_frecency(&commands);
+				shared.store.lock().command_uses = commands;
+				stored
+			}
+			(None, None, None) => {
+				return Err(ApiError::invalid_body(
+					"Only favourite emoji, GIFs and command uses are kept",
+				));
+			}
 		};
 		shared.hub.broadcast(
 			"USER_SETTINGS_PROTO_UPDATE",
@@ -168,7 +178,7 @@ pub async fn settings_proto(State(shared): Mock, Path(kind): Path<u32>) -> ApiRe
 	}
 	let encoded = {
 		let store = shared.store.lock();
-		encode_frecency(&store.favorite_emojis, &store.favorite_gifs)
+		encode_frecency(&store.favorite_emojis, &store.favorite_gifs, &store.command_uses)
 	};
 	Ok(Json(json!({ "settings": encoded })))
 }

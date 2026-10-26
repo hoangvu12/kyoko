@@ -6,7 +6,8 @@ use axum::body::to_bytes;
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
-use protocol::{MessageType, Snowflake, User};
+use chrono::{DateTime, Utc};
+use protocol::{CommandUse, MessageType, Snowflake, User};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -20,12 +21,28 @@ pub const STALLED_UPLOAD: &str = "stalled-upload.mp4";
 pub const BROKEN_UPLOAD: &str = "broken-upload.mp4";
 const STALL: Duration = Duration::from_secs(600);
 const MAX_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
-const COMMAND_IDS: [(u64, &str); 4] = [
-	(9_100_000_000_000_000_101, "ping"),
-	(9_100_000_000_000_000_102, "echo"),
-	(9_100_000_000_000_000_103, "roll"),
-	(9_100_000_000_000_000_104, "broken"),
+pub const REMINDY_ID: u64 = 9_100_000_000_000_000_002;
+pub const POLLY_ID: u64 = 9_100_000_000_000_000_003;
+pub const SNAPPER_ID: u64 = 9_100_000_000_000_000_004;
+pub const REMIND_COMMAND: u64 = 9_100_000_000_000_000_201;
+pub const ROLL_COMMAND: u64 = 9_100_000_000_000_000_103;
+pub const SHRUG_COMMAND: &str = "-1";
+const COMMAND_IDS: [(u64, u64, &str); 7] = [
+	(9_100_000_000_000_000_101, MOCKBOT_ID, "ping"),
+	(9_100_000_000_000_000_102, MOCKBOT_ID, "echo"),
+	(ROLL_COMMAND, MOCKBOT_ID, "roll"),
+	(9_100_000_000_000_000_104, MOCKBOT_ID, "broken"),
+	(REMIND_COMMAND, REMINDY_ID, "remind"),
+	(9_100_000_000_000_000_301, POLLY_ID, "poll"),
+	(9_100_000_000_000_000_401, SNAPPER_ID, "snap"),
 ];
+const APPLICATIONS: [(u64, &str); 4] = [
+	(MOCKBOT_ID, "Mockbot"),
+	(REMINDY_ID, "Remindy"),
+	(POLLY_ID, "Polly"),
+	(SNAPPER_ID, "Snapper"),
+];
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 const COMMAND_VERSION: u64 = 9_100_000_000_000_000_900;
 
 #[derive(Deserialize, Default)]
@@ -52,29 +69,66 @@ fn mockbot() -> User {
 	}
 }
 
-fn command(id: u64, name: &str) -> Value {
+fn string_option(name: &str, description: &str, required: bool) -> Value {
+	json!({ "type": 3, "name": name, "description": description, "required": required })
+}
+
+fn integer_option(name: &str, description: &str, required: bool, max: i64) -> Value {
+	json!({
+		"type": 4,
+		"name": name,
+		"description": description,
+		"required": required,
+		"min_value": 1,
+		"max_value": max,
+	})
+}
+
+fn command(id: u64, application_id: u64, name: &str) -> Value {
 	let (description, options) = match name {
-		"ping" => ("Check that the bot answers", json!([])),
+		"ping" => ("Check that Mockbot is responding", json!([])),
 		"echo" => (
-			"Repeat some text",
-			json!([{ "type": 3, "name": "text", "description": "What to repeat", "required": true }]),
+			"Repeats what you say",
+			json!([
+				string_option("text", "What to repeat", true),
+				{
+					"type": 3,
+					"name": "language",
+					"description": "The language to answer in",
+					"required": true,
+					"choices": [
+						{ "name": "English", "value": "en" },
+						{ "name": "French", "value": "fr" },
+						{ "name": "Japanese", "value": "ja" },
+					],
+				},
+			]),
 		),
 		"roll" => (
 			"Roll a die",
-			json!([{
-				"type": 4,
-				"name": "sides",
-				"description": "How many sides",
-				"required": false,
-				"choices": [{ "name": "six", "value": 6 }, { "name": "twenty", "value": 20 }],
-			}]),
+			json!([
+				integer_option("sides", "How many sides the die has", true, 100),
+				integer_option("count", "How many dice to roll", false, 10),
+			]),
 		),
-		_ => ("Never answers", json!([])),
+		"remind" => (
+			"Set a reminder",
+			json!([
+				string_option("when", "When to remind you, like 'in 2 hours'", true),
+				string_option("message", "What to remind you about", true),
+			]),
+		),
+		"poll" => (
+			"Ask the channel a question",
+			json!([string_option("question", "What to ask", true)]),
+		),
+		"snap" => ("Save a snapshot of this channel", json!([])),
+		_ => ("Always fails, to test error states", json!([])),
 	};
 	json!({
 		"id": id.to_string(),
 		"type": 1,
-		"application_id": MOCKBOT_ID.to_string(),
+		"application_id": application_id.to_string(),
 		"version": COMMAND_VERSION.to_string(),
 		"name": name,
 		"description": description,
@@ -86,17 +140,39 @@ fn command(id: u64, name: &str) -> Value {
 
 fn index() -> Value {
 	json!({
-		"applications": [{
-			"id": MOCKBOT_ID.to_string(),
-			"name": "Mockbot",
+		"applications": APPLICATIONS.iter().map(|(id, name)| json!({
+			"id": id.to_string(),
+			"name": name,
 			"icon": null,
-			"bot_id": MOCKBOT_ID.to_string(),
-		}],
-		"application_commands": COMMAND_IDS.iter().map(|(id, name)| command(*id, name)).collect::<Vec<_>>(),
+			"bot_id": id.to_string(),
+		})).collect::<Vec<_>>(),
+		"application_commands": COMMAND_IDS
+			.iter()
+			.map(|(id, application_id, name)| command(*id, *application_id, name))
+			.collect::<Vec<_>>(),
 		"version": COMMAND_VERSION.to_string(),
 	})
 }
 
+pub fn frequent_commands(anchor: DateTime<Utc>) -> Vec<CommandUse> {
+	let now = anchor.timestamp_millis();
+	[
+		(REMIND_COMMAND.to_string(), 12),
+		(ROLL_COMMAND.to_string(), 7),
+		(SHRUG_COMMAND.to_owned(), 3),
+	]
+	.into_iter()
+	.map(|(key, uses)| CommandUse {
+		key,
+		total_uses: uses,
+		recent_uses: (0..uses.min(10))
+			.map(|day| (now - i64::from(day) * DAY_MS) as u64)
+			.collect(),
+		frecency: -1,
+		score: -1,
+	})
+	.collect()
+}
 pub async fn guild_index(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
 	if !shared.fixtures.guilds.iter().any(|guild| guild.id == id) {
 		return Err(ApiError::unknown_guild());
@@ -219,6 +295,15 @@ fn answer(name: &str, data: &Value) -> Option<String> {
 			let sides = option_value(data, "sides").and_then(Value::as_i64).unwrap_or(6);
 			Some(format!("You rolled {} of {sides}", sides.min(4)))
 		}
+		"remind" => {
+			let when = option_value(data, "when").and_then(Value::as_str)?;
+			let message = option_value(data, "message").and_then(Value::as_str)?;
+			Some(format!("I will remind you {when}: {message}"))
+		}
+		"poll" => option_value(data, "question")
+			.and_then(Value::as_str)
+			.map(|question| format!("Poll: {question}")),
+		"snap" => Some("Snapshot saved".to_owned()),
 		_ => None,
 	}
 }
@@ -232,9 +317,9 @@ pub async fn create_interaction(
 	let known = data["id"]
 		.as_str()
 		.and_then(|id| id.parse::<u64>().ok())
-		.and_then(|id| COMMAND_IDS.iter().find(|(known, _)| *known == id));
+		.and_then(|id| COMMAND_IDS.iter().find(|(known, ..)| *known == id));
 	let channel_id = body["channel_id"].as_str().and_then(|id| id.parse::<u64>().ok());
-	let (Some((_, name)), Some(channel_id)) = (known, channel_id) else {
+	let (Some((_, _, name)), Some(channel_id)) = (known, channel_id) else {
 		return Err(ApiError::invalid_body("Invalid Form Body"));
 	};
 	if body["type"].as_i64() != Some(2) || body["session_id"].as_str().is_none_or(str::is_empty) {

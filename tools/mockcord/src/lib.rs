@@ -43,7 +43,10 @@ pub use ready::API_CODE_VERSION;
 pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,
 };
-pub use rest::{BROKEN_UPLOAD, MOCKBOT_ID, MODERATED_PHRASE, STALLED_UPLOAD};
+pub use rest::{
+	BROKEN_UPLOAD, MOCKBOT_ID, MODERATED_PHRASE, POLLY_ID, REMIND_COMMAND, REMINDY_ID, ROLL_COMMAND,
+	SHRUG_COMMAND, SNAPPER_ID, STALLED_UPLOAD,
+};
 pub use scenario::{HeartbeatAcks, Reply};
 pub use server::{Server, login_page_url, remote_auth_url};
 pub use web::{

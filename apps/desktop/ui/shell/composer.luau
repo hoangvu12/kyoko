@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local plugin_slot = require("@components/plugin_slot")
+local command_picker = require("./command_picker")
 
 local LEADING = 56
 local LINE = 22
@@ -458,8 +459,20 @@ return function(scope: any?)
 		return #shared.files:get() > 0
 	end
 
+	local function commanding(): boolean
+		return shared.command:get().active == true
+	end
+
+	local function picker_open(): boolean
+		return shared.picker:get().open == true
+	end
+
+	local function optional_open(): boolean
+		return commanding() and shared.command:get().optional_open == true
+	end
+
 	local function joined(): boolean
-		return notice_kind() ~= "" or has_reply() or has_edit() or has_files()
+		return notice_kind() ~= "" or has_reply() or has_edit() or has_files() or commanding()
 	end
 
 	local function suggesting(): boolean
@@ -628,6 +641,7 @@ return function(scope: any?)
 			border = 1,
 			border_sides = { 1, 1, 0, 1 },
 			border_color = theme.color.border,
+			ui.show(commanding, command_picker.hint(shared, area)),
 			notice(),
 			reply_bar(),
 			edit_bar(),
@@ -809,9 +823,14 @@ return function(scope: any?)
 			on_resize = function(_, element)
 				bar_element = element
 			end,
-			plugin_slot { name = "composer.buttons", context = { area = area }, gap = 2 },
-			composer_button("gif", "Open GIF picker", opens("gif")),
-			composer_button("sticker", "Open sticker picker", opens("sticker")),
+			ui.show(function()
+				return not commanding()
+			end, ui.row {
+				items = "center",
+				plugin_slot { name = "composer.buttons", context = { area = area }, gap = 2 },
+				composer_button("gif", "Open GIF picker", opens("gif")),
+				composer_button("sticker", "Open sticker picker", opens("sticker")),
+			}),
 			composer_button("emoji", "Select emoji", opens("emoji")),
 		}
 	end
@@ -821,7 +840,7 @@ return function(scope: any?)
 			return shared.limit:get() - length(text:get())
 		end
 		return ui.show(function()
-			return remaining() < COUNTER_FROM
+			return remaining() < COUNTER_FROM and not commanding()
 		end, ui.text {
 			function()
 				return tostring(remaining())
@@ -841,7 +860,7 @@ return function(scope: any?)
 
 	local function typing_line()
 		return ui.show(function()
-			return not suggesting()
+			return not suggesting() and not picker_open() and not commanding()
 		end, ui.row {
 			w_full = true,
 			h = theme.size.typing_height,
@@ -878,6 +897,8 @@ return function(scope: any?)
 		relative = true,
 		w_full = true,
 		shrink = 0,
+		ui.show(picker_open, command_picker.picker(shared, area)),
+		ui.show(optional_open, command_picker.optional(shared, area)),
 		popup(text, shared, area, suggesting),
 		typing_line(),
 		joined_bars(),
@@ -905,7 +926,13 @@ return function(scope: any?)
 			rounded_tr = function()
 				return if joined() or suggesting() then 0 else radius()
 			end,
-			ui.row {
+			ui.show(commanding, ui.row {
+				h = function()
+					return chatbar() - 2
+				end,
+				shrink = 0,
+				command_picker.app_slot(shared),
+			}, ui.row {
 				w = LEADING,
 				h = function()
 					return chatbar() - 2
@@ -921,8 +948,15 @@ return function(scope: any?)
 					tooltip = "More",
 					on_click = plus,
 				},
-			},
-			editor(text, box),
+			}),
+			ui.show(commanding, ui.row {
+				grow = 1,
+				min_w = 0,
+				h = function()
+					return chatbar() - 2
+				end,
+				command_picker.editor(shared, area),
+			}, editor(text, box)),
 			toolbar(),
 			counter(text),
 		},
