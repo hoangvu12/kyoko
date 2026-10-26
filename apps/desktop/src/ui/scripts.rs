@@ -336,7 +336,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(
 		&mut app,
 		"the friends list",
-		"ONLINE — 2",
+		"Online — 2",
 		&[
 			("home.page", json!("friends")),
 			("friends.rows", friend_rows()),
@@ -1280,10 +1280,10 @@ fn friend_rows() -> serde_json::Value {
 		})
 	};
 	json!([
-		{ "kind": "title", "key": "tONLINE — 2", "title": "ONLINE — 2" },
+		{ "kind": "title", "key": "tOnline — 2", "title": "Online — 2" },
 		person("41", "ada", "online", "Online", "friend"),
 		person("42", "grace", "dnd", "Playing Hades II", "friend"),
-		{ "kind": "title", "key": "tINCOMING — 1", "title": "INCOMING — 1" },
+		{ "kind": "title", "key": "tReceived — 1", "title": "Received — 1" },
 		person("43", "linus", "offline", "Incoming Friend Request", "incoming"),
 		person("44", "ken", "offline", "Outgoing Friend Request", "outgoing"),
 		person("45", "troll", "offline", "Blocked", "blocked"),
@@ -1298,7 +1298,7 @@ fn the_friends_page_reaches_every_relationship_action() {
 	shows(
 		&mut app,
 		"the friends page",
-		"ONLINE — 2",
+		"Online — 2",
 		&[
 			("login.screen", json!("main")),
 			("rail.items", rail_items()),
@@ -1355,7 +1355,7 @@ fn the_friends_page_reaches_every_relationship_action() {
 	shows(
 		&mut app,
 		"the add friend tab",
-		"ADD FRIEND",
+		"Other places to make friends",
 		&[("friends.tab", json!("add"))],
 	);
 	app.type_text("friends_add_input", "grace");
@@ -1415,4 +1415,62 @@ pub(super) fn member_window() -> serde_json::Value {
 			{ "kind": "placeholder", "key": "p2", "index": 2 },
 		],
 	})
+}
+
+fn dm_profile(open: bool) -> serde_json::Value {
+	json!({
+		"open": open, "id": "50", "name": "ada", "username": "ada", "avatar": "", "banner": "",
+		"accent": "", "status": "online", "bio": "hi, i am ada", "since": "Mar 3, 2019",
+		"servers": "Mutual Servers — 2", "friends": "Mutual Friends — 1",
+	})
+}
+
+fn dm_members() -> serde_json::Value {
+	json!([
+		{ "key": "g50", "id": "50", "name": "ada", "avatar": "", "status": "online", "activity": "Playing Chess", "owner": false },
+		{ "key": "g51", "id": "51", "name": "grace", "avatar": "", "status": "idle", "activity": "", "owner": true },
+	])
+}
+
+#[test]
+fn the_dm_columns_show_the_profile_and_the_group_members() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "mentions");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the profile column of a direct message",
+		"Mutual Servers — 2",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("")),
+			("dms.rows", dm_rows()),
+			("timeline.channel_id", json!("30")),
+			("timeline.channel_name", json!("ada")),
+			("dms.profile", dm_profile(true)),
+		],
+	);
+	shows(&mut app, "the profile's bio", "hi, i am ada", &[]);
+	app.click("dm_profile_full");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "dms.full_profile"), Some(json!("50")));
+	app.click("top_bar_dm_profile");
+	app.frames(2);
+	assert!(
+		!app.texts().iter().any(|text| text == "hi, i am ada"),
+		"the header button hides the profile column"
+	);
+	shows(
+		&mut app,
+		"the member column of a group",
+		"Members — 2",
+		&[
+			("timeline.channel_id", json!("31")),
+			("timeline.channel_name", json!("ada, grace")),
+			("dms.profile", dm_profile(false)),
+			("dms.members", dm_members()),
+		],
+	);
+	shows(&mut app, "a group member's activity", "Playing Chess", &[]);
 }

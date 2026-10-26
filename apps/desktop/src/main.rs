@@ -3,6 +3,7 @@
 mod capture;
 mod churn;
 mod community;
+mod dm_panel;
 mod dm_sidebar;
 mod emoji;
 mod fonts;

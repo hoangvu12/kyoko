@@ -4,6 +4,7 @@ mod composer;
 mod connection;
 mod deep_links;
 mod display;
+mod dm_panel;
 mod dms;
 mod expressions;
 mod favourites;

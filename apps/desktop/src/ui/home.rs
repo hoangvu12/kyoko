@@ -1,7 +1,7 @@
 use bridge::OpenChannel;
 use protocol::Snowflake;
 use session::Command;
-use state::State;
+use state::{Changes, State};
 
 use super::{Link, Slot};
 use crate::capture;
@@ -126,6 +126,16 @@ impl Link {
 			.borrow()
 			.open()
 			.is_some_and(|open| open.guild_id.is_none())
+			&& self.dm_panel_settled()
+	}
+
+	fn dm_panel_settled(&self) -> bool {
+		let loaded = match (self.dm_panel.recipient(), self.state()) {
+			(Some(user_id), Some(shared)) => shared.read().profile(user_id).is_some(),
+			_ => true,
+		};
+		let shown = self.shown.borrow();
+		loaded && self.dm_panel.images().iter().all(|name| shown.contains(name))
 	}
 
 	fn select_home_only(&self, state: &State) {
@@ -138,6 +148,40 @@ impl Link {
 	pub(super) fn leave_home_page(&self) {
 		if self.dms.set_page("") && !self.settings_view().is_open() {
 			self.window.slot.set(self.reported_slot.get());
+		}
+	}
+
+	pub(super) fn sync_dm_panel(&self, state: &State, open: Option<OpenChannel>) {
+		let channel = open
+			.filter(|open| open.guild_id.is_none())
+			.map(|open| open.channel_id);
+		if !self.dm_panel.set_open(channel) {
+			return;
+		}
+		self.dm_panel.refresh(state, None);
+		self.publish_dm_panel();
+		if let Some(user_id) = self.dm_panel.recipient() {
+			self.send(Command::LoadProfile {
+				user_id,
+				guild_id: None,
+			});
+		}
+	}
+
+	pub(super) fn dm_panel_apply(&self, state: &State, changes: &Changes) {
+		if self.dm_panel.refresh(state, Some(changes)) {
+			self.publish_dm_panel();
+		}
+	}
+
+	fn publish_dm_panel(&self) {
+		let icons = Icons {
+			gallery: &self.images.gallery,
+			cdn: &self.images.cdn,
+			scale: self.scale_factor(),
+		};
+		if self.dm_panel.publish(&icons) {
+			self.refresh_visible();
 		}
 	}
 }

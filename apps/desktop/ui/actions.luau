@@ -375,4 +375,8 @@ function M.open_friend_profile(id: string, x: number, y: number)
 	ui.invoke("friends.open_profile", { id = id, x = x, y = y })
 end
 
+function M.open_full_profile(id: string)
+	ui.invoke("dms.full_profile", id)
+end
+
 return M

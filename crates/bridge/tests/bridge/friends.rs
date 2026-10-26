@@ -53,7 +53,7 @@ async fn each_tab_lists_its_relationships_with_counts() {
 	);
 
 	let tab = view.sections(FriendsTab::Online, "");
-	assert_eq!(titles(&tab), [format!("ONLINE — {online}")]);
+	assert_eq!(titles(&tab), [format!("Online — {online}")]);
 	assert!(
 		tab[0]
 			.entries
@@ -68,7 +68,7 @@ async fn each_tab_lists_its_relationships_with_counts() {
 	);
 
 	let tab = view.sections(FriendsTab::All, "");
-	assert_eq!(titles(&tab), [format!("ALL FRIENDS — {}", friends.len())]);
+	assert_eq!(titles(&tab), [format!("All Friends — {}", friends.len())]);
 	let ranks: Vec<bool> = tab[0]
 		.entries
 		.iter()
@@ -80,14 +80,14 @@ async fn each_tab_lists_its_relationships_with_counts() {
 	);
 
 	let tab = view.sections(FriendsTab::Pending, "");
-	assert_eq!(titles(&tab), ["INCOMING — 1", "OUTGOING — 1"]);
+	assert_eq!(titles(&tab), ["Received — 1", "Sent — 1"]);
 	assert_eq!(ids(&tab[0]), [incoming]);
 	assert_eq!(tab[0].entries[0].subtitle(), "Incoming Friend Request");
 	assert_eq!(tab[1].entries[0].subtitle(), "Outgoing Friend Request");
 	assert_eq!(view.pending_count(), 1);
 
 	let tab = view.sections(FriendsTab::Blocked, "");
-	assert_eq!(titles(&tab), ["BLOCKED — 1"]);
+	assert_eq!(titles(&tab), ["Blocked — 1"]);
 	assert_eq!(tab[0].entries[0].subtitle(), "Blocked");
 	assert!(view.sections(FriendsTab::Add, "").is_empty());
 
@@ -146,6 +146,6 @@ async fn presence_and_accepted_requests_move_people_between_tabs() {
 		})
 		.await;
 	let pending = running.view.friends.sections(FriendsTab::Pending, "");
-	assert_eq!(titles(&pending), ["OUTGOING — 1"]);
+	assert_eq!(titles(&pending), ["Sent — 1"]);
 	running.stop().await;
 }

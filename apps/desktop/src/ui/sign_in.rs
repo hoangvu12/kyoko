@@ -752,6 +752,7 @@ impl Link {
 		self.dms.reset();
 		self.dm_avatars.borrow_mut().clear();
 		self.friends.reset();
+		self.dm_panel.reset();
 		self.members.reset();
 		self.member_avatars.borrow_mut().clear();
 		for value in [

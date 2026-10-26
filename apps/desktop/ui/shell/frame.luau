@@ -14,6 +14,8 @@ local login = require("./login")
 local storage_notice = require("./storage_notice")
 local plugin_notice = require("./plugin_notice")
 local home_page = require("./home_page")
+local dm_profile = require("./dm_profile")
+local dm_members = require("./dm_members")
 local settings = require("./settings")
 local server_settings = require("./server_settings")
 local search_panel = require("./search_panel")
@@ -64,14 +66,14 @@ end
 local function home_cover()
 	return ui.show(function()
 		return state.home.page:get() ~= ""
-	end, panel {
-		absolute = true,
-		left = 0,
-		top = 0,
-		right = 0,
-		bottom = 0,
-		home_page(),
-	})
+	end, home_page())
+end
+
+local function dm_side(members_room: () -> boolean): boolean
+	return members_room()
+		and state.sidebar.guild_id:get() == ""
+		and state.timeline.channel_id:get() ~= ""
+		and not state.search.panel:get().open
 end
 
 local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
@@ -100,6 +102,12 @@ local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
 					and not state.threads.panel:get().open
 					and not state.hidden.view:get().open
 			end, panel { w = theme.size.member_list_panel_width, h_full = true, member_list() })),
+			ui.show(function()
+				return dm_side(members_room) and state.dms.profile:get().open and state.shell.dm_profile_visible:get()
+			end, panel { h_full = true, dm_profile() }),
+			ui.show(function()
+				return dm_side(members_room) and #state.dms.members:get() > 0 and state.shell.members_visible:get()
+			end, panel { h_full = true, dm_members() }),
 		},
 		home_cover(),
 	}

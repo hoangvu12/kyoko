@@ -8,6 +8,7 @@ mod connection;
 mod deep_link;
 mod display;
 mod dm_list;
+mod dm_panel;
 mod emoji_picker;
 mod expression_popout;
 mod friends;
@@ -62,6 +63,7 @@ pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use display::{Display, person, relative_text, relative_time};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
+pub use dm_panel::{DmPanel, DmProfile, GroupMember, since_label};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, EmojiSection, FAVORITES_SECTION, NITRO_LOCK, PERMISSION_LOCK,
 	PickerSection, RECENT_SECTION, RailEntry, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE, TONES,
@@ -71,7 +73,9 @@ pub use expression_popout::{
 	Area, DEFAULT_EMOJI_NOTE, ExpressionDetails, PopoutServer, PopoutSubject, expression_details,
 	members_label, place_popout,
 };
-pub use friends::{FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, status_label};
+pub use friends::{
+	ActiveCard, FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, active_card, status_label,
+};
 pub use gif_picker::{
 	FAVORITES_TITLE, GIF_SEARCH_DELAY, GifSearch, GifTile, GifView, TRENDING_TITLE, favorite_gif,
 	favorite_gif_attachment, favorite_gifs, favorite_of_gif, gif_masonry, gif_motion, gif_of_favorite,

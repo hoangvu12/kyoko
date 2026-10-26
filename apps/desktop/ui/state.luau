@@ -110,6 +110,31 @@ export type FriendRow = {
 	status: string,
 	subtitle: string,
 	relation: string,
+	details: string?,
+	state: string?,
+}
+export type DmProfile = {
+	open: boolean,
+	id: string,
+	name: string,
+	username: string,
+	avatar: string,
+	banner: string,
+	accent: string,
+	status: string,
+	bio: string,
+	since: string,
+	servers: string,
+	friends: string,
+}
+export type DmMember = {
+	key: string,
+	id: string,
+	name: string,
+	avatar: string,
+	status: string,
+	activity: string,
+	owner: boolean,
 }
 export type FriendAdd = { phase: string, text: string }
 export type ComposerReplace = { serial: number, text: string, caret: number }
@@ -324,6 +349,21 @@ M.sidebar = {
 M.dms = {
 	rows = ui.shared("dms.rows", {} :: { DmRow }),
 	requests = ui.shared("dms.requests", 0),
+	profile = ui.shared("dms.profile", {
+		open = false,
+		id = "",
+		name = "",
+		username = "",
+		avatar = "",
+		banner = "",
+		accent = "",
+		status = "offline",
+		bio = "",
+		since = "",
+		servers = "",
+		friends = "",
+	} :: DmProfile),
+	members = ui.shared("dms.members", {} :: { DmMember }),
 }
 
 M.home = {
@@ -387,6 +427,7 @@ M.window = {
 
 M.shell = {
 	members_visible = ui.state("members_visible", true),
+	dm_profile_visible = ui.state("dm_profile_visible", true),
 }
 
 M.settings = {

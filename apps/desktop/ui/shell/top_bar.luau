@@ -2,10 +2,10 @@ local theme = require("../theme")
 local state = require("../state")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
-local status_dot = require("@components/status_dot")
+local avatar = require("@components/avatar")
 local actions = require("../actions")
 
-local STATUSES = { "online", "idle", "dnd", "offline" }
+local NO_DM = { key = "", id = "", name = "", avatar = "", status = "offline", group = false, members = 0, unread = false, mentions = 0 }
 
 local query = ui.state("query", "")
 
@@ -13,7 +13,6 @@ local icon_lg = theme.number(theme.size.icon_size_lg)
 local icon_md = theme.number(theme.size.icon_size_md)
 local icon_sm = theme.number(theme.size.icon_size_sm)
 local button = theme.number(theme.size.button_size)
-local status_size = theme.number(theme.size.status_size)
 
 local function topic()
 	return ui.show(function()
@@ -59,30 +58,63 @@ local function guild(): boolean
 	return not direct()
 end
 
-local function direct_status(): string
+local function open_dm(): state.DmRow
 	local open = state.timeline.channel_id:get()
 	if not direct() or open == "" then
-		return ""
+		return NO_DM
 	end
 	for _, row in state.dms.rows:get() do
 		if row.id == open then
-			return if row.group then "offline" else row.status
+			return row
 		end
 	end
-	return ""
+	return NO_DM
 end
 
-local function status()
-	local dots = {}
-	for _, name in STATUSES do
-		table.insert(
-			dots,
-			ui.show(function()
-				return direct_status() == name
-			end, status_dot { status = name, size = status_size(), cutout = theme.color.bg_4 })
-		)
+local function group_open(): boolean
+	return open_dm().group
+end
+
+local function single_open(): boolean
+	local row = open_dm()
+	return row.id ~= "" and not row.group
+end
+
+local function dm_badge(row: state.DmRow)
+	if row.group then
+		return ui.row {
+			w = theme.size.icon_size_lg,
+			h = theme.size.icon_size_lg,
+			shrink = 0,
+			mr = theme.size.space_2,
+			justify = "center",
+			items = "center",
+			rounded = theme.size.icon_size_lg,
+			bg = theme.color.accent_4,
+			icon { name = "group", size = icon_sm(), color = theme.color.text_0 },
+		}
 	end
-	return ui.row { shrink = 0, items = "center", pl = theme.size.space_8, table.unpack(dots) }
+	return ui.div {
+		shrink = 0,
+		mr = theme.size.space_2,
+		avatar { src = row.avatar, size = icon_lg(), status = row.status, cutout = theme.color.bg_4 },
+	}
+end
+
+local function channel_mark()
+	return ui.show(
+		function()
+			return open_dm().id ~= ""
+		end,
+		ui.presence(open_dm, dm_badge),
+		icon {
+			name = function()
+				return state.timeline.channel_icon:get()
+			end,
+			size = icon_lg(),
+			color = theme.color.text_4,
+		}
+	)
 end
 
 local function search()
@@ -131,13 +163,7 @@ local function title()
 		grow = 1,
 		min_w = 0,
 		items = "center",
-		icon {
-			name = function()
-				return state.timeline.channel_icon:get()
-			end,
-			size = icon_lg(),
-			color = theme.color.text_4,
-		},
+		channel_mark(),
 		ui.text {
 			function()
 				return state.timeline.channel_name:get()
@@ -150,7 +176,6 @@ local function title()
 			weight = theme.weight.semibold,
 			color = theme.color.text_2,
 		},
-		status(),
 		topic(),
 	}
 end
@@ -183,6 +208,25 @@ local function toolbar()
 		ui.show(guild, tool {
 			name = "members",
 			tooltip = "Member List",
+			active = function()
+				return state.shell.members_visible:get()
+			end,
+			on_click = ui.toggle(state.shell.members_visible),
+		}),
+		ui.show(direct, tool { name = "user_plus", tooltip = "Add Friends to DM" }),
+		ui.show(single_open, tool {
+			name = "panel_right",
+			id = "top_bar_dm_profile",
+			tooltip = "Show User Profile",
+			active = function()
+				return state.shell.dm_profile_visible:get()
+			end,
+			on_click = ui.toggle(state.shell.dm_profile_visible),
+		}),
+		ui.show(group_open, tool {
+			name = "members",
+			id = "top_bar_dm_members",
+			tooltip = "Show Member List",
 			active = function()
 				return state.shell.members_visible:get()
 			end,

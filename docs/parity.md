@@ -226,8 +226,8 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `dm-sidebar` | 24 | Select Home, which opens the most recent DM, and wait for its history. | yes |
-| `dm-group` | 24 | Open the first group DM from the DM list and wait for its history. Kyoko has no group bar or group member panel yet. | yes |
+| `dm-sidebar` | 24 | Select Home, which opens the most recent DM, and wait for its history and the recipient's profile (the profile column, M21). | yes |
+| `dm-group` | 24 | Open the first group DM from the DM list and wait for its history; the member column shows beside the chat (M21). | yes |
 
 ### 25 Timeline view
 

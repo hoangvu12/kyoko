@@ -2,7 +2,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use bridge::{FriendEntry, FriendsTab, FriendsView};
+use bridge::{ActiveCard, FriendEntry, FriendsTab, FriendsView};
+use chrono::Utc;
 use media::ImageName;
 use protocol::Snowflake;
 use state::{Changes, State};
@@ -11,8 +12,8 @@ use zgx_script::{ScriptHost, Shared, Value};
 use crate::rail::Icons;
 use crate::ui::{Link, number, record};
 
-const ROW_AVATAR: f64 = 36.;
-const ACTIVE_AVATAR: f64 = 40.;
+const ROW_AVATAR: f64 = 32.;
+const ACTIVE_AVATAR: f64 = 32.;
 
 type AvatarKey = (Snowflake, Option<String>, u64);
 
@@ -156,13 +157,15 @@ impl FriendsPage {
 		} else {
 			""
 		};
+		let now = Utc::now();
 		let active: Vec<Value> = view
 			.active_now()
 			.into_iter()
-			.map(|entry| {
+			.filter_map(|entry| {
+				let card = bridge::active_card(state, entry.id, now)?;
 				let avatar = self.avatar(state, entry.id, ACTIVE_AVATAR, icons);
 				names.extend(avatar.clone());
-				person_value(entry, avatar.as_deref())
+				Some(active_value(entry, avatar.as_deref(), &card))
 			})
 			.collect();
 		self.rows.set(Value::List(rows.into()));
@@ -201,6 +204,26 @@ fn person_value(entry: &FriendEntry, avatar: Option<&str>) -> Value {
 		("status", entry.status.as_str().into()),
 		("subtitle", entry.subtitle().into()),
 		("relation", entry.kind.as_str().into()),
+	])
+}
+
+fn active_value(entry: &FriendEntry, avatar: Option<&str>, card: &ActiveCard) -> Value {
+	let avatar = avatar.map(|name| format!("host:{name}")).unwrap_or_default();
+	let title = card.title.as_str();
+	let details = card.details.as_deref().unwrap_or_default();
+	let state = card.state.as_deref().unwrap_or_default();
+	record([
+		("kind", "person".into()),
+		("key", format!("a{}", entry.id).as_str().into()),
+		("id", entry.id.to_string().as_str().into()),
+		("name", entry.name.as_str().into()),
+		("username", entry.username.as_str().into()),
+		("avatar", avatar.as_str().into()),
+		("status", entry.status.as_str().into()),
+		("subtitle", title.into()),
+		("relation", entry.kind.as_str().into()),
+		("details", details.into()),
+		("state", state.into()),
 	])
 }
 

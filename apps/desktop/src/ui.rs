@@ -51,6 +51,7 @@ use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::capture::{self, Capture, Opening};
 use crate::community::CommunityLayer;
+use crate::dm_panel::DmPanelView;
 use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
 use crate::friends::{self as friends_page, FriendsPage};
@@ -397,6 +398,7 @@ pub(crate) struct Link {
 	dms: DmSidebarView,
 	dm_avatars: RefCell<Vec<String>>,
 	friends: FriendsPage,
+	dm_panel: DmPanelView,
 	members: MemberListView,
 	member_avatars: RefCell<Vec<String>>,
 	reported_slot: Cell<Slot>,
@@ -535,6 +537,7 @@ impl Link {
 			dms: DmSidebarView::new(host),
 			dm_avatars: RefCell::new(Vec::new()),
 			friends: FriendsPage::new(host),
+			dm_panel: DmPanelView::new(host),
 			members,
 			member_avatars: RefCell::new(Vec::new()),
 			reported_slot: Cell::new(Slot::default()),
@@ -1110,6 +1113,7 @@ impl Link {
 				self.publish_dms(&state);
 			}
 			self.friends_apply(&state, changes);
+			self.dm_panel_apply(&state, changes);
 			self.composer_apply(&state, changes);
 			self.expressions_apply(&state, changes);
 			self.publish_actions(&state, changes);
@@ -1259,6 +1263,7 @@ impl Link {
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
 		self.open_channel.set(id.as_str().into());
 		self.show_members(open);
+		self.sync_dm_panel(state, open);
 		if self.sidebar.set_open(open.map(|open| open.channel_id)) {
 			self.publish_selection(state);
 		}
@@ -1304,6 +1309,7 @@ impl Link {
 		names.extend(self.community_images());
 		names.extend(self.server_images());
 		names.extend(self.friends_images());
+		names.extend(self.dm_panel.images());
 		names.extend(self.login_images());
 		names.extend(
 			self.timeline_view

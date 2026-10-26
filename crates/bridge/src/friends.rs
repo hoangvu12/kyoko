@@ -1,4 +1,5 @@
-use protocol::Snowflake;
+use chrono::{DateTime, Utc};
+use protocol::{ActivityKind, Snowflake};
 use state::{Changes, RelationshipRow, State};
 
 use crate::dm_list::DmStatus;
@@ -179,7 +180,7 @@ impl FriendsView {
 				.cloned()
 				.collect();
 			FriendSection {
-				title: format!("{title} — {}", entries.len()).to_uppercase(),
+				title: format!("{title} — {}", entries.len()),
 				entries,
 			}
 		};
@@ -187,8 +188,8 @@ impl FriendsView {
 			FriendsTab::Online => vec![pick("Online", &self.friends, true)],
 			FriendsTab::All => vec![pick("All Friends", &self.friends, false)],
 			FriendsTab::Pending => vec![
-				pick("Incoming", &self.incoming, false),
-				pick("Outgoing", &self.outgoing, false),
+				pick("Received", &self.incoming, false),
+				pick("Sent", &self.outgoing, false),
 			],
 			FriendsTab::Blocked => vec![pick("Blocked", &self.blocked, false)],
 			FriendsTab::Add => Vec::new(),
@@ -208,5 +209,45 @@ impl FriendsView {
 
 	pub fn entry(&self, user_id: Snowflake) -> Option<&FriendEntry> {
 		self.everyone().find(|entry| entry.id == user_id)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveCard {
+	pub title: String,
+	pub details: Option<String>,
+	pub state: Option<String>,
+}
+
+pub fn active_card(state: &State, user_id: Snowflake, now: DateTime<Utc>) -> Option<ActiveCard> {
+	let activity = state
+		.presence(user_id)?
+		.activities
+		.iter()
+		.find(|activity| activity.kind != ActivityKind::Custom)?;
+	let text = |value: &Option<String>| value.clone().filter(|value| !value.trim().is_empty());
+	let elapsed = activity
+		.timestamps
+		.as_ref()
+		.and_then(|timestamps| timestamps.start)
+		.and_then(DateTime::from_timestamp_millis)
+		.and_then(|start| elapsed_label(now - start));
+	Some(ActiveCard {
+		title: match elapsed {
+			Some(elapsed) => format!("{} — {elapsed}", activity.name),
+			None => activity.name.clone(),
+		},
+		details: text(&activity.details),
+		state: text(&activity.state),
+	})
+}
+
+fn elapsed_label(elapsed: chrono::TimeDelta) -> Option<String> {
+	let minutes = elapsed.num_minutes();
+	match minutes {
+		..1 => None,
+		1..60 => Some(format!("{minutes}m")),
+		60..1440 => Some(format!("{}h", minutes / 60)),
+		_ => Some(format!("{}d", minutes / 1440)),
 	}
 }

@@ -137,6 +137,12 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 		}
 	});
 	let actions = Rc::downgrade(link);
+	host.action("dms.full_profile", move |argument| {
+		if let (Some(link), Some(user_id)) = (actions.upgrade(), snowflake(&argument)) {
+			link.open_full_profile(user_id);
+		}
+	});
+	let actions = Rc::downgrade(link);
 	host.action("home.show_page", move |argument| {
 		if let (Some(link), Value::Str(page)) = (actions.upgrade(), &argument) {
 			link.show_home_page(page);

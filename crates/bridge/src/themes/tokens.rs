@@ -448,6 +448,12 @@ pub const SIZES: &[(&str, f32)] = &[
 	("window_controls_right", 13.),
 	("login_card_gap", 64.),
 	("login_badge_size", 80.),
+	("friends_button_size", 36.),
+	("add_friend_input_height", 52.),
+	("dm_profile_banner_height", 121.),
+	("dm_profile_avatar_top", 75.),
+	("dm_profile_avatar_ring", 92.),
+	("dm_profile_content_top", 52.),
 	("disabled_opacity", 0.3),
 	("offline_opacity", 0.3),
 	("locked_opacity", 0.5),
@@ -755,4 +761,34 @@ pub const DERIVED_SIZES: &[(&str, SizeTerms, f32)] = &[
 	),
 	("login_card_gap", &[("space_32", 2.)], 0.),
 	("login_badge_size", &[("space_56", 1.), ("space_24", 1.)], 0.),
+	("friends_button_size", &[("button_size", 1.), ("space_4", 1.)], 0.),
+	(
+		"add_friend_input_height",
+		&[("space_56", 1.), ("space_4", -1.)],
+		0.,
+	),
+	(
+		"dm_profile_banner_height",
+		&[("banner_height", 1.), ("space_16", 1.)],
+		0.,
+	),
+	(
+		"dm_profile_avatar_top",
+		&[
+			("dm_profile_banner_height", 1.),
+			("avatar_size_lg", -0.5),
+			("space_6", -1.),
+		],
+		0.,
+	),
+	(
+		"dm_profile_avatar_ring",
+		&[("avatar_size_lg", 1.), ("space_6", 2.)],
+		0.,
+	),
+	(
+		"dm_profile_content_top",
+		&[("avatar_size_lg", 0.5), ("space_12", 1.)],
+		0.,
+	),
 ];
