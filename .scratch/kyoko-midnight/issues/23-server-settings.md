@@ -4,7 +4,7 @@
 
 **Blocked by:** 19; v1 36
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/server-settings-*.html`
 

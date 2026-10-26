@@ -4,15 +4,15 @@
 
 **Blocked by:** 01, 07; v1 37, 45, 57
 
-**Status:** claimed
+**Status:** resolved
 
 **Mockups:** `docs/design/mockups/settings-my-account.html`, `docs/design/mockups/settings-notifications.html`, `docs/design/mockups/settings-appearance.html`, `docs/design/mockups/settings-plugins.html`, `docs/design/mockups/settings-themes.html`
 
 **Spec:** `docs/design/midnight.md`, Settings
 
-- [ ] Matches the mockups
-- [ ] Every existing settings page is reachable from the new sidebar
-- [ ] Search filters pages and settings
+- [x] Matches the mockups
+- [x] Every existing settings page is reachable from the new sidebar
+- [x] Search filters pages and settings
 
 ## Design brief (confirmed by the user, 2026-10-26, through `/impeccable shape`)
 
@@ -32,3 +32,18 @@
 8. **Content.** Group and page titles as above (Discord's wording where a page matches Discord's), the no-match line, the Voice & Video line, build info (version, build, data folder link). Every setting needs searchable text (label, description, extra keywords); pages hold a handful up to ~20 settings (Appearance).
 9. **References.** `docs/design/midnight.md` ("Settings", "Other surfaces"); M07's `kit::switch`/`radio_row`/`checkbox`; impeccable's `spatial-design.md`, `interaction-design.md` (keyboard, focus return), `motion-design.md` (reduced motion).
 10. **Open for the implementer.** Place GIF autoplay, animated emoji and sticker animation where `settings-appearance.html` and Discord put them (Accessibility or Chat). Place Keybinds and Streamer Mode as the mockup's sidebar does (its tabs: account, privacy, messaging, notifications, clips, vencord, plugins, themes, updater, cloud, backup, nitro, boost, subs, gifts, billing, voice, appearance, accessibility, system, language, games, activity, overlay, apps, developer, logout). M20 notes: Edit Profile opens the settings Profiles page via `Request::EditProfile`; Log Out now lives only in settings, keep it there; `profile/parts.rs` has reusable parts and a Profiles preview could reuse `popout::card`.
+
+## Answer
+
+Merged to main as `f0fbe91`. Docs: `docs/ui.md` (Settings rewritten), `docs/parity.md`.
+
+- Frame: a Luau `ui.modal` in `ui/shell/settings.luau`. zgx lifts an open modal above the whole window, Rust timeline and layers included, so the live timeline stays visible and dimmed behind it (the old slot collapse is gone); the host turns on M07's scrim (`scrim::track`) while it is open, window controls stay bright; Escape, the X and an outside press close it and zgx returns focus. No new Rust layer. Opens on the last page visited (My Account first) with search focused, 250 ms slide (none under reduced motion); on narrow windows the side margin shrinks before the column. The user panel gear passes an empty key (last page).
+- Sidebar: profile card with "Edit Profiles", search, groups, the open page's sub-sections (click scrolls to the heading), Log Out in red, build info (version, OS, "Open data folder"). Hover slides 10, Up/Down and Enter. Groups: Account (My Account, Profiles, Data & Privacy with Activity Privacy, Notifications, Devices, Connections, Friend Requests); Kyoko (Plugins, Themes, Safety & Privacy, Storage); Experience (Voice & Video greyed with "Kyoko has no voice calls", Appearance, Accessibility, Chat, Keybinds, System, Language & Time, Streamer Mode); Developer (key still `advanced`); Log Out.
+- Pages are data (headings and rows with keywords) drawn by the new `ui/settings/kit.luau` (`kit.page`); search (`ui/settings/search.luau`) and sub-sections read the same data. Search matches titles, labels, descriptions, keywords and installed plugin and theme names, narrows the sidebar, highlights rows, shows "No settings match '…'", and clearing restores the sidebar on the same page. `widgets.luau` and `settings/frame.luau` are untouched (server settings still use them).
+- Expression settings: GIF autoplay ("Automatically play GIFs when Kyoko is focused"), "Play animated emoji" and Sticker animation (always / on interaction / never) are three separate settings on Accessibility (was one); the gallery tells emoji and stickers apart by CDN path.
+- Activity Privacy: "Share my activity" writes Discord's `show_current_game` through the settings proto like status; a refusal rolls it back with a toast.
+- Plugins restyled to Vencord's look (management card, filter field, two-column cards); Themes has Local/Online tabs.
+- Section-10 decisions: a System page (startup, tray, discord:// switches moved off Advanced, which becomes Developer); Keybinds and Streamer Mode are their own Experience pages; the Clips note page is removed; Profiles is its own page under Account and opens from "Edit Profiles"; safety locks, link warning, trusted sites and GIF-usage sharing moved to Safety & Privacy, the data folder to Storage; Compact/Cozy on Accessibility, 24-hour time on Language & Time; My Account's "Account Status" replaced by "Sign Out" (kyoko doesn't know account standing).
+- Tests: load-check `settings_search_narrows_the_sidebar_marks_rows_and_clearing_restores_it` (filtering, highlights, plugin-name search, no-match, clearing, Down+Enter from search, close by X, Escape, outside press); session test for Activity Privacy save and rollback; the bridge media test covers the split GIF and emoji settings. All 20 pages in the load check.
+- Checks re-run by the orchestrator in lane B: all green except the known load flake `storage::turning_the_opt_in_on_and_off_moves_the_secrets` in `test --workspace` (passed in the same run's `xtask test`). Mockup parity (port 8496, before → after): settings-my-account 30.8 → 4.6%, settings-notifications 23.0 → 5.5%, settings-appearance 28.0 → 11.6% (Nitro upsell and colour themes left out), settings-plugins 24.4 → 7.2%, settings-themes newly mapped 8.0%.
+- For M23: reuse the `ui.modal` setup from `shell/settings.luau` and `kit.page`; server settings still use `widgets.luau` and `settings/frame.luau`. A new settings page needs rows with keywords, a capture mapping in `src/capture.rs` and an entry in `SETTINGS_PAGES` in `src/ui/scripts.rs`. Testing gotcha: reopening plays a 250 ms slide, so a click right after a reopen can miss.
