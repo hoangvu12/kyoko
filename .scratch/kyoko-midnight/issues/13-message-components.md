@@ -4,7 +4,7 @@
 
 **Blocked by:** 12
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/message-components.html`, `docs/design/mockups/message-components-multi-select.html`, `docs/design/mockups/message-components-v2.html`, `docs/design/mockups/app-modal.html`, `docs/design/mockups/app-modal-error.html`
 
