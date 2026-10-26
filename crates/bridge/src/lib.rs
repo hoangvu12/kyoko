@@ -84,7 +84,7 @@ pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, 
 pub use login::{QrEvent, REMOTE_AUTH_URL, Scanner};
 pub use member_list::{
 	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
-	MemberRowKind, OpenMembers, SEARCH_GROUP, layout_of,
+	MemberRowKind, OpenMembers, layout_of,
 };
 pub use message::{
 	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, PollChoice,

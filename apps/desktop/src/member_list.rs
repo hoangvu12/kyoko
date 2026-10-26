@@ -93,19 +93,6 @@ impl MemberListView {
 		command
 	}
 
-	pub(crate) fn search(&self, query: &str) {
-		if self.panel.borrow_mut().set_query(query, Instant::now()) {
-			self.wakes.push(());
-		}
-	}
-
-	pub(crate) fn search_command(&self, state: &State, query: &str) -> Option<Command> {
-		let panel = self.panel.borrow();
-		(panel.query() == query.trim().to_lowercase())
-			.then(|| panel.search_command(state))
-			.flatten()
-	}
-
 	pub(crate) fn scroll_to_end(&self) {
 		let serial = self.jumps.get() + 1;
 		self.jumps.set(serial);
@@ -193,23 +180,6 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 			}
 		}
 		Value::Nil
-	});
-	let actions = Rc::downgrade(link);
-	host.action("members.search", move |argument| {
-		if let (Some(link), Value::Str(query)) = (actions.upgrade(), &argument) {
-			link.members().search(query);
-		}
-	});
-	let actions = Rc::downgrade(link);
-	host.action("members.search_remote", move |argument| {
-		if let (Some(link), Value::Str(query)) = (actions.upgrade(), &argument) {
-			let command = link
-				.state()
-				.and_then(|shared| link.members().search_command(&shared.read(), query));
-			if let Some(command) = command {
-				link.send(command);
-			}
-		}
 	});
 	let actions = Rc::downgrade(link);
 	host.action("members.open_profile", move |argument| {

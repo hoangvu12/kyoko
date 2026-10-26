@@ -193,14 +193,6 @@ function M.member_scroll(offset: number, height: number, member: number, group: 
 	ui.call_sync("members.scroll", { offset = offset, height = height, member = member, group = group })
 end
 
-function M.member_search(query: string)
-	ui.invoke("members.search", query)
-end
-
-function M.member_search_remote(query: string)
-	ui.invoke("members.search_remote", query)
-end
-
 function M.open_member_profile(id: string, x: number, y: number)
 	ui.invoke("members.open_profile", { id = id, x = x, y = y })
 end

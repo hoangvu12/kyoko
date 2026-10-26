@@ -8,12 +8,10 @@ use crate::display::{Display, person};
 use crate::dm_list::DmStatus;
 
 pub const MEMBER_PUBLISH_GAP: Duration = Duration::from_millis(150);
-pub const SEARCH_GROUP: &str = "search";
 const OVERSCAN: usize = 12;
 const SHIFT_MARGIN: usize = 4;
 const INITIAL_ROWS: usize = 24;
 const MAX_ROWS: usize = 100_000;
-const SEARCH_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemberRowKind {
@@ -54,12 +52,7 @@ pub struct MemberGroup {
 
 impl MemberGroup {
 	pub fn title(&self) -> String {
-		let title = if self.id == SEARCH_GROUP {
-			format!("Search results - {}", self.count)
-		} else {
-			format!("{} — {}", self.name, self.count)
-		};
-		title.to_uppercase()
+		format!("{} — {}", self.name, self.count).to_uppercase()
 	}
 }
 
@@ -98,7 +91,6 @@ pub struct OpenMembers {
 pub struct MemberPanel {
 	heights: MemberHeights,
 	open: Option<OpenMembers>,
-	query: String,
 	layout: Vec<MemberRowKind>,
 	tops: Vec<f64>,
 	visible: Option<(usize, usize)>,
@@ -123,7 +115,6 @@ impl MemberPanel {
 		Self {
 			heights,
 			open: None,
-			query: String::new(),
 			layout: Vec::new(),
 			tops: Vec::new(),
 			visible: None,
@@ -187,16 +178,9 @@ impl MemberPanel {
 		})
 	}
 
-	pub fn query(&self) -> &str {
-		&self.query
-	}
-
 	pub fn show(&mut self, open: Option<OpenMembers>, now: Instant) -> bool {
 		if self.open == open {
 			return false;
-		}
-		if self.open.map(|open| open.guild_id) != open.map(|open| open.guild_id) {
-			self.query.clear();
 		}
 		self.open = open;
 		self.visible = None;
@@ -233,33 +217,6 @@ impl MemberPanel {
 		self.mark(now);
 	}
 
-	pub fn set_query(&mut self, query: &str, now: Instant) -> bool {
-		let query = query.trim().to_lowercase();
-		if query == self.query {
-			return false;
-		}
-		self.query = query;
-		self.visible = None;
-		self.last_scroll = None;
-		self.mark(now);
-		true
-	}
-
-	pub fn search_command(&self, state: &State) -> Option<Command> {
-		let open = self.open?;
-		if self.query.is_empty() {
-			return None;
-		}
-		let guild = state.guild(open.guild_id)?;
-		let incomplete = guild
-			.member_count
-			.is_some_and(|total| total > guild.members.len() as i64);
-		incomplete.then(|| Command::SearchMembers {
-			guild_id: open.guild_id,
-			query: self.query.clone(),
-		})
-	}
-
 	pub fn scroll(&mut self, offset: f64, height: f64, now: Instant) -> Option<Command> {
 		self.last_scroll = Some((offset, height));
 		let (first, last) = rows_at(&self.tops, offset, height)?;
@@ -276,7 +233,7 @@ impl MemberPanel {
 			self.mark(now);
 		}
 		let open = self.open?;
-		if !self.query.is_empty() || self.reported == Some(rows) {
+		if self.reported == Some(rows) {
 			return None;
 		}
 		self.reported = Some(rows);
@@ -302,16 +259,11 @@ impl MemberPanel {
 		}
 		self.dirty_since = None;
 		self.published_at = Some(now);
-		let source = match self.open {
-			None => Source::Closed,
-			Some(open) if self.query.is_empty() => Source::Listed(open.guild_id),
-			Some(open) => Source::Searched(search_entries(state, open.guild_id, &self.query)),
-		};
-		let layout = match &source {
-			Source::Closed => Vec::new(),
-			Source::Listed(guild_id) => state.member_list(*guild_id).map(layout_of).unwrap_or_default(),
-			Source::Searched(entries) => entries.iter().map(MemberListEntry::kind).collect(),
-		};
+		let guild_id = self.open.map(|open| open.guild_id);
+		let layout = guild_id
+			.and_then(|guild_id| state.member_list(guild_id))
+			.map(layout_of)
+			.unwrap_or_default();
 		let relaid = std::mem::take(&mut self.restyled) || layout != self.layout;
 		if relaid {
 			self.tops = tops_of(&layout, self.heights);
@@ -323,20 +275,12 @@ impl MemberPanel {
 				self.visible = Some(rows);
 			}
 		}
-		let (first, entries) = match (self.window(self.layout.len()), source) {
-			(Some((first, last)), Source::Listed(guild_id)) => {
-				(first, listed_entries(state, guild_id, &self.layout, first, last))
-			}
-			(Some((first, last)), Source::Searched(mut entries)) => {
-				entries.truncate(last + 1);
-				entries.drain(..first.min(entries.len()));
-				(first, entries)
+		let (first, entries) = match (self.window(self.layout.len()), guild_id) {
+			(Some((first, last)), Some(guild_id)) => {
+				let entries = listed_entries(state, guild_id, &self.layout, first, last);
+				(first, self.shown(state, guild_id, entries))
 			}
 			_ => (0, Vec::new()),
-		};
-		let entries = match self.open {
-			Some(open) => self.shown(state, open.guild_id, entries),
-			None => entries,
 		};
 		let change = MemberChange {
 			layout: relaid,
@@ -393,21 +337,6 @@ impl MemberPanel {
 		let last = (last + OVERSCAN).min(len - 1);
 		let first = first.saturating_sub(OVERSCAN).min(last);
 		Some((first, last))
-	}
-}
-
-enum Source {
-	Closed,
-	Listed(Snowflake),
-	Searched(Vec<MemberListEntry>),
-}
-
-impl MemberListEntry {
-	pub fn kind(&self) -> MemberRowKind {
-		match self {
-			Self::Group(_) => MemberRowKind::Group,
-			_ => MemberRowKind::Member,
-		}
 	}
 }
 
@@ -513,46 +442,6 @@ fn entry_of(state: &State, row: MemberListRow) -> MemberListEntry {
 
 fn is_bot(state: &State, user_id: Snowflake) -> bool {
 	state.user(user_id).is_some_and(|user| user.bot == Some(true))
-}
-
-fn search_entries(state: &State, guild_id: Snowflake, query: &str) -> Vec<MemberListEntry> {
-	let Some(guild) = state.guild(guild_id) else {
-		return Vec::new();
-	};
-	let mut matches: Vec<(String, Snowflake)> = guild
-		.members
-		.keys()
-		.filter_map(|id| {
-			let name = state.display_name(Some(guild_id), *id);
-			let hit = name.to_lowercase().contains(query)
-				|| state
-					.user(*id)
-					.is_some_and(|user| user.username.to_lowercase().contains(query));
-			hit.then_some((name, *id))
-		})
-		.collect();
-	matches.sort_by_cached_key(|(name, id)| (name.to_lowercase(), *id));
-	matches.truncate(SEARCH_LIMIT);
-	let mut entries = vec![MemberListEntry::Group(MemberGroup {
-		id: SEARCH_GROUP.to_owned(),
-		name: String::new(),
-		count: matches.len() as u32,
-	})];
-	entries.extend(matches.into_iter().map(|(name, user_id)| {
-		MemberListEntry::Member(MemberEntry {
-			user_id,
-			name,
-			extra: None,
-			color: state.role_color(guild_id, user_id),
-			status: DmStatus::of(state, user_id),
-			activity: None,
-			bot: is_bot(state, user_id),
-			badge: state
-				.user_override(Some(guild_id), user_id)
-				.and_then(|over| over.badge.clone()),
-		})
-	}));
-	entries
 }
 
 fn tops_of(layout: &[MemberRowKind], heights: MemberHeights) -> Vec<f64> {

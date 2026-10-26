@@ -4,13 +4,11 @@ local actions = require("../actions")
 local avatar = require("@components/avatar")
 local motion = require("@components/motion")
 
-local SEARCH_DELAY = 350
 local PLACEHOLDER_NAME = 12
 local PLACEHOLDER_WIDTHS = { 96, 72, 120, 84, 108, 64, 100, 80 }
 
 local offset = ui.state("members.offset", 0)
 local viewport = ui.state("members.viewport", 0)
-local query = ui.state("members.query", "")
 
 local member_height = theme.number(theme.size.member_row_pitch)
 local group_height = theme.number(theme.size.group_header_height)
@@ -223,40 +221,6 @@ local function row(i: number)
 	end, build)
 end
 
-local function search()
-	local cancel: (() -> ())? = nil
-	ui.effect(function()
-		local text = query:get()
-		actions.member_search(text)
-		if cancel then
-			cancel()
-		end
-		cancel = ui.after(SEARCH_DELAY, function()
-			actions.member_search_remote(text)
-		end)
-	end)
-	return ui.div {
-		shrink = 0,
-		px = theme.size.space_8,
-		pt = theme.size.space_8,
-		ui.input {
-			w_full = true,
-			h = theme.size.button_size,
-			px = theme.size.space_8,
-			bg = theme.color.bg_3,
-			border = theme.size.border_thickness,
-			border_color = theme.color.border_light,
-			rounded = theme.size.radius_sm,
-			focus = { border_color = theme.color.accent_2 },
-			text_size = theme.size.font_size_sm,
-			color = theme.color.text_3,
-			placeholder = "Search members",
-			placeholder_color = theme.color.text_5,
-			value = query,
-		},
-	}
-end
-
 return function()
 	ui.effect(function()
 		state.timeline.channel_id:get()
@@ -274,7 +238,6 @@ return function()
 	return ui.column {
 		w_full = true,
 		h_full = true,
-		search(),
 		ui.list {
 			label = "Members",
 			grow = 1,
