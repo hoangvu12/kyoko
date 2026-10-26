@@ -104,6 +104,9 @@ fn place(handle: &NodeHandle, ranges: &[Range<usize>]) -> Option<Vec<Rect>> {
 	let scene = handle.scene()?;
 	let scene = scene.borrow();
 	let owner = handle.node();
+	if !scene.contains(owner) {
+		return None;
+	}
 	let paragraph = rich_node(&scene, owner)?;
 	let NodeKind::RichText { text } = scene.kind(paragraph) else {
 		return None;

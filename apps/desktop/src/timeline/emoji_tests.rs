@@ -48,6 +48,15 @@ fn svgs(scene: &Scene, from: NodeId) -> usize {
 		.sum::<usize>()
 }
 
+fn shown_svgs(scene: &Scene, from: NodeId) -> usize {
+	let own = usize::from(matches!(scene.kind(from), NodeKind::Svg(_)) && scene.layout_visible(from));
+	own + scene
+		.children(from)
+		.iter()
+		.map(|child| shown_svgs(scene, *child))
+		.sum::<usize>()
+}
+
 #[test]
 fn copying_a_message_yields_its_unicode_emoji_and_custom_emoji_markup() {
 	let tokio = tokio::runtime::Builder::new_current_thread()
@@ -96,6 +105,57 @@ fn copying_a_message_yields_its_unicode_emoji_and_custom_emoji_markup() {
 	for part in ["\u{1F680}", "party:11", "dance:12", "\u{1F44B}\u{1F3FD}"] {
 		assert!(html.contains(part), "{part} is missing from {html}");
 	}
+}
+
+#[test]
+fn a_row_removed_before_its_first_layout_places_no_emoji() {
+	let tokio = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.expect("a tokio runtime");
+	let handle = tokio.handle().clone();
+	let built: Rc<RefCell<Option<View>>> = Rc::default();
+	let shown: Rc<RefCell<Option<zgx::reactive::Signal<Vec<u64>>>>> = Rc::default();
+	let (into, toggle) = (built.clone(), shown.clone());
+	let app = TestApp::wrapped(
+		move |runtime| {
+			let fetcher = MediaFetcher::new().expect("a media fetcher");
+			let service = MediaService::new(fetcher, scratch("emoji-removed"), Limits::default());
+			let gallery = Gallery::new(service, handle);
+			let view = TimelineView::new(runtime, setup(gallery, media::cdn::CDN.to_owned(), None));
+			let rows = runtime.signal(Vec::<u64>::new());
+			*toggle.borrow_mut() = Some(rows.clone());
+			let listed = rows.clone();
+			let row = move |id: u64, _: &mut Context| {
+				let document = markdown::parse(CONTENT);
+				let bump = view.runtime.signal(0);
+				body::render(
+					&document,
+					&view.env,
+					&bridge::Names::default(),
+					Snowflake(id),
+					0,
+					&bump,
+					Look::message(16.),
+				)
+			};
+			*into.borrow_mut() = Some(div().w(640.).child(keyed(move || listed.get(), row)));
+			ScriptHost::inline(runtime, "app", "return ui.column {}")
+		},
+		move |_| built.borrow_mut().take().unwrap_or_else(div),
+	);
+	let rows = shown.borrow().clone().expect("the rows signal");
+	rows.set(vec![1]);
+	rows.set(Vec::new());
+	app.frames(2);
+	rows.set(vec![2]);
+	app.frames(2);
+	let scene = app.ui.scene.borrow();
+	assert_eq!(
+		shown_svgs(&scene, scene.root()),
+		2,
+		"a row mounted after the removed one still lays its emoji over the text"
+	);
 }
 
 #[test]
