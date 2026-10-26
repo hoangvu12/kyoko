@@ -649,7 +649,7 @@ type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
 fn recording_app(calls: &Calls, level: &'static str) -> TestApp {
 	let calls = calls.clone();
 	TestApp::new(move |runtime| {
-		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		Catalog::load(&[themes_dir()]).install(runtime, crate::theme::DEFAULT);
 		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
 		for name in host_names() {
 			let (seen, recorded) = (calls.clone(), name.clone());

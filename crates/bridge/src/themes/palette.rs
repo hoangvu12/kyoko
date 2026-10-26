@@ -1,10 +1,13 @@
 use serde_json::{Map, Value};
 
 use super::color::parse_color;
-use super::tokens::{AMOLED, CODE_FONTS, COLORS, LIGHT, SIZES, UI_FONTS};
+use super::tokens::{
+	AMOLED, CODE_FONTS, COLORS, DERIVED_COLORS, DERIVED_SIZES, LIGHT, MIDNIGHT, MIDNIGHT_CODE_FONTS,
+	MIDNIGHT_UI_FONTS, SIZES, UI_FONTS,
+};
 
-pub const DEFAULT_THEME: &str = "dark";
-pub const BUILTIN_THEMES: [&str; 3] = ["dark", "light", "amoled"];
+pub const DEFAULT_THEME: &str = "midnight";
+pub const BUILTIN_THEMES: [&str; 4] = ["midnight", "dark", "light", "amoled"];
 const ABOUT_KEYS: [&str; 6] = ["name", "author", "description", "version", "source", "website"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,7 +87,7 @@ fn json_object(text: &str) -> Result<Map<String, Value>, PaletteError> {
 impl Palette {
 	pub fn dark() -> Self {
 		Self {
-			name: DEFAULT_THEME.to_owned(),
+			name: "dark".to_owned(),
 			colors: COLORS
 				.iter()
 				.map(|(key, value)| (*key, (*value).to_owned()))
@@ -98,6 +101,7 @@ impl Palette {
 	pub fn builtin(name: &str) -> Option<Self> {
 		let overrides = match name {
 			"dark" => return Some(Self::dark()),
+			"midnight" => return Some(Self::midnight()),
 			"light" => LIGHT,
 			"amoled" => AMOLED,
 			_ => return None,
@@ -108,6 +112,13 @@ impl Palette {
 			palette.set_color(key, value);
 		}
 		Some(palette)
+	}
+
+	pub fn midnight() -> Self {
+		let mut palette = Self::dark();
+		palette.name = "midnight".to_owned();
+		palette.apply(&Layer::midnight(), false);
+		palette
 	}
 
 	pub fn builtins() -> impl Iterator<Item = Self> {
@@ -155,17 +166,28 @@ impl Palette {
 			.is_some_and(|color| color.lightness() > 0.5)
 	}
 
+	pub fn size(&self, key: &str) -> Option<f32> {
+		self.sizes
+			.iter()
+			.find(|(name, _)| *name == key)
+			.map(|(_, value)| *value)
+	}
+
 	pub fn apply(&mut self, layer: &Layer, light: bool) {
+		let mut changed: Vec<&str> = Vec::new();
 		for (key, value, scheme) in &layer.colors {
-			if scheme.admits(light) {
-				self.set_color(key, value);
+			if scheme.admits(light) && self.set_color(key, value) {
+				changed.push(key);
 			}
 		}
+		self.derive_colors(&mut changed);
+		let mut resized: Vec<&str> = Vec::new();
 		for (key, value) in &layer.sizes {
-			if let Some((_, slot)) = self.sizes.iter_mut().find(|(name, _)| name == key) {
-				*slot = *value;
+			if self.set_size(key, *value) {
+				resized.push(key);
 			}
 		}
+		self.derive_sizes(&mut resized);
 		if let Some(fonts) = &layer.ui_fonts {
 			self.ui_fonts.clone_from(fonts);
 		}
@@ -183,6 +205,48 @@ impl Palette {
 		palette
 	}
 
+	fn derive_colors(&mut self, changed: &mut Vec<&str>) {
+		let explicit = changed.clone();
+		for (target, source, alpha) in DERIVED_COLORS {
+			if !changed.contains(source) || explicit.contains(target) {
+				continue;
+			}
+			let Some(color) = self.color(source).and_then(parse_color) else {
+				continue;
+			};
+			if self.set_color(target, &color.faded(*alpha).hex()) {
+				changed.push(*target);
+			}
+		}
+	}
+
+	fn derive_sizes(&mut self, changed: &mut Vec<&str>) {
+		let explicit = changed.clone();
+		for (target, terms, constant) in DERIVED_SIZES {
+			if explicit.contains(target) || !terms.iter().any(|(source, _)| changed.contains(source)) {
+				continue;
+			}
+			let total = terms.iter().try_fold(*constant, |total, (source, factor)| {
+				self.size(source).map(|size| total + size * factor)
+			});
+			if let Some(total) = total
+				&& self.set_size(target, total.max(0.))
+			{
+				changed.push(*target);
+			}
+		}
+	}
+
+	fn set_size(&mut self, key: &str, value: f32) -> bool {
+		match self.sizes.iter_mut().find(|(name, _)| *name == key) {
+			Some((_, slot)) => {
+				*slot = value;
+				true
+			}
+			None => false,
+		}
+	}
+
 	fn set_color(&mut self, key: &str, value: &str) -> bool {
 		match self.colors.iter_mut().find(|(name, _)| *name == key) {
 			Some((_, slot)) => {
@@ -195,6 +259,18 @@ impl Palette {
 }
 
 impl Layer {
+	pub fn midnight() -> Self {
+		let mut layer = Self::default();
+		for (key, value) in MIDNIGHT {
+			if let Some(color) = parse_color(value) {
+				layer.set_color(key, color.hex(), Scheme::Any);
+			}
+		}
+		layer.ui_fonts = Some(families(MIDNIGHT_UI_FONTS));
+		layer.code_fonts = Some(families(MIDNIGHT_CODE_FONTS));
+		layer
+	}
+
 	pub fn from_json(name: &str, text: &str) -> Result<Self, PaletteError> {
 		let mut tokens = json_object(text)?;
 		tokens.remove("base");
@@ -218,6 +294,11 @@ impl Layer {
 		self.colors
 			.retain(|(name, _, existing)| !(*name == key && *existing == scheme));
 		self.colors.push((key, value, scheme));
+	}
+
+	pub fn set_size(&mut self, key: &'static str, value: f32) {
+		self.sizes.retain(|(name, _)| *name != key);
+		self.sizes.push((key, value));
 	}
 
 	pub fn colors(&self) -> &[(&'static str, String, Scheme)] {
@@ -244,8 +325,7 @@ impl Layer {
 				let size = number.as_f64().filter(|size| size.is_finite() && *size >= 0.);
 				match (size_token(key), size) {
 					(Some(token), Some(size)) => {
-						self.sizes.retain(|(name, _)| *name != token);
-						self.sizes.push((token, size as f32));
+						self.set_size(token, size as f32);
 						true
 					}
 					_ => false,

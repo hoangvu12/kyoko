@@ -122,7 +122,9 @@ pub fn run(
 		Some(_) => (capture::WIDTH, capture::HEIGHT),
 		None => (WIDTH, HEIGHT),
 	};
-	let mut application = Application::new();
+	let mut application = crate::fonts::bundled()
+		.into_iter()
+		.fold(Application::new(), Application::font);
 	if let Some(id) = desktop.app_id {
 		application = application
 			.application_id(id)

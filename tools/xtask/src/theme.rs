@@ -6,7 +6,7 @@ use clap::{Args, Subcommand};
 use serde_json::Value;
 
 const MAX_ID_LENGTH: usize = 64;
-const BASES: [&str; 3] = ["dark", "light", "amoled"];
+const BASES: [&str; 4] = ["midnight", "dark", "light", "amoled"];
 const FIELDS: [&str; 4] = ["name", "version", "author", "description"];
 
 #[derive(Args)]

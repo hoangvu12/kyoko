@@ -215,7 +215,7 @@ pub struct DeveloperSettings {
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
-			theme: "dark".to_owned(),
+			theme: "midnight".to_owned(),
 			locale: "en-US".to_owned(),
 			storage: StorageSettings::default(),
 			notifications: NotificationSettings::default(),

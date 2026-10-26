@@ -4,7 +4,7 @@ use zgx::theme::{Theme, ThemeKind, Themes as ZgxThemes, TokenId, TokenInput, fon
 
 use crate::fonts;
 
-pub const DEFAULT: &str = "dark";
+pub const DEFAULT: &str = "midnight";
 pub const SYSTEM: &str = "system";
 pub const NAMESPACE: &str = "kyoko";
 
@@ -153,7 +153,7 @@ impl Catalog {
 		if self.palettes.iter().any(|palette| palette.name == chosen) {
 			return chosen.to_owned();
 		}
-		tracing::warn!(theme = %chosen, "unknown theme, using dark");
+		tracing::warn!(theme = %chosen, "unknown theme, using the default");
 		DEFAULT.to_owned()
 	}
 }

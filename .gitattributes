@@ -6,3 +6,4 @@
 *.kyoko-plugin binary
 *.sig text eol=lf
 *.pack binary
+*.ttf binary

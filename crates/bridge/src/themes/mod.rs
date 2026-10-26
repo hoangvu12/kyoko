@@ -2,6 +2,7 @@ mod color;
 mod css;
 mod links;
 mod palette;
+mod roles;
 mod tokens;
 
 use std::path::{Path, PathBuf};
@@ -12,16 +13,23 @@ use session::{MAX_THEME_BYTES, ThemeLinkCopy};
 use store::ThemeSettings;
 
 pub use color::{Rgba, parse_color};
-pub use css::{CSS_MAPPING, ThemeMeta, import_css, parse_meta};
+pub use css::{CSS_MAPPING, CSS_SIZES, ThemeMeta, import_css, parse_meta};
 pub use links::{ThemeLink, link_lines, link_urls, theme_link, theme_links};
 pub use palette::{
 	BUILTIN_THEMES, DEFAULT_THEME, Layer, Palette, PaletteError, Scheme, color_token, size_token,
 };
-pub use tokens::{AMOLED, CODE_FONTS, COLORS, LIGHT, SIZES, UI_FONTS};
+pub use roles::{MOCKUP_ROLES, UNTOKENED};
+pub use tokens::{
+	AMOLED, CODE_FONTS, COLORS, DERIVED_COLORS, DERIVED_SIZES, LIGHT, MIDNIGHT, MIDNIGHT_CODE_FONTS,
+	MIDNIGHT_UI_FONTS, SIZES, UI_FONTS,
+};
 
 const THEME_FILE: &str = "theme.json";
 const ABOUT_FILE: &str = "theme.toml";
 const BUILTIN_AUTHOR: &str = "Kyoko";
+const MIDNIGHT_AUTHOR: &str = "refact0r";
+const MIDNIGHT_VERSION: &str = "2.1.1";
+const MIDNIGHT_SOURCE: &str = "https://github.com/refact0r/midnight-discord";
 const SWATCH: [&str; 6] = [
 	"background_tertiary",
 	"background_secondary",
@@ -30,7 +38,12 @@ const SWATCH: [&str; 6] = [
 	"text_normal",
 	"link",
 ];
-const BUILTIN_ABOUT: [(&str, &str, &str); 3] = [
+const BUILTIN_ABOUT: [(&str, &str, &str); 4] = [
+	(
+		"midnight",
+		"Midnight",
+		"Warm greys, a rose accent and Inter: the Vencord flavour of Midnight, under the MIT licence.",
+	),
 	("dark", "Dark", "Discord's dark colours."),
 	("light", "Light", "Discord's light colours."),
 	("amoled", "AMOLED", "Pure black surfaces for OLED screens."),
@@ -259,12 +272,21 @@ fn builtin_meta(name: &str) -> ThemeMeta {
 		.iter()
 		.find(|(id, _, _)| *id == name)
 		.map_or((name, ""), |(_, title, description)| (*title, *description));
-	ThemeMeta {
+	let meta = ThemeMeta {
 		name: title.to_owned(),
 		author: BUILTIN_AUTHOR.to_owned(),
 		description: description.to_owned(),
 		version: env!("CARGO_PKG_VERSION").to_owned(),
 		..ThemeMeta::default()
+	};
+	if name != "midnight" {
+		return meta;
+	}
+	ThemeMeta {
+		author: MIDNIGHT_AUTHOR.to_owned(),
+		version: MIDNIGHT_VERSION.to_owned(),
+		source: MIDNIGHT_SOURCE.to_owned(),
+		..meta
 	}
 }
 

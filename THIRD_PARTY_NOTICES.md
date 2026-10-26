@@ -120,15 +120,52 @@ SOFTWARE.
 
 ## Fonts
 
-Kyoko bundles no fonts. Like oxidcord, it asks for the first installed family of `gg sans`, `Noto Sans`, `Segoe UI`, `Helvetica Neue`, `Arial` and `sans-serif` for the interface, and of `Consolas`, `Menlo` and `monospace` for code, all provided by the operating system. Discord's gg sans is proprietary and is used only if the user has installed it.
+Kyoko bundles one font family, Inter, for the built-in Midnight theme. `apps/desktop/fonts/inter/` holds `Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` and `Inter-Bold.ttf` (weights 400, 500, 600 and 700) from `extras/ttf/` of the [rsms/inter](https://github.com/rsms/inter) release v4.1 (`Inter-4.1.zip`, SHA-256 `9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e`), unchanged, with the release's `LICENSE.txt`. Their SHA-256 sums:
+
+```
+40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82  Inter-Regular.ttf
+97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872  Inter-Medium.ttf
+78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3  Inter-SemiBold.ttf
+288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f  Inter-Bold.ttf
+```
+
+Inter is Copyright (c) 2016 The Inter Project Authors and is distributed under the SIL Open Font License, Version 1.1, whose full text is in `apps/desktop/fonts/inter/LICENSE.txt`. The fonts are compiled into the executable and registered with the window at start; nothing is downloaded.
+
+Every other family comes from the operating system. The Midnight theme asks for `Inter`, `gg sans`, `Noto Sans`, `Helvetica Neue`, `Helvetica`, `Arial` and `sans-serif` for the interface and `gg mono`, `Source Code Pro`, `Consolas`, `Monaco` and `monospace` for code; the Dark, Light and AMOLED themes ask, like oxidcord, for `gg sans`, `Noto Sans`, `Segoe UI`, `Helvetica Neue`, `Arial` and `sans-serif`, and `Consolas`, `Menlo` and `monospace`. Discord's gg sans and gg mono are proprietary and are used only if the user has installed them.
 
 ## Oxidcord theme and layout
 
 The theme tokens in `crates/bridge/src/themes/tokens.rs` and `apps/desktop/src/theme.rs` (colours, sizes, fonts, the light and AMOLED overrides) and the shell layout in `apps/desktop/ui/shell/` are ported from oxidcord's `crates/ui/src/theme.rs` and `crates/ui/src/shell/`, under oxidcord's MIT OR Apache-2.0 licence (see `NOTICE`).
 
-## Midnight test fixture
+## Midnight theme
 
-`crates/bridge/tests/bridge/fixtures/midnight-vencord.theme.css` is a test fixture shaped like the variable block of refact0r's Midnight theme, Vencord flavour 2.1.1 ([refact0r/midnight-discord](https://github.com/refact0r/midnight-discord)), with its variable names and palette values. Midnight is distributed under the MIT License. The fixture contains no selectors or rules from Midnight and is not shipped in the application.
+The built-in Midnight theme is refact0r's Midnight, Vencord flavour 2.1.1 ([refact0r/midnight-discord](https://github.com/refact0r/midnight-discord)). Its palette values (`MIDNIGHT` in `crates/bridge/src/themes/tokens.rs`), its variable names, which kyoko's Midnight tokens and the CSS import follow, and the panel layout described in `docs/design/midnight.md` come from it. `crates/bridge/tests/bridge/fixtures/midnight-vencord.theme.css` is the flavour file itself (`themes/flavors/midnight-vencord.theme.css` at commit `8598b2d`), unchanged, used only by tests and not shipped in the application. No selectors or rules of Midnight's stylesheet are used. Midnight is distributed under the MIT License:
+
+```
+MIT License
+
+Copyright (c) 2025 refact0r
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`themes/deep-blue/` is a different theme, by Master0fFate, that was named Midnight before this one.
 
 ## ClearURLs rules (not bundled)
 

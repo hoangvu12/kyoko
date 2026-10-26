@@ -7,8 +7,8 @@ Kyoko's interface is a 1:1 port of oxidcord 0.2.0-beta.1, written in Luau on zgx
 ```
 apps/desktop/src/
   ui.rs            the window: Link (session to Luau), host actions, shared values, the Rust root layout
-  theme.rs         oxidcord's theme tokens, theme files, zgx theme data
-  fonts.rs         installed font families, picking the first of a font list
+  theme.rs         palettes to zgx themes, installing and switching them
+  fonts.rs         the bundled Inter faces, installed font families, picking the first of a font list
   frame.rs         the native window: maximized state, the exit waker
   timeline/        the message timeline, a Rust view in the timeline slot (below)
 apps/desktop/ui/
@@ -109,7 +109,7 @@ Labels oxidcord leaves at gpui's default line height are given 1.618 times their
 
 ## Theme
 
-`crates/bridge/src/themes/tokens.rs` holds oxidcord's tokens in one place: `COLORS` and `SIZES` with oxidcord's dark defaults, the `light` and `amoled` overrides, and the UI and code font lists. `bridge::themes::Palette` is a whole theme and `Layer` a set of overrides on top of one (`docs/themes.md`). `bridge::themes::Themes` loads the built-in themes and every `themes/<id>/theme.json` beside the source (or `KYOKO_THEMES_DIR`) as bases, and the user's themes folder and theme links as layers, and gives each base with the enabled layers applied. `apps/desktop/src/theme.rs` turns palettes into zgx themes (`to_theme`, with the zgx standard token mapping): `Catalog::install` registers them and applies `settings.theme` (`dark` by default; `system` follows the system's light or dark), `Catalog::apply` switches the base, and `Catalog::replace` re-registers the palettes a layer changed, so the window restyles at once.
+`crates/bridge/src/themes/tokens.rs` holds every token in one place: `COLORS` and `SIZES` with the dark defaults, the `light` and `amoled` overrides, the `MIDNIGHT` palette, the derivations (`DERIVED_COLORS`, `DERIVED_SIZES`), and the UI and code font lists. Two sets of tokens live there side by side: oxidcord's, which every screen not yet restyled uses, and Midnight's (below), which the Midnight restyle tickets move each screen onto. `bridge::themes::Palette` is a whole theme and `Layer` a set of overrides on top of one (`docs/themes.md`). `bridge::themes::Themes` loads the built-in themes and every `themes/<id>/theme.json` beside the source (or `KYOKO_THEMES_DIR`) as bases, and the user's themes folder and theme links as layers, and gives each base with the enabled layers applied. `apps/desktop/src/theme.rs` turns palettes into zgx themes (`to_theme`, with the zgx standard token mapping): `Catalog::install` registers them and applies `settings.theme` (`midnight` by default; `system` follows the system's light or dark), `Catalog::apply` switches the base, and `Catalog::replace` re-registers the palettes a layer changed, so the window restyles at once.
 
 Every token is the zgx app token `kyoko.<name>`: `kyoko.background_primary`, `kyoko.radius_md`, `kyoko.ui_font`. zgx's standard tokens are mapped from them too (`background`, `text.primary`, `accent`, `font.sans`, `font.mono`, scrollbars, hover washes), so zgx's own widgets, scrollbars and menus match the theme.
 
@@ -123,9 +123,53 @@ ui.row { h = theme.size.top_bar_height, bg = theme.color.background_primary,
 
 `theme.color.*` and `theme.size.*` are token strings, so a theme switch restyles without running the script. A property that only takes a number (such as `rounded_tl`) uses `theme.number(theme.size.radius_md)`. A new token goes into `COLORS` or `SIZES` (`crates/bridge/src/themes/tokens.rs`) and into `theme.luau` together. The only literal colour allowed is a fully transparent `#00000000` to clear a control's own background.
 
+### Midnight tokens
+
+Midnight 01 made refact0r's Midnight (Vencord flavour 2.1.1, `docs/design/midnight.md`) the built-in default theme and gave every value the mockups use a token named after its Midnight variable: drop the `--` (and Midnight's `custom-` prefix) and write `-` as `_`, so `--bg-4` is `theme.color.bg_4` and `--chatbar-height` is `theme.size.chatbar_height`. A restyled screen uses only these; oxidcord's tokens stay until the last oxidcord screen is gone.
+
+| Group | Colour tokens |
+|---|---|
+| Surfaces | `bg_1` (dark button pressed, scrollbar thumb), `bg_2` (dark and secondary buttons, the selected settings item), `bg_3` (the window behind the panels, inputs, code, popouts, menus, tooltips), `bg_4` (every panel, modals) |
+| Text | `text_0` (on coloured elements), `text_1` (bright, on coloured elements), `text_2` (headings, author names), `text_3` (normal text, hovered icons), `text_4` (icon buttons, channel names, offline), `text_5` (muted channels, timestamps, placeholders) |
+| States | `hover`, `active`, `active_2`, `message_hover`, `border_light`, `border`, `border_hover`, `button_border` |
+| Accent | `accent_1` (links, mention text), `accent_2` (small accents, focus, switches), `accent_3`, `accent_4`, `accent_5` (accent buttons, hovered, pressed), `accent_new` (what Discord draws red) |
+| Status | `online`, `idle`, `dnd`, `streaming`, `offline` |
+| Scales | `red_1`..`red_5`, `green_1`..`green_5`, `blue_1`..`blue_5`, `yellow_1`..`yellow_5`, `purple_1`..`purple_5` (light to dark; danger buttons are `red_3`, `red_4` hovered, `red_5` pressed) |
+| Washes | `mention`, `mention_hover`, `reply`, `reply_hover` (the start colour of the highlight gradients), `background_feedback_critical`, `_positive`, `_warning`, `_info`, `border_feedback_warning`, `input_background_error`, `reaction_background_reacted`, `reaction_background_reacted_hover`, `poll_fill_winner`, `user_panel_button_active`, `user_panel_button_active_hover`, `background_scrim_lightbox`, `overlay_button_background`, `overlay_text`, `switch_thumb_background` |
+
+Washes are derived: a theme that changes `accent_2` changes `mention`, `reaction_background_reacted` and every other token built on it (`DERIVED_COLORS`), and the same table gives oxidcord's tokens their Midnight values (`background_primary` is `bg_4`, `text_normal` is `text_3`, `brand` is `accent_3`, `mention_background` is `accent_2` at 10%), so screens not yet restyled already wear Midnight's palette. A token a theme sets itself is never overwritten by a derivation.
+
+Sizes are the same in every theme (Discord's layout), and come in these groups (the full list is `SIZES`):
+
+| Group | Size tokens |
+|---|---|
+| Shell, measured | `gap` 12, `border_thickness` 1, `divider_thickness` 4, `top_strip_height` 12 (Midnight's `--top-bar-height`), `guildbar_avatar_size` 40, `guild_list_padding` 12, `guild_list_width` 66, `sidebar_width` 280, `guild_sidebar_width` 346, `channel_header_height` 50, `chatbar_height` 47, `member_list_panel_width` 264, `window_control_size` 14, `window_controls_padding` 6 |
+| Rows | `channel_item_height` 36 and `channel_item_pitch` 38, `category_row_height` 24, `member_row_height` 42 and `member_row_pitch` 44, `dm_row_height` 42, `group_header_height` 40, `list_item_hover_shift` 10, `member_hover_shift` 18 |
+| Scale | `radius_xs` 4, `radius_sm` 8, `radius_md` 12, `radius_lg` 16; `space_1`..`space_56` and `space_xs` 8, `space_sm` 12, `space_md` 16, `space_lg` 24; `icon_size_xs`..`_lg` 12 to 24; `avatar_size_xs`..`_xl` 16 to 120; `font_size_tag` 10 to `font_size_xl` 24 with `line_height_*`; `button_size`, `button_height_sm`..`_lg`, `input_height`, `select_height` |
+| Surfaces | message, reaction, embed, menu, popout, modal, picker, emoji, sticker, GIF, command, component, upload, poll, voice message, settings dialog and profile dialog sizes, each named after its mockup variable (`menu_width`, `expression_picker_width`, `settings_column_width`, ...) |
+| Opacity | `disabled_opacity` 0.3, `offline_opacity` 0.3, `locked_opacity` 0.5, `disabled_opacity_control` 0.5 |
+
+Derived sizes follow their inputs as Midnight's `calc()` does (`DERIVED_SIZES`): a theme with `guildbar_avatar_size` 48 gets a 74-point rail and a 58-point header.
+
+Seven Midnight names were already oxidcord tokens with other values, so the Midnight value has its own name until the oxidcord screen goes: `--member-list-width` is `member_list_panel_width`, `--channel-row-height` `channel_item_height`, `--message-gutter` `message_content_left`, `--modal-width-md` `modal_width_wide`, `--settings-nav-width` `settings_dialog_nav_width`, `--profile-banner-height` `profile_dialog_banner_height`, `--top-bar-height` `top_strip_height`. The radii keep their names and moved to Discord's scale for every screen (`radius_sm` 4 to 8, `radius_md` 8 to 12, with `radius_xs` 4 new), so oxidcord's screens are a little rounder until restyled.
+
+Every variable of the mockups' `:root` block is accounted for, which `every_variable_of_the_mockups_has_a_token_or_a_reason` checks against `docs/design/mockups/midnight-discord.html`: a colour or size token (`CSS_MAPPING`, `CSS_SIZES`), or one of Discord's semantic names that the mockup defines as a Midnight role, listed with the token to draw it with in `MOCKUP_ROLES` (`--input-border-hover` is `border`, `--slider-fill-background` is `accent_2`, `--tooltip-background` is `bg_3`), or a reason in `UNTOKENED` (gradients between two tokens, image filters, emoji sizes relative to the text, the font weights in `theme.weight`, stand-in nameplate art, the capture window size). Restyle tickets look a Discord name up in `MOCKUP_ROLES` before adding a token.
+
+How the shell (M03) reads the sizes:
+
+```lua
+local theme = require("../theme")
+ui.row { w_full = true, h_full = true, bg = theme.color.bg_3, gap = theme.size.gap, px = theme.size.gap, pb = theme.size.gap,
+	ui.column { w = theme.size.guild_list_width, bg = theme.color.bg_4, border = theme.size.border_thickness, border_color = theme.color.border,
+		rounded = theme.size.radius_lg },
+	ui.column { w = theme.size.sidebar_width, bg = theme.color.bg_4, rounded = theme.size.radius_lg } }
+```
+
+Rust reads the same values from the palette (`Palette::size`, `Palette::color`) or as the zgx tokens `kyoko.<name>`; a property that takes a number in Luau uses `theme.number(theme.size.gap)`.
+
 ## Fonts
 
-Kyoko bundles no fonts, as oxidcord bundles none. `fonts::installed` reads the installed families from the Windows font registry and `fonts::pick` takes the first installed family of the theme's list: `gg sans`, `Noto Sans`, `Segoe UI`, `Helvetica Neue`, `Arial`, `sans-serif` for the interface and `Consolas`, `Menlo`, `monospace` for code. On a stock Windows machine that is Segoe UI and Consolas, the same faces oxidcord renders. The shell root sets `font = theme.font.ui`.
+Kyoko bundles Inter (SIL OFL 1.1, release v4.1, the static 400, 500, 600 and 700 faces in `apps/desktop/fonts/inter/`, compiled in). `fonts::bundled` hands them to zgx (`Application::font`) before any text is shaped, so they need no installation and no network. `fonts::installed` reads the installed families from the Windows font registry and adds the bundled ones, and `fonts::pick` takes the first available family of the theme's list. Midnight asks for `Inter`, `gg sans`, `Noto Sans`, `Helvetica Neue`, `Helvetica`, `Arial`, `sans-serif` (always Inter) and, for code, `gg mono`, `Source Code Pro`, `Consolas`, `Monaco`, `monospace` (Consolas on a stock Windows machine). Dark, Light and AMOLED keep oxidcord's lists, `gg sans`, `Noto Sans`, `Segoe UI`, `Helvetica Neue`, `Arial`, `sans-serif` and `Consolas`, `Menlo`, `monospace`, which is Segoe UI and Consolas on a stock machine. A theme sets its own lists with `ui_fonts` and `code_fonts`. The shell root sets `font = theme.font.ui`.
 
 ## Icons
 

@@ -43,6 +43,13 @@ impl Rgba {
 		format!("#{:02x}{:02x}{:02x}{alpha:02x}", self.red, self.green, self.blue)
 	}
 
+	pub fn faded(self, factor: f32) -> Self {
+		Self {
+			alpha: (self.alpha * factor).clamp(0., 1.),
+			..self
+		}
+	}
+
 	pub fn lightness(&self) -> f32 {
 		let channels = [self.red, self.green, self.blue];
 		let high = channels.iter().max().copied().unwrap_or(0) as f32;
@@ -74,12 +81,83 @@ pub fn parse_color(text: &str) -> Option<Rgba> {
 		});
 	}
 	let (function, inner) = lower.strip_suffix(')')?.split_once('(')?;
+	if function.trim() == "color-mix" {
+		return color_mix(inner);
+	}
 	let parts = arguments(inner)?;
 	match function.trim() {
 		"rgb" | "rgba" => rgb(&parts),
 		"hsl" | "hsla" => hsl(&parts),
 		_ => None,
 	}
+}
+
+fn color_mix(inner: &str) -> Option<Rgba> {
+	let parts = top_level_parts(inner);
+	let [space, first, second] = parts.as_slice() else {
+		return None;
+	};
+	if !space.trim().starts_with("in ") {
+		return None;
+	}
+	let (first, first_share) = mix_stop(first)?;
+	let (second, second_share) = mix_stop(second)?;
+	let (first_share, second_share) = match (first_share, second_share) {
+		(Some(first), Some(second)) => (first, second),
+		(Some(first), None) => (first, 1. - first),
+		(None, Some(second)) => (1. - second, second),
+		(None, None) => (0.5, 0.5),
+	};
+	let total = first_share + second_share;
+	if total <= 0. {
+		return None;
+	}
+	let (first_share, second_share) = (first_share / total, second_share / total);
+	let alpha = first.alpha * first_share + second.alpha * second_share;
+	if alpha <= 0. {
+		return Some(Rgba { alpha: 0., ..first });
+	}
+	let channel = |left: u8, right: u8| -> u8 {
+		let weighted =
+			f32::from(left) * first.alpha * first_share + f32::from(right) * second.alpha * second_share;
+		(weighted / alpha).round().clamp(0., 255.) as u8
+	};
+	Some(Rgba {
+		red: channel(first.red, second.red),
+		green: channel(first.green, second.green),
+		blue: channel(first.blue, second.blue),
+		alpha: alpha.clamp(0., 1.),
+	})
+}
+
+fn mix_stop(text: &str) -> Option<(Rgba, Option<f32>)> {
+	let text = text.trim();
+	if let Some((color, share)) = text.rsplit_once(char::is_whitespace)
+		&& let Some(percent) = share.strip_suffix('%')
+	{
+		let share = (number(percent)? / 100.).clamp(0., 1.);
+		return Some((parse_color(color)?, Some(share)));
+	}
+	Some((parse_color(text)?, None))
+}
+
+fn top_level_parts(text: &str) -> Vec<&str> {
+	let mut parts = Vec::new();
+	let mut depth = 0usize;
+	let mut start = 0;
+	for (index, character) in text.char_indices() {
+		match character {
+			'(' => depth += 1,
+			')' => depth = depth.saturating_sub(1),
+			',' if depth == 0 => {
+				parts.push(&text[start..index]);
+				start = index + 1;
+			}
+			_ => {}
+		}
+	}
+	parts.push(&text[start..]);
+	parts
 }
 
 fn hex(digits: &str) -> Option<Rgba> {

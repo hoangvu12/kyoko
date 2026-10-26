@@ -2,6 +2,7 @@ local theme = require("../theme")
 local widgets = require("./widgets")
 
 local THEMES = {
+	{ label = "Midnight", value = "midnight" },
 	{ label = "Dark", value = "dark" },
 	{ label = "Light", value = "light" },
 	{ label = "AMOLED", value = "amoled" },

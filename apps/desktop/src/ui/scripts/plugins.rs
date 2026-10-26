@@ -163,7 +163,7 @@ pub(super) fn app_with(
 	let lab = Rc::new(RefCell::new(lab));
 	let held = lab.clone();
 	let app = TestApp::new(move |runtime| {
-		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		Catalog::load(&[themes_dir()]).install(runtime, crate::theme::DEFAULT);
 		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
 		for name in host_names() {
 			host.action(name.clone(), |_| {});

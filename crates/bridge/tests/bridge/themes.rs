@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use bridge::themes::{
-	CSS_MAPPING, Palette, Scheme, ThemeSource, Themes, color_token, import_css, link_lines, link_urls,
-	parse_meta, set_theme_links, theme_link, toggle_theme,
+	COLORS, CSS_MAPPING, CSS_SIZES, DEFAULT_THEME, Layer, MOCKUP_ROLES, Palette, Scheme, ThemeSource, Themes,
+	UNTOKENED, color_token, import_css, link_lines, link_urls, parse_color, parse_meta, set_theme_links,
+	size_token, theme_link, toggle_theme,
 };
 use session::ThemeLinkCopy;
 use store::ThemeSettings;
@@ -54,61 +55,185 @@ const VENCORD_THEME: &str = r#"/**
 const MIDNIGHT: &str = include_str!("fixtures/midnight-vencord.theme.css");
 
 #[test]
-fn a_midnight_theme_maps_its_role_variables_onto_the_nearest_tokens() {
+fn the_midnight_flavour_imports_one_to_one_into_the_built_in_midnight_theme() {
 	let meta = parse_meta(MIDNIGHT, "midnight-vencord.theme");
 	assert_eq!(meta.name, "midnight (vencord)");
 	assert_eq!(meta.author, "refact0r");
 	assert_eq!(meta.version, "2.1.1");
 
-	let shown = Palette::dark().layered([&import_css(MIDNIGHT)]);
-	for (token, value) in [
-		("background_primary", "#282828"),
-		("background_secondary", "#282828"),
-		("user_panel_background", "#282828"),
-		("background_tertiary", "#31302f"),
-		("background_floating", "#31302f"),
-		("input_background", "#31302f"),
-		("code_background", "#31302f"),
-		("button_secondary", "#3c3836"),
-		("button_secondary_hover", "#433f3d"),
-		("scrollbar_thumb", "#433f3d"),
-		("modifier_hover", "#6965631a"),
-		("modifier_selected", "#69656333"),
-		("modifier_active", "#6965634c"),
-		("divider", "#69656333"),
-		("message_hover", "#0000001a"),
-		("text_on_brand", "#282828"),
-		("interactive_active", "#f1e9da"),
-		("header_primary", "#e4d2b4"),
-		("text_normal", "#d4be98"),
-		("interactive_hover", "#d4be98"),
-		("text_muted", "#a79a83"),
-		("header_secondary", "#a79a83"),
-		("interactive_normal", "#a79a83"),
-		("interactive_muted", "#d4be9866"),
-		("link", "#db9aab"),
-		("mention_text", "#db9aab"),
-		("unread_pill", "#d3869b"),
-		("mention_badge", "#d3869b"),
-		("brand", "#d3869b"),
-		("brand_hover", "#cd748c"),
-		("status_online", "#a8b665"),
-		("status_idle", "#d8a656"),
-		("status_dnd", "#ea6962"),
-		("status_offline", "#a79a83"),
-		("status_streaming", "#d3869b"),
-		("danger", "#ea6962"),
-		("danger_hover", "#e7534b"),
-		("success", "#a8b665"),
-		("warning", "#d8a656"),
-	] {
-		assert_eq!(shown.color(token), Some(value), "{token}");
+	let layer = import_css(MIDNIGHT);
+	for (token, _, variables) in CSS_MAPPING {
+		let declared = variables
+			.iter()
+			.any(|variable| MIDNIGHT.contains(&format!("{variable}:")));
+		let gradient = ["mention", "mention_hover", "reply", "reply_hover"].contains(token);
+		if declared && !gradient {
+			assert!(
+				layer.colors().iter().any(|(name, _, _)| name == token),
+				"{token} was not imported"
+			);
+		}
 	}
-	assert_eq!(
-		shown.color("mention_background"),
-		Palette::dark().color("mention_background")
+	let shown = Palette::dark().layered([&layer]);
+	assert_same_colours(&shown, &Palette::midnight());
+	assert_eq!(shown.size("gap"), Some(12.));
+	assert_eq!(shown.size("chatbar_height"), Some(47.));
+	assert_eq!(shown.color("bg_4"), Some("#282828"));
+	assert_eq!(shown.color("background_primary"), Some("#282828"));
+	assert_eq!(shown.color("text_3"), Some("#d4be98"));
+	assert_eq!(shown.color("accent_2"), Some("#d3869b"));
+	assert_eq!(shown.color("brand"), Some("#d3869b"));
+	assert_eq!(shown.color("mention"), Some("#d3869b1a"));
+}
+
+#[test]
+fn every_variable_of_the_mockups_has_a_token_or_a_reason() {
+	let root = mockup_root();
+	let variables: Vec<&str> = root
+		.split(';')
+		.filter_map(|declaration| declaration.split_once(':'))
+		.map(|(name, _)| name.rsplit("*/").next().unwrap_or("").trim())
+		.map(|name| name.rsplit('{').next().unwrap_or("").trim())
+		.filter(|name| name.starts_with("--"))
+		.collect();
+	assert!(variables.len() > 300, "only {} variables found", variables.len());
+	for variable in variables {
+		let colour = CSS_MAPPING
+			.iter()
+			.any(|(_, discord, midnight)| discord.contains(&variable) || midnight.contains(&variable));
+		let size = CSS_SIZES.iter().any(|(_, name)| *name == variable);
+		let role = MOCKUP_ROLES.iter().any(|(name, _)| *name == variable);
+		let reason = UNTOKENED
+			.iter()
+			.any(|(name, _)| *name == variable || (name.ends_with('-') && variable.starts_with(name)));
+		assert!(
+			colour || size || role || reason,
+			"{variable} has no token and no reason"
+		);
+	}
+	for (variable, token) in MOCKUP_ROLES {
+		assert!(
+			color_token(token).is_some() || ["ui_font", "code_font"].contains(token),
+			"{variable} names {token}, which is not a token"
+		);
+	}
+	for (token, _) in CSS_SIZES {
+		assert!(size_token(token).is_some(), "{token} is not a size token");
+	}
+}
+
+#[test]
+fn each_midnight_variable_lands_on_exactly_one_token() {
+	let mut seen: Vec<&str> = Vec::new();
+	for (_, _, midnight) in CSS_MAPPING {
+		for variable in *midnight {
+			assert!(!seen.contains(variable), "{variable} maps onto two tokens");
+			seen.push(variable);
+		}
+	}
+	for (_, variable) in CSS_SIZES {
+		assert!(!seen.contains(variable), "{variable} maps onto two tokens");
+		seen.push(variable);
+	}
+}
+
+#[test]
+fn the_mockups_variable_block_restyles_kyoko_exactly_as_midnight() {
+	let layer = import_css(&mockup_root());
+	let midnight = Palette::midnight();
+	assert_same_colours(
+		&Palette::builtin("light").expect("light").layered([&layer]),
+		&midnight,
 	);
-	assert_eq!(shown.sizes(), Palette::dark().sizes());
+	let shown = Palette::dark().layered([&layer]);
+	assert_same_colours(&shown, &midnight);
+	for (token, size) in [
+		("guild_list_width", 66.),
+		("channel_header_height", 50.),
+		("chatbar_height", 47.),
+		("channel_item_height", 36.),
+		("member_list_panel_width", 264.),
+		("radius_md", 12.),
+		("space_xs", 8.),
+	] {
+		assert_eq!(shown.size(token), Some(size), "{token}");
+	}
+}
+
+#[test]
+fn the_midnight_theme_gives_every_token_a_value_from_its_own_palette() {
+	let midnight = Palette::midnight();
+	let on_light = Palette::builtin("light")
+		.expect("light")
+		.layered([&Layer::midnight()]);
+	let on_amoled = Palette::builtin("amoled")
+		.expect("amoled")
+		.layered([&Layer::midnight()]);
+	assert_same_colours(&on_light, &midnight);
+	assert_same_colours(&on_amoled, &midnight);
+	assert_eq!(midnight.colors().len(), COLORS.len());
+	for (token, value) in [
+		("bg_3", "#31302f"),
+		("text_1", "#f1e9da"),
+		("text_0", "#282828"),
+		("accent_new", "#d3869b"),
+		("online", "#a8b665"),
+		("border", "#69656333"),
+		("background_tertiary", "#31302f"),
+		("interactive_active", "#f1e9da"),
+		("danger", "#ea6962"),
+		("mention_background", "#d3869b1a"),
+		("background_feedback_critical", "#ea696233"),
+		("overlay", "#000000b3"),
+	] {
+		assert_eq!(midnight.color(token), Some(value), "{token}");
+	}
+	assert_eq!(midnight.ui_fonts()[0], "Inter");
+	assert_eq!(midnight.code_fonts()[0], "gg mono");
+	assert!(!midnight.is_light());
+}
+
+#[test]
+fn a_theme_that_changes_a_base_colour_carries_it_to_every_token_built_on_it() {
+	let layer = Layer::from_json(
+		"rose",
+		r##"{ "purple_2": "#ff0088", "text_3": "#eeeeee", "link": "#00ff00", "gap": 8, "guildbar_avatar_size": 48 }"##,
+	)
+	.expect("theme");
+	let shown = Palette::midnight().layered([&layer]);
+	for token in [
+		"accent_2",
+		"accent_new",
+		"streaming",
+		"focus_ring",
+		"mention_badge",
+	] {
+		assert_eq!(shown.color(token), Some("#ff0088"), "{token}");
+	}
+	assert_eq!(shown.color("mention"), Some("#ff00881a"));
+	assert_eq!(shown.color("text_normal"), Some("#eeeeee"));
+	assert_eq!(shown.color("link"), Some("#00ff00"));
+	assert_eq!(shown.color("accent_1"), Palette::midnight().color("accent_1"));
+	assert_eq!(shown.size("top_strip_height"), Some(8.));
+	assert_eq!(shown.size("guild_list_width"), Some(74.));
+	assert_eq!(shown.size("guild_sidebar_width"), Some(354.));
+	assert_eq!(shown.size("channel_header_height"), Some(58.));
+}
+
+fn mockup_root() -> String {
+	let path =
+		PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/design/mockups/midnight-discord.html");
+	let page = std::fs::read_to_string(path).expect("the mockup page");
+	let start = page.find(":root {").expect("a :root block");
+	let end = page[start..].find("\n}").expect("the end of :root") + start + 2;
+	page[start..end].to_owned()
+}
+
+fn assert_same_colours(shown: &Palette, expected: &Palette) {
+	let hex = |value: Option<&str>| value.and_then(parse_color).map(|color| color.hex());
+	for (token, value) in expected.colors() {
+		assert_eq!(hex(shown.color(token)), hex(Some(value)), "{token}");
+	}
 }
 
 #[test]
@@ -285,7 +410,7 @@ fn enabled_themes_apply_in_order_over_the_chosen_base_and_turning_one_off_restor
 	assert!(toggle_theme(&mut settings, "blue.json", false));
 	let red_only = dark(&themes, &settings);
 	assert_eq!(red_only.color("brand"), Some("#ff0000"));
-	assert!(red_only.sizes().contains(&("radius_md", 8.)));
+	assert!(red_only.sizes().contains(&("radius_md", 12.)));
 
 	assert!(toggle_theme(&mut settings, "red.css", false));
 	assert_eq!(dark(&themes, &settings), base);
@@ -422,16 +547,40 @@ fn the_bundled_themes_are_bases_with_their_details() {
 	let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../themes");
 	let themes = Themes::load(&[bundled], PathBuf::new());
 	let names = themes.base_names();
-	assert_eq!(names[..3], ["dark", "light", "amoled"]);
-	assert!(names.contains(&"midnight".to_owned()));
-	let entries = themes.entries(&ThemeSettings::default(), "midnight");
-	let midnight = entries
+	assert_eq!(names[..4], ["midnight", "dark", "light", "amoled"]);
+	assert!(names.contains(&"deep-blue".to_owned()));
+	let entries = themes.entries(&ThemeSettings::default(), "deep-blue");
+	let deep_blue = entries
 		.iter()
-		.find(|entry| entry.id == "midnight")
-		.expect("midnight");
+		.find(|entry| entry.id == "deep-blue")
+		.expect("deep-blue");
+	assert!(deep_blue.enabled);
+	assert_eq!(deep_blue.meta.name, "Deep Blue");
+	assert_eq!(deep_blue.source, ThemeSource::Builtin);
+	assert!(!deep_blue.meta.author.is_empty());
+	assert!(!deep_blue.meta.version.is_empty());
+	assert_eq!(deep_blue.swatch.len(), 6);
+	assert_eq!(
+		themes
+			.base("deep-blue")
+			.and_then(|palette| palette.color("background_primary")),
+		Some("#0f1020")
+	);
+}
+
+#[test]
+fn midnight_is_the_default_theme_and_credits_refact0r() {
+	assert_eq!(DEFAULT_THEME, "midnight");
+	assert_eq!(store::Settings::default().theme, DEFAULT_THEME);
+	let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../themes");
+	let themes = Themes::load(&[bundled], PathBuf::new());
+	let entries = themes.entries(&ThemeSettings::default(), DEFAULT_THEME);
+	let midnight = &entries[0];
+	assert_eq!(midnight.id, "midnight");
+	assert_eq!(midnight.meta.name, "Midnight");
+	assert_eq!(midnight.meta.author, "refact0r");
+	assert_eq!(midnight.meta.version, "2.1.1");
 	assert!(midnight.enabled);
-	assert_eq!(midnight.source, ThemeSource::Builtin);
-	assert!(!midnight.meta.author.is_empty());
-	assert!(!midnight.meta.version.is_empty());
-	assert_eq!(midnight.swatch.len(), 6);
+	assert_eq!(themes.base(DEFAULT_THEME), Some(&Palette::midnight()));
+	assert_eq!(Palette::builtin(DEFAULT_THEME), Some(Palette::midnight()));
 }

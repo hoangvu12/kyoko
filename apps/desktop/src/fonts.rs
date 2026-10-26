@@ -1,3 +1,12 @@
+use zgx_desktop::FontData;
+
+const BUNDLED: [&[u8]; 4] = [
+	include_bytes!("../fonts/inter/Inter-Regular.ttf"),
+	include_bytes!("../fonts/inter/Inter-Medium.ttf"),
+	include_bytes!("../fonts/inter/Inter-SemiBold.ttf"),
+	include_bytes!("../fonts/inter/Inter-Bold.ttf"),
+];
+
 const STYLES: &[&str] = &[
 	"regular",
 	"normal",
@@ -36,10 +45,24 @@ pub fn pick(families: &[String], installed: &[String]) -> String {
 		.unwrap_or_else(|| "sans-serif".to_owned())
 }
 
+pub fn bundled() -> Vec<FontData> {
+	BUNDLED
+		.into_iter()
+		.filter_map(|bytes| match FontData::new(bytes) {
+			Ok(font) => Some(font),
+			Err(error) => {
+				tracing::warn!(%error, "a bundled font could not be read");
+				None
+			}
+		})
+		.collect()
+}
+
 pub fn installed() -> Vec<String> {
 	let mut families: Vec<String> = registered_faces()
 		.iter()
 		.filter_map(|face| family_of(face))
+		.chain(bundled().iter().flat_map(|font| font.families().to_vec()))
 		.collect();
 	families.sort_by_key(|family| family.to_ascii_lowercase());
 	families.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
