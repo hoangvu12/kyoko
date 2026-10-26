@@ -1,12 +1,25 @@
 use std::sync::Arc;
 
-use protocol::{ApplicationCommandIndex, PremiumTier, PremiumType, Snowflake};
+use protocol::{ApplicationCommandIndex, CommandChoice, PremiumTier, PremiumType, Snowflake};
 
 use crate::changes::Changes;
 use crate::state::State;
 
 const MIB: u64 = 1024 * 1024;
 pub const MAX_ATTACHMENTS: usize = 10;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AutocompleteStatus {
+	Loading,
+	Loaded(Vec<CommandChoice>),
+	Failed,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Autocomplete {
+	pub request: u64,
+	pub status: AutocompleteStatus,
+}
 
 impl State {
 	pub fn upload_limit(&self, channel_id: Snowflake) -> u64 {
@@ -49,6 +62,22 @@ impl State {
 		changes: &mut Changes,
 	) {
 		self.commands.insert(scope, Arc::clone(index));
+		changes.commands = true;
+	}
+
+	pub fn autocomplete(&self) -> Option<&Autocomplete> {
+		self.autocomplete.as_ref()
+	}
+
+	pub(crate) fn autocomplete_changed(&mut self, autocomplete: &Autocomplete, changes: &mut Changes) {
+		if self
+			.autocomplete
+			.as_ref()
+			.is_some_and(|current| current.request > autocomplete.request)
+		{
+			return;
+		}
+		self.autocomplete = Some(autocomplete.clone());
 		changes.commands = true;
 	}
 }

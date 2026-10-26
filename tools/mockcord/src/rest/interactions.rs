@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::channels::read_body;
+use crate::config::AutocompleteReply;
 use crate::error::{ApiError, ApiResult};
 use crate::ops::{Draft, UploadedFile};
 use crate::state::Shared;
@@ -26,16 +27,30 @@ pub const POLLY_ID: u64 = 9_100_000_000_000_000_003;
 pub const SNAPPER_ID: u64 = 9_100_000_000_000_000_004;
 pub const REMIND_COMMAND: u64 = 9_100_000_000_000_000_201;
 pub const ROLL_COMMAND: u64 = 9_100_000_000_000_000_103;
+pub const TRANSLATE_COMMAND: u64 = 9_100_000_000_000_000_105;
+pub const RESIZE_COMMAND: u64 = 9_100_000_000_000_000_402;
 pub const SHRUG_COMMAND: &str = "-1";
-const COMMAND_IDS: [(u64, u64, &str); 7] = [
+pub const LANGUAGES: [(&str, &str); 6] = [
+	("English", "en"),
+	("Deutsch", "de"),
+	("Español", "es"),
+	("Français", "fr"),
+	("日本語", "ja"),
+	("Português", "pt"),
+];
+const COMMAND_IDS: [(u64, u64, &str); 9] = [
 	(9_100_000_000_000_000_101, MOCKBOT_ID, "ping"),
 	(9_100_000_000_000_000_102, MOCKBOT_ID, "echo"),
 	(ROLL_COMMAND, MOCKBOT_ID, "roll"),
 	(9_100_000_000_000_000_104, MOCKBOT_ID, "broken"),
+	(TRANSLATE_COMMAND, MOCKBOT_ID, "translate"),
 	(REMIND_COMMAND, REMINDY_ID, "remind"),
 	(9_100_000_000_000_000_301, POLLY_ID, "poll"),
 	(9_100_000_000_000_000_401, SNAPPER_ID, "snap"),
+	(RESIZE_COMMAND, SNAPPER_ID, "resize"),
 ];
+const APPLICATION_COMMAND: i64 = 2;
+const APPLICATION_COMMAND_AUTOCOMPLETE: i64 = 4;
 const APPLICATIONS: [(u64, &str); 4] = [
 	(MOCKBOT_ID, "Mockbot"),
 	(REMINDY_ID, "Remindy"),
@@ -84,6 +99,15 @@ fn integer_option(name: &str, description: &str, required: bool, max: i64) -> Va
 	})
 }
 
+fn language_choices(typed: &str) -> Vec<Value> {
+	let typed = typed.to_lowercase();
+	LANGUAGES
+		.iter()
+		.filter(|(name, value)| name.to_lowercase().contains(&typed) || value.starts_with(&typed))
+		.map(|(name, value)| json!({ "name": name, "value": value }))
+		.collect()
+}
+
 fn command(id: u64, application_id: u64, name: &str) -> Value {
 	let (description, options) = match name {
 		"ping" => ("Check that Mockbot is responding", json!([])),
@@ -94,14 +118,30 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 				{
 					"type": 3,
 					"name": "language",
-					"description": "The language to answer in",
+					"description": "The language to echo in",
 					"required": true,
-					"choices": [
-						{ "name": "English", "value": "en" },
-						{ "name": "French", "value": "fr" },
-						{ "name": "Japanese", "value": "ja" },
-					],
+					"choices": language_choices(""),
 				},
+			]),
+		),
+		"translate" => (
+			"Translates what you say",
+			json!([
+				string_option("text", "What to translate", true),
+				{
+					"type": 3,
+					"name": "language",
+					"description": "The language to translate to",
+					"required": true,
+					"autocomplete": true,
+				},
+			]),
+		),
+		"resize" => (
+			"Resize an image",
+			json!([
+				{ "type": 11, "name": "file", "description": "The image to resize", "required": true },
+				integer_option("width", "New width in pixels", true, 4096),
 			]),
 		),
 		"roll" => (
@@ -285,6 +325,59 @@ fn option_value<'a>(data: &'a Value, name: &str) -> Option<&'a Value> {
 		.map(|option| &option["value"])
 }
 
+fn focused_value(data: &Value) -> Option<&str> {
+	data["options"]
+		.as_array()?
+		.iter()
+		.find(|option| option["focused"].as_bool() == Some(true))
+		.and_then(|option| option["value"].as_str())
+}
+
+fn attachment_id(value: &Value) -> Option<u64> {
+	value
+		.as_u64()
+		.or_else(|| value.as_str().and_then(|id| id.parse().ok()))
+}
+
+fn claimed_attachment(shared: &Shared, data: &Value, name: &str) -> Option<UploadedFile> {
+	let wanted = attachment_id(option_value(data, name)?)?;
+	let attachment = data["attachments"]
+		.as_array()?
+		.iter()
+		.find(|attachment| attachment_id(&attachment["id"]) == Some(wanted))?;
+	let key = attachment["uploaded_filename"].as_str()?;
+	shared.store.lock().uploads.remove(key)
+}
+
+async fn autocomplete(shared: Arc<Shared>, body: &Value, name: &str) -> Result<StatusCode, ApiError> {
+	if name != "translate" {
+		return Err(ApiError::invalid_body("Invalid Form Body"));
+	}
+	let reply = shared.store.lock().autocomplete;
+	if reply == AutocompleteReply::Fail {
+		return Err(ApiError::server_error());
+	}
+	let typed = focused_value(&body["data"]).unwrap_or_default().to_owned();
+	let event = json!({
+		"nonce": body["nonce"].clone(),
+		"application_id": MOCKBOT_ID.to_string(),
+		"choices": language_choices(&typed),
+	});
+	if reply == AutocompleteReply::Stall {
+		tokio::spawn(async move {
+			tokio::time::sleep(STALL).await;
+			shared
+				.hub
+				.broadcast("APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE", &event);
+		});
+	} else {
+		shared
+			.hub
+			.broadcast("APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE", &event);
+	}
+	Ok(StatusCode::NO_CONTENT)
+}
+
 fn answer(name: &str, data: &Value) -> Option<String> {
 	match name {
 		"ping" => Some("Pong!".to_owned()),
@@ -304,6 +397,11 @@ fn answer(name: &str, data: &Value) -> Option<String> {
 			.and_then(Value::as_str)
 			.map(|question| format!("Poll: {question}")),
 		"snap" => Some("Snapshot saved".to_owned()),
+		"translate" => {
+			let text = option_value(data, "text").and_then(Value::as_str)?;
+			let language = option_value(data, "language").and_then(Value::as_str)?;
+			Some(format!("{text} ({language})"))
+		}
 		_ => None,
 	}
 }
@@ -322,20 +420,38 @@ pub async fn create_interaction(
 	let (Some((_, _, name)), Some(channel_id)) = (known, channel_id) else {
 		return Err(ApiError::invalid_body("Invalid Form Body"));
 	};
-	if body["type"].as_i64() != Some(2) || body["session_id"].as_str().is_none_or(str::is_empty) {
+	if body["session_id"].as_str().is_none_or(str::is_empty) {
 		return Err(ApiError::invalid_body("Invalid Form Body"));
+	}
+	match body["type"].as_i64() {
+		Some(APPLICATION_COMMAND) => {}
+		Some(APPLICATION_COMMAND_AUTOCOMPLETE) => return autocomplete(shared, &body, name).await,
+		_ => return Err(ApiError::invalid_body("Invalid Form Body")),
+	}
+	let mut files = Vec::new();
+	if *name == "resize" {
+		let file =
+			claimed_attachment(&shared, data, "file").ok_or(ApiError::invalid_body("Invalid upload"))?;
+		files.push(file);
 	}
 	let nonce = body["nonce"].clone();
 	let interaction_id = shared.store.lock().next_snowflake().to_string();
 	let event = json!({ "id": interaction_id, "nonce": nonce });
 	shared.hub.broadcast("INTERACTION_CREATE", &event);
-	let Some(content) = answer(name, data) else {
+	let content = match files.first() {
+		Some(file) => option_value(data, "width")
+			.and_then(Value::as_i64)
+			.map(|width| format!("Resized {} to {width} pixels wide", file.filename)),
+		None => answer(name, data),
+	};
+	let Some(content) = content else {
 		shared.hub.broadcast("INTERACTION_FAILURE", &event);
 		return Ok(StatusCode::NO_CONTENT);
 	};
 	shared.hub.broadcast("INTERACTION_SUCCESS", &event);
 	let draft = Draft {
 		kind: Some(MessageType::ChatInputCommand),
+		files,
 		..Draft::text(content)
 	};
 	shared.post_message(channel_id, &mockbot(), draft)?;

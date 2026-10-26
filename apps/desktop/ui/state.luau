@@ -147,7 +147,7 @@ export type SuggestionHeading = { title: string, query: string }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
 export type CommandVisual = { kind: string, letter: string?, hue: number?, image: string? }
 export type CommandPickerState = { open: boolean, items: { any }?, rail: { any }?, selected: number?, section: number? }
-export type CommandState = { active: boolean, serial: number?, app: CommandVisual?, name: string?, focused: number?, fields: { any }?, hint: { name: string, description: string, error: boolean }?, optional_count: number?, optional_open: boolean?, optional_selected: number?, optional: { any }? }
+export type CommandState = { active: boolean, serial: number?, app: CommandVisual?, name: string?, focused: number?, fields: { any }?, hint: { name: string, description: string, error: boolean }?, optional_count: number?, optional_open: boolean?, optional_selected: number?, optional: { any }?, choices: any?, wants_file: boolean? }
 export type MemberWindow = {
 	first: number,
 	rows: { any },

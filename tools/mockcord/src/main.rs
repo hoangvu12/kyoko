@@ -33,6 +33,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--no-nitro" => config.nitro = false,
 			"--autocomplete-emoji" => config.autocomplete_emoji = true,
 			"--frequent-commands" => config.frequent_commands = true,
+			"--slow-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Stall,
+			"--failing-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Fail,
 			other => return Err(format!("unknown flag {other}")),
 		}
 	}

@@ -216,6 +216,10 @@ impl Control {
 		);
 	}
 
+	pub fn set_autocomplete(&self, reply: crate::config::AutocompleteReply) {
+		self.shared.store.lock().autocomplete = reply;
+	}
+
 	pub fn command_uses(&self) -> Vec<protocol::CommandUse> {
 		self.shared.store.lock().command_uses.clone()
 	}

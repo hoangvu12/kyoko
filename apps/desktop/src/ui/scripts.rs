@@ -1530,6 +1530,122 @@ fn the_command_picker_and_option_states_load() {
 	);
 }
 
+fn choice_state(kind: &str) -> serde_json::Value {
+	let items = if kind == "choices" {
+		json!([
+			{ "key": "0:English", "index": 1, "name": "English" },
+			{ "key": "1:Deutsch", "index": 2, "name": "Deutsch" },
+		])
+	} else {
+		json!([])
+	};
+	json!({
+		"active": true,
+		"serial": 1,
+		"app": command_app("M", 0.),
+		"name": "/translate",
+		"focused": 2,
+		"fields": [
+			{ "key": "text", "index": 1, "name": "text", "value": "hello", "focused": false, "invalid": false, "takes_file": false, "file": { "name": "", "image": "" } },
+			{ "key": "language", "index": 2, "name": "language", "value": "", "focused": true, "invalid": false, "takes_file": false, "file": { "name": "", "image": "" } },
+		],
+		"hint": { "name": "language", "description": "The language to translate to", "error": false },
+		"optional_count": 0,
+		"optional_open": false,
+		"optional_selected": 1,
+		"optional": [],
+		"choices": { "open": true, "kind": kind, "title": "LANGUAGE", "items": items, "selected": 1 },
+		"wants_file": false,
+	})
+}
+
+fn file_state(picked: bool) -> serde_json::Value {
+	let file = if picked {
+		json!({ "name": "cat.png", "image": "" })
+	} else {
+		json!({ "name": "", "image": "" })
+	};
+	json!({
+		"active": true,
+		"serial": 1,
+		"app": command_app("S", 3.),
+		"name": "/resize",
+		"focused": if picked { 2 } else { 1 },
+		"fields": [
+			{ "key": "file", "index": 1, "name": "file", "value": "", "focused": !picked, "invalid": false, "takes_file": true, "file": file },
+			{ "key": "width", "index": 2, "name": "width", "value": "", "focused": picked, "invalid": false, "takes_file": false, "file": { "name": "", "image": "" } },
+		],
+		"hint": { "name": "file", "description": "The image to resize", "error": false },
+		"optional_count": 0,
+		"optional_open": false,
+		"optional_selected": 1,
+		"optional": [],
+		"choices": { "open": false },
+		"wants_file": !picked,
+	})
+}
+
+#[test]
+fn the_command_choice_and_file_option_states_load() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the choices of an option",
+		"Deutsch",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("10")),
+			("sidebar.guild_name", json!("Kyoko")),
+			("sidebar.rows", sidebar_rows()),
+			("timeline.channel_id", json!("20")),
+			("timeline.channel_name", json!("general")),
+			("composer.open", json!(true)),
+			("composer.command", choice_state("choices")),
+		],
+	);
+	assert!(app.texts().iter().any(|text| text == "LANGUAGE"));
+	shows(
+		&mut app,
+		"autocomplete loading",
+		"Loading options...",
+		&[("composer.command", choice_state("loading"))],
+	);
+	shows(
+		&mut app,
+		"autocomplete failing",
+		"Couldn't load options",
+		&[("composer.command", choice_state("failed"))],
+	);
+	assert!(app.texts().iter().any(|text| text == "Retry"));
+	shows(
+		&mut app,
+		"a file option waiting for a file",
+		"Drag and drop or click to upload file",
+		&[("composer.command", file_state(false))],
+	);
+	shows(
+		&mut app,
+		"a picked file",
+		"cat.png",
+		&[("composer.command", file_state(true))],
+	);
+	assert!(
+		!app.texts()
+			.iter()
+			.any(|text| text == "Drag and drop or click to upload file")
+	);
+}
+
 fn watch_dots(app: &mut TestApp, span: Duration) -> Vec<[f32; 3]> {
 	let deadline = Instant::now() + span;
 	let mut seen = Vec::new();

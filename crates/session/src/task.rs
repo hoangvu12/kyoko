@@ -123,6 +123,8 @@ pub(crate) enum Internal {
 		scope: Snowflake,
 		index: Option<Box<protocol::ApplicationCommandIndex>>,
 	},
+	AutocompleteDue(u64),
+	AutocompleteFailed(u64),
 	ThemeLinksChanged,
 	Alert(Alert),
 	AlertVetoed(StdInstant),
@@ -589,6 +591,7 @@ impl Core {
 			DispatchEvent::RateLimited(limited) => self.on_rate_limited(&limited),
 			DispatchEvent::InteractionSuccess(value) => self.interaction_settled(&value, false),
 			DispatchEvent::InteractionFailure(value) => self.interaction_settled(&value, true),
+			DispatchEvent::AutocompleteResponse(response) => self.autocomplete_answered(response),
 			_ => {}
 		}
 	}
@@ -643,6 +646,8 @@ impl Core {
 			Internal::SendFailed(nonce, reason, outgoing) => self.send_failed(nonce, reason, *outgoing),
 			Internal::Uploading(nonce, sent) => self.apply_local(LocalEvent::UploadProgress { nonce, sent }),
 			Internal::CommandIndex { scope, index } => self.command_index_arrived(scope, index),
+			Internal::AutocompleteDue(request) => self.autocomplete_due(request),
+			Internal::AutocompleteFailed(request) => self.autocomplete_failed(request),
 			Internal::Searched {
 				serial,
 				offset,
@@ -801,7 +806,14 @@ impl Core {
 				channel_id,
 				command_id,
 				options,
-			} => self.run_command(channel_id, command_id, options),
+				files,
+			} => self.run_command(channel_id, command_id, options, files),
+			Command::AutocompleteCommand {
+				channel_id,
+				command_id,
+				options,
+				request,
+			} => self.autocomplete(channel_id, command_id, options, request),
 			Command::EditMessage {
 				channel_id,
 				message_id,

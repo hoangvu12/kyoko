@@ -1,9 +1,12 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use protocol::{
-	ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, CommandOption, CommandOptionType,
-	InteractionOption, Permissions, Snowflake,
+	ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, CommandChoice, CommandOption,
+	CommandOptionType, InteractionOption, Permissions, Snowflake,
 };
+use rest::UploadFile;
 use serde_json::{Number, Value};
-use state::State;
+use state::{Autocomplete, AutocompleteStatus, State};
 
 use crate::guild_admin::GuildAccess;
 
@@ -11,6 +14,13 @@ const FREQUENT_ROWS: usize = 5;
 const FREQUENTLY_USED: &str = "Frequently Used";
 const BUILT_IN: &str = "Built-In";
 const REQUIRED: &str = "This option is required";
+const FILE_REQUIRED: &str = "Pick a file to upload";
+
+static AUTOCOMPLETE_REQUESTS: AtomicU64 = AtomicU64::new(0);
+
+fn next_autocomplete_request() -> u64 {
+	AUTOCOMPLETE_REQUESTS.fetch_add(1, Ordering::Relaxed) + 1
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltIn {
@@ -594,7 +604,7 @@ pub fn option_value(option: &CommandOption, raw: &str) -> Result<Value, String> 
 		CommandOptionType::Mentionable => mention_id(raw, &["@&", "@!", "@"])
 			.map(Value::String)
 			.ok_or_else(|| "Must be a user or role mention or ID".to_owned()),
-		CommandOptionType::Attachment => Err("File options are not supported yet".to_owned()),
+		CommandOptionType::Attachment => Err(FILE_REQUIRED.to_owned()),
 		_ => Err("This option is not supported".to_owned()),
 	}
 }
@@ -603,15 +613,22 @@ pub fn interaction_options(
 	entry: &CommandEntry,
 	values: Vec<(CommandOption, Value)>,
 ) -> Vec<InteractionOption> {
-	let mut options: Vec<InteractionOption> = values
-		.into_iter()
-		.map(|(option, value)| InteractionOption {
-			kind: option.kind,
-			name: option.name,
-			value: Some(value),
-			options: Vec::new(),
-		})
-		.collect();
+	nested(
+		entry,
+		values
+			.into_iter()
+			.map(|(option, value)| InteractionOption {
+				kind: option.kind,
+				name: option.name,
+				value: Some(value),
+				options: Vec::new(),
+				focused: None,
+			})
+			.collect(),
+	)
+}
+
+fn nested(entry: &CommandEntry, mut options: Vec<InteractionOption>) -> Vec<InteractionOption> {
 	let CommandSource::Application { path_kinds, .. } = &entry.source else {
 		return options;
 	};
@@ -621,9 +638,22 @@ pub fn interaction_options(
 			name: name.clone(),
 			value: None,
 			options,
+			focused: None,
 		}];
 	}
 	options
+}
+
+#[derive(Debug, Clone)]
+pub struct OptionFile {
+	pub id: u64,
+	pub file: UploadFile,
+}
+
+impl PartialEq for OptionFile {
+	fn eq(&self, other: &Self) -> bool {
+		self.id == other.id
+	}
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -631,6 +661,8 @@ pub struct OptionField {
 	pub option: CommandOption,
 	pub value: String,
 	pub error: Option<String>,
+	pub choice: Option<CommandChoice>,
+	pub file: Option<OptionFile>,
 }
 
 impl OptionField {
@@ -639,16 +671,98 @@ impl OptionField {
 			option: option.clone(),
 			value: String::new(),
 			error: None,
+			choice: None,
+			file: None,
+		}
+	}
+
+	pub fn takes_file(&self) -> bool {
+		self.option.kind == CommandOptionType::Attachment
+	}
+
+	pub fn autocompletes(&self) -> bool {
+		self.option.autocomplete == Some(true) && !self.takes_file()
+	}
+
+	pub fn has_choices(&self) -> bool {
+		!self.option.choices.is_empty() || self.autocompletes()
+	}
+
+	fn is_empty(&self) -> bool {
+		if self.takes_file() {
+			self.file.is_none()
+		} else {
+			self.value.trim().is_empty()
+		}
+	}
+
+	fn picked(&self) -> Option<Value> {
+		self.choice
+			.as_ref()
+			.filter(|choice| choice.name == self.value)
+			.map(|choice| choice.value.clone())
+	}
+
+	fn parsed(&self) -> Result<Value, String> {
+		match self.picked() {
+			Some(value) => Ok(value),
+			None => option_value(&self.option, &self.value),
 		}
 	}
 
 	fn check(&mut self) {
-		self.error = if self.value.trim().is_empty() {
+		self.error = if self.value.trim().is_empty() || self.picked().is_some() {
 			None
 		} else {
 			option_value(&self.option, &self.value).err()
 		};
 	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChoiceList {
+	Choices(Vec<CommandChoice>),
+	Loading,
+	Failed,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionChoices {
+	pub title: String,
+	pub list: ChoiceList,
+	pub selected: usize,
+}
+
+impl OptionChoices {
+	pub fn count(&self) -> usize {
+		match &self.list {
+			ChoiceList::Choices(choices) => choices.len(),
+			_ => 0,
+		}
+	}
+
+	pub fn selected_choice(&self) -> Option<&CommandChoice> {
+		match &self.list {
+			ChoiceList::Choices(choices) => choices.get(self.selected),
+			_ => None,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AutocompleteAsk {
+	request: u64,
+	field: usize,
+	value: String,
+}
+
+fn filtered(choices: &[CommandChoice], typed: &str) -> Vec<CommandChoice> {
+	let typed = typed.trim().to_lowercase();
+	choices
+		.iter()
+		.filter(|choice| typed.is_empty() || choice.name.to_lowercase().contains(&typed))
+		.cloned()
+		.collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -666,6 +780,8 @@ pub struct ActiveCommand {
 	pub optional_open: bool,
 	pub optional_selected: usize,
 	pub refusal: Option<String>,
+	pub choice_selected: usize,
+	asked: Option<AutocompleteAsk>,
 }
 
 pub enum Prepared {
@@ -683,6 +799,8 @@ impl ActiveCommand {
 			optional_open: false,
 			optional_selected: 0,
 			refusal: None,
+			choice_selected: 0,
+			asked: None,
 		}
 	}
 
@@ -727,10 +845,14 @@ impl ActiveCommand {
 		if field.value == value {
 			return false;
 		}
+		if field.takes_file() {
+			return false;
+		}
 		field.value = value.to_owned();
 		field.check();
 		self.refusal = None;
 		self.focused = index;
+		self.choice_selected = 0;
 		true
 	}
 
@@ -739,7 +861,170 @@ impl ActiveCommand {
 			return false;
 		}
 		self.focused = index;
+		self.choice_selected = 0;
 		true
+	}
+
+	pub fn wants_file(&self) -> bool {
+		!self.optional_open
+			&& self
+				.focused_field()
+				.is_some_and(|field| field.takes_file() && field.file.is_none())
+	}
+
+	pub fn choices(&self, autocomplete: Option<&Autocomplete>) -> Option<OptionChoices> {
+		if self.optional_open {
+			return None;
+		}
+		let field = self.focused_field().filter(|field| field.has_choices())?;
+		let list = if field.autocompletes() {
+			let asked = self.asked.as_ref().filter(|asked| asked.field == self.focused)?;
+			match autocomplete.filter(|autocomplete| autocomplete.request == asked.request) {
+				Some(Autocomplete {
+					status: AutocompleteStatus::Loaded(choices),
+					..
+				}) => ChoiceList::Choices(choices.clone()),
+				Some(Autocomplete {
+					status: AutocompleteStatus::Failed,
+					..
+				}) => ChoiceList::Failed,
+				_ => ChoiceList::Loading,
+			}
+		} else {
+			ChoiceList::Choices(filtered(&field.option.choices, &field.value))
+		};
+		if matches!(&list, ChoiceList::Choices(choices) if choices.is_empty()) {
+			return None;
+		}
+		let last = match &list {
+			ChoiceList::Choices(choices) => choices.len() - 1,
+			_ => 0,
+		};
+		Some(OptionChoices {
+			title: field.option.name.to_uppercase(),
+			list,
+			selected: self.choice_selected.min(last),
+		})
+	}
+
+	pub fn move_choice(&mut self, count: usize, delta: i32) {
+		if count == 0 {
+			return;
+		}
+		let current = self.choice_selected.min(count - 1);
+		let step = delta.unsigned_abs() as usize % count;
+		self.choice_selected = if delta < 0 {
+			(current + count - step) % count
+		} else {
+			(current + step) % count
+		};
+	}
+
+	pub fn pick_choice(&mut self, choice: CommandChoice) {
+		let index = self.focused;
+		let Some(field) = self.fields.get_mut(index) else {
+			return;
+		};
+		field.value = choice.name.clone();
+		field.choice = Some(choice);
+		field.error = None;
+		self.refusal = None;
+		self.choice_selected = 0;
+		if let Some(asked) = &mut self.asked
+			&& asked.field == index
+		{
+			asked.value = field.value.clone();
+		}
+		self.step(1);
+	}
+
+	pub fn attach(&mut self, file: OptionFile) -> bool {
+		let Some(field) = self
+			.fields
+			.get_mut(self.focused)
+			.filter(|field| field.takes_file())
+		else {
+			return false;
+		};
+		field.file = Some(file);
+		field.error = None;
+		self.refusal = None;
+		self.step(1);
+		true
+	}
+
+	pub fn clear_file(&mut self, index: usize) -> Option<u64> {
+		let removed = self.fields.get_mut(index)?.file.take()?;
+		self.focused = index;
+		self.optional_open = false;
+		Some(removed.id)
+	}
+
+	pub fn files(&self) -> Vec<UploadFile> {
+		self.fields
+			.iter()
+			.filter_map(|field| field.file.as_ref().map(|file| file.file.clone()))
+			.collect()
+	}
+
+	pub fn file_ids(&self) -> Vec<u64> {
+		self.fields
+			.iter()
+			.filter_map(|field| field.file.as_ref().map(|file| file.id))
+			.collect()
+	}
+
+	fn autocomplete_options(&self) -> Vec<InteractionOption> {
+		let leaves = self
+			.fields
+			.iter()
+			.enumerate()
+			.filter(|(_, field)| !field.takes_file())
+			.filter_map(|(index, field)| {
+				let focused = index == self.focused;
+				let value = if focused {
+					Value::String(field.value.clone())
+				} else if field.is_empty() {
+					return None;
+				} else {
+					field.parsed().ok()?
+				};
+				Some(InteractionOption {
+					kind: field.option.kind,
+					name: field.option.name.clone(),
+					value: Some(value),
+					options: Vec::new(),
+					focused: focused.then_some(true),
+				})
+			})
+			.collect();
+		nested(&self.entry, leaves)
+	}
+
+	pub fn autocomplete(&mut self, retry: bool) -> Option<(Snowflake, Vec<InteractionOption>, u64)> {
+		let CommandSource::Application { command_id, .. } = &self.entry.source else {
+			return None;
+		};
+		let command_id = *command_id;
+		let field = self
+			.focused_field()
+			.filter(|field| field.autocompletes() && !self.optional_open)?;
+		let value = field.value.clone();
+		let same = self
+			.asked
+			.as_ref()
+			.is_some_and(|asked| asked.field == self.focused && asked.value == value);
+		if same && !retry {
+			return None;
+		}
+		let request = next_autocomplete_request();
+		self.asked = Some(AutocompleteAsk {
+			request,
+			field: self.focused,
+			value,
+		});
+		self.choice_selected = 0;
+		Some((command_id, self.autocomplete_options(), request))
 	}
 
 	pub fn step(&mut self, delta: i32) -> bool {
@@ -816,15 +1101,26 @@ impl ActiveCommand {
 
 	pub fn prepare(&mut self) -> Prepared {
 		let mut values = Vec::new();
+		let mut attachments = 0u64;
 		for index in 0..self.fields.len() {
 			let field = &self.fields[index];
-			if field.value.trim().is_empty() {
+			if field.is_empty() {
 				if field.option.is_required() {
-					return self.fail(index, REQUIRED.to_owned());
+					let reason = if field.takes_file() {
+						FILE_REQUIRED
+					} else {
+						REQUIRED
+					};
+					return self.fail(index, reason.to_owned());
 				}
 				continue;
 			}
-			match option_value(&field.option, &field.value) {
+			if field.takes_file() {
+				values.push((field.option.clone(), Value::from(attachments)));
+				attachments += 1;
+				continue;
+			}
+			match field.parsed() {
 				Ok(value) => values.push((field.option.clone(), value)),
 				Err(reason) => return self.fail(index, reason),
 			}

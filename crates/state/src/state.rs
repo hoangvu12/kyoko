@@ -125,6 +125,7 @@ pub struct State {
 	pub(crate) show_deleted: bool,
 	pub(crate) kept_writes: Vec<KeptWrite>,
 	pub(crate) commands: HashMap<Snowflake, Arc<ApplicationCommandIndex>>,
+	pub(crate) autocomplete: Option<crate::composer::Autocomplete>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -635,6 +636,7 @@ impl State {
 				self.command_index_loaded(*scope, index, &mut changes)
 			}
 			LocalEvent::StatusSettings(settings) => changes.merge(self.set_status_settings(settings.clone())),
+			LocalEvent::Autocomplete(autocomplete) => self.autocomplete_changed(autocomplete, &mut changes),
 		}
 		changes
 	}

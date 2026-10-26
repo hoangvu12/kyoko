@@ -167,6 +167,7 @@ pub enum LocalEvent {
 		index: Arc<ApplicationCommandIndex>,
 	},
 	StatusSettings(protocol::ProtoStatusSettings),
+	Autocomplete(crate::composer::Autocomplete),
 }
 
 #[derive(Debug)]

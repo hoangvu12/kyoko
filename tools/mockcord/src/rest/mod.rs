@@ -8,8 +8,8 @@ mod users;
 pub use channels::MODERATED_PHRASE;
 pub(crate) use expressions::ready_stickers;
 pub use interactions::{
-	BROKEN_UPLOAD, MOCKBOT_ID, POLLY_ID, REMIND_COMMAND, REMINDY_ID, ROLL_COMMAND, SHRUG_COMMAND, SNAPPER_ID,
-	STALLED_UPLOAD, frequent_commands,
+	BROKEN_UPLOAD, LANGUAGES, MOCKBOT_ID, POLLY_ID, REMIND_COMMAND, REMINDY_ID, RESIZE_COMMAND, ROLL_COMMAND,
+	SHRUG_COMMAND, SNAPPER_ID, STALLED_UPLOAD, TRANSLATE_COMMAND, frequent_commands,
 };
 
 use std::collections::hash_map::DefaultHasher;

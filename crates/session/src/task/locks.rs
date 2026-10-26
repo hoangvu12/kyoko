@@ -9,8 +9,10 @@ impl Core {
 			return false;
 		};
 		tracing::info!(reason = lock.reason.code(), "risky action held for confirmation");
-		if !matches!(command, Command::Typing { .. }) {
-			self.reject(lock.reason.explanation());
+		match command {
+			Command::Typing { .. } => {}
+			Command::AutocompleteCommand { request, .. } => self.autocomplete_held(*request),
+			_ => self.reject(lock.reason.explanation()),
 		}
 		true
 	}
@@ -30,6 +32,7 @@ impl Core {
 				thread_id: channel_id,
 			}
 			| Command::RunApplicationCommand { channel_id, .. }
+			| Command::AutocompleteCommand { channel_id, .. }
 			| Command::ForwardMessage {
 				to_channel_id: channel_id,
 				..

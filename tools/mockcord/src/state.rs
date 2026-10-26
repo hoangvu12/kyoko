@@ -55,6 +55,7 @@ pub struct Store {
 	pub favorite_emojis: Vec<String>,
 	pub favorite_gifs: Vec<protocol::FavoriteGif>,
 	pub command_uses: Vec<protocol::CommandUse>,
+	pub autocomplete: crate::config::AutocompleteReply,
 	pub uploads: HashMap<String, UploadedFile>,
 	pub reactors: HashMap<(u64, String, bool), Vec<u64>>,
 	last_id: u64,
@@ -163,6 +164,7 @@ impl Store {
 			favorite_emojis: crate::admin::seed_favorite_emojis(fixtures),
 			favorite_gifs: Vec::new(),
 			command_uses: fixtures.command_uses.clone(),
+			autocomplete: crate::config::AutocompleteReply::Answer,
 			uploads: HashMap::new(),
 			reactors: HashMap::new(),
 			last_id,
@@ -232,7 +234,9 @@ pub struct Shared {
 
 impl Shared {
 	pub fn new(config: MockConfig, fixtures: Fixtures, urls: Urls, shutdown: watch::Receiver<bool>) -> Self {
-		let store = Mutex::new(Store::new(&fixtures));
+		let mut store = Store::new(&fixtures);
+		store.autocomplete = config.autocomplete;
+		let store = Mutex::new(store);
 		let recorder = Recorder::new(config.record);
 		let token = Mutex::new(config.token.clone());
 		Self {

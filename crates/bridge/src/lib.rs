@@ -59,11 +59,11 @@ pub use community::{
 	rank_forward,
 };
 pub use composer::{
-	ActiveCommand, Attachment, BuiltIn, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
-	CommandSource, Composer, FileEdit, LineState, Mark, Marked, Notice, OptionField, Outcome, Prepared,
-	Query, Reply, Suggestion, Trigger, Visual, apply_suggestion, command_catalog, command_picker,
-	exact_command, failure_text, interaction_options, line_marks, option_value, placeholder, query_at,
-	suggestion_heading, suggestions, text_marks, too_big, typing_line,
+	ActiveCommand, Attachment, BuiltIn, ChoiceList, CommandApp, CommandEntry, CommandHint, CommandPicker,
+	CommandSection, CommandSource, Composer, FileEdit, LineState, Mark, Marked, Notice, OptionChoices,
+	OptionField, OptionFile, Outcome, Prepared, Query, Reply, Suggestion, Trigger, Visual, apply_suggestion,
+	command_catalog, command_picker, exact_command, failure_text, interaction_options, line_marks,
+	option_value, placeholder, query_at, suggestion_heading, suggestions, text_marks, too_big, typing_line,
 };
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};

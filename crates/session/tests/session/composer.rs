@@ -357,7 +357,9 @@ async fn a_slash_command_runs_through_the_interactions_endpoint() {
 			name: "text".to_owned(),
 			value: Some(json!("hello bot")),
 			options: Vec::new(),
+			focused: None,
 		}],
+		files: Vec::new(),
 	});
 	running
 		.until("the bot to answer", |state| {
@@ -409,6 +411,7 @@ async fn a_command_the_application_fails_is_reported_once() {
 		channel_id,
 		command_id: BROKEN_ID,
 		options: Vec::new(),
+		files: Vec::new(),
 	});
 	let reason = rejected_with(&running, before).await;
 	assert_eq!(reason, "/broken failed: the application did not respond");
@@ -420,6 +423,7 @@ async fn a_command_the_application_fails_is_reported_once() {
 		channel_id,
 		command_id: BROKEN_ID,
 		options: Vec::new(),
+		files: Vec::new(),
 	});
 	let reason = rejected_with(&running, before).await;
 	assert_eq!(reason, "/broken: complete this in the official Discord client");

@@ -169,6 +169,11 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `command-options-remind` | `command-options-remind.html` |
 | `command-choices-invalid` | `command-choices-invalid.html` |
 | `voice-message` | `voice-message.html` |
+| `command-choices-and-autocomplete` | `command-choices-and-autocomplete.html` |
+| `command-choices-loading` | `command-choices-loading.html` |
+| `command-choices-failed` | `command-choices-failed.html` |
+| `command-attachment-option` | `command-attachment-option.html` |
+| `command-attachment-option-picked` | `command-attachment-option-picked.html` |
 
 `inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
 
@@ -176,7 +181,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-loading`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -473,6 +478,18 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). Mockcord serves the mockups' ap
 | `command-options-optional` | 10 | As `command-options`, with `sides` set to 20 and the optional list opened (`count`). | yes |
 | `command-options-remind` | 10 | As `command-options`, picking `/remind`: the focused `when` chip and the `message` chip. | yes |
 | `command-choices-invalid` | 10 | As `command-options`, with `sides` set to 1000: the chip and the hint in red with "Must be a number between 1 and 100". | yes |
+
+### Midnight 11 Command choices, autocomplete and file options
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). Steps as `command-options`, picking another command. Mockbot's `/echo` lists its six languages as choices; `/translate` asks Mockbot for them through autocomplete, and Snapper's `/resize` takes a file. For `command-choices-loading` the parity tool adds `--slow-autocomplete` (Mockbot answers after ten minutes), for `command-choices-failed` `--failing-autocomplete` (the interaction is refused with a 500).
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `command-choices-and-autocomplete` | 11 | Pick `/echo`, `text` set to hello, `language` focused: the LANGUAGE list above the hint bar with English selected. | yes |
+| `command-choices-loading` | 11 | Pick `/translate`, `text` set to hello, `language` focused while Mockbot has not answered: "Loading options..." with the dots. | yes |
+| `command-choices-failed` | 11 | As `command-choices-loading`, the autocomplete refused: "Couldn't load options" and Retry. | yes |
+| `command-attachment-option` | 11 | Pick `/resize`: the focused `file` chip and the drop box above the hint bar. | yes |
+| `command-attachment-option-picked` | 11 | As `command-attachment-option`, then a generated `cat.png` picked: the file chip with its thumbnail and name, `width` focused. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

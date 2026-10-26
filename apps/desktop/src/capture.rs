@@ -146,6 +146,11 @@ pub enum ComposerShot {
 	CommandOptional,
 	CommandRemind,
 	CommandInvalid,
+	CommandChoices,
+	CommandChoicesLoading,
+	CommandChoicesFailed,
+	CommandFile,
+	CommandFilePicked,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,6 +245,11 @@ impl Screen {
 			"command-options-optional" => Some(Screen::ComposerShot(ComposerShot::CommandOptional)),
 			"command-options-remind" => Some(Screen::ComposerShot(ComposerShot::CommandRemind)),
 			"command-choices-invalid" => Some(Screen::ComposerShot(ComposerShot::CommandInvalid)),
+			"command-choices-and-autocomplete" => Some(Screen::ComposerShot(ComposerShot::CommandChoices)),
+			"command-choices-loading" => Some(Screen::ComposerShot(ComposerShot::CommandChoicesLoading)),
+			"command-choices-failed" => Some(Screen::ComposerShot(ComposerShot::CommandChoicesFailed)),
+			"command-attachment-option" => Some(Screen::ComposerShot(ComposerShot::CommandFile)),
+			"command-attachment-option-picked" => Some(Screen::ComposerShot(ComposerShot::CommandFilePicked)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),

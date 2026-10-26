@@ -4,6 +4,7 @@ mod backfill;
 mod caches;
 mod capabilities;
 mod collapse;
+mod command_options;
 mod community;
 mod composer;
 mod deletes;

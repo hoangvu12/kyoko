@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bridge::{
-	ActiveCommand, CommandApp, CommandPicker, Composer, FileEdit, Inbox, Mark, Notice, OpenChannel, Outcome,
-	Suggestion, Visual,
+	ActiveCommand, ChoiceList, CommandApp, CommandPicker, Composer, FileEdit, Inbox, Mark, Notice,
+	OpenChannel, OptionChoices, OptionFile, Outcome, Suggestion, Visual,
 };
 use chrono::Utc;
 use protocol::{Nonce, Snowflake};
@@ -33,6 +33,8 @@ type Handler = fn(&Link, Pane);
 
 const CAPTURE_DRAFT: &str = "Checking how the composer looks with a draft in it";
 const CAPTURE_EMOJI_QUERY: &str = "wow :sm";
+const CAPTURE_OPTION_TEXT: &str = "hello";
+const CAPTURE_FILE_NAME: &str = "cat.png";
 
 pub(super) use crate::composer_layer::Pane;
 
@@ -71,6 +73,23 @@ fn capture_picture() -> Loaded {
 	Loaded::File {
 		thumbnail: thumbnail(&bytes, "image/png"),
 		file: UploadFile::new("screenshot.png", bytes, "image/png"),
+	}
+}
+
+fn capture_cat() -> Loaded {
+	let (width, height) = CAPTURE_PICTURE;
+	let picture = image::RgbaImage::from_fn(width, height, |x, y| {
+		let along = ((x + y) * 255 / (width + height)) as u8;
+		image::Rgba([240, 200 - along / 2, 60 - along / 5, 255])
+	});
+	let mut encoded = Cursor::new(Vec::new());
+	if picture.write_to(&mut encoded, image::ImageFormat::Png).is_err() {
+		return Loaded::Failed("The capture picture could not be made".to_owned());
+	}
+	let bytes = encoded.into_inner();
+	Loaded::Option {
+		thumbnail: thumbnail(&bytes, "image/png"),
+		file: UploadFile::new(CAPTURE_FILE_NAME, bytes, "image/png"),
 	}
 }
 
@@ -131,6 +150,10 @@ pub(super) struct Names {
 	toggle_optional: &'static str,
 	add_optional: &'static str,
 	cancel_command: &'static str,
+	choose_option: &'static str,
+	retry_choices: &'static str,
+	option_files: &'static str,
+	remove_option_file: &'static str,
 }
 
 pub(super) const MAIN: Names = Names {
@@ -176,6 +199,10 @@ pub(super) const MAIN: Names = Names {
 	toggle_optional: "composer.toggle_optional",
 	add_optional: "composer.add_optional",
 	cancel_command: "composer.cancel_command",
+	choose_option: "composer.choose_option",
+	retry_choices: "composer.retry_choices",
+	option_files: "composer.option_files",
+	remove_option_file: "composer.remove_option_file",
 };
 
 pub(super) const THREAD: Names = Names {
@@ -221,6 +248,10 @@ pub(super) const THREAD: Names = Names {
 	toggle_optional: "thread_composer.toggle_optional",
 	add_optional: "thread_composer.add_optional",
 	cancel_command: "thread_composer.cancel_command",
+	choose_option: "thread_composer.choose_option",
+	retry_choices: "thread_composer.retry_choices",
+	option_files: "thread_composer.option_files",
+	remove_option_file: "thread_composer.remove_option_file",
 };
 
 enum Loaded {
@@ -231,6 +262,10 @@ enum Loaded {
 	Direct {
 		files: Vec<UploadFile>,
 		refused: Option<String>,
+	},
+	Option {
+		file: UploadFile,
+		thumbnail: Option<ImageData>,
 	},
 	Failed(String),
 }
@@ -735,6 +770,7 @@ impl Link {
 					.borrow_mut()
 					.edit_option(index, value)
 				{
+					link.ask_autocomplete(pane, false);
 					link.publish_composer_all(pane);
 				}
 			}
@@ -752,6 +788,7 @@ impl Link {
 				&& link.pane_composer(pane).composer.borrow_mut().focus_option(index)
 			{
 				link.focus_command(pane);
+				link.ask_autocomplete(pane, false);
 				link.publish_composer_all(pane);
 			}
 		});
@@ -773,6 +810,7 @@ impl Link {
 					.add_optional(position(&argument))
 			{
 				link.focus_command(pane);
+				link.ask_autocomplete(pane, false);
 				link.publish_composer_all(pane);
 			}
 		});
@@ -785,6 +823,87 @@ impl Link {
 				link.request_focus(pane);
 				link.publish_composer_all(pane);
 			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.choose_option, move |argument| {
+			if let Some(link) = actions.upgrade() {
+				link.choose_option(pane, position(&argument));
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.retry_choices, move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.ask_autocomplete(pane, true);
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.option_files, move |argument| {
+			if let Some(link) = actions.upgrade()
+				&& let Some(path) = texts(&argument).into_iter().next()
+			{
+				link.composer_option_path(pane, PathBuf::from(path));
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.remove_option_file, move |argument| {
+			if let (Some(link), Some(index)) = (actions.upgrade(), position(&argument)) {
+				let removed = link
+					.pane_composer(pane)
+					.composer
+					.borrow_mut()
+					.clear_option_file(index);
+				if removed.is_some() {
+					link.focus_command(pane);
+					link.publish_composer_all(pane);
+				}
+			}
+		});
+	}
+
+	fn ask_autocomplete(&self, pane: Pane, retry: bool) {
+		let request = self
+			.pane_composer(pane)
+			.composer
+			.borrow_mut()
+			.autocomplete_request(retry);
+		self.composer_send(request.into_iter().collect());
+	}
+
+	fn choose_option(&self, pane: Pane, index: Option<usize>) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let picked = self
+			.pane_composer(pane)
+			.composer
+			.borrow_mut()
+			.pick_choice(&shared.read(), index);
+		if picked {
+			self.focus_command(pane);
+			self.ask_autocomplete(pane, false);
+			self.publish_composer(pane, &shared.read());
+		}
+	}
+
+	fn composer_option_path(&self, pane: Pane, path: PathBuf) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let view = self.pane_composer(pane);
+		let Some(channel_id) = view.composer.borrow().channel() else {
+			return;
+		};
+		let limit = shared.read().upload_limit(channel_id);
+		let loads = view.loads.clone();
+		view.runtime.spawn_blocking(move || {
+			loads.push(match read_upload(&path, limit) {
+				Ok(file) => Loaded::Option {
+					thumbnail: thumbnail(&file.bytes, &file.content_type),
+					file,
+				},
+				Err(reason) => Loaded::Failed(reason),
+			})
 		});
 	}
 
@@ -802,26 +921,39 @@ impl Link {
 		let shift = flag(event, "shift");
 		let empty = field(event, "value").and_then(text).is_none_or(str::is_empty);
 		let index = field(event, "index").and_then(position);
-		let (optional_open, focused, required) = {
+		let (optional_open, focused, required, has_file) = {
 			let composer = view.composer.borrow();
 			let Some(command) = composer.command() else {
 				return false;
 			};
+			let field = command.fields.get(index.unwrap_or(command.focused));
 			(
 				command.optional_open,
 				index.unwrap_or(command.focused),
-				command
-					.fields
-					.get(index.unwrap_or(command.focused))
-					.is_none_or(|field| field.option.is_required()),
+				field.is_none_or(|field| field.option.is_required()),
+				field.is_some_and(|field| field.file.is_some()),
 			)
 		};
+		let choosing = view
+			.composer
+			.borrow()
+			.option_choices(&shared.read())
+			.is_some_and(|choices| choices.count() > 0);
 		let mut composer = view.composer.borrow_mut();
 		let handled = match key {
 			"ArrowDown" | "ArrowUp" if optional_open => {
 				composer.move_selection(if key == "ArrowDown" { 1 } else { -1 });
 				true
 			}
+			"ArrowDown" | "ArrowUp" if choosing => {
+				composer.move_choice(&shared.read(), if key == "ArrowDown" { 1 } else { -1 })
+			}
+			"Enter" | "Tab" if choosing && !shift => {
+				drop(composer);
+				self.choose_option(pane, None);
+				return true;
+			}
+			"Backspace" if has_file => composer.clear_option_file(focused).is_some(),
 			"Enter" if optional_open && !shift => composer.add_optional(None),
 			"Enter" if !shift => {
 				let outcome = composer.submit(&shared.read(), "", Utc::now());
@@ -852,6 +984,7 @@ impl Link {
 		drop(composer);
 		if handled {
 			self.focus_command(pane);
+			self.ask_autocomplete(pane, false);
 			self.publish_composer_all(pane);
 		}
 		handled || key == "Tab"
@@ -889,6 +1022,12 @@ impl Link {
 		tracing::debug!(files = paths.len(), direct, "files dropped on the window");
 		self.composer.drop_hover.set(false.into());
 		self.composer_layer.show_drop(None);
+		if self.composer.composer.borrow().wants_file() {
+			if let Some(path) = paths.first() {
+				self.composer_option_path(Pane::Main, path.clone());
+			}
+			return;
+		}
 		if direct {
 			self.composer_upload_now(Pane::Main, paths.to_vec());
 		} else {
@@ -996,7 +1135,8 @@ impl Link {
 			|| !changes.channel_lists.is_empty()
 		{
 			let refreshed = view.composer.borrow_mut().refresh_suggestions(state);
-			if refreshed {
+			let commanding = changes.commands && view.composer.borrow().command().is_some();
+			if refreshed || commanding {
 				self.publish_composer_suggestions(pane, state);
 			}
 		}
@@ -1114,6 +1254,7 @@ impl Link {
 		if picked {
 			self.replace_text(pane, Some((String::new(), 0)));
 			self.focus_command(pane);
+			self.ask_autocomplete(pane, false);
 		}
 		self.publish_composer_suggestions(pane, &shared.read());
 	}
@@ -1177,6 +1318,7 @@ impl Link {
 			.choose(typed, index);
 		if self.pane_composer(pane).composer.borrow().command().is_some() {
 			self.focus_command(pane);
+			self.ask_autocomplete(pane, false);
 		}
 		self.replace_text(pane, chosen);
 		if let Some(shared) = self.state() {
@@ -1300,6 +1442,22 @@ impl Link {
 				self.composer_send(outcome.commands);
 				return;
 			}
+			Loaded::Option { file, thumbnail } => {
+				match composer.attach_option(&shared.read(), file) {
+					Ok(id) => {
+						if let Some(thumbnail) = thumbnail {
+							let name = format!("{}/{id}", view.names.thumbnails);
+							self.host.image(&name, Some(Arc::new(thumbnail)));
+							view.thumbnails.borrow_mut().push((id, name));
+						}
+					}
+					Err(reason) => composer.refuse(reason),
+				}
+				drop(composer);
+				self.focus_command(pane);
+				self.ask_autocomplete(pane, false);
+				return;
+			}
 			Loaded::Failed(reason) => composer.refuse(reason),
 		}
 		drop(composer);
@@ -1323,8 +1481,9 @@ impl Link {
 	fn forget_thumbnails(&self, pane: Pane) {
 		let view = self.pane_composer(pane);
 		let composer = view.composer.borrow();
+		let options = composer.option_file_ids();
 		view.thumbnails.borrow_mut().retain(|(id, name)| {
-			let keep = composer.files().iter().any(|attachment| attachment.id == *id);
+			let keep = options.contains(id) || composer.files().iter().any(|attachment| attachment.id == *id);
 			if !keep {
 				self.host.image(name, None);
 			}
@@ -1581,10 +1740,58 @@ impl Link {
 		])
 	}
 
+	fn file_record(&self, view: &ComposerView, file: Option<&OptionFile>) -> Value {
+		let Some(file) = file else {
+			return record([("name", "".into()), ("image", "".into())]);
+		};
+		let image = view
+			.thumbnails
+			.borrow()
+			.iter()
+			.find(|(id, _)| *id == file.id)
+			.map(|(_, name)| format!("host:{name}"))
+			.unwrap_or_default();
+		record([
+			("name", file.file.name.as_str().into()),
+			("image", image.as_str().into()),
+		])
+	}
+
+	fn choices_record(choices: Option<OptionChoices>) -> Value {
+		let Some(choices) = choices else {
+			return record([("open", false.into())]);
+		};
+		let (kind, items) = match &choices.list {
+			ChoiceList::Choices(list) => (
+				"choices",
+				list.iter()
+					.enumerate()
+					.map(|(index, choice)| {
+						record([
+							("key", format!("{index}:{}", choice.name).as_str().into()),
+							("index", ((index + 1) as f64).into()),
+							("name", choice.name.as_str().into()),
+						])
+					})
+					.collect(),
+			),
+			ChoiceList::Loading => ("loading", Vec::new()),
+			ChoiceList::Failed => ("failed", Vec::new()),
+		};
+		record([
+			("open", true.into()),
+			("kind", kind.into()),
+			("title", choices.title.as_str().into()),
+			("items", Value::List(items.into())),
+			("selected", ((choices.selected + 1) as f64).into()),
+		])
+	}
+
 	fn command_record(
 		&self,
 		view: &ComposerView,
 		command: &ActiveCommand,
+		choices: Option<OptionChoices>,
 		images: &mut Vec<String>,
 	) -> Value {
 		let fields: Vec<Value> = command
@@ -1599,6 +1806,8 @@ impl Link {
 					("value", field.value.as_str().into()),
 					("focused", (index == command.focused).into()),
 					("invalid", field.error.is_some().into()),
+					("takes_file", field.takes_file().into()),
+					("file", self.file_record(view, field.file.as_ref())),
 				])
 			})
 			.collect();
@@ -1642,10 +1851,12 @@ impl Link {
 				((command.optional_selected + 1) as f64).into(),
 			),
 			("optional", Value::List(optional.into())),
+			("choices", Self::choices_record(choices)),
+			("wants_file", command.wants_file().into()),
 		])
 	}
 
-	fn publish_composer_command(&self, pane: Pane, _state: &State) -> Vec<String> {
+	fn publish_composer_command(&self, pane: Pane, state: &State) -> Vec<String> {
 		let view = self.pane_composer(pane);
 		let composer = view.composer.borrow();
 		let mut images = Vec::new();
@@ -1654,7 +1865,10 @@ impl Link {
 			None => record([("open", false.into())]),
 		};
 		let command = match composer.command() {
-			Some(command) => self.command_record(view, command, &mut images),
+			Some(command) => {
+				let choices = command.choices(state.autocomplete());
+				self.command_record(view, command, choices, &mut images)
+			}
 			None => record([("active", false.into())]),
 		};
 		drop(composer);
@@ -1748,7 +1962,12 @@ impl Link {
 			| capture::ComposerShot::CommandOptions
 			| capture::ComposerShot::CommandOptional
 			| capture::ComposerShot::CommandRemind
-			| capture::ComposerShot::CommandInvalid => self.drive_command(shot).await,
+			| capture::ComposerShot::CommandInvalid
+			| capture::ComposerShot::CommandChoices
+			| capture::ComposerShot::CommandChoicesLoading
+			| capture::ComposerShot::CommandChoicesFailed
+			| capture::ComposerShot::CommandFile
+			| capture::ComposerShot::CommandFilePicked => self.drive_command(shot).await,
 			capture::ComposerShot::Drop => self.files_hovering(true),
 			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
 			capture::ComposerShot::PlusMenu => {
@@ -1801,6 +2020,13 @@ impl Link {
 			capture::ComposerShot::CommandOptional => ("roll", "20", true),
 			capture::ComposerShot::CommandRemind => ("remind", "", false),
 			capture::ComposerShot::CommandInvalid => ("roll", "1000", false),
+			capture::ComposerShot::CommandChoices => ("echo", CAPTURE_OPTION_TEXT, false),
+			capture::ComposerShot::CommandChoicesLoading | capture::ComposerShot::CommandChoicesFailed => {
+				("translate", CAPTURE_OPTION_TEXT, false)
+			}
+			capture::ComposerShot::CommandFile | capture::ComposerShot::CommandFilePicked => {
+				("resize", "", false)
+			}
 			_ => return,
 		};
 		{
@@ -1813,12 +2039,54 @@ impl Link {
 			if optional {
 				composer.toggle_optional();
 			}
+			if !value.is_empty() && name != "roll" {
+				composer.step_option(1);
+			}
 		}
 		self.focus_command(Pane::Main);
+		self.ask_autocomplete(Pane::Main, false);
 		self.replace_text(Pane::Main, Some((String::new(), 0)));
 		self.publish_composer_all(Pane::Main);
-		self.until_capture(|link| link.composer.composer.borrow().command().is_some())
+		if shot == capture::ComposerShot::CommandFilePicked {
+			self.composer.loads.push(capture_cat());
+		}
+		self.until_capture(move |link| link.command_shot_ready(shot))
 			.await;
+	}
+
+	fn command_shot_ready(&self, shot: capture::ComposerShot) -> bool {
+		let Some(shared) = self.state() else {
+			return false;
+		};
+		let composer = self.composer.composer.borrow();
+		let Some(command) = composer.command() else {
+			return false;
+		};
+		let list = composer
+			.option_choices(&shared.read())
+			.map(|choices| choices.list);
+		match shot {
+			capture::ComposerShot::CommandChoices => matches!(list, Some(ChoiceList::Choices(_))),
+			capture::ComposerShot::CommandChoicesLoading => {
+				list == Some(ChoiceList::Loading)
+					&& shared
+						.read()
+						.autocomplete()
+						.is_some_and(|autocomplete| autocomplete.status == state::AutocompleteStatus::Loading)
+			}
+			capture::ComposerShot::CommandChoicesFailed => list == Some(ChoiceList::Failed),
+			capture::ComposerShot::CommandFile => command.wants_file(),
+			capture::ComposerShot::CommandFilePicked => {
+				!command.file_ids().is_empty()
+					&& self
+						.composer
+						.thumbnails
+						.borrow()
+						.iter()
+						.any(|(id, _)| command.file_ids().contains(id))
+			}
+			_ => true,
+		}
 	}
 
 	async fn drive_uploads(&self) {

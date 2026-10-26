@@ -2,6 +2,14 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AutocompleteReply {
+	#[default]
+	Answer,
+	Stall,
+	Fail,
+}
+
 #[derive(Debug, Clone)]
 pub struct MockConfig {
 	pub port: Option<u16>,
@@ -20,6 +28,7 @@ pub struct MockConfig {
 	pub nitro: bool,
 	pub autocomplete_emoji: bool,
 	pub frequent_commands: bool,
+	pub autocomplete: AutocompleteReply,
 	pub record: bool,
 	pub anchor: Option<DateTime<Utc>>,
 	pub build_number: u64,
@@ -46,6 +55,7 @@ impl Default for MockConfig {
 			nitro: true,
 			autocomplete_emoji: false,
 			frequent_commands: false,
+			autocomplete: AutocompleteReply::Answer,
 			record: false,
 			anchor: None,
 			build_number: 424_242,

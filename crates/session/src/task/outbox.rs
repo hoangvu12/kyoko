@@ -115,7 +115,7 @@ fn progress_of(nonce: Nonce, internal: UnboundedSender<Internal>, total: u64) ->
 	})
 }
 
-async fn uploaded(
+pub(super) async fn uploaded(
 	rest: &RestClient,
 	files: &[UploadFile],
 	channel_id: Snowflake,

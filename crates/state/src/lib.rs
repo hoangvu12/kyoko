@@ -35,7 +35,7 @@ pub use community::{
 	FieldKind, Join, MemberVerification, Onboarding, OnboardingOption, OnboardingPrompt, PromptKind,
 	VerificationField,
 };
-pub use composer::MAX_ATTACHMENTS;
+pub use composer::{Autocomplete, AutocompleteStatus, MAX_ATTACHMENTS};
 pub use deletions::{DeleteBatch, DeleteStatus};
 pub use event::{Event, LoadDirection, LocalEvent};
 pub use expressions::{

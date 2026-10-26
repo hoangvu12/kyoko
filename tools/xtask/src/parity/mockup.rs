@@ -102,6 +102,17 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("command-options-remind", "command-options-remind"),
 	("command-choices-invalid", "command-choices-invalid"),
 	("voice-message", "voice-message"),
+	(
+		"command-choices-and-autocomplete",
+		"command-choices-and-autocomplete",
+	),
+	("command-choices-loading", "command-choices-loading"),
+	("command-choices-failed", "command-choices-failed"),
+	("command-attachment-option", "command-attachment-option"),
+	(
+		"command-attachment-option-picked",
+		"command-attachment-option-picked",
+	),
 ];
 
 pub struct Pairing {

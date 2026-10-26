@@ -258,6 +258,22 @@ end
 function M.composer_cancel_command(area: string?)
 	ui.invoke(area_of(area) .. ".cancel_command")
 end
+
+function M.composer_choose_option(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".choose_option", index)
+end
+
+function M.composer_retry_choices(area: string?)
+	ui.invoke(area_of(area) .. ".retry_choices")
+end
+
+function M.composer_option_files(paths: { string }, area: string?)
+	ui.invoke(area_of(area) .. ".option_files", paths)
+end
+
+function M.composer_remove_option_file(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".remove_option_file", index)
+end
 function M.composer_backgrounds(text: string): { any }
 	local result = ui.call_sync("composer.backgrounds", text)
 	return if type(result) == "table" then result else {}

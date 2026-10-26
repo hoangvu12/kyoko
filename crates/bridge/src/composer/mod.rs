@@ -14,9 +14,9 @@ use crate::emoji_picker::EmojiCell;
 use crate::sticker_picker::StickerCell;
 
 pub use command::{
-	ActiveCommand, BuiltIn, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
-	CommandSource, OptionField, Prepared, command_catalog, command_picker, exact_command,
-	interaction_options, option_value,
+	ActiveCommand, BuiltIn, ChoiceList, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
+	CommandSource, OptionChoices, OptionField, OptionFile, Prepared, command_catalog, command_picker,
+	exact_command, interaction_options, option_value,
 };
 pub use marks::{LineState, Mark, Marked, line_marks, text_marks};
 pub use suggest::{
@@ -277,6 +277,87 @@ impl Composer {
 		self.command
 			.as_mut()
 			.is_some_and(|command| command.remove_field(index))
+	}
+
+	pub fn option_choices(&self, state: &State) -> Option<OptionChoices> {
+		self.command.as_ref()?.choices(state.autocomplete())
+	}
+
+	pub fn autocomplete_request(&mut self, retry: bool) -> Option<Command> {
+		let channel_id = self.channel_id?;
+		let (command_id, options, request) = self.command.as_mut()?.autocomplete(retry)?;
+		Some(Command::AutocompleteCommand {
+			channel_id,
+			command_id,
+			options,
+			request,
+		})
+	}
+
+	pub fn move_choice(&mut self, state: &State, delta: i32) -> bool {
+		let Some(count) = self.option_choices(state).map(|choices| choices.count()) else {
+			return false;
+		};
+		match self.command.as_mut() {
+			Some(command) if count > 0 => {
+				command.move_choice(count, delta);
+				true
+			}
+			_ => false,
+		}
+	}
+
+	pub fn pick_choice(&mut self, state: &State, index: Option<usize>) -> bool {
+		let Some(choices) = self.option_choices(state) else {
+			return false;
+		};
+		let choice = match (&choices.list, index) {
+			(ChoiceList::Choices(list), Some(index)) => list.get(index).cloned(),
+			_ => choices.selected_choice().cloned(),
+		};
+		match (choice, self.command.as_mut()) {
+			(Some(choice), Some(command)) => {
+				command.pick_choice(choice);
+				true
+			}
+			_ => false,
+		}
+	}
+
+	pub fn wants_file(&self) -> bool {
+		self.command.as_ref().is_some_and(ActiveCommand::wants_file)
+	}
+
+	pub fn attach_option(&mut self, state: &State, file: UploadFile) -> Result<u64, String> {
+		let channel_id = self.channel_id.ok_or_else(|| "Open a channel first".to_owned())?;
+		if !self.wants_file() {
+			return Err("Pick a file option first".to_owned());
+		}
+		if let Some(refusal) = too_big(&file.name, file.size(), state.upload_limit(channel_id)) {
+			return Err(refusal);
+		}
+		self.next_file += 1;
+		let id = self.next_file;
+		let attached = self
+			.command
+			.as_mut()
+			.is_some_and(|command| command.attach(OptionFile { id, file }));
+		if attached {
+			Ok(id)
+		} else {
+			Err("Pick a file option first".to_owned())
+		}
+	}
+
+	pub fn clear_option_file(&mut self, index: usize) -> Option<u64> {
+		self.command.as_mut()?.clear_file(index)
+	}
+
+	pub fn option_file_ids(&self) -> Vec<u64> {
+		self.command
+			.as_ref()
+			.map(ActiveCommand::file_ids)
+			.unwrap_or_default()
 	}
 
 	pub fn open(
@@ -789,6 +870,7 @@ impl Composer {
 				channel_id,
 				command_id: *command_id,
 				options: interaction_options(&active.entry, values),
+				files: active.files(),
 			},
 			CommandSource::BuiltIn(kind) => {
 				let text = values

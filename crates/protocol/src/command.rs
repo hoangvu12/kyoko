@@ -165,4 +165,14 @@ pub struct InteractionOption {
 	pub value: Option<Value>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub options: Vec<InteractionOption>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub focused: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(default)]
+pub struct AutocompleteResponse {
+	pub nonce: Option<String>,
+	pub application_id: Option<Snowflake>,
+	pub choices: LenientVec<CommandChoice>,
 }

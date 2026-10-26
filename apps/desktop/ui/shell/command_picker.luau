@@ -301,6 +301,50 @@ function M.picker(shared: any, area: string)
 	}
 end
 
+local function file_value(file: any, row: any, area: string)
+	return ui.row {
+		shrink = 0,
+		gap = theme.size.space_4,
+		items = "center",
+		ui.row {
+			w = theme.size.icon_size_sm,
+			h = theme.size.icon_size_sm,
+			shrink = 0,
+			rounded = theme.size.radius_xs,
+			overflow = "hidden",
+			bg = theme.color.bg_2,
+			ui.show((file.image or "") ~= "", ui.image {
+				src = file.image,
+				w = theme.size.icon_size_sm,
+				h = theme.size.icon_size_sm,
+				fit = "cover",
+			}),
+		},
+		ui.text {
+			file.name,
+			literal = true,
+			shrink = 0,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			color = theme.color.text_2,
+		},
+		ui.button {
+			id = area .. "_option_remove_file_" .. row:peek().name,
+			shrink = 0,
+			p = 0,
+			bg = "#00000000",
+			border = 0,
+			focus = { border = 0 },
+			cursor = "pointer",
+			tooltip = "Remove file",
+			on_click = function()
+				actions.composer_remove_option_file(row:peek().index, area)
+			end,
+			icon { name = "close", size = theme.number(theme.size.icon_size_xs)(), color = theme.color.text_4 },
+		},
+	}
+end
+
 local function chip(shared: any, area: string, row: any)
 	local typed = ui.use_state(row:peek().value or "")
 	local measured = ui.use_state(0)
@@ -327,9 +371,24 @@ local function chip(shared: any, area: string, row: any)
 	local function focused(): boolean
 		return row:get().focused == true
 	end
-	local function shows_value(): boolean
-		return focused() or typed:get() ~= ""
+	local function takes_file(): boolean
+		return row:get().takes_file == true
 	end
+	local function picked_file(): any
+		local file = row:get().file
+		if file == nil or (file.name or "") == "" then
+			return nil
+		end
+		return file
+	end
+	local function shows_value(): boolean
+		return focused() or typed:get() ~= "" or picked_file() ~= nil
+	end
+	ui.effect(function()
+		if takes_file() and typed:get() ~= "" then
+			typed:set("")
+		end
+	end)
 	return ui.row {
 		id = area .. "_option_" .. row:peek().name,
 		relative = true,
@@ -366,6 +425,15 @@ local function chip(shared: any, area: string, row: any)
 			weight = theme.weight.semibold,
 			color = theme.color.text_3,
 		},
+		ui.each(ui.computed(function()
+			local file = picked_file()
+			if file == nil then
+				return {}
+			end
+			return { { key = file.name .. ":" .. (file.image or ""), file = file } }
+		end), function(item: any)
+			return file_value(item.file, row, area)
+		end, { key = by_key }),
 		ui.text {
 			function()
 				return typed:get()
@@ -388,7 +456,7 @@ local function chip(shared: any, area: string, row: any)
 			ref = box,
 			label = row:peek().name,
 			w = function()
-				if not shows_value() then
+				if not shows_value() or picked_file() ~= nil then
 					return 0
 				end
 				return measured:get() + theme.number(theme.size.border_thickness)()
@@ -664,6 +732,189 @@ function M.optional(shared: any, area: string)
 				},
 			}
 		end, { key = by_key, w_full = true, gap = theme.size.space_2 }),
+	}
+end
+
+local function choice_status(text: string, color: any, extra: any?)
+	return ui.row {
+		w_full = true,
+		h = theme.size.autocomplete_row_height,
+		px = theme.size.space_8,
+		gap = theme.size.space_8,
+		items = "center",
+		ui.text {
+			text,
+			literal = true,
+			shrink = 0,
+			text_size = theme.size.font_size_md,
+			line_height = theme.size.line_height_label,
+			weight = theme.weight.medium,
+			color = color,
+		},
+		extra,
+	}
+end
+
+local function loading_dots()
+	local function dot(opacity: number)
+		return ui.div {
+			w = theme.size.space_6,
+			h = theme.size.space_6,
+			shrink = 0,
+			rounded = theme.size.space_6,
+			bg = theme.color.text_4,
+			opacity = opacity,
+		}
+	end
+	return ui.row {
+		shrink = 0,
+		gap = theme.size.space_2,
+		items = "center",
+		dot(0.4),
+		dot(0.7),
+		dot(1),
+	}
+end
+
+function M.choices(shared: any, area: string)
+	local function list(): any
+		return shared.command:get().choices or { open = false }
+	end
+	local function kind(): string
+		return list().kind or ""
+	end
+	local function rows()
+		return list().items or {}
+	end
+	return ui.column {
+		id = area .. "_command_choices",
+		mx = theme.size.space_8,
+		mb = theme.size.space_8,
+		p = theme.size.space_8,
+		gap = theme.size.space_2,
+		shrink = 0,
+		rounded = theme.size.radius_md,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		ui.row {
+			h = theme.size.space_24,
+			px = theme.size.space_8,
+			items = "center",
+			ui.text {
+				function()
+					return list().title or ""
+				end,
+				literal = true,
+				text_size = theme.size.font_size_xs,
+				line_height = theme.size.line_height_xs,
+				weight = theme.weight.semibold,
+				color = theme.color.text_4,
+			},
+		},
+		ui.show(function()
+			return kind() == "loading"
+		end, choice_status("Loading options...", theme.color.text_4, loading_dots())),
+		ui.show(function()
+			return kind() == "failed"
+		end, choice_status("Couldn't load options", theme.color.red_2, ui.button {
+			id = area .. "_command_choices_retry",
+			shrink = 0,
+			p = 0,
+			bg = "#00000000",
+			border = 0,
+			focus = { border = 0 },
+			cursor = "pointer",
+			text_size = theme.size.font_size_md,
+			weight = theme.weight.medium,
+			color = theme.color.link,
+			on_click = function()
+				actions.composer_retry_choices(area)
+			end,
+			ui.text("Retry"),
+		})),
+		ui.each(ui.computed(rows), function(item: any)
+			local function selected(): boolean
+				return list().selected == item.index
+			end
+			return ui.row {
+				id = area .. "_command_choice_" .. item.index,
+				w_full = true,
+				h = theme.size.autocomplete_row_height,
+				px = theme.size.space_8,
+				gap = theme.size.space_8,
+				items = "center",
+				rounded = theme.size.radius_sm,
+				cursor = "pointer",
+				bg = function()
+					return if selected() then theme.color.hover else "#00000000"
+				end,
+				hover = { bg = theme.color.hover },
+				on_click = function()
+					actions.composer_choose_option(item.index, area)
+				end,
+				ui.text {
+					item.name,
+					literal = true,
+					min_w = 0,
+					truncate = true,
+					text_size = theme.size.font_size_md,
+					line_height = theme.size.line_height_label,
+					weight = theme.weight.medium,
+					color = function()
+						return if selected() then theme.color.text_2 else theme.color.text_3
+					end,
+				},
+			}
+		end, { key = by_key, w_full = true, gap = theme.size.space_2 }),
+	}
+end
+
+function M.dropbox(shared: any, area: string)
+	local picking = false
+	local function pick()
+		if picking then
+			return
+		end
+		picking = true
+		ui.task(function()
+			local ok, files = pcall(function()
+				return ui.open_files({ title = "Upload a File", multiple = false }):await()
+			end)
+			picking = false
+			if not ok then
+				return
+			end
+			for _, file in files do
+				actions.composer_option_files({ file.path }, area)
+				return
+			end
+		end)
+	end
+	return ui.row {
+		id = area .. "_command_dropbox",
+		mx = theme.size.space_8,
+		mb = theme.size.space_8,
+		h = theme.size.command_dropbox_height,
+		shrink = 0,
+		gap = theme.size.space_8,
+		items = "center",
+		justify = "center",
+		rounded = theme.size.radius_md,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		border_dash = { 3, 3 },
+		cursor = "pointer",
+		on_click = pick,
+		icon { name = "upload", size = theme.number(theme.size.icon_size_lg)(), color = theme.color.text_4 },
+		ui.text {
+			"Drag and drop or click to upload file",
+			literal = true,
+			text_size = theme.size.font_size_xs,
+			line_height = theme.size.line_height_xs,
+			color = theme.color.text_4,
+		},
 	}
 end
 

@@ -57,6 +57,10 @@ impl ApiError {
 		Self::new(StatusCode::BAD_REQUEST, 50035, message)
 	}
 
+	pub const fn server_error() -> Self {
+		Self::new(StatusCode::INTERNAL_SERVER_ERROR, 0, "500: Internal Server Error")
+	}
+
 	pub const fn empty_message() -> Self {
 		Self::new(StatusCode::BAD_REQUEST, 50006, "Cannot send an empty message")
 	}

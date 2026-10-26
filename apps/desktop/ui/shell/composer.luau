@@ -471,6 +471,14 @@ return function(scope: any?)
 		return commanding() and shared.command:get().optional_open == true
 	end
 
+	local function choices_open(): boolean
+		return commanding() and (shared.command:get().choices or {}).open == true
+	end
+
+	local function dropbox_open(): boolean
+		return commanding() and shared.command:get().wants_file == true
+	end
+
 	local function joined(): boolean
 		return notice_kind() ~= "" or has_reply() or has_edit() or has_files() or commanding()
 	end
@@ -899,6 +907,8 @@ return function(scope: any?)
 		shrink = 0,
 		ui.show(picker_open, command_picker.picker(shared, area)),
 		ui.show(optional_open, command_picker.optional(shared, area)),
+		ui.show(choices_open, command_picker.choices(shared, area)),
+		ui.show(dropbox_open, command_picker.dropbox(shared, area)),
 		popup(text, shared, area, suggesting),
 		typing_line(),
 		joined_bars(),

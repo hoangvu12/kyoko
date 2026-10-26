@@ -69,6 +69,13 @@ pub enum Command {
 		channel_id: Snowflake,
 		command_id: Snowflake,
 		options: Vec<InteractionOption>,
+		files: Vec<UploadFile>,
+	},
+	AutocompleteCommand {
+		channel_id: Snowflake,
+		command_id: Snowflake,
+		options: Vec<InteractionOption>,
+		request: u64,
 	},
 	EditMessage {
 		channel_id: Snowflake,

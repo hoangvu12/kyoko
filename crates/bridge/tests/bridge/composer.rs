@@ -1,5 +1,6 @@
 use bridge::{
-	ChannelKind, Composer, EmojiPicker, FileEdit, Mark, NITRO_LOCK, Notice, Visual, text_marks, too_big,
+	ChannelKind, ChoiceList, Composer, EmojiPicker, FileEdit, Mark, NITRO_LOCK, Notice, Visual, text_marks,
+	too_big,
 };
 use chrono::Utc;
 use mockcord::{MockConfig, Reply as MockReply};
@@ -9,7 +10,7 @@ use protocol::{ChannelType, CommandOptionType, Snowflake};
 use rest::UploadFile;
 use serde_json::json;
 use session::Command;
-use state::{RiskyReason, RiskyTarget, State};
+use state::{AutocompleteStatus, RiskyReason, RiskyTarget, State};
 
 use crate::harness::Running;
 
@@ -269,7 +270,7 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 		]
 	);
 	assert_eq!(listed[0].1, ["remind", "roll", "shrug"]);
-	assert_eq!(listed[1].1, ["broken", "echo", "ping", "roll"]);
+	assert_eq!(listed[1].1, ["broken", "echo", "ping", "roll", "translate"]);
 	let built_in = &listed[5].1;
 	for name in [
 		"gif",
@@ -321,6 +322,167 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 	);
 	assert!(composer.dismiss());
 	assert!(composer.picker().is_none());
+	running.stop().await;
+}
+
+fn choice_names(composer: &Composer, running: &Running) -> Option<Vec<String>> {
+	let state = running.session().state().clone();
+	let choices = composer.option_choices(&state.read())?;
+	match choices.list {
+		ChoiceList::Choices(list) => Some(list.into_iter().map(|choice| choice.name).collect()),
+		ChoiceList::Loading => Some(vec!["loading".to_owned()]),
+		ChoiceList::Failed => Some(vec!["failed".to_owned()]),
+	}
+}
+
+fn pick_choice(composer: &mut Composer, running: &Running) -> bool {
+	let state = running.session().state().clone();
+	composer.pick_choice(&state.read(), None)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn choices_filter_as_typed_autocomplete_asks_once_per_value_and_files_ride_along() {
+	let (mut running, mut composer, channel_id) = opened("composer-choices").await;
+	with_commands(&mut running, &mut composer, channel_id).await;
+
+	picked(&mut composer, &running, "/ec", "echo");
+	assert!(composer.edit_option(0, "hello"));
+	assert_eq!(choice_names(&composer, &running), None, "text has no choices");
+	assert!(composer.step_option(1));
+	let all = choice_names(&composer, &running).expect("the language choices");
+	assert_eq!(
+		all,
+		["English", "Deutsch", "Español", "Français", "日本語", "Português"]
+	);
+	let state = running.session().state().clone();
+	assert_eq!(
+		composer
+			.option_choices(&state.read())
+			.map(|choices| choices.title),
+		Some("LANGUAGE".to_owned())
+	);
+	assert!(composer.edit_option(1, "is"));
+	assert_eq!(
+		choice_names(&composer, &running),
+		Some(vec!["English".to_owned(), "Français".to_owned()])
+	);
+	assert!(composer.move_choice(&state.read(), 1));
+	assert!(pick_choice(&mut composer, &running));
+	let command = composer.command().expect("open");
+	assert_eq!(command.fields[1].value, "Français");
+	let outcome = submitted(&mut composer, &running, "");
+	assert!(matches!(
+		outcome.commands.first(),
+		Some(Command::RunApplicationCommand { options, files, .. })
+			if options[1].value == Some(json!("fr")) && files.is_empty()
+	));
+
+	picked(&mut composer, &running, "/tra", "translate");
+	assert!(
+		composer.autocomplete_request(false).is_none(),
+		"text does not autocomplete"
+	);
+	assert!(composer.edit_option(0, "hi"));
+	assert!(composer.step_option(1));
+	let asked = composer
+		.autocomplete_request(false)
+		.expect("the focused option asks");
+	let Command::AutocompleteCommand {
+		channel_id: asked_channel,
+		command_id,
+		options,
+		request: first,
+	} = &asked
+	else {
+		panic!("expected an autocomplete, got {asked:?}");
+	};
+	assert_eq!(*asked_channel, channel_id);
+	assert_eq!(*command_id, Snowflake(mockcord::TRANSLATE_COMMAND));
+	assert_eq!(options.len(), 2);
+	assert_eq!(
+		(options[0].value.clone(), options[0].focused),
+		(Some(json!("hi")), None)
+	);
+	assert_eq!(
+		(options[1].value.clone(), options[1].focused),
+		(Some(json!("")), Some(true))
+	);
+	assert!(
+		composer.autocomplete_request(false).is_none(),
+		"the same value is asked once"
+	);
+	assert_eq!(
+		choice_names(&composer, &running),
+		Some(vec!["loading".to_owned()])
+	);
+	assert!(composer.edit_option(1, "deu"));
+	let asked = composer
+		.autocomplete_request(false)
+		.expect("a new value asks again");
+	let Command::AutocompleteCommand { request, .. } = &asked else {
+		panic!("expected an autocomplete");
+	};
+	assert!(request > first);
+	let request = *request;
+	running.session().send(asked);
+	running
+		.until_state("the autocomplete answer", |state| {
+			state.autocomplete().is_some_and(|autocomplete| {
+				autocomplete.request == request
+					&& matches!(autocomplete.status, AutocompleteStatus::Loaded(_))
+			})
+		})
+		.await;
+	assert_eq!(
+		choice_names(&composer, &running),
+		Some(vec!["Deutsch".to_owned()])
+	);
+	assert!(pick_choice(&mut composer, &running));
+	let outcome = submitted(&mut composer, &running, "");
+	assert!(matches!(
+		outcome.commands.first(),
+		Some(Command::RunApplicationCommand { options, .. })
+			if options[1].value == Some(json!("de")) && options[1].focused.is_none()
+	));
+
+	picked(&mut composer, &running, "/res", "resize");
+	assert!(composer.wants_file());
+	assert!(submitted(&mut composer, &running, "").commands.is_empty());
+	assert_eq!(
+		hint(&composer),
+		("file".to_owned(), "Pick a file to upload".to_owned(), true)
+	);
+	let id = composer
+		.attach_option(
+			&state.read(),
+			UploadFile::new("cat.png", vec![1u8; 64], "image/png"),
+		)
+		.expect("the file is taken");
+	assert!(!composer.wants_file());
+	assert_eq!(composer.option_file_ids(), [id]);
+	assert_eq!(composer.command().map(|command| command.focused), Some(1));
+	assert!(composer.edit_option(1, "200"));
+	let outcome = submitted(&mut composer, &running, "");
+	match outcome.commands.first() {
+		Some(Command::RunApplicationCommand {
+			command_id,
+			options,
+			files,
+			..
+		}) => {
+			assert_eq!(*command_id, Snowflake(mockcord::RESIZE_COMMAND));
+			assert_eq!(
+				(options[0].kind, options[0].value.clone()),
+				(CommandOptionType::Attachment, Some(json!(0)))
+			);
+			assert_eq!(options[1].value, Some(json!(200)));
+			assert_eq!(files.len(), 1);
+			assert_eq!(files[0].name, "cat.png");
+		}
+		other => panic!("expected the resize to run, got {other:?}"),
+	}
+	assert!(composer.command().is_none());
+	assert!(composer.option_file_ids().is_empty());
 	running.stop().await;
 }
 
@@ -420,11 +582,11 @@ async fn required_options_are_checked_before_sending_and_the_reason_shows_in_the
 		hint(&composer),
 		(
 			"language".to_owned(),
-			"Choose one of English, French, Japanese".to_owned(),
+			"Choose one of English, Deutsch, Español, Français, 日本語, Português".to_owned(),
 			true
 		)
 	);
-	assert!(composer.edit_option(1, "french"));
+	assert!(composer.edit_option(1, "fr"));
 	let outcome = submitted(&mut composer, &running, "");
 	assert!(matches!(
 		outcome.commands.first(),
