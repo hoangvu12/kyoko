@@ -11,6 +11,7 @@ use crate::error::{RestError, Result};
 use crate::request::{Request, UploadFile, encode_component};
 
 const PUBLIC_THREAD: i64 = 11;
+const PRIVATE_THREAD: i64 = 12;
 const PINS_PAGE: u8 = 50;
 pub const THREAD_PAGE: u32 = 25;
 
@@ -24,6 +25,7 @@ pub struct SearchQuery {
 	pub after: Option<Snowflake>,
 	pub channel_id: Option<Snowflake>,
 	pub pinned: Option<bool>,
+	pub oldest_first: bool,
 	pub offset: Option<u32>,
 }
 
@@ -118,6 +120,10 @@ fn search_pairs(query: SearchQuery, channel_id: Option<Snowflake>) -> Vec<(&'sta
 	}
 	if let Some(pinned) = query.pinned {
 		pairs.push(("pinned", pinned.to_string()));
+	}
+	if query.oldest_first {
+		pairs.push(("sort_by", "timestamp".to_owned()));
+		pairs.push(("sort_order", "asc".to_owned()));
 	}
 	if let Some(offset) = query.offset.filter(|offset| *offset > 0) {
 		pairs.push(("offset", offset.to_string()));
@@ -353,14 +359,16 @@ impl RestClient {
 		message_id: Option<Snowflake>,
 		name: &str,
 		auto_archive: u32,
+		private: bool,
 	) -> Result<Channel> {
+		let kind = if private { PRIVATE_THREAD } else { PUBLIC_THREAD };
 		let request = match message_id {
 			Some(message_id) => {
 				Request::post(format!("/channels/{channel_id}/messages/{message_id}/threads"))
 					.json(&json!({ "name": name, "auto_archive_duration": auto_archive }))
 			}
 			None => Request::post(format!("/channels/{channel_id}/threads"))
-				.json(&json!({ "name": name, "auto_archive_duration": auto_archive, "type": PUBLIC_THREAD })),
+				.json(&json!({ "name": name, "auto_archive_duration": auto_archive, "type": kind })),
 		};
 		self.send(request).await
 	}

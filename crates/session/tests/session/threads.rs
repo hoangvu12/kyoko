@@ -160,6 +160,7 @@ async fn a_thread_from_a_message_opens_once_discord_creates_it() {
 		message_id: Some(message_id),
 		name: "about this".to_owned(),
 		auto_archive_minutes: 1440,
+		private: false,
 	});
 	running
 		.until("the new thread to open", |state| {
@@ -189,6 +190,7 @@ async fn a_new_thread_opens_and_its_first_message_goes_through_the_outbox() {
 		message_id: None,
 		name: "fresh start".to_owned(),
 		auto_archive_minutes: 60,
+		private: false,
 	});
 	running
 		.until("the new thread to open", |state| {
@@ -211,6 +213,37 @@ async fn a_new_thread_opens_and_its_first_message_goes_through_the_outbox() {
 	assert!(
 		body(sent[0])["nonce"].is_string(),
 		"the first message is a nonce'd send"
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_private_thread_is_created_as_one_and_opens() {
+	let running = Running::start_with(Options::new("threads-private").rest(tuning())).await;
+	let channel_id = running.open_text_channel().await;
+	running.session().send(Command::CreateThread {
+		channel_id,
+		message_id: None,
+		name: "just us".to_owned(),
+		auto_archive_minutes: 1440,
+		private: true,
+	});
+	running
+		.until("the private thread to open", |state| {
+			named_thread(state, channel_id, "just us").is_some_and(|thread| {
+				selected(state) == Some(thread)
+					&& state
+						.channel(thread)
+						.is_some_and(|channel| channel.kind == ChannelType::PrivateThread)
+			})
+		})
+		.await;
+	let recording = running.mock().recording();
+	let created = requests(&recording, "POST", &format!("/channels/{channel_id}/threads"));
+	assert_eq!(created.len(), 1);
+	assert_eq!(
+		body(created[0]),
+		json!({ "name": "just us", "auto_archive_duration": 1440, "type": 12 })
 	);
 	running.stop().await;
 }
@@ -365,6 +398,7 @@ async fn a_server_gate_holds_new_threads_posts_and_joins() {
 			message_id: None,
 			name: "held".to_owned(),
 			auto_archive_minutes: 60,
+			private: false,
 		},
 		Command::JoinThread { thread_id: thread },
 	] {

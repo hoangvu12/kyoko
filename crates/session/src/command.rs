@@ -158,6 +158,7 @@ pub enum Command {
 		message_id: Option<Snowflake>,
 		name: String,
 		auto_archive_minutes: u32,
+		private: bool,
 	},
 	JoinThread {
 		thread_id: Snowflake,

@@ -131,6 +131,32 @@ async fn a_guild_search_sends_its_filters_and_pages_through_the_results() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_oldest_first_search_asks_for_ascending_order_and_gets_it() {
+	let running = Running::start_with(Options::new("search-oldest").rest(tuning())).await;
+	running.connected().await;
+	let guild_id = Snowflake(running.fixtures().guilds[0].id);
+	let author = busiest_author(&running, 0);
+	running.session().send(Command::Search {
+		guild_id: Some(guild_id),
+		channel_id: None,
+		query: SearchQuery {
+			author_id: Some(author),
+			oldest_first: true,
+			..SearchQuery::default()
+		},
+	});
+	let first = settled(&running, "the oldest page").await;
+	assert_eq!(first.status, SearchStatus::Ready);
+	assert!(first.messages.len() > 1);
+	assert!(first.messages.windows(2).all(|pair| pair[0].id < pair[1].id));
+	let wire = searches(&running);
+	let sent = params(&wire[0]);
+	assert_eq!(param(&sent, "sort_by"), ["timestamp"]);
+	assert_eq!(param(&sent, "sort_order"), ["asc"]);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_filter_reaches_the_wire_and_narrows_the_results() {
 	let running = Running::start_with(Options::new("search-filters").rest(tuning())).await;
 	running.connected().await;
@@ -157,6 +183,7 @@ async fn every_filter_reaches_the_wire_and_narrows_the_results() {
 			after: Some(after),
 			channel_id: Some(channel_id),
 			pinned: Some(false),
+			oldest_first: false,
 			offset: None,
 		},
 	});

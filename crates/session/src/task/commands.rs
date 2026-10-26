@@ -151,14 +151,17 @@ impl Core {
 				message_id,
 				name,
 				auto_archive_minutes,
+				private,
 			} => {
-				if self.channel_allows(
-					channel_id,
-					Permissions::CREATE_PUBLIC_THREADS,
-					"Create Public Threads",
-				) {
+				let private = private && message_id.is_none();
+				let (needed, label) = if private {
+					(Permissions::CREATE_PRIVATE_THREADS, "Create Private Threads")
+				} else {
+					(Permissions::CREATE_PUBLIC_THREADS, "Create Public Threads")
+				};
+				if self.channel_allows(channel_id, needed, label) {
 					self.spawn_open("create thread", move |rest| async move {
-						rest.start_thread(channel_id, message_id, &name, auto_archive_minutes)
+						rest.start_thread(channel_id, message_id, &name, auto_archive_minutes, private)
 							.await
 					});
 				}

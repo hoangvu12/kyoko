@@ -327,6 +327,7 @@ pub struct SearchFilter {
 	max_id: Option<u64>,
 	channel: Option<u64>,
 	pinned: Option<bool>,
+	oldest: bool,
 	offset: usize,
 	limit: usize,
 }
@@ -348,6 +349,7 @@ impl SearchFilter {
 				"max_id" => filter.max_id = id,
 				"channel_id" => filter.channel = id,
 				"pinned" => filter.pinned = value.parse().ok(),
+				"sort_order" => filter.oldest = value == "asc",
 				"offset" => filter.offset = value.parse().unwrap_or(0),
 				"limit" => {
 					filter.limit = value
@@ -417,6 +419,9 @@ pub fn search_in(store: &Store, channel_ids: &[u64], filter: &SearchFilter) -> V
 		.filter(|message| filter.matches(message))
 		.collect();
 	hits.sort_by_key(|message| Reverse(message_id(message)));
+	if filter.oldest {
+		hits.reverse();
+	}
 	let total = hits.len();
 	let messages: Vec<Value> = hits
 		.into_iter()
