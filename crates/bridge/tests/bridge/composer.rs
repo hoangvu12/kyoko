@@ -1,4 +1,4 @@
-use bridge::{ChannelKind, Composer, Notice, Visual};
+use bridge::{ChannelKind, Composer, FileEdit, Mark, Notice, Visual, text_marks, too_big};
 use chrono::Utc;
 use mockcord::Reply as MockReply;
 use std::time::Duration;
@@ -287,26 +287,14 @@ async fn attachments_are_checked_against_the_limit() {
 	let (running, mut composer, channel_id) = opened("composer-files").await;
 	let state = running.session().state().clone();
 	let limit = state.read().upload_limit(channel_id);
-	let small = UploadFile {
-		name: "small.png".to_owned(),
-		bytes: vec![1u8; 16].into(),
-		content_type: "image/png".to_owned(),
-	};
+	let small = UploadFile::new("small.png", vec![1u8; 16], "image/png");
 	let id = composer.attach(&state.read(), small).expect("a small file fits");
 	assert!(limit >= 10 * 1024 * 1024);
 	for index in 0..9 {
-		let file = UploadFile {
-			name: format!("{index}.txt"),
-			bytes: vec![2u8; 8].into(),
-			content_type: "text/plain".to_owned(),
-		};
+		let file = UploadFile::new(format!("{index}.txt"), vec![2u8; 8], "text/plain");
 		composer.attach(&state.read(), file).expect("room for ten");
 	}
-	let eleventh = UploadFile {
-		name: "eleventh.txt".to_owned(),
-		bytes: vec![3u8; 8].into(),
-		content_type: "text/plain".to_owned(),
-	};
+	let eleventh = UploadFile::new("eleventh.txt", vec![3u8; 8], "text/plain");
 	assert_eq!(
 		composer.attach(&state.read(), eleventh),
 		Err("You can attach up to 10 files".to_owned())
@@ -510,5 +498,119 @@ async fn a_picked_sticker_waits_for_the_lock_and_keeps_the_draft() {
 		}
 		other => panic!("expected a confirmation and the held sticker, got {other:?}"),
 	}
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shift_on_drop_uploads_the_files_directly_and_leaves_the_draft() {
+	let (running, mut composer, channel_id) = opened("composer-drop-direct").await;
+	let state = running.session().state().clone();
+	let (message_id, _) = other_author(&state.read(), channel_id);
+	assert!(composer.start_reply(&state.read(), message_id));
+	typed(&mut composer, &running, "still writing");
+	let queued = UploadFile::new("queued.txt", vec![1u8; 8], "text/plain");
+	composer.attach(&state.read(), queued).expect("a queued file");
+	let dropped = vec![
+		UploadFile::new("one.png", vec![2u8; 8], "image/png"),
+		UploadFile::new("two.png", vec![3u8; 8], "image/png"),
+	];
+	let outcome = composer.upload_now(&state.read(), dropped, Utc::now());
+	assert!(outcome.replace.is_none());
+	match outcome.commands.as_slice() {
+		[
+			Command::SendMessage {
+				channel_id: sent_to,
+				content,
+				reply_to: None,
+				files,
+				..
+			},
+		] => {
+			assert_eq!(*sent_to, channel_id);
+			assert!(content.is_empty());
+			let names: Vec<&str> = files.iter().map(|file| file.name.as_str()).collect();
+			assert_eq!(names, ["one.png", "two.png"]);
+		}
+		other => panic!("expected one direct upload, got {other:?}"),
+	}
+	assert_eq!(composer.files().len(), 1);
+	assert!(composer.reply().is_some());
+	let eleven = (0..11)
+		.map(|index| UploadFile::new(format!("{index}.txt"), vec![4u8; 8], "text/plain"))
+		.collect();
+	assert!(
+		composer
+			.upload_now(&state.read(), eleven, Utc::now())
+			.commands
+			.is_empty()
+	);
+	assert_eq!(
+		composer.notice(&state.read(), Utc::now()),
+		Some(Notice::Refused("You can attach up to 10 files".to_owned()))
+	);
+	assert_eq!(
+		too_big("cat.mov", 512 * 1024 * 1024, 10 * 1024 * 1024).as_deref(),
+		Some("cat.mov is too big (512 MB). The limit here is 10 MB.")
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_spoilered_and_edited_file_is_sent_as_edited() {
+	let (running, mut composer, _) = opened("composer-file-edit").await;
+	let state = running.session().state().clone();
+	let photo = UploadFile::new("IMG_0001.png", vec![1u8; 8], "image/png");
+	let id = composer.attach(&state.read(), photo).expect("attached");
+	assert!(composer.toggle_spoiler(id));
+	assert!(
+		composer
+			.file(id)
+			.is_some_and(|attachment| attachment.file.spoiler)
+	);
+	assert!(composer.edit_file(
+		id,
+		FileEdit {
+			name: " cat.png ".to_owned(),
+			description: "a sleepy cat".to_owned(),
+			spoiler: true,
+		},
+	));
+	let outcome = submitted(&mut composer, &running, "");
+	match outcome.commands.first() {
+		Some(Command::SendMessage { files, .. }) => {
+			assert_eq!(files[0].name, "cat.png");
+			assert_eq!(files[0].upload_name(), "SPOILER_cat.png");
+			assert_eq!(files[0].description.as_deref(), Some("a sleepy cat"));
+		}
+		other => panic!("expected a send, got {other:?}"),
+	}
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn markdown_in_the_field_is_marked_but_sent_exactly_as_typed() {
+	let (running, mut composer, channel_id) = opened("composer-markdown").await;
+	let text = "**Midnight** is *almost* ready\n> thanks <@42>\n`code` and ||secret|| <:uwu:7>";
+	let marks = text_marks(text);
+	let marked = |mark: Mark| -> Vec<&str> {
+		marks
+			.iter()
+			.filter(|found| found.mark == mark)
+			.map(|found| &text[found.range.clone()])
+			.collect()
+	};
+	assert_eq!(
+		marked(Mark::Syntax),
+		["**", "**", "*", "*", ">", "`", "`", "||", "||", "<:", ":7>"]
+	);
+	assert_eq!(marked(Mark::Mention), ["<@42>"]);
+	assert_eq!(marked(Mark::Code), ["code"]);
+	assert_eq!(marked(Mark::Spoiler), ["secret"]);
+	typed(&mut composer, &running, text);
+	let outcome = submitted(&mut composer, &running, text);
+	assert!(matches!(
+		outcome.commands.first(),
+		Some(Command::SendMessage { content, channel_id: sent_to, .. }) if content == text && *sent_to == channel_id
+	));
 	running.stop().await;
 }

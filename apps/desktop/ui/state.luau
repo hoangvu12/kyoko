@@ -139,7 +139,7 @@ export type DmMember = {
 export type FriendAdd = { phase: string, text: string }
 export type ComposerReplace = { serial: number, text: string, caret: number }
 export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
-export type ComposerFile = { id: string, name: string, size: string, image: string }
+export type ComposerFile = { id: string, name: string, size: string, image: string, kind: string, spoiler: boolean }
 export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string, svg: string? }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
 export type MemberWindow = {
@@ -399,6 +399,7 @@ M.composer = {
 	notice = ui.shared("composer.notice", { kind = "" } :: ComposerNotice),
 	drop_hover = ui.shared("composer.drop_hover", false),
 	limit = ui.shared("composer.limit", 2000),
+	pick = ui.shared("composer.pick", 0),
 }
 
 M.user = {
@@ -479,6 +480,7 @@ M.thread_composer = {
 	notice = ui.shared("thread_composer.notice", { kind = "" } :: ComposerNotice),
 	drop_hover = ui.shared("thread_composer.drop_hover", false),
 	limit = ui.shared("thread_composer.limit", 2000),
+	pick = ui.shared("thread_composer.pick", 0),
 }
 
 M.threads = {

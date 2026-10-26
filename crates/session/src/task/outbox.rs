@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use protocol::rest::{AllowedMentions, AttachmentDescriptor};
 use protocol::{
@@ -7,7 +9,9 @@ use protocol::{
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
 use serde_json::{Value, json};
-use state::{LocalEvent, MAX_ATTACHMENTS, SendFailure};
+use state::{LocalEvent, MAX_ATTACHMENTS, PendingFile, SendFailure};
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::AbortHandle;
 
 use crate::hooks::{Hooks, Rewrite, guarded_blocking};
 
@@ -16,6 +20,7 @@ use super::{Core, Internal, failures};
 
 const KEPT_FAILURES: usize = 16;
 const MIB: f64 = 1024.0 * 1024.0;
+const PROGRESS_STEPS: u64 = 100;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Outgoing {
@@ -40,9 +45,25 @@ pub(crate) struct ForumPost {
 #[derive(Default)]
 pub(crate) struct Outbox {
 	failed: VecDeque<(Nonce, Outgoing)>,
+	uploading: Vec<(Nonce, AbortHandle)>,
 }
 
 impl Outbox {
+	fn uploading(&mut self, nonce: Nonce, handle: AbortHandle) {
+		self.uploading.retain(|(_, running)| !running.is_finished());
+		self.uploading.push((nonce, handle));
+	}
+
+	fn cancel(&mut self, nonce: &Nonce) -> bool {
+		let Some(index) = self.uploading.iter().position(|(running, _)| running == nonce) else {
+			return false;
+		};
+		let (_, handle) = self.uploading.swap_remove(index);
+		let running = !handle.is_finished();
+		handle.abort();
+		running
+	}
+
 	fn keep(&mut self, nonce: Nonce, outgoing: Outgoing) {
 		self.failed.retain(|(kept, _)| *kept != nonce);
 		if self.failed.len() >= KEPT_FAILURES {
@@ -82,33 +103,55 @@ fn create_body(nonce: &Nonce, outgoing: &Outgoing) -> CreateMessage {
 	}
 }
 
+type Progress = Arc<dyn Fn(u64) + Send + Sync>;
+
+fn progress_of(nonce: Nonce, internal: UnboundedSender<Internal>, total: u64) -> Progress {
+	let reported = Arc::new(AtomicU64::new(u64::MAX));
+	Arc::new(move |sent: u64| {
+		let step = sent.saturating_mul(PROGRESS_STEPS) / total.max(1);
+		if reported.swap(step, Ordering::Relaxed) != step {
+			let _ = internal.send(Internal::Uploading(nonce.clone(), sent));
+		}
+	})
+}
+
 async fn uploaded(
 	rest: &RestClient,
 	files: &[UploadFile],
 	channel_id: Snowflake,
+	progress: Option<Progress>,
 ) -> Result<Vec<AttachmentDescriptor>, RestError> {
 	let requests: Vec<UploadSlotRequest> = files
 		.iter()
 		.enumerate()
 		.map(|(index, file)| UploadSlotRequest {
 			id: index.to_string(),
-			filename: file.name.clone(),
-			file_size: file.bytes.len() as u64,
+			filename: file.upload_name(),
+			file_size: file.size(),
 			is_clip: false,
 		})
 		.collect();
 	let slots = rest.attachment_slots(channel_id, &requests).await?;
 	let mut attachments = Vec::with_capacity(files.len());
+	let mut before = 0;
 	for (index, file) in files.iter().enumerate() {
 		let slot = slots
 			.iter()
 			.find(|slot| slot.id == index as i64)
 			.ok_or(RestError::InvalidRequest)?;
-		rest.upload(&slot.upload_url, file).await?;
+		let report = progress.clone();
+		rest.upload(&slot.upload_url, file, move |sent| {
+			if let Some(report) = &report {
+				report(before + sent);
+			}
+		})
+		.await?;
+		before += file.size();
 		attachments.push(AttachmentDescriptor {
 			id: Snowflake(index as u64),
-			filename: Some(file.name.clone()),
+			filename: Some(file.upload_name()),
 			uploaded_filename: Some(slot.upload_filename.clone()),
+			description: file.description.clone(),
 			..AttachmentDescriptor::default()
 		});
 	}
@@ -120,8 +163,9 @@ async fn upload_and_send(
 	mut body: CreateMessage,
 	files: &[UploadFile],
 	channel_id: Snowflake,
+	progress: Progress,
 ) -> Result<Message, RestError> {
-	body.attachments = uploaded(rest, files, channel_id).await?;
+	body.attachments = uploaded(rest, files, channel_id, Some(progress)).await?;
 	rest.create_message(channel_id, body).await
 }
 
@@ -153,7 +197,7 @@ async fn create_post(rest: &RestClient, hooks: &Hooks, post: ForumPost) -> Resul
 	let attachments = if post.files.is_empty() {
 		Vec::new()
 	} else {
-		uploaded(rest, &post.files, channel_id).await?
+		uploaded(rest, &post.files, channel_id, None).await?
 	};
 	rest.create_forum_post(channel_id, post_body(&post, content, attachments))
 		.await
@@ -195,6 +239,14 @@ impl Core {
 			stickers: outgoing.stickers.clone(),
 			author: Box::new(author),
 			by_plugin: None,
+			files: outgoing
+				.files
+				.iter()
+				.map(|file| PendingFile {
+					name: file.upload_name(),
+					size: file.size(),
+				})
+				.collect(),
 		});
 		if self.hooks.is_some() && !outgoing.content.is_empty() {
 			self.hook_before_send(nonce, outgoing);
@@ -249,19 +301,26 @@ impl Core {
 		let body = create_body(&nonce, &outgoing);
 		let rest = self.rest.clone();
 		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
+		let uploads = !outgoing.files.is_empty();
+		let total = outgoing.files.iter().map(UploadFile::size).sum();
+		let progress = progress_of(nonce.clone(), internal.clone(), total);
+		let sending = nonce.clone();
+		let task = self.runtime.spawn(async move {
 			let channel_id = outgoing.channel_id;
 			let sent = if outgoing.files.is_empty() {
 				rest.create_message(channel_id, body).await
 			} else {
-				upload_and_send(&rest, body, &outgoing.files, channel_id).await
+				upload_and_send(&rest, body, &outgoing.files, channel_id, progress).await
 			};
 			if let Err(error) = sent {
 				tracing::warn!(%error, "message was not sent");
 				let failure = failures::send_failure(&error);
-				let _ = internal.send(Internal::SendFailed(nonce, failure, Box::new(outgoing)));
+				let _ = internal.send(Internal::SendFailed(sending, failure, Box::new(outgoing)));
 			}
 		});
+		if uploads {
+			self.outbox.uploading(nonce, task.abort_handle());
+		}
 	}
 
 	pub(super) fn post_forum(&mut self, post: ForumPost) {
@@ -371,7 +430,8 @@ impl Core {
 				.any(|pending| pending.failure.is_some() && pending.message.nonce.as_ref() == Some(&nonce))
 		});
 		self.outbox.take(&nonce);
-		if failed {
+		let cancelled = self.outbox.cancel(&nonce);
+		if failed || cancelled {
 			self.apply_local(LocalEvent::PendingDiscarded { nonce });
 		}
 	}

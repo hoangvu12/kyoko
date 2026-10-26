@@ -26,6 +26,7 @@ use super::icons::icon;
 use super::kept;
 use super::links::Links;
 use super::pictures::{AVATAR, Pictures, REPLY_AVATAR};
+use super::uploads;
 
 const GUTTER: f32 = 72.;
 const RIGHT: f32 = 48.;
@@ -196,6 +197,7 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 				+ reply + history
 				+ body_lines(&entry.content, width - GUTTER - RIGHT) * LINE
 				+ rich_height(entry)
+				+ uploads::height(entry)
 				+ 4.
 		}
 	}
@@ -316,7 +318,7 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 					.bg(tok(bar)),
 			)
 		})
-		.when(entry.pending, |row| row.opacity(0.5));
+		.when(entry.pending && entry.upload.is_none(), |row| row.opacity(0.5));
 	if !bridge::has_actions(entry) || entry.deleted {
 		return frame;
 	}
@@ -342,7 +344,10 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump:
 		};
 		out.push(
 			body::render(&entry.body.content, env, &entry.names, entry.id, 0, bump, look)
-				.id(format!("message-text-{}", entry.id)),
+				.id(format!("message-text-{}", entry.id))
+				.when(entry.pending && !entry.failed && entry.upload.is_some(), |body| {
+					body.opacity(0.5)
+				}),
 		);
 	} else if entry.deleted {
 		out.push(
@@ -352,6 +357,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump:
 		);
 	}
 	out.extend(attachments::attachments(entry, env));
+	out.extend(uploads::upload(entry, env));
 	if !entry.message.flags.contains(MessageFlags::SUPPRESS_EMBEDS) {
 		out.extend(attachments::embeds(entry, env, bump));
 	}

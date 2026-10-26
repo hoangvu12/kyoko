@@ -26,7 +26,7 @@ pub fn tinted(entry: &MessageEntry) -> bool {
 }
 
 pub fn text_color(entry: &MessageEntry) -> &'static str {
-	if entry.failed {
+	if entry.failed && entry.upload.is_none() {
 		return "red_2";
 	}
 	if !entry.deleted {

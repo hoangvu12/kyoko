@@ -8,8 +8,8 @@ use parking_lot::RwLock;
 use protocol::rest::{ApiError, RateLimitBody};
 use protocol::{DecodeError, Token};
 use reqwest::header::{
-	ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName,
-	HeaderValue, IntoHeaderName, ORIGIN, REFERER,
+	ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, HeaderMap,
+	HeaderName, HeaderValue, IntoHeaderName, ORIGIN, REFERER,
 };
 use serde::de::DeserializeOwned;
 use url::{Host, Url};
@@ -29,6 +29,7 @@ use reqwest::{Body as HttpBody, Method, Response, StatusCode};
 
 const FALLBACK_RETRY_AFTER: Duration = Duration::from_secs(1);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+const UPLOAD_CHUNK: usize = 64 * 1024;
 const X_DISCORD_LOCALE: HeaderName = HeaderName::from_static("x-discord-locale");
 const X_DISCORD_TIMEZONE: HeaderName = HeaderName::from_static("x-discord-timezone");
 const X_SUPER_PROPERTIES: HeaderName = HeaderName::from_static("x-super-properties");
@@ -115,9 +116,19 @@ fn secure_scheme(url: &Url) -> bool {
 	}
 }
 
+fn counted(bytes: Bytes, progress: impl Fn(u64) + Send + 'static) -> HttpBody {
+	let total = bytes.len();
+	let chunks = (0..total).step_by(UPLOAD_CHUNK).map(move |start| {
+		let end = (start + UPLOAD_CHUNK).min(total);
+		progress(end as u64);
+		Ok::<Bytes, std::io::Error>(bytes.slice(start..end))
+	});
+	HttpBody::wrap_stream(futures_util::stream::iter(chunks))
+}
+
 fn file_part(file: &UploadFile) -> Result<Part> {
 	Part::stream_with_length(HttpBody::from(file.bytes.clone()), file.bytes.len() as u64)
-		.file_name(file.name.clone())
+		.file_name(file.upload_name())
 		.mime_str(&file.content_type)
 		.map_err(|_| RestError::InvalidRequest)
 }
@@ -254,7 +265,12 @@ impl RestClient {
 		self.execute(request).await
 	}
 
-	pub async fn upload(&self, upload_url: &str, file: &UploadFile) -> Result<()> {
+	pub async fn upload(
+		&self,
+		upload_url: &str,
+		file: &UploadFile,
+		progress: impl Fn(u64) + Send + 'static,
+	) -> Result<()> {
 		let url = Url::parse(upload_url).map_err(|_| RestError::InvalidRequest)?;
 		if !secure_scheme(&url) {
 			return Err(RestError::InvalidRequest);
@@ -265,7 +281,8 @@ impl RestClient {
 			.uploads
 			.put(url)
 			.header(CONTENT_TYPE, file.content_type.as_str())
-			.body(file.bytes.clone());
+			.header(CONTENT_LENGTH, file.bytes.len())
+			.body(counted(file.bytes.clone(), progress));
 		let response = self
 			.inner
 			.safety

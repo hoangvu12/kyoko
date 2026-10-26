@@ -39,6 +39,7 @@ local function sidebar_column()
 end
 
 local function chat()
+	local column = ui.ref()
 	return panel {
 		grow = 1,
 		shrink = 1,
@@ -52,12 +53,17 @@ local function chat()
 			ui.show(function()
 				return state.hidden.view:get().open
 			end, hidden_channel(), ui.column {
+				ref = column,
 				w_full = true,
 				grow = 1,
 				min_h = 0,
 				connection_banner(),
 				timeline(),
-				composer(),
+				composer {
+					room = function()
+						return column.height or 0
+					end,
+				},
 			})
 		),
 	}

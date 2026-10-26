@@ -50,7 +50,10 @@ pub use loaded::{
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
-pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply_update, reaction_name};
+pub use messages::{
+	ChannelMessages, PendingFile, PendingMessage, SendFailure, UploadProgress, Viewport, apply_update,
+	reaction_name,
+};
 pub use notifications::{AlertKind, Attention};
 pub use own_status::{CustomStatus, StatusEmoji, status_kind};
 pub use permissions::DM_PERMISSIONS;

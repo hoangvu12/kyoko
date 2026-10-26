@@ -1,3 +1,4 @@
+mod marks;
 mod slash;
 mod suggest;
 
@@ -12,6 +13,7 @@ use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
 use crate::emoji_picker::EmojiCell;
 use crate::sticker_picker::StickerCell;
 
+pub use marks::{LineState, Mark, Marked, line_marks, text_marks};
 pub use slash::{Slash, parse_slash};
 pub use suggest::{
 	Query, Suggestion, Trigger, Visual, apply_suggestion, emoji_candidates, placeholder, query_at,
@@ -83,6 +85,31 @@ pub struct Composer {
 	member_query: Option<String>,
 	ranked_for: Option<(String, u64)>,
 	dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FileEdit {
+	pub name: String,
+	pub description: String,
+	pub spoiler: bool,
+}
+
+pub fn too_big(name: &str, size: u64, limit: u64) -> Option<String> {
+	(size > limit).then(|| {
+		format!(
+			"{name} is too big ({}). The limit here is {} MB.",
+			crate::file_size(size).replace(".0 ", " "),
+			(limit as f64 / MIB).round()
+		)
+	})
+}
+
+fn leaves_draft(command: &Command) -> bool {
+	match command {
+		Command::SendGif { .. } | Command::SendSticker { .. } => true,
+		Command::SendMessage { content, .. } => content.is_empty(),
+		_ => false,
+	}
 }
 
 pub fn failure_text(failure: &SendFailure) -> String {
@@ -361,19 +388,72 @@ impl Composer {
 		if self.files.len() >= MAX_ATTACHMENTS {
 			return Err(format!("You can attach up to {MAX_ATTACHMENTS} files"));
 		}
-		let limit = state.upload_limit(channel_id);
-		if file.bytes.len() as u64 > limit {
-			return Err(format!(
-				"{} is too large. The limit here is {} MB.",
-				file.name,
-				(limit as f64 / MIB).round()
-			));
+		if let Some(refusal) = too_big(&file.name, file.size(), state.upload_limit(channel_id)) {
+			return Err(refusal);
 		}
 		self.next_file += 1;
 		let id = self.next_file;
 		self.files.push(Attachment { id, file });
 		self.refusal = None;
 		Ok(id)
+	}
+
+	pub fn toggle_spoiler(&mut self, id: u64) -> bool {
+		let Some(attachment) = self.files.iter_mut().find(|attachment| attachment.id == id) else {
+			return false;
+		};
+		attachment.file.spoiler = !attachment.file.spoiler;
+		true
+	}
+
+	pub fn file(&self, id: u64) -> Option<&Attachment> {
+		self.files.iter().find(|attachment| attachment.id == id)
+	}
+
+	pub fn edit_file(&mut self, id: u64, edit: FileEdit) -> bool {
+		let Some(attachment) = self.files.iter_mut().find(|attachment| attachment.id == id) else {
+			return false;
+		};
+		let name = edit.name.trim();
+		if !name.is_empty() {
+			attachment.file.name = name.to_owned();
+		}
+		let description = edit.description.trim();
+		attachment.file.description = (!description.is_empty()).then(|| description.to_owned());
+		attachment.file.spoiler = edit.spoiler;
+		true
+	}
+
+	pub fn upload_now(&mut self, state: &State, files: Vec<UploadFile>, now: DateTime<Utc>) -> Outcome {
+		let Some(channel_id) = self.channel_id else {
+			return Outcome::default();
+		};
+		if files.is_empty() {
+			return Outcome::default();
+		}
+		if files.len() > MAX_ATTACHMENTS {
+			self.refusal = Some(format!("You can attach up to {MAX_ATTACHMENTS} files"));
+			return Outcome::default();
+		}
+		let limit = state.upload_limit(channel_id);
+		if let Some(refusal) = files
+			.iter()
+			.find_map(|file| too_big(&file.name, file.size(), limit))
+		{
+			self.refusal = Some(refusal);
+			return Outcome::default();
+		}
+		self.expression(
+			state,
+			Command::SendMessage {
+				channel_id,
+				content: String::new(),
+				reply_to: None,
+				ping_reply: true,
+				files,
+			},
+			now,
+		)
 	}
 
 	pub fn refuse(&mut self, reason: String) {
@@ -419,6 +499,7 @@ impl Composer {
 			.pending
 			.iter()
 			.rev()
+			.filter(|pending| pending.upload.is_none())
 			.find_map(|pending| {
 				let failure = pending.failure.as_ref()?;
 				Some(Notice::Failed {
@@ -438,7 +519,7 @@ impl Composer {
 			reason: lock.reason,
 		}];
 		match self.held.take() {
-			Some(held @ (Command::SendGif { .. } | Command::SendSticker { .. })) => {
+			Some(held) if leaves_draft(&held) => {
 				commands.push(held);
 				Outcome {
 					commands,

@@ -7,7 +7,7 @@ mod users;
 
 pub use channels::MODERATED_PHRASE;
 pub(crate) use expressions::ready_stickers;
-pub use interactions::MOCKBOT_ID;
+pub use interactions::{BROKEN_UPLOAD, MOCKBOT_ID, STALLED_UPLOAD};
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -256,6 +256,7 @@ async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next
 	};
 	let path = path.to_owned();
 	let method = request.method().as_str().to_owned();
+	shared.scenario.wait_if_held(&method, &path).await;
 	let injected = shared.scenario.take_reply(&method, &path);
 	if !shared.recorder.enabled() {
 		return match injected {

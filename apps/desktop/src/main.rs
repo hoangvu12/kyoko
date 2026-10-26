@@ -3,6 +3,7 @@
 mod capture;
 mod churn;
 mod community;
+mod composer_layer;
 mod dm_panel;
 mod dm_sidebar;
 mod emoji;

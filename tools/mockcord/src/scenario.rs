@@ -7,6 +7,7 @@ use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+use tokio::sync::watch;
 
 const CAPTCHA_SITEKEY: &str = "mock-captcha-sitekey";
 const CAPTCHA_RQDATA: &str = "mock-captcha-rqdata";
@@ -122,9 +123,16 @@ struct Rule {
 	remaining: Option<usize>,
 }
 
+struct Hold {
+	method: String,
+	pattern: String,
+	open: watch::Sender<bool>,
+}
+
 #[derive(Default)]
 pub struct Scenario {
 	rules: Mutex<Vec<Rule>>,
+	holds: Mutex<Vec<Hold>>,
 	failing_resumes: AtomicUsize,
 	closing_identifies: Mutex<Vec<u16>>,
 	closing_connections: Mutex<Vec<u16>>,
@@ -165,6 +173,32 @@ impl Scenario {
 			}
 		}
 		Some(reply)
+	}
+
+	pub fn hold(&self, method: &str, pattern: &str) {
+		self.holds.lock().push(Hold {
+			method: method.to_owned(),
+			pattern: pattern.to_owned(),
+			open: watch::Sender::new(false),
+		});
+	}
+
+	pub fn release_holds(&self) {
+		for hold in self.holds.lock().drain(..) {
+			hold.open.send_replace(true);
+		}
+	}
+
+	pub async fn wait_if_held(&self, method: &str, path: &str) {
+		let held = self
+			.holds
+			.lock()
+			.iter()
+			.find(|hold| hold.method.eq_ignore_ascii_case(method) && path_matches(&hold.pattern, path))
+			.map(|hold| hold.open.subscribe());
+		if let Some(mut open) = held {
+			let _ = open.wait_for(|open| *open).await;
+		}
 	}
 
 	pub fn fail_resumes(&self, count: usize) {

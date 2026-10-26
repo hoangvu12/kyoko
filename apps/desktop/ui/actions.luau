@@ -213,6 +213,24 @@ function M.composer_dismiss(area: string?)
 	ui.invoke(area_of(area) .. ".dismiss")
 end
 
+function M.composer_plus(at: { x: number, y: number }, area: string?)
+	ui.invoke(area_of(area) .. ".plus", at)
+end
+
+function M.composer_spoiler(id: string, area: string?)
+	ui.invoke(area_of(area) .. ".spoiler", id)
+end
+
+function M.composer_edit_file(id: string, area: string?)
+	ui.invoke(area_of(area) .. ".edit_file", id)
+end
+
+
+function M.composer_backgrounds(text: string): { any }
+	local result = ui.call_sync("composer.backgrounds", text)
+	return if type(result) == "table" then result else {}
+end
+
 function M.composer_picker(tab: string, toolbar: any)
 	ui.invoke("composer.picker", { tab = tab, toolbar = toolbar })
 end

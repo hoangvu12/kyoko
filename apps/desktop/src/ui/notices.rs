@@ -19,6 +19,8 @@ impl Link {
 					link.toasts
 						.set_window(width as f32 / scale, height as f32 / scale);
 					link.scrim.set_window(width as f32 / scale, height as f32 / scale);
+					link.composer_layer
+						.set_window(width as f32 / scale, height as f32 / scale);
 				}
 			}
 		});

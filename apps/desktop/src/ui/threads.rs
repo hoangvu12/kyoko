@@ -403,11 +403,7 @@ impl Link {
 					.map(|name| name.to_string_lossy().into_owned())
 					.unwrap_or_else(|| "file".to_owned());
 				match std::fs::read(&path) {
-					Ok(bytes) => files.push(UploadFile {
-						content_type: content_type(&name).to_owned(),
-						name,
-						bytes: bytes.into(),
-					}),
+					Ok(bytes) => files.push(UploadFile::new(name.clone(), bytes, content_type(&name))),
 					Err(error) => tracing::debug!(%error, "a post attachment could not be read"),
 				}
 			});
@@ -646,7 +642,7 @@ impl Link {
 		self.refresh_layer();
 	}
 
-	fn open_create_thread(&self, channel_id: Snowflake, message_id: Option<Snowflake>) {
+	pub(super) fn open_create_thread(&self, channel_id: Snowflake, message_id: Option<Snowflake>) {
 		let Some(shared) = self.state() else {
 			return;
 		};

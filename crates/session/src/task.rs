@@ -95,6 +95,7 @@ pub(crate) enum Internal {
 	},
 	LoadFinished(Snowflake, Page),
 	SendFailed(Nonce, SendFailure, Box<outbox::Outgoing>),
+	Uploading(Nonce, u64),
 	Searched {
 		serial: u64,
 		offset: u32,
@@ -640,6 +641,7 @@ impl Core {
 				self.loading.remove(&(channel_id, page));
 			}
 			Internal::SendFailed(nonce, reason, outgoing) => self.send_failed(nonce, reason, *outgoing),
+			Internal::Uploading(nonce, sent) => self.apply_local(LocalEvent::UploadProgress { nonce, sent }),
 			Internal::CommandIndex { scope, index } => self.command_index_arrived(scope, index),
 			Internal::Searched {
 				serial,

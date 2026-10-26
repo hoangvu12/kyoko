@@ -14,11 +14,11 @@ pub const LIMIT: Duration = Duration::from_secs(30);
 pub const SCROLL_PASSES: usize = 10;
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
-pub const SILENT_TYPING_BUTTON: (f32, f32) = (848., 742.);
+pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
-pub const COMPOSER_PICKER: (f32, f32) = (952., 742.);
+pub const COMPOSER_PICKER: (f32, f32) = (954., 755.);
 pub const TOP_BAR_THREADS: (f32, f32) = (721., 37.);
 pub const TOP_BAR_PINS: (f32, f32) = (801., 37.);
 pub const TOAST: &str = "You are sending messages too quickly.";
@@ -30,6 +30,9 @@ pub const LINK_PREVIEW: &str = "docs are up https://github.com/refact0r/midnight
 pub const FAVOURITE_EMOJI: &str = "\u{1f64f}";
 pub const JUMBO_EMOJI: &str = "\u{1f62d}";
 pub const OWN_MESSAGE: &str = "can someone ping me";
+pub const MARKDOWN_DRAFT: &str = "**Midnight 2.1.2** is *almost* ready\n> thanks to all who tested the pickers\n`--emoji-size-ui` is in the ||secret|| notes";
+pub const UPLOADING: &str = "here it is";
+pub const UPLOAD_FAILED: &str = "and the other angle";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -95,6 +98,7 @@ pub enum Screen {
 	KeptEdits,
 	Expressions(ExpressionShot),
 	LinkPreview,
+	ComposerShot(ComposerShot),
 	HiddenChannel,
 	MemberNotes,
 	Reactions(ReactionShot),
@@ -118,6 +122,15 @@ pub enum ExpressionShot {
 	CustomEmoji,
 	UnicodeEmoji,
 	Sticker,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComposerShot {
+	OverLimit,
+	Uploads,
+	Drop,
+	UploadFailed,
+	PlusMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,6 +214,11 @@ impl Screen {
 			"expressions-in-messages-emoji-popout" => Some(Screen::Expressions(ExpressionShot::UnicodeEmoji)),
 			"expressions-in-messages-sticker-popout" => Some(Screen::Expressions(ExpressionShot::Sticker)),
 			"link-preview-while-typing" => Some(Screen::LinkPreview),
+			"composer-markdown-over-limit" => Some(Screen::ComposerShot(ComposerShot::OverLimit)),
+			"composer-uploads" => Some(Screen::ComposerShot(ComposerShot::Uploads)),
+			"composer-drop" => Some(Screen::ComposerShot(ComposerShot::Drop)),
+			"composer-upload-failed" => Some(Screen::ComposerShot(ComposerShot::UploadFailed)),
+			"composer-plus-menu" => Some(Screen::ComposerShot(ComposerShot::PlusMenu)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),
@@ -262,6 +280,7 @@ impl Screen {
 			| Screen::KeptEdits
 			| Screen::Expressions(_)
 			| Screen::LinkPreview
+			| Screen::ComposerShot(_)
 			| Screen::HiddenChannel
 			| Screen::MemberNotes
 			| Screen::Reactions(_) => Some(Opening::First),

@@ -11,7 +11,7 @@ use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::kept::MessageVersion;
 use crate::loaded::Loaded;
 use crate::locks::{RiskyReason, RiskyTarget};
-use crate::messages::{SendFailure, Viewport};
+use crate::messages::{PendingFile, SendFailure, Viewport};
 use crate::state::{ConnectionStatus, SecretStorage};
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
@@ -32,6 +32,11 @@ pub enum LocalEvent {
 		stickers: Vec<StickerItem>,
 		author: Box<User>,
 		by_plugin: Option<String>,
+		files: Vec<PendingFile>,
+	},
+	UploadProgress {
+		nonce: Nonce,
+		sent: u64,
 	},
 	PendingFailed {
 		nonce: Nonce,

@@ -1,10 +1,11 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
-use axum::body::Bytes;
+use axum::body::to_bytes;
 use axum::extract::{Path, Request, State};
+use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
-use axum::http::{HeaderMap, StatusCode};
 use protocol::{MessageType, Snowflake, User};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -15,6 +16,10 @@ use crate::ops::{Draft, UploadedFile};
 use crate::state::Shared;
 
 pub const MOCKBOT_ID: u64 = 9_100_000_000_000_000_001;
+pub const STALLED_UPLOAD: &str = "stalled-upload.mp4";
+pub const BROKEN_UPLOAD: &str = "broken-upload.mp4";
+const STALL: Duration = Duration::from_secs(600);
+const MAX_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
 const COMMAND_IDS: [(u64, &str); 4] = [
 	(9_100_000_000_000_000_101, "ping"),
 	(9_100_000_000_000_000_102, "echo"),
@@ -152,17 +157,39 @@ pub async fn attachment_slots(
 	Ok(Json(json!({ "attachments": slots })))
 }
 
+fn slot_name(filename: &str) -> String {
+	filename
+		.chars()
+		.map(|character| {
+			if character.is_ascii_alphanumeric() || character == '.' {
+				character
+			} else {
+				'_'
+			}
+		})
+		.collect()
+}
+
 pub async fn upload(
 	State(shared): State<Arc<Shared>>,
 	Path(key): Path<String>,
-	headers: HeaderMap,
-	body: Bytes,
+	request: Request,
 ) -> StatusCode {
 	let filename = key.rsplit('/').next().unwrap_or("file").to_owned();
-	let content_type = headers
+	if filename == slot_name(STALLED_UPLOAD) {
+		tokio::time::sleep(STALL).await;
+	}
+	if filename == slot_name(BROKEN_UPLOAD) {
+		return StatusCode::INTERNAL_SERVER_ERROR;
+	}
+	let content_type = request
+		.headers()
 		.get(CONTENT_TYPE)
 		.and_then(|value| value.to_str().ok())
 		.map(str::to_owned);
+	let Ok(body) = to_bytes(request.into_body(), MAX_UPLOAD_BYTES).await else {
+		return StatusCode::BAD_REQUEST;
+	};
 	shared.store.lock().uploads.insert(
 		key,
 		UploadedFile {

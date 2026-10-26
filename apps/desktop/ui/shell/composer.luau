@@ -5,20 +5,26 @@ local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local plugin_slot = require("@components/plugin_slot")
 
-local FIELD = 44
 local LEADING = 56
-local LINE = 20
-local TEXT_INSET = 10
+local LINE = 22
+local TEXT_SIZE = 16
 local MAX_LINES = 10
-local BAR = 32
-local CHIP = 36
-local CHIP_MAX = 240
 local ROW = 36
-local TYPING = 24
 local COUNTER_FROM = 200
-local DOT = 4
-local DOT_DIM = 0.35
+local DOT = 6
+local DOT_DIM = 0.4
 local DOT_STEP = 300
+local CARD = 216
+local CARD_PADDING = 8
+local THUMBNAIL = 160
+local TOOL = 24
+local TOOL_ICON = 16
+local BADGE = 40
+local SPOILER_BLUR = 32
+local CLOSE = 24
+local CLOSE_ICON = 12
+local ICON = 20
+local BUTTON = 32
 
 local function by_key(item: { key: string })
 	return item.key
@@ -106,21 +112,21 @@ local function popup(text: any, shared: any, area: string)
 	return ui.show(function()
 		return #shared.suggestions:get() > 0
 	end, ui.column {
-		w_full = true,
+		mx = theme.size.space_8,
 		mb = theme.size.space_8,
 		p = theme.size.space_8,
 		rounded = theme.size.radius_md,
 		border = 1,
-		border_color = theme.color.divider,
-		bg = theme.color.background_floating,
-		color = theme.color.text_normal,
+		border_color = theme.color.border,
+		bg = theme.color.bg_3,
+		color = theme.color.text_3,
 		ui.each(shared.suggestions, function(item: state.ComposerSuggestion, index: number)
 			return suggestion_row(item, index, text, shared, area)
 		end, { key = by_key, w_full = true }),
 	})
 end
 
-local function notice_button(label: string, on_click: () -> (), danger: boolean)
+local function bar_button(label: string, on_click: () -> (), danger: boolean)
 	return ui.button {
 		label,
 		h = 24,
@@ -129,12 +135,33 @@ local function notice_button(label: string, on_click: () -> (), danger: boolean)
 		rounded = theme.size.radius_sm,
 		border = 0,
 		focus = { border = 0 },
-		text_size = theme.size.font_sm,
+		text_size = theme.size.font_size_sm,
 		weight = theme.weight.medium,
-		color = theme.color.text_on_brand,
-		bg = if danger then theme.color.danger else theme.color.brand,
-		hover = { bg = if danger then theme.color.danger_hover else theme.color.brand_hover },
+		color = theme.color.text_0,
+		bg = if danger then theme.color.red_3 else theme.color.accent_3,
+		hover = { bg = if danger then theme.color.red_4 else theme.color.accent_4 },
 		on_click = on_click,
+	}
+end
+
+local function close_disc(id: string, tooltip: string, on_click: () -> ())
+	return ui.button {
+		id = id,
+		w = CLOSE,
+		h = CLOSE,
+		shrink = 0,
+		p = 0,
+		rounded = CLOSE,
+		border = 0,
+		focus = { border = 0 },
+		items = "center",
+		justify = "center",
+		cursor = "pointer",
+		tooltip = tooltip,
+		bg = theme.color.bg_2,
+		hover = { bg = theme.color.bg_1 },
+		on_click = on_click,
+		icon { name = "close", size = CLOSE_ICON, color = theme.color.text_3 },
 	}
 end
 
@@ -162,7 +189,7 @@ local typing_dots = ui.component(function()
 				w = DOT,
 				h = DOT,
 				rounded = DOT,
-				bg = theme.color.text_normal,
+				bg = theme.color.text_3,
 				opacity = function()
 					if not animated() then
 						return 1
@@ -172,10 +199,156 @@ local typing_dots = ui.component(function()
 			}
 		)
 	end
-	return ui.row { shrink = 0, gap = 2, items = "center", pr = theme.size.space_4, table.unpack(dots) }
+	return ui.row { shrink = 0, gap = theme.size.space_2, items = "center", table.unpack(dots) }
 end)
 
-export type Scope = { area: string, shared: any, text_key: string, measure_key: string }
+local function upload_tool(id: string, name: string, tooltip: string, danger: boolean, on_click: () -> ())
+	return ui.button {
+		id = id,
+		w = TOOL,
+		h = TOOL,
+		p = 0,
+		shrink = 0,
+		border = 0,
+		focus = { border = 0 },
+		rounded = theme.size.radius_xs,
+		items = "center",
+		justify = "center",
+		cursor = "pointer",
+		tooltip = tooltip,
+		bg = "#00000000",
+		hover = { bg = theme.color.hover },
+		on_click = on_click,
+		icon { name = name, size = TOOL_ICON, color = if danger then theme.color.red_2 else theme.color.text_4 },
+	}
+end
+
+local function upload_thumbnail(file: state.ComposerFile)
+	return ui.row {
+		relative = true,
+		w_full = true,
+		h = THUMBNAIL,
+		shrink = 0,
+		items = "center",
+		justify = "center",
+		overflow = "hidden",
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		ui.show(
+			file.image ~= "",
+			ui.image {
+				src = file.image,
+				absolute = true,
+				left = 0,
+				top = 0,
+				right = 0,
+				bottom = 0,
+				fit = "cover",
+				blur = if file.spoiler then SPOILER_BLUR else 0,
+			},
+			ui.show(file.kind ~= "video", icon { name = "file", size = BADGE, color = theme.color.text_4 })
+		),
+		ui.show(
+			file.kind == "video",
+			ui.row {
+				absolute = true,
+				left = (CARD - 2 * CARD_PADDING - BADGE) / 2,
+				top = (THUMBNAIL - BADGE) / 2,
+				w = BADGE,
+				h = BADGE,
+				rounded = BADGE,
+				items = "center",
+				justify = "center",
+				bg = theme.color.overlay_button_background,
+				icon { name = "play", size = 20, color = theme.color.overlay_text },
+			}
+		),
+		ui.show(
+			file.spoiler,
+			ui.row {
+				absolute = true,
+				left = 0,
+				top = 0,
+				right = 0,
+				bottom = 0,
+				items = "center",
+				justify = "center",
+				ui.text {
+					"SPOILER",
+					h = 24,
+					px = theme.size.space_12,
+					rounded = 24,
+					bg = theme.color.overlay_button_background,
+					color = theme.color.overlay_text,
+					text_size = theme.size.font_size_xs,
+					line_height = 24,
+					weight = theme.weight.bold,
+				},
+			}
+		),
+	}
+end
+
+local upload_card = ui.component(function(props: { file: state.ComposerFile, area: string })
+	local hovered = ui.use_state(false)
+	local file = props.file
+	local area = props.area
+	return ui.column {
+		id = "upload_card_" .. file.id,
+		relative = true,
+		w = CARD,
+		h = CARD,
+		shrink = 0,
+		p = CARD_PADDING,
+		gap = theme.size.space_8,
+		rounded = theme.size.radius_md,
+		bg = theme.color.bg_4,
+		border = 1,
+		border_color = theme.color.border,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		upload_thumbnail(file),
+		ui.text {
+			file.name,
+			literal = true,
+			w_full = true,
+			truncate = true,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			color = theme.color.text_3,
+		},
+		ui.show(function()
+			return hovered:get()
+		end, ui.row {
+			absolute = true,
+			top = 4,
+			right = 4,
+			w = 3 * TOOL + 6,
+			p = theme.size.space_2,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.bg_3,
+			border = 1,
+			border_color = theme.color.border,
+			upload_tool("upload_spoiler_" .. file.id, "eye", "Spoiler Attachment", false, function()
+				actions.composer_spoiler(file.id, area)
+			end),
+			upload_tool("upload_edit_" .. file.id, "edit", "Modify Attachment", false, function()
+				actions.composer_edit_file(file.id, area)
+			end),
+			upload_tool("upload_remove_" .. file.id, "trash", "Remove Attachment", true, function()
+				actions.composer_remove_file(file.id, area)
+			end),
+		}),
+	}
+end)
+
+export type Scope = {
+	area: string,
+	shared: any,
+	text_key: string,
+	measure_key: string,
+}
 
 local MAIN: Scope = {
 	area = "composer",
@@ -184,202 +357,197 @@ local MAIN: Scope = {
 	measure_key = "composer_measured",
 }
 
-return function(scope: Scope?)
-	local current: Scope = scope or MAIN
+return function(scope: any?)
+	local current: Scope = if scope and scope.shared then scope else MAIN
+	local room: (() -> number)? = scope and scope.room
 	local area = current.area
 	local shared = current.shared
 	local picking = false
-	local function notice()
-		local current = shared.notice
-		local function kind(): string
-			return current:get().kind
-		end
-		return ui.show(function()
-			return kind() ~= ""
-		end, ui.row {
+	local field_box: any = nil
+	local chatbar = theme.number(theme.size.chatbar_height)
+
+	local function notice_kind(): string
+		return shared.notice:get().kind
+	end
+
+	local function has_reply(): boolean
+		return shared.reply:get().active == true
+	end
+
+	local function has_edit(): boolean
+		return shared.editing:get() == true
+	end
+
+	local function has_files(): boolean
+		return #shared.files:get() > 0
+	end
+
+	local function joined(): boolean
+		return notice_kind() ~= "" or has_reply() or has_edit() or has_files()
+	end
+
+	local function bar(content: { any }, background: any?)
+		local props: { [any]: any } = {
 			w_full = true,
-			min_h = BAR,
-			mb = theme.size.space_8,
-			px = theme.size.space_12,
-			py = theme.size.space_4,
+			h = theme.size.composer_bar_height,
+			shrink = 0,
+			pl = theme.size.space_16,
+			pr = theme.size.space_8,
 			gap = theme.size.space_8,
 			items = "center",
-			rounded = theme.size.radius_md,
-			bg = theme.color.background_secondary,
-			icon {
-				name = "warning",
-				size = 16,
-				color = function()
-					return if kind() == "lock" then theme.color.warning else theme.color.danger
-				end,
-			},
+			bg = background,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			color = theme.color.text_4,
+		}
+		for _, child in content do
+			table.insert(props, child)
+		end
+		return ui.row(props)
+	end
+
+	local function notice()
+		local current_notice = shared.notice
+		return ui.show(function()
+			return notice_kind() ~= ""
+		end, bar({
 			ui.text {
 				function()
-					return current:get().text or ""
+					return current_notice:get().text or ""
 				end,
 				literal = true,
 				grow = 1,
 				min_w = 0,
-				wrap = true,
-				text_size = theme.size.font_sm,
+				truncate = true,
+				weight = theme.weight.medium,
 				color = function()
-					return if kind() == "failed" then theme.color.danger else theme.color.text_normal
+					return if notice_kind() == "lock" then theme.color.text_3 else theme.color.red_2
 				end,
 			},
 			ui.show(function()
-				return kind() == "lock" and current:get().confirmable == true
-			end, notice_button("I understand", function()
+				return notice_kind() == "lock" and current_notice:get().confirmable == true
+			end, bar_button("I understand", function()
 				actions.composer_confirm(area)
 			end, false)),
 			ui.show(function()
-				return kind() == "failed"
+				return notice_kind() == "failed"
 			end, ui.row {
 				gap = theme.size.space_8,
-				notice_button("Retry", function()
-					actions.composer_retry(current:peek().nonce or "", area)
+				bar_button("Retry", function()
+					actions.composer_retry(current_notice:peek().nonce or "", area)
 				end, false),
-				notice_button("Delete", function()
-					actions.composer_discard(current:peek().nonce or "", area)
+				bar_button("Delete", function()
+					actions.composer_discard(current_notice:peek().nonce or "", area)
 				end, true),
 			}),
 			ui.show(function()
-				return kind() == "refused"
-			end, icon_button {
-				name = "close",
-				icon_size = 16,
-				hit_size = 24,
-				tooltip = "Dismiss",
-				on_click = function()
-					actions.composer_dismiss(area)
-				end,
-			}),
-		})
-	end
-
-	local function top_bar(label: () -> string, extra: any, on_close: () -> (), tooltip: string)
-		return ui.row {
-			w_full = true,
-			h = BAR,
-			px = theme.size.space_12,
-			items = "center",
-			justify = "between",
-			rounded_tl = theme.number(theme.size.radius_md),
-			rounded_tr = theme.number(theme.size.radius_md),
-			bg = theme.color.background_secondary,
-			text_size = theme.size.font_sm,
-			color = theme.color.text_muted,
-			ui.text { label, literal = true, min_w = 0, truncate = true },
-			ui.row {
-				gap = theme.size.space_8,
-				items = "center",
-				shrink = 0,
-				extra,
-				icon_button {
-					name = "close",
-					icon_size = 16,
-					hit_size = 24,
-					tooltip = tooltip,
-					on_click = on_close,
-				},
-			},
-		}
+				return notice_kind() == "refused"
+			end, close_disc(area .. "_notice_close", "Dismiss", function()
+				actions.composer_dismiss(area)
+			end)),
+		}, function()
+			return if notice_kind() == "lock"
+				then theme.color.background_feedback_warning
+				else theme.color.background_feedback_critical
+		end))
 	end
 
 	local function reply_bar()
 		local reply = shared.reply
-		local ping = ui.show(function()
+		local function others(): boolean
 			return reply:get().own ~= true
-		end, ui.button {
-			h = 24,
-			px = theme.size.space_4,
-			py = 0,
-			gap = theme.size.space_2,
-			bg = "#00000000",
-			border = 0,
-			focus = { border = 0 },
-			cursor = "pointer",
-			tooltip = "Mention the author",
-			text_size = theme.size.font_sm,
-			weight = theme.weight.bold,
-			color = function()
-				return if reply:get().ping then theme.color.link else theme.color.text_muted
-			end,
-			on_click = function()
-				actions.composer_toggle_ping(area)
-			end,
-			icon { name = "at_sign", size = 16 },
-			ui.text(function()
-				return if reply:get().ping then "ON" else "OFF"
+		end
+		return ui.show(has_reply, bar({
+			ui.row {
+				grow = 1,
+				min_w = 0,
+				items = "center",
+				ui.text { "Replying to ", literal = true, shrink = 0 },
+				ui.text {
+					function()
+						return reply:get().name or ""
+					end,
+					literal = true,
+					min_w = 0,
+					truncate = true,
+					weight = theme.weight.semibold,
+					color = theme.color.text_2,
+				},
+			},
+			ui.show(others, ui.button {
+				id = area .. "_reply_ping",
+				h = 24,
+				px = theme.size.space_4,
+				py = 0,
+				shrink = 0,
+				bg = "#00000000",
+				border = 0,
+				focus = { border = 0 },
+				cursor = "pointer",
+				tooltip = "Mention the author",
+				text_size = theme.size.font_size_sm,
+				weight = theme.weight.bold,
+				color = function()
+					return if reply:get().ping then theme.color.link else theme.color.text_4
+				end,
+				on_click = function()
+					actions.composer_toggle_ping(area)
+				end,
+				ui.text(function()
+					return if reply:get().ping then "@ ON" else "@ OFF"
+				end),
+			}),
+			ui.show(others, ui.div { w = 1, h = 16, shrink = 0, bg = theme.color.border }),
+			close_disc(area .. "_reply_close", "Cancel reply", function()
+				actions.composer_cancel_reply(area)
 			end),
-		})
-		return ui.show(function()
-			return reply:get().active
-		end, top_bar(function()
-			return "Replying to " .. (reply:get().name or "")
-		end, ping, function()
-			actions.composer_cancel_reply(area)
-		end, "Cancel reply"))
+		}))
 	end
 
 	local function edit_bar()
-		return ui.show(function()
-			return shared.editing:get()
-		end, top_bar(function()
-			return "Editing message · escape to cancel · enter to save"
-		end, nil, function()
-			actions.composer_cancel_edit(area)
-		end, "Cancel edit"))
-	end
-
-	local function file_chip(file: state.ComposerFile)
-		return ui.row {
-			max_w = CHIP_MAX,
-			h = CHIP,
-			pl = theme.size.space_8,
-			pr = theme.size.space_4,
-			gap = theme.size.space_8,
-			items = "center",
-			rounded = theme.size.radius_sm,
-			bg = theme.color.background_secondary,
-			ui.show(
-				file.image ~= "",
-				ui.image { src = file.image, w = 28, h = 28, rounded = theme.size.radius_sm, fit = "cover", shrink = 0 },
-				icon { name = "file", size = 20, color = theme.color.interactive_normal }
-			),
-			ui.column {
+		return ui.show(has_edit, bar({
+			ui.text {
+				"Editing message · escape to cancel · enter to save",
+				literal = true,
+				grow = 1,
 				min_w = 0,
-				ui.text {
-					file.name,
-					literal = true,
-					truncate = true,
-					text_size = theme.size.font_sm,
-					color = theme.color.text_normal,
-				},
-				ui.text { file.size, literal = true, text_size = theme.size.font_tiny, color = theme.color.text_muted },
+				truncate = true,
 			},
-			icon_button {
-				name = "close",
-				icon_size = 16,
-				hit_size = 24,
-				tooltip = "Remove",
-				on_click = function()
-					actions.composer_remove_file(file.id, area)
-				end,
-			},
-		}
+			close_disc(area .. "_edit_close", "Cancel edit", function()
+				actions.composer_cancel_edit(area)
+			end),
+		}))
 	end
 
-	local function chips()
-		return ui.show(function()
-			return #shared.files:get() > 0
-		end, ui.row {
+	local function tray()
+		return ui.show(has_files, ui.scroll_x {
+			id = area .. "_upload_tray",
 			w_full = true,
-			flex_wrap = true,
-			gap = theme.size.space_8,
-			p = theme.size.space_8,
-			ui.each(shared.files, function(file: state.ComposerFile)
-				return file_chip(file)
-			end, { key = by_id, w_full = true, flex_wrap = true, gap = theme.size.space_8 }),
+			shrink = 0,
+			ui.row {
+				p = theme.size.space_16,
+				ui.each(shared.files, function(file: state.ComposerFile)
+					return upload_card { file = file, area = area }
+				end, { key = by_id, gap = theme.size.space_8 }),
+			},
+		})
+	end
+
+	local function joined_bars()
+		return ui.show(joined, ui.column {
+			mx = theme.size.space_8,
+			shrink = 0,
+			overflow = "hidden",
+			rounded_tl = theme.number(theme.size.radius_md),
+			rounded_tr = theme.number(theme.size.radius_md),
+			bg = theme.color.bg_3,
+			border = 1,
+			border_sides = { 1, 1, 0, 1 },
+			border_color = theme.color.border,
+			notice(),
+			reply_bar(),
+			edit_bar(),
+			tray(),
 		})
 	end
 
@@ -406,9 +574,17 @@ return function(scope: Scope?)
 		end)
 	end
 
+	local function field_limit(): number
+		if room == nil then
+			return LINE * MAX_LINES
+		end
+		return math.max(LINE, room() / 2 - (chatbar() - LINE))
+	end
+
 	local function editor(text: any, box: any)
 		local measured = ui.state(current.measure_key, LINE)
 		local applied = 0
+		local seen_pick = shared.pick:peek()
 		local function caret(): number
 			local element = box:peek()
 			if element == nil then
@@ -418,8 +594,8 @@ return function(scope: Scope?)
 			return focus or #text:peek()
 		end
 		ui.effect(function()
-			local current = text:get()
-			actions.composer_changed(current, caret(), area)
+			local typed = text:get()
+			actions.composer_changed(typed, caret(), area)
 		end)
 		ui.effect(function()
 			local replace = shared.replace:get()
@@ -443,53 +619,64 @@ return function(scope: Scope?)
 				element:focus()
 			end
 		end)
+		ui.effect(function()
+			local serial = shared.pick:get()
+			if serial ~= seen_pick then
+				seen_pick = serial
+				pick_files()
+			end
+		end)
 		return ui.row {
 			relative = true,
 			grow = 1,
 			min_w = 0,
-			min_h = FIELD,
-			py = 12,
-			pl = TEXT_INSET,
-			items = "center",
+			ml = theme.size.space_12,
+			py = function()
+				return (chatbar() - 2 - LINE) / 2
+			end,
 			ui.text {
 				function()
-					local current = text:get()
-					return if current == "" or string.sub(current, -1) == "\n" then current .. " " else current
+					local typed = text:get()
+					return if typed == "" or string.sub(typed, -1) == "\n" then typed .. " " else typed
 				end,
 				literal = true,
 				absolute = true,
-				left = TEXT_INSET,
+				left = 0,
 				right = 0,
 				top = 0,
 				wrap = true,
 				opacity = 0,
 				pointer_events = "none",
-				text_size = theme.size.font_sm,
+				text_size = TEXT_SIZE,
 				line_height = LINE,
 				on_resize = function(size)
 					measured:set(size.h)
 				end,
 			},
 			ui.textarea {
+				id = area .. "_field",
 				value = text,
 				ref = box,
 				label = "Message",
 				placeholder = shared.placeholder,
-				placeholder_color = theme.color.text_muted,
+				placeholder_color = theme.color.text_5,
 				spellcheck = true,
 				wrap = true,
 				w_full = true,
 				h = function()
-					return math.clamp(measured:get(), LINE, LINE * MAX_LINES)
+					return math.clamp(measured:get(), LINE, field_limit())
 				end,
 				px = 0,
 				py = 0,
 				bg = "#00000000",
 				border = 0,
 				focus = { border = 0 },
-				text_size = theme.size.font_sm,
+				text_size = TEXT_SIZE,
 				line_height = LINE,
-				color = theme.color.text_normal,
+				color = theme.color.text_3,
+				decorations = function()
+					return actions.composer_backgrounds(text:get())
+				end,
 				on_key = function(event)
 					return actions.composer_key(event, text:peek(), area)
 				end,
@@ -497,48 +684,84 @@ return function(scope: Scope?)
 		}
 	end
 
+	local function composer_button(name: string, tooltip: string, on_click: any)
+		return ui.row {
+			mx = theme.size.space_4,
+			icon_button {
+				id = area .. "_" .. name .. "_button",
+				name = name,
+				icon_size = ICON,
+				hit_size = BUTTON,
+				tooltip = tooltip,
+				on_click = on_click,
+			},
+		}
+	end
+
 	local function toolbar()
-		local bar: any = nil
+		local bar_element: any = nil
 		local function opens(tab: string)
 			if area ~= MAIN.area then
 				return nil
 			end
 			return function()
-				if bar ~= nil and bar.x ~= nil and bar.y ~= nil then
-					actions.composer_picker(tab, { x = bar.x, y = bar.y, w = bar.width, h = bar.height })
+				if bar_element ~= nil and bar_element.x ~= nil and bar_element.y ~= nil then
+					actions.composer_picker(tab, {
+						x = bar_element.x,
+						y = bar_element.y,
+						w = bar_element.width,
+						h = bar_element.height,
+					})
 				end
 			end
 		end
 		return ui.row {
-			h = FIELD,
+			h = function()
+				return chatbar() - 2
+			end,
 			pr = theme.size.space_8,
-			gap = 2,
 			items = "center",
 			shrink = 0,
 			on_resize = function(_, element)
-				bar = element
+				bar_element = element
 			end,
 			plugin_slot { name = "composer.buttons", context = { area = area }, gap = 2 },
-			icon_button { name = "gif", icon_size = 24, hit_size = 32, tooltip = "Open GIF picker", on_click = opens("gif") },
-			icon_button {
-				name = "sticker",
-				icon_size = 24,
-				hit_size = 32,
-				tooltip = "Open sticker picker",
-				on_click = opens("sticker"),
-			},
-			icon_button { name = "emoji", icon_size = 24, hit_size = 32, tooltip = "Select emoji", on_click = opens("emoji") },
+			composer_button("gif", "Open GIF picker", opens("gif")),
+			composer_button("sticker", "Open sticker picker", opens("sticker")),
+			composer_button("emoji", "Select emoji", opens("emoji")),
 		}
 	end
 
-	local function footer(text: any)
+	local function counter(text: any)
 		local function remaining(): number
 			return shared.limit:get() - length(text:get())
 		end
+		return ui.show(function()
+			return remaining() < COUNTER_FROM
+		end, ui.text {
+			function()
+				return tostring(remaining())
+			end,
+			id = area .. "_counter",
+			absolute = true,
+			right = theme.number(theme.size.space_16),
+			bottom = theme.number(theme.size.space_4),
+			text_size = theme.size.font_size_xs,
+			line_height = theme.size.line_height_xs,
+			weight = theme.weight.medium,
+			color = function()
+				return if remaining() < 0 then theme.color.red_2 else theme.color.text_4
+			end,
+		})
+	end
+
+	local function typing_line()
 		return ui.row {
 			w_full = true,
-			h = TYPING,
-			px = theme.size.space_4,
+			h = theme.size.typing_height,
+			shrink = 0,
+			px = theme.size.space_16,
+			gap = theme.size.space_6,
 			items = "center",
 			ui.show(function()
 				return shared.typing:get() ~= ""
@@ -551,93 +774,79 @@ return function(scope: Scope?)
 				grow = 1,
 				min_w = 0,
 				truncate = true,
-				text_size = theme.size.font_tiny,
-				weight = theme.weight.semibold,
-				color = theme.color.text_normal,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				color = theme.color.text_3,
 			},
-			ui.show(function()
-				return remaining() < COUNTER_FROM
-			end, ui.text {
-				function()
-					return tostring(remaining())
-				end,
-				shrink = 0,
-				text_size = theme.size.font_tiny,
-				weight = theme.weight.semibold,
-				color = function()
-					return if remaining() < 0 then theme.color.danger else theme.color.text_muted
-				end,
-			}),
 		}
 	end
 
 	local radius = theme.number(theme.size.radius_md)
 	local text = ui.state(current.text_key, "")
 	local box = ui.ref()
-	local has_bar = function(): boolean
-		return shared.reply:get().active or shared.editing:get()
+	local function plus()
+		if field_box == nil or field_box.x == nil or field_box.y == nil then
+			return
+		end
+		actions.composer_plus({ x = field_box.x, y = field_box.y }, area)
 	end
 	return ui.show(shared.open, ui.column {
 		relative = true,
 		w_full = true,
 		shrink = 0,
-		px = theme.size.space_16,
-		bg = theme.color.background_primary,
 		popup(text, shared, area),
-		notice(),
-		reply_bar(),
-		edit_bar(),
-		ui.column {
+		typing_line(),
+		joined_bars(),
+		ui.row {
+			id = area .. "_box",
 			relative = true,
-			w_full = true,
-			bg = theme.color.input_background,
+			mx = theme.size.space_8,
+			mb = theme.size.space_8,
+			min_h = theme.size.chatbar_height,
+			items = "start",
+			bg = theme.color.bg_3,
+			border = 1,
+			border_color = theme.color.border_light,
 			on_resize = function(_, element)
+				field_box = element
 				if area == MAIN.area then
 					actions.report_slot("composer", element)
 				end
 			end,
-			rounded_bl = theme.number(theme.size.radius_md),
-			rounded_br = theme.number(theme.size.radius_md),
+			rounded_bl = radius,
+			rounded_br = radius,
 			rounded_tl = function()
-				return if has_bar() then 0 else radius()
+				return if joined() then 0 else radius()
 			end,
 			rounded_tr = function()
-				return if has_bar() then 0 else radius()
+				return if joined() then 0 else radius()
 			end,
-			chips(),
 			ui.row {
-				w_full = true,
-				min_h = FIELD,
-				items = "end",
-				ui.row {
-					w = LEADING,
-					h = FIELD,
-					shrink = 0,
-					justify = "center",
-					items = "center",
-					icon_button {
-						name = "plus",
-						icon_size = 24,
-						hit_size = 32,
-						tooltip = "Upload a File",
-						on_click = pick_files,
-					},
+				w = LEADING,
+				h = function()
+					return chatbar() - 2
+				end,
+				shrink = 0,
+				justify = "center",
+				items = "center",
+				icon_button {
+					id = area .. "_plus_button",
+					name = "plus",
+					icon_size = ICON,
+					hit_size = BUTTON,
+					tooltip = "More",
+					on_click = plus,
 				},
-				editor(text, box),
-				toolbar(),
 			},
-			ui.show(shared.drop_hover, ui.row {
-				absolute = true,
-				left = 0,
-				right = 0,
-				top = 0,
-				bottom = 0,
-				rounded = theme.size.radius_md,
-				bg = theme.color.brand,
-				opacity = 0.12,
-				pointer_events = "none",
-			}),
+			editor(text, box),
+			toolbar(),
+			counter(text),
 		},
-		footer(text),
-	}, ui.row { w_full = true, h = FIELD + TYPING, shrink = 0, bg = theme.color.background_primary })
+	}, ui.row {
+		w_full = true,
+		h = function()
+			return theme.number(theme.size.typing_height)() + chatbar() + theme.number(theme.size.space_8)()
+		end,
+		shrink = 0,
+	})
 end

@@ -27,10 +27,33 @@ pub enum SendFailure {
 	Other(Option<u16>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingFile {
+	pub name: String,
+	pub size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UploadProgress {
+	pub files: Vec<PendingFile>,
+	pub sent: u64,
+}
+
+impl UploadProgress {
+	pub fn total(&self) -> u64 {
+		self.files.iter().map(|file| file.size).sum()
+	}
+
+	pub fn done(&self) -> bool {
+		self.sent >= self.total()
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
 	pub message: Arc<Message>,
 	pub failure: Option<SendFailure>,
+	pub upload: Option<UploadProgress>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,
 	pub rendered: Option<Arc<RenderedMessage>>,
@@ -381,10 +404,12 @@ impl ChannelMessages {
 		message: Arc<Message>,
 		plugin: Option<String>,
 		rendered: Arc<RenderedMessage>,
+		files: Vec<PendingFile>,
 	) {
 		self.pending.push(PendingMessage {
 			message,
 			failure: None,
+			upload: (!files.is_empty()).then_some(UploadProgress { files, sent: 0 }),
 			plugin,
 			altered_by: None,
 			rendered: Some(rendered),
@@ -410,6 +435,19 @@ impl ChannelMessages {
 				true
 			}
 			None => false,
+		}
+	}
+
+	pub fn upload_progressed(&mut self, nonce: &Nonce, sent: u64) -> bool {
+		match self
+			.pending_mut(nonce)
+			.and_then(|pending| pending.upload.as_mut())
+		{
+			Some(upload) if upload.sent != sent => {
+				upload.sent = sent;
+				true
+			}
+			_ => false,
 		}
 	}
 

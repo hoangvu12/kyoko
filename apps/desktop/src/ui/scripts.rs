@@ -896,7 +896,7 @@ fn the_server_settings_pages_call_the_host() {
 }
 
 const TYPING: &str = "ada is typing...";
-const DOT_DIM: f32 = 0.35;
+const DOT_DIM: f32 = 0.4;
 
 #[test]
 fn the_typing_dots_animate_only_while_the_setting_allows() {

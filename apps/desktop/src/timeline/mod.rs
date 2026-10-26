@@ -20,6 +20,7 @@ mod reactions;
 mod rows;
 mod scroll;
 mod unread;
+mod uploads;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};

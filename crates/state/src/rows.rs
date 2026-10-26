@@ -426,6 +426,7 @@ impl State {
 			grouped_with_previous,
 			pending: pending.is_some(),
 			failure: pending.and_then(|pending| pending.failure.clone()),
+			upload: pending.and_then(|pending| pending.upload.clone()),
 			plugin,
 			altered_by,
 			rendered,

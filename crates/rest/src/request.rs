@@ -2,11 +2,38 @@ use bytes::Bytes;
 use reqwest::Method;
 use serde::Serialize;
 
-#[derive(Debug, Clone)]
+const SPOILER_PREFIX: &str = "SPOILER_";
+
+#[derive(Debug, Clone, Default)]
 pub struct UploadFile {
 	pub name: String,
 	pub bytes: Bytes,
 	pub content_type: String,
+	pub spoiler: bool,
+	pub description: Option<String>,
+}
+
+impl UploadFile {
+	pub fn new(name: impl Into<String>, bytes: impl Into<Bytes>, content_type: impl Into<String>) -> Self {
+		Self {
+			name: name.into(),
+			bytes: bytes.into(),
+			content_type: content_type.into(),
+			..Self::default()
+		}
+	}
+
+	pub fn upload_name(&self) -> String {
+		if self.spoiler && !self.name.starts_with(SPOILER_PREFIX) {
+			format!("{SPOILER_PREFIX}{}", self.name)
+		} else {
+			self.name.clone()
+		}
+	}
+
+	pub fn size(&self) -> u64 {
+		self.bytes.len() as u64
+	}
 }
 
 pub(crate) enum Body {

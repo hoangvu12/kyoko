@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use markdown::Document;
 use protocol::{Message, MessageType, Snowflake};
 use session::{Command, DeletedLook, Formatting, MessageLook, ShownName};
-use state::{Changes, MessageRow, MessageVersion, MessageView, RenderedMessage, State};
+use state::{Changes, MessageRow, MessageVersion, MessageView, RenderedMessage, State, UploadProgress};
 
 use crate::display::{Display, person};
 use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
@@ -43,6 +43,7 @@ pub struct MessageEntry {
 	pub edited: bool,
 	pub pending: bool,
 	pub failed: bool,
+	pub upload: Option<UploadProgress>,
 	pub deleted: bool,
 	pub bot: bool,
 	pub mine: bool,
@@ -97,6 +98,7 @@ impl PartialEq for MessageEntry {
 			&& self.edited == other.edited
 			&& self.pending == other.pending
 			&& self.failed == other.failed
+			&& self.upload == other.upload
 			&& self.deleted == other.deleted
 			&& self.bot == other.bot
 			&& self.mine == other.mine
@@ -536,6 +538,7 @@ fn entry(
 		edited: message.edited_timestamp.is_some(),
 		pending: view.pending,
 		failed: view.failure.is_some(),
+		upload: view.upload,
 		deleted: view.deleted.is_some(),
 		bot: message.author.bot == Some(true),
 		mine: state.current_user_id() == Some(message.author.id),

@@ -400,6 +400,7 @@ impl State {
 				stickers,
 				author,
 				by_plugin,
+				files,
 			} => {
 				let rendered = Arc::new(RenderedMessage::plain(content, false, 0));
 				let message = Message {
@@ -417,8 +418,16 @@ impl State {
 					Arc::new(message),
 					by_plugin.clone(),
 					rendered,
+					files.clone(),
 				);
 				changes.messages.insert(*channel_id);
+			}
+			LocalEvent::UploadProgress { nonce, sent } => {
+				for (&channel_id, cache) in &mut self.messages {
+					if cache.upload_progressed(nonce, *sent) {
+						changes.messages.insert(channel_id);
+					}
+				}
 			}
 			LocalEvent::PendingFailed { nonce, reason } => {
 				for (&channel_id, cache) in &mut self.messages {

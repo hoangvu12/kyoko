@@ -58,8 +58,9 @@ pub use community::{
 	rank_forward,
 };
 pub use composer::{
-	Attachment, Composer, Notice, Outcome, Query, Reply, Slash, Suggestion, Trigger, Visual,
-	apply_suggestion, failure_text, parse_slash, placeholder, query_at, suggestions, typing_line,
+	Attachment, Composer, FileEdit, LineState, Mark, Marked, Notice, Outcome, Query, Reply, Slash,
+	Suggestion, Trigger, Visual, apply_suggestion, failure_text, line_marks, parse_slash, placeholder,
+	query_at, suggestions, text_marks, too_big, typing_line,
 };
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};

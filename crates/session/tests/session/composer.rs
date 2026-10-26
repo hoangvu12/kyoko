@@ -5,7 +5,7 @@ use mockcord::{MOCKBOT_ID, Recording, Reply, RestRequest};
 use protocol::{CommandOptionType, InteractionOption, Nonce, Snowflake};
 use serde_json::{Value, json};
 use session::{Command, RestTuning, UploadFile};
-use state::{SendFailure, State};
+use state::{SendFailure, State, UploadProgress};
 
 use crate::harness::{Options, Running};
 
@@ -211,11 +211,7 @@ async fn files_upload_to_their_slots_before_the_message_is_posted() {
 		content: "with a file".to_owned(),
 		reply_to: None,
 		ping_reply: true,
-		files: vec![UploadFile {
-			name: "notes.txt".to_owned(),
-			bytes: bytes.clone(),
-			content_type: "text/plain".to_owned(),
-		}],
+		files: vec![UploadFile::new("notes.txt", bytes.clone(), "text/plain")],
 	});
 	delivered(&running, channel_id, "with a file").await;
 	let recording = running.mock().recording();
@@ -272,11 +268,7 @@ async fn a_file_over_the_limit_is_refused_before_any_request() {
 		reply_to: None,
 		ping_reply: true,
 		files: (0..11)
-			.map(|index| UploadFile {
-				name: format!("{index}.txt"),
-				bytes: Bytes::from_static(b"x"),
-				content_type: "text/plain".to_owned(),
-			})
+			.map(|index| UploadFile::new(format!("{index}.txt"), Bytes::from_static(b"x"), "text/plain"))
 			.collect(),
 	});
 	assert_eq!(
@@ -289,11 +281,11 @@ async fn a_file_over_the_limit_is_refused_before_any_request() {
 		content: "too big".to_owned(),
 		reply_to: None,
 		ping_reply: true,
-		files: vec![UploadFile {
-			name: "huge.bin".to_owned(),
-			bytes: Bytes::from(vec![0u8; limit as usize + 1]),
-			content_type: "application/octet-stream".to_owned(),
-		}],
+		files: vec![UploadFile::new(
+			"huge.bin",
+			vec![0u8; limit as usize + 1],
+			"application/octet-stream",
+		)],
 	});
 	let reason = rejected_with(&running, before).await;
 	assert_eq!(reason, "huge.bin is larger than the 10 MB upload limit");
@@ -536,5 +528,163 @@ async fn a_failed_send_is_retried_or_discarded_only_when_asked() {
 		json!(target.to_string())
 	);
 	assert_ne!(retried[0]["nonce"], retried[1]["nonce"]);
+	running.stop().await;
+}
+
+const SMALL: usize = 4096;
+const LARGE: usize = 2 * 1024 * 1024;
+
+fn send_files(running: &Running, channel_id: Snowflake, content: &str, files: Vec<UploadFile>) {
+	running.session().send(Command::SendMessage {
+		channel_id,
+		content: content.to_owned(),
+		reply_to: None,
+		ping_reply: true,
+		files,
+	});
+}
+
+fn two_files() -> Vec<UploadFile> {
+	vec![
+		UploadFile::new("first.txt", vec![1u8; SMALL], "text/plain"),
+		UploadFile::new("large.bin", vec![2u8; LARGE], "application/octet-stream"),
+	]
+}
+
+fn pending_upload(state: &State, channel_id: Snowflake, content: &str) -> Option<(Nonce, UploadProgress)> {
+	let pending = state
+		.messages(channel_id)?
+		.pending
+		.iter()
+		.find(|pending| pending.message.content == content)?;
+	Some((pending.message.nonce.clone()?, pending.upload.clone()?))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn upload_progress_shows_on_the_pending_message_until_it_is_sent() {
+	let (running, channel_id) = start("composer-upload-progress").await;
+	running.mock().hold_requests("PUT", "/upload/*/large.bin");
+	send_files(&running, channel_id, "two files", two_files());
+	running
+		.until("the first file to count as sent", |state| {
+			pending_upload(state, channel_id, "two files")
+				.is_some_and(|(_, upload)| upload.sent >= SMALL as u64)
+		})
+		.await;
+	let (_, upload) =
+		pending_upload(&running.session().state().read(), channel_id, "two files").expect("an upload");
+	let files: Vec<(&str, u64)> = upload
+		.files
+		.iter()
+		.map(|file| (file.name.as_str(), file.size))
+		.collect();
+	assert_eq!(files, [("first.txt", SMALL as u64), ("large.bin", LARGE as u64)]);
+	assert_eq!(upload.total(), (SMALL + LARGE) as u64);
+	assert_eq!(posts_of(&running.mock().recording(), "two files"), 0);
+	running.mock().release_requests();
+	running
+		.until("the upload to finish", |state| {
+			pending_upload(state, channel_id, "two files").is_none_or(|(_, upload)| upload.done())
+		})
+		.await;
+	delivered(&running, channel_id, "two files").await;
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancelling_an_upload_in_flight_stops_it_and_posts_nothing() {
+	let (running, channel_id) = start("composer-upload-cancel").await;
+	running.mock().hold_requests("PUT", "/upload/*/large.bin");
+	send_files(&running, channel_id, "never mind", two_files());
+	running
+		.until("the upload to start", |state| {
+			pending_upload(state, channel_id, "never mind").is_some_and(|(_, upload)| upload.sent > 0)
+		})
+		.await;
+	let (nonce, _) =
+		pending_upload(&running.session().state().read(), channel_id, "never mind").expect("an upload");
+	running
+		.session()
+		.send(Command::DiscardMessage { channel_id, nonce });
+	running
+		.until("the cancelled upload to go", |state| {
+			state
+				.messages(channel_id)
+				.is_some_and(|cache| cache.pending.is_empty())
+		})
+		.await;
+	running.mock().release_requests();
+	tokio::time::sleep(QUIET).await;
+	assert_eq!(posts_of(&running.mock().recording(), "never mind"), 0);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_upload_keeps_its_files_and_a_retry_uploads_them_again() {
+	let (running, channel_id) = start("composer-upload-retry").await;
+	running
+		.mock()
+		.respond_once("PUT", "/upload/**", Reply::error(500, 0, "Internal Server Error"));
+	send_files(
+		&running,
+		channel_id,
+		"second try",
+		vec![UploadFile::new("clip.mp4", vec![3u8; SMALL], "video/mp4")],
+	);
+	running
+		.until("the upload to fail", |state| {
+			pending_failure(state, channel_id, "second try").is_some()
+		})
+		.await;
+	let (nonce, upload) =
+		pending_upload(&running.session().state().read(), channel_id, "second try").expect("an upload");
+	assert_eq!(upload.files[0].name, "clip.mp4");
+	assert_eq!(posts_of(&running.mock().recording(), "second try"), 0);
+	running
+		.session()
+		.send(Command::RetryMessage { channel_id, nonce });
+	delivered(&running, channel_id, "second try").await;
+	let recording = running.mock().recording();
+	assert_eq!(recording.requests_to("PUT", "/upload/**").count(), 2);
+	assert_eq!(posts_of(&recording, "second try"), 1);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_spoilered_upload_reaches_discord_as_a_spoiler_with_its_alt_text() {
+	let (running, channel_id) = start("composer-upload-spoiler").await;
+	let file = UploadFile {
+		spoiler: true,
+		description: Some("a sleepy cat".to_owned()),
+		..UploadFile::new("cat.png", vec![4u8; SMALL], "image/png")
+	};
+	send_files(&running, channel_id, "look", vec![file]);
+	delivered(&running, channel_id, "look").await;
+	let recording = running.mock().recording();
+	let slots_path = format!("/channels/{channel_id}/attachments");
+	let asked = recording
+		.requests_to("POST", &slots_path)
+		.last()
+		.and_then(RestRequest::json)
+		.expect("a slot request");
+	assert_eq!(asked["files"][0]["filename"], json!("SPOILER_cat.png"));
+	let posted = post_with(&recording, "look").expect("the message was posted");
+	assert_eq!(posted["attachments"][0]["filename"], json!("SPOILER_cat.png"));
+	assert_eq!(posted["attachments"][0]["description"], json!("a sleepy cat"));
+	let attachment = running
+		.session()
+		.state()
+		.read()
+		.messages(channel_id)
+		.and_then(|cache| {
+			cache
+				.ordered
+				.iter()
+				.find(|message| message.content == "look")
+				.and_then(|message| message.attachments.first().cloned())
+		})
+		.expect("the attachment is cached");
+	assert!(attachment.filename.starts_with("SPOILER_"));
+	assert_eq!(attachment.description.as_deref(), Some("a sleepy cat"));
 	running.stop().await;
 }

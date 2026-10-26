@@ -1,11 +1,11 @@
 use std::cell::{Cell, RefCell};
 use std::io::Cursor;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bridge::{Composer, Inbox, Notice, OpenChannel, Outcome, Suggestion, Visual};
+use bridge::{Composer, FileEdit, Inbox, Mark, Notice, OpenChannel, Outcome, Suggestion, Visual};
 use chrono::Utc;
 use protocol::{Nonce, Snowflake};
 use rest::UploadFile;
@@ -16,19 +16,69 @@ use zgx_script::{ScriptHost, Shared, Value};
 
 use super::{Link, field, record, snowflake, text, texts};
 use crate::capture;
+use crate::composer_layer::{PlusMenu, Request};
 
 const DRAFT_DELAY: Duration = Duration::from_millis(500);
 const TICK: Duration = Duration::from_millis(250);
 const SUGGESTION_POINTS: f64 = 24.;
-const THUMBNAIL_PIXELS: u32 = 96;
+const THUMBNAIL_PIXELS: u32 = 400;
+const WAITING: &str = "Waiting for connection...";
 type Handler = fn(&Link, Pane);
 
 const CAPTURE_DRAFT: &str = "Checking how the composer looks with a draft in it";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Pane {
-	Main,
-	Thread,
+pub(super) use crate::composer_layer::Pane;
+
+const CAPTURE_UPLOADS: usize = 3;
+const CAPTURE_VIDEO_BYTES: usize = 4 * 1024 * 1024;
+const CAPTURE_PICTURE: (u32, u32) = (320, 240);
+const TRAY_INSET: f32 = 17.;
+const CARD: f32 = 216.;
+const CARD_GAP: f32 = 8.;
+
+fn over_limit(limit: usize) -> String {
+	let filler_words = "thanks for testing the pickers\n";
+	let wanted = limit + 12;
+	let mut draft = String::with_capacity(wanted);
+	while draft.chars().count() + capture::MARKDOWN_DRAFT.chars().count() + 1 < wanted {
+		draft.push_str(filler_words);
+	}
+	draft.truncate(wanted - capture::MARKDOWN_DRAFT.chars().count() - 1);
+	draft.push('\n');
+	draft.push_str(capture::MARKDOWN_DRAFT);
+	draft
+}
+
+fn capture_picture() -> Loaded {
+	let (width, height) = CAPTURE_PICTURE;
+	let picture = image::RgbaImage::from_fn(width, height, |x, y| {
+		let across = (x * 255 / width) as u8;
+		let down = (y * 255 / height) as u8;
+		image::Rgba([120 - across / 4, 80 + down / 3, 200, 255])
+	});
+	let mut encoded = Cursor::new(Vec::new());
+	if picture.write_to(&mut encoded, image::ImageFormat::Png).is_err() {
+		return Loaded::Failed("The capture picture could not be made".to_owned());
+	}
+	let bytes = encoded.into_inner();
+	Loaded::File {
+		thumbnail: thumbnail(&bytes, "image/png"),
+		file: UploadFile::new("screenshot.png", bytes, "image/png"),
+	}
+}
+
+fn capture_uploads() -> Vec<Loaded> {
+	vec![
+		capture_picture(),
+		Loaded::File {
+			thumbnail: None,
+			file: UploadFile::new("clip.mp4", vec![0u8; 2048], "video/mp4"),
+		},
+		Loaded::File {
+			thumbnail: None,
+			file: UploadFile::new("notes.txt", b"midnight 2.1.2 notes".to_vec(), "text/plain"),
+		},
+	]
 }
 
 pub(super) struct Names {
@@ -60,6 +110,10 @@ pub(super) struct Names {
 	cancel_edit: &'static str,
 	dismiss: &'static str,
 	thumbnails: &'static str,
+	plus: &'static str,
+	spoiler: &'static str,
+	edit_file: &'static str,
+	pick: &'static str,
 }
 
 pub(super) const MAIN: Names = Names {
@@ -91,6 +145,10 @@ pub(super) const MAIN: Names = Names {
 	cancel_edit: "composer.cancel_edit",
 	dismiss: "composer.dismiss",
 	thumbnails: "composer",
+	plus: "composer.plus",
+	spoiler: "composer.spoiler",
+	edit_file: "composer.edit_file",
+	pick: "composer.pick",
 };
 
 pub(super) const THREAD: Names = Names {
@@ -122,12 +180,20 @@ pub(super) const THREAD: Names = Names {
 	cancel_edit: "thread_composer.cancel_edit",
 	dismiss: "thread_composer.dismiss",
 	thumbnails: "thread_composer",
+	plus: "thread_composer.plus",
+	spoiler: "thread_composer.spoiler",
+	edit_file: "thread_composer.edit_file",
+	pick: "thread_composer.pick",
 };
 
 enum Loaded {
 	File {
 		file: UploadFile,
 		thumbnail: Option<ImageData>,
+	},
+	Direct {
+		files: Vec<UploadFile>,
+		refused: Option<String>,
 	},
 	Failed(String),
 }
@@ -159,6 +225,8 @@ pub(super) struct ComposerView {
 	drop_hover: Shared,
 	limit: Shared,
 	open: Shared,
+	pick: Shared,
+	pick_serial: Cell<u64>,
 }
 
 pub(super) fn content_type(name: &str) -> &'static str {
@@ -192,37 +260,86 @@ fn thumbnail(bytes: &[u8], kind: &str) -> Option<ImageData> {
 	ImageData::new(small.width(), small.height(), small.into_raw()).ok()
 }
 
-fn read_file(path: PathBuf, limit: u64) -> Loaded {
+fn read_upload(path: &Path, limit: u64) -> Result<UploadFile, String> {
 	let name = path
 		.file_name()
 		.map(|name| name.to_string_lossy().into_owned())
 		.unwrap_or_else(|| "file".to_owned());
-	let too_large = || {
-		Loaded::Failed(format!(
-			"{name} is too large. The limit here is {} MB.",
-			(limit as f64 / (1024.0 * 1024.0)).round()
-		))
-	};
-	match std::fs::metadata(&path) {
-		Ok(metadata) if metadata.is_dir() => return Loaded::Failed(format!("{name} is a folder")),
-		Ok(metadata) if metadata.len() > limit => return too_large(),
-		Ok(_) => {}
-		Err(_) => return Loaded::Failed(format!("{name} could not be read")),
-	}
-	match std::fs::read(&path) {
-		Ok(bytes) => {
-			let kind = content_type(&name);
-			Loaded::File {
-				thumbnail: thumbnail(&bytes, kind),
-				file: UploadFile {
-					name,
-					bytes: bytes.into(),
-					content_type: kind.to_owned(),
-				},
+	match std::fs::metadata(path) {
+		Ok(metadata) if metadata.is_dir() => return Err(format!("{name} is a folder")),
+		Ok(metadata) => {
+			if let Some(refusal) = bridge::too_big(&name, metadata.len(), limit) {
+				return Err(refusal);
 			}
 		}
-		Err(_) => Loaded::Failed(format!("{name} could not be read")),
+		Err(_) => return Err(format!("{name} could not be read")),
 	}
+	let bytes = std::fs::read(path).map_err(|_| format!("{name} could not be read"))?;
+	let kind = content_type(&name);
+	Ok(UploadFile::new(name, bytes, kind))
+}
+
+fn read_file(path: PathBuf, limit: u64) -> Loaded {
+	match read_upload(&path, limit) {
+		Ok(file) => Loaded::File {
+			thumbnail: thumbnail(&file.bytes, &file.content_type),
+			file,
+		},
+		Err(reason) => Loaded::Failed(reason),
+	}
+}
+
+fn read_direct(paths: &[PathBuf], limit: u64) -> Loaded {
+	let mut files = Vec::with_capacity(paths.len());
+	let mut refused = None;
+	for path in paths {
+		match read_upload(path, limit) {
+			Ok(file) => files.push(file),
+			Err(reason) => refused = Some(reason),
+		}
+	}
+	Loaded::Direct { files, refused }
+}
+
+fn file_kind(file: &UploadFile) -> &'static str {
+	if file.content_type.starts_with("image/") {
+		"image"
+	} else if file.content_type.starts_with("video/") {
+		"video"
+	} else {
+		"file"
+	}
+}
+
+fn background_color(mark: Mark) -> Option<&'static str> {
+	match mark {
+		Mark::Mention => Some("$kyoko.mention_background"),
+		Mark::Code => Some("$kyoko.bg_4"),
+		Mark::Spoiler => Some("$kyoko.bg_2"),
+		Mark::Syntax | Mark::Label => None,
+	}
+}
+
+fn backgrounds(typed: &str) -> Value {
+	let spans: Vec<Value> = bridge::text_marks(typed)
+		.into_iter()
+		.filter(|marked| marked.range.start < marked.range.end)
+		.filter_map(|marked| {
+			let color = background_color(marked.mark)?;
+			Some(Value::List(Rc::new([
+				((marked.range.start + 1) as f64).into(),
+				(marked.range.end as f64).into(),
+				color.into(),
+			])))
+		})
+		.collect();
+	Value::List(spans.into())
+}
+
+fn install_marks(host: &ScriptHost) {
+	host.function("composer.backgrounds", |argument| {
+		backgrounds(text(&argument).unwrap_or_default())
+	});
 }
 
 fn pasted_image(image: platform::clipboard::RgbaImage) -> Loaded {
@@ -239,11 +356,11 @@ fn pasted_image(image: platform::clipboard::RgbaImage) -> Loaded {
 	let bytes = encoded.into_inner();
 	Loaded::File {
 		thumbnail: thumbnail(&bytes, "image/png"),
-		file: UploadFile {
-			name: format!("image-{}.png", Utc::now().format("%Y%m%d-%H%M%S")),
-			bytes: bytes.into(),
-			content_type: "image/png".to_owned(),
-		},
+		file: UploadFile::new(
+			format!("image-{}.png", Utc::now().format("%Y%m%d-%H%M%S")),
+			bytes,
+			"image/png",
+		),
 	}
 }
 
@@ -299,6 +416,8 @@ impl ComposerView {
 			drop_hover: host.shared(names.drop_hover, false),
 			limit: host.shared(names.limit, 2000.0),
 			open: host.shared(names.open, false),
+			pick: host.shared(names.pick, 0.0),
+			pick_serial: Cell::new(0),
 		}
 	}
 
@@ -336,6 +455,59 @@ impl Link {
 	pub(super) fn install_composer(host: &ScriptHost, link: &Rc<Link>) {
 		for pane in [Pane::Main, Pane::Thread] {
 			Link::install_pane_composer(host, link, pane);
+		}
+		install_marks(host);
+		let actions = Rc::downgrade(link);
+		link.composer_layer.on_request(move |request| {
+			if let Some(link) = actions.upgrade() {
+				link.composer_request(request);
+			}
+		});
+	}
+
+	fn composer_request(&self, request: Request) {
+		match request {
+			Request::Upload(pane) => {
+				let view = self.pane_composer(pane);
+				let serial = view.pick_serial.get() + 1;
+				view.pick_serial.set(serial);
+				view.pick.set((serial as f64).into());
+			}
+			Request::CreateThread => {
+				if let Some(open) = self.pane_open(Pane::Main) {
+					self.open_create_thread(open.channel_id, None);
+				}
+			}
+			Request::SaveFile(pane, id, edit) => {
+				if self.pane_composer(pane).composer.borrow_mut().edit_file(id, edit) {
+					self.publish_composer_all(pane);
+				}
+			}
+		}
+	}
+
+	fn composer_plus(&self, pane: Pane, at: (f32, f32)) {
+		let thread = pane == Pane::Main
+			&& self.state().is_some_and(|shared| {
+				self.pane_open(pane)
+					.is_some_and(|open| bridge::can_create_threads(&shared.read(), open.channel_id))
+			});
+		self.composer_layer.open_menu(PlusMenu { pane, at, thread });
+	}
+
+	fn composer_edit_file(&self, pane: Pane, id: u64) {
+		let edit = self
+			.pane_composer(pane)
+			.composer
+			.borrow()
+			.file(id)
+			.map(|attachment| FileEdit {
+				name: attachment.file.name.clone(),
+				description: attachment.file.description.clone().unwrap_or_default(),
+				spoiler: attachment.file.spoiler,
+			});
+		if let Some(edit) = edit {
+			self.composer_layer.edit_file(pane, id, edit);
 		}
 	}
 
@@ -386,6 +558,33 @@ impl Link {
 				&& let Some(id) = text(&argument).and_then(|id| id.parse().ok())
 			{
 				link.composer_remove_file(pane, id);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.plus, move |argument| {
+			if let (Some(link), Some(x), Some(y)) = (
+				actions.upgrade(),
+				super::number(&argument, "x"),
+				super::number(&argument, "y"),
+			) {
+				link.composer_plus(pane, (x, y));
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.spoiler, move |argument| {
+			if let Some(link) = actions.upgrade()
+				&& let Some(id) = text(&argument).and_then(|id| id.parse().ok())
+				&& link.pane_composer(pane).composer.borrow_mut().toggle_spoiler(id)
+			{
+				link.publish_composer_all(pane);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action(names.edit_file, move |argument| {
+			if let Some(link) = actions.upgrade()
+				&& let Some(id) = text(&argument).and_then(|id| id.parse().ok())
+			{
+				link.composer_edit_file(pane, id);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -482,14 +681,49 @@ impl Link {
 	}
 
 	pub(super) fn files_dropped(&self, paths: &[PathBuf]) {
-		tracing::debug!(files = paths.len(), "files dropped on the window");
+		let direct = platform::keyboard::shift_held();
+		tracing::debug!(files = paths.len(), direct, "files dropped on the window");
 		self.composer.drop_hover.set(false.into());
-		self.composer_add_paths(Pane::Main, paths.to_vec());
+		self.composer_layer.show_drop(None);
+		if direct {
+			self.composer_upload_now(Pane::Main, paths.to_vec());
+		} else {
+			self.composer_add_paths(Pane::Main, paths.to_vec());
+		}
 	}
 
 	pub(super) fn files_hovering(&self, hovering: bool) {
 		tracing::debug!(hovering, "files over the window");
 		self.composer.drop_hover.set(hovering.into());
+		let target = hovering.then(|| self.drop_target()).flatten();
+		self.composer_layer.show_drop(target);
+	}
+
+	fn drop_target(&self) -> Option<String> {
+		let shared = self.state()?;
+		let state = shared.read();
+		self.composer.composer.borrow().channel()?;
+		let placeholder = self.composer_placeholder(Pane::Main, &state);
+		Some(
+			placeholder
+				.strip_prefix("Message ")
+				.unwrap_or(&placeholder)
+				.to_owned(),
+		)
+	}
+
+	fn composer_upload_now(&self, pane: Pane, paths: Vec<PathBuf>) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let view = self.pane_composer(pane);
+		let Some(channel_id) = view.composer.borrow().channel() else {
+			return;
+		};
+		let limit = shared.read().upload_limit(channel_id);
+		let loads = view.loads.clone();
+		view.runtime
+			.spawn_blocking(move || loads.push(read_direct(&paths, limit)));
 	}
 
 	fn flush_draft(&self, pane: Pane) {
@@ -575,7 +809,7 @@ impl Link {
 		if changes.current_user {
 			view.limit.set((state.message_limit() as f64).into());
 		}
-		if !changes.channel_lists.is_empty() || changes.private_channels {
+		if !changes.channel_lists.is_empty() || changes.private_channels || changes.session {
 			view.placeholder
 				.set(self.composer_placeholder(pane, state).as_str().into());
 		}
@@ -839,6 +1073,15 @@ impl Link {
 				}
 				Err(reason) => composer.refuse(reason),
 			},
+			Loaded::Direct { files, refused } => {
+				let outcome = composer.upload_now(&shared.read(), files, Utc::now());
+				if let Some(reason) = refused {
+					composer.refuse(reason);
+				}
+				drop(composer);
+				self.composer_send(outcome.commands);
+				return;
+			}
 			Loaded::Failed(reason) => composer.refuse(reason),
 		}
 		drop(composer);
@@ -909,6 +1152,8 @@ impl Link {
 				record([
 					("id", attachment.id.to_string().as_str().into()),
 					("name", attachment.file.name.as_str().into()),
+					("kind", file_kind(&attachment.file).into()),
+					("spoiler", attachment.file.spoiler.into()),
 					(
 						"size",
 						bridge::file_size(attachment.file.bytes.len() as u64)
@@ -928,6 +1173,9 @@ impl Link {
 	}
 
 	fn composer_placeholder(&self, pane: Pane, state: &State) -> String {
+		if !state.session().connected && self.pane_open(pane).is_some() {
+			return WAITING.to_owned();
+		}
 		match self.pane_open(pane) {
 			Some(open) if open.guild_id.is_none() => format!("Message @{}", self.channel_title(state, open)),
 			Some(open) => bridge::placeholder(state, open.channel_id),
@@ -1060,29 +1308,132 @@ impl Link {
 				self.replace_text(Pane::Main, Some((CAPTURE_DRAFT.to_owned(), CAPTURE_DRAFT.len())));
 				self.request_focus(Pane::Main);
 			}
-			capture::Screen::ComposerReply => {
-				let Some(shared) = self.state() else {
-					return;
-				};
-				let target = {
-					let state = shared.read();
-					let me = state.current_user_id();
-					self.composer.composer.borrow().channel().and_then(|channel_id| {
-						state
-							.messages(channel_id)?
-							.ordered
-							.iter()
-							.rev()
-							.find(|message| Some(message.author.id) != me)
-							.map(|message| message.id)
-					})
-				};
-				if let Some(message_id) = target {
-					self.composer_reply(message_id);
-				}
-			}
+			capture::Screen::ComposerReply => self.reply_to_newest_other(),
 			_ => {}
 		}
+	}
+
+	fn reply_to_newest_other(&self) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let target = {
+			let state = shared.read();
+			let me = state.current_user_id();
+			self.composer.composer.borrow().channel().and_then(|channel_id| {
+				state
+					.messages(channel_id)?
+					.ordered
+					.iter()
+					.rev()
+					.find(|message| Some(message.author.id) != me)
+					.map(|message| message.id)
+			})
+		};
+		if let Some(message_id) = target {
+			self.composer_reply(message_id);
+		}
+	}
+
+	pub(super) async fn drive_composer_shot(&self, shot: capture::ComposerShot) {
+		match shot {
+			capture::ComposerShot::OverLimit => {
+				self.reply_to_newest_other();
+				let limit = self.state().map_or(0, |shared| shared.read().message_limit());
+				let draft = over_limit(limit);
+				self.replace_text(Pane::Main, Some((draft.clone(), draft.len())));
+				self.request_focus(Pane::Main);
+				self.until_capture(|link| *link.composer.text.borrow() == draft)
+					.await;
+			}
+			capture::ComposerShot::Uploads => self.drive_uploads().await,
+			capture::ComposerShot::Drop => self.files_hovering(true),
+			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
+			capture::ComposerShot::PlusMenu => {
+				self.until_capture(|link| link.composer_slot().is_some()).await;
+				if let Some(slot) = self.composer_slot() {
+					self.composer_plus(Pane::Main, (slot.x, slot.y));
+				}
+				self.until_capture(|link| link.composer_layer.menu_shown()).await;
+			}
+		}
+	}
+
+	async fn drive_uploads(&self) {
+		for loaded in capture_uploads() {
+			self.composer.loads.push(loaded);
+		}
+		self.until_capture(|link| link.composer.composer.borrow().files().len() == CAPTURE_UPLOADS)
+			.await;
+		let first = self
+			.composer
+			.composer
+			.borrow()
+			.files()
+			.first()
+			.map(|attachment| attachment.id);
+		if let Some(id) = first {
+			self.composer.composer.borrow_mut().toggle_spoiler(id);
+			self.publish_composer_all(Pane::Main);
+		}
+		zgx::timer::sleep(capture::SETTLE).await;
+		let (Some(slot), Some(mut ui)) = (
+			self.composer_slot(),
+			self.ui.borrow().as_ref().and_then(zgx::widgets::WeakUi::upgrade),
+		) else {
+			return;
+		};
+		let x = slot.x + TRAY_INSET + CARD + CARD_GAP + CARD / 2.;
+		let y = slot.y - TRAY_INSET + 1. - CARD / 2.;
+		ui.dispatch(zgx::input::InputEvent::PointerMove { x, y });
+	}
+
+	async fn drive_failed_uploads(&self) {
+		let Some(channel_id) = self.composer.composer.borrow().channel() else {
+			return;
+		};
+		let send = |content: &str, file: UploadFile| {
+			self.send(session::Command::SendMessage {
+				channel_id,
+				content: content.to_owned(),
+				reply_to: None,
+				ping_reply: true,
+				files: vec![file],
+			});
+		};
+		send(
+			capture::UPLOADING,
+			UploadFile::new(
+				mockcord::STALLED_UPLOAD,
+				vec![0u8; CAPTURE_VIDEO_BYTES],
+				"video/mp4",
+			),
+		);
+		send(
+			capture::UPLOAD_FAILED,
+			UploadFile::new(
+				mockcord::BROKEN_UPLOAD,
+				vec![0u8; CAPTURE_VIDEO_BYTES],
+				"video/mp4",
+			),
+		);
+		if let Some(shared) = self.state() {
+			let limit = shared.read().upload_limit(channel_id);
+			if let Some(refusal) = bridge::too_big("cat.mov", limit * 2, limit) {
+				self.composer.composer.borrow_mut().refuse(refusal);
+			}
+			self.publish_composer(Pane::Main, &shared.read());
+		}
+		self.until_capture(|link| {
+			let timeline = link.timeline.borrow();
+			let failed: Vec<bool> = timeline
+				.messages()
+				.filter(|entry| entry.upload.is_some())
+				.map(|entry| entry.failed)
+				.collect();
+			failed.contains(&true) && failed.contains(&false)
+		})
+		.await;
 	}
 
 	pub(super) fn composer_settled(&self, screen: &capture::Screen) -> bool {

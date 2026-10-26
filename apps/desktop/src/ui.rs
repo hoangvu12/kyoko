@@ -234,6 +234,7 @@ pub fn run(
 			let community = link.community.view();
 			let toasts = link.toasts.view();
 			let scrim = link.scrim.view();
+			let composer_layer = link.composer_layer.view();
 			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
@@ -263,6 +264,7 @@ pub fn run(
 						lightbox,
 						moderation,
 						toasts,
+						composer_layer,
 					],
 				)
 				.on_event(move |event| {
@@ -410,6 +412,7 @@ pub(crate) struct Link {
 	cloner: cloner::Cloner,
 	toasts: Rc<ToastLayer>,
 	scrim: Rc<crate::scrim::Scrim>,
+	composer_layer: Rc<crate::composer_layer::ComposerLayer>,
 	toast_window: RefCell<Option<Effect>>,
 	motion: Motion,
 	connection: RefCell<ConnectionWatch>,
@@ -514,6 +517,7 @@ impl Link {
 		members.set_display(display.clone());
 		let toasts = ToastLayer::new(&window.runtime);
 		let scrim = crate::scrim::Scrim::new(&window.runtime);
+		let composer_layer = crate::composer_layer::ComposerLayer::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let link = Rc::new(Link {
 			window,
@@ -550,6 +554,7 @@ impl Link {
 			toasts,
 			toast_window: RefCell::new(None),
 			scrim,
+			composer_layer,
 			motion,
 			connection: RefCell::new(ConnectionWatch::default()),
 			connection_pinned: Cell::new(false),
@@ -873,6 +878,7 @@ impl Link {
 			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
+			capture::Screen::ComposerShot(shot) => self.drive_composer_shot(*shot).await,
 			capture::Screen::CloneDialog => {
 				self.drive_clone_dialog().await;
 				self.until_capture(|link| link.community_settled()).await;

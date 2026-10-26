@@ -71,6 +71,14 @@ impl Control {
 		self.shared.scenario.respond(method, pattern, reply, None);
 	}
 
+	pub fn hold_requests(&self, method: &str, pattern: &str) {
+		self.shared.scenario.hold(method, pattern);
+	}
+
+	pub fn release_requests(&self) {
+		self.shared.scenario.release_holds();
+	}
+
 	pub fn clear_replies(&self) {
 		self.shared.scenario.clear_replies();
 	}

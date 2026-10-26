@@ -135,11 +135,11 @@ impl Core {
 		if !self.has_free_slot(guild_id, ExpressionKind::Sticker) {
 			return;
 		}
-		let file = UploadFile {
-			name: format!("{}.{}", name.trim(), picture.extension()),
-			bytes: file.into(),
-			content_type: picture.mime().to_owned(),
-		};
+		let file = UploadFile::new(
+			format!("{}.{}", name.trim(), picture.extension()),
+			file,
+			picture.mime(),
+		);
 		let call = Call::CreateSticker {
 			name: name.trim().to_owned(),
 			description: description.trim().to_owned(),

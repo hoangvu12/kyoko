@@ -231,11 +231,11 @@ async fn a_forum_post_uploads_its_files_carries_its_tags_and_opens() {
 		name: "screen goes dark".to_owned(),
 		content: "it happens after login".to_owned(),
 		tags: tags.clone(),
-		files: vec![UploadFile {
-			name: "log.txt".to_owned(),
-			bytes: Bytes::from_static(b"trace"),
-			content_type: "text/plain".to_owned(),
-		}],
+		files: vec![UploadFile::new(
+			"log.txt",
+			Bytes::from_static(b"trace"),
+			"text/plain",
+		)],
 	});
 	running
 		.until("the post to open with its first message", |state| {

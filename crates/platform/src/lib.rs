@@ -4,6 +4,7 @@ pub mod foreground;
 pub mod hotkeys;
 pub mod idle;
 pub mod instance;
+pub mod keyboard;
 pub mod notifications;
 pub mod open;
 pub mod relaunch;

@@ -155,6 +155,10 @@ impl Link {
 		self.expressions.composer.set(Some(slot));
 	}
 
+	pub(super) fn composer_slot(&self) -> Option<Slot> {
+		self.expressions.composer.get()
+	}
+
 	pub(super) fn open_expressions(&self, tab: Tab, at: (f32, f32)) {
 		let Some(shared) = self.state() else {
 			return;

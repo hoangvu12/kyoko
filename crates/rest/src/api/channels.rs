@@ -183,7 +183,8 @@ impl RestClient {
 				.enumerate()
 				.map(|(index, file)| AttachmentDescriptor {
 					id: Snowflake(index as u64),
-					filename: Some(file.name.clone()),
+					filename: Some(file.upload_name()),
+					description: file.description.clone(),
 					..AttachmentDescriptor::default()
 				})
 				.collect();

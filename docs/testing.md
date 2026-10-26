@@ -93,6 +93,8 @@ REST replies are matched by method and pattern, in the order they were queued, b
 - `Reply::rate_limited(retry_after, global)` gives a 429 with Discord's body, a `retry-after` header, `x-ratelimit-scope`, and `x-ratelimit-global` when `global` is set.
 - `Reply::captcha_required()` and `captcha(keys)` give a 400 with Discord's captcha fields (`captcha_key`, `captcha_sitekey`, `captcha_service`, `captcha_rqdata`, `captcha_rqtoken`, `captcha_session_id`).
 - `Reply::json(status, body)` and `error(status, code, message)` build anything else. `with_header` adds headers.
+- `hold_requests(method, pattern)` keeps matching requests (`/upload/**` included) waiting before mockcord reads their bodies, until `release_requests()`; an upload test holds the second file's `PUT` to see the first counted as sent.
+- Two upload names answer on their own, for captures that cannot reach `Control`: `mockcord::STALLED_UPLOAD` (`stalled-upload.mp4`) is not answered for ten minutes and `mockcord::BROKEN_UPLOAD` (`broken-upload.mp4`) gets a 500.
 
 Gateway controls:
 

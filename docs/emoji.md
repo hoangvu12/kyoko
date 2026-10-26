@@ -45,4 +45,4 @@ Text in one Luau or Rust label (`ui.text`, `text(...)`) cannot hold an image yet
 - Statuses and activities as text: the member list's activity line, the friends subtitle, DM rows.
 - Plain-text snippets: reply previews, search results, pins, forum excerpts, forward previews.
 - Embed titles, author names and field names, poll questions and answers (an answer's emoji is not drawn at all), forum tag labels, the picker's skin tone menu and its footer label.
-- The composer's text field: a zgx text area holds text only.
+- The composer's text field: a zgx text area holds text only. M16 puts backgrounds behind code, spoilers and mentions with zgx's `decorations`, but custom emoji stay `<:name:id>` text and Unicode emoji come from the system font there (`docs/ui.md`, "Live markdown in the field").
