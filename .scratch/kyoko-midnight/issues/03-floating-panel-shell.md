@@ -4,13 +4,26 @@
 
 **Blocked by:** 01; v1 20, 22, 23, 24, 29, 30
 
-**Status:** claimed
+**Status:** resolved
 
 **Mockups:** `docs/design/mockups/midnight-discord.html`, `docs/design/mockups/dm.html`, `docs/design/mockups/group-dm.html`
 
 **Spec:** `docs/design/midnight.md`, Structure: floating panels, Server rail, Channel sidebar, User panel, Channel header, Member list, Motion
 
-- [ ] The main screen matches `midnight-discord.html` in a mockup capture (02)
-- [ ] The measured sizes in the spec hold at 100% scale
-- [ ] Hover slides and the home icon spin respect reduced motion
-- [ ] The headless load check builds every screen with the new shell
+- [x] The main screen matches `midnight-discord.html` in a mockup capture (02)
+- [x] The measured sizes in the spec hold at 100% scale
+- [x] Hover slides and the home icon spin respect reduced motion
+- [x] The headless load check builds every screen with the new shell
+
+## Answer
+
+Merged to main as `82d6195`. Docs: `docs/ui.md` (shell regions, window frame, the restyled regions).
+
+- Frame: window `bg_3`; every region wraps `components/panel.luau` (`bg_4`, `radius_lg`, `border_thickness` border in `border`, clipped), `gap` apart and inset `gap` left, right and bottom. `shell/title_bar.luau` is only the 12-point drag strip. `shell/window_controls.luau`: three 14-point circles (idle, online, dnd) in 28-point hit boxes after a 1-point divider, brightness 0.7 hovered, scale 0.9 pressed; drawn last in the root so they show on every screen (login, settings, home), positioned by `window_controls_top`/`window_controls_right` inside the channel header's right end (the header keeps an empty `window_controls_width` box).
+- Rail (66, full height, small-user-panel layout): 40-point rounded-square tiles, the 4-point pill (8 unread, 20 hovered, 36 selected), Home tile with kyoko's own mark (`icons/kyoko.svg`) spinning -360° and scaling to 0.8 over 400 ms on hover, divider under Home, closed folder 2x2 mini grid, open folder `hover` wash, add-server and Discover tiles. Channel sidebar (280): guild header 49 + 1 border with an Invite People button; categories 14 medium with a trailing chevron; rows 36 high, 38 apart, sliding 10 over 200 ms; the 8-point unread dot half outside the left edge sliding to 4. DM sidebar: same header with the find bar, nav rows 42 (slide 10), DM rows 42 (slide 18). User panel: own 56-high panel (chatbar 47 + 8 + 1), mute/deafen active in `accent_new` on a wash. Channel header (50): icon, name `text_2`, dot, topic `text_5`, threads/bell/pins/members 32-point buttons, 240-wide search field, inbox, controls space; no help button (Midnight hides it in titlebar mode). Chat panel holds timeline (or forum view) and composer. Member list (264): headers 40 high, rows 42/44, `radius_lg`, slide 18, BOT tag `accent_2`/`text_0`. Thread and search panels sit beside the chat; home pages are one panel covering header and content (`frame.luau` `home_cover`).
+- Rust timeline slot inset 6 from the chat panel's top and 4 from its sides, so the rectangular view stays inside the rounded corners.
+- New derived size tokens (no arithmetic in Luau): `channel_item_pitch`, `member_row_pitch` (now derived), `guild_pill_inset`, `user_panel_box_height`, `sidebar_header_height`, `window_control_hit`, `window_controls_width`, `window_controls_top`, `window_controls_right`; plain `guild_pill_hover_height` 20. `components/icon_button.luau` on Midnight tokens; `components/motion.luau` gained `motion.moving` and `motion.slide` (respects reduced motion). Plugin slots `rail.buttons`, `panel.buttons`, `composer.buttons` stay in place.
+- Tests: `hover_slides_and_the_home_spin_stay_still_under_reduced_motion` (ui::scripts), load check (17 tests) and `ui::root` pass. Checks re-run by the orchestrator in lane A: all green except `safety::a_rejected_token_stops_every_request_and_signs_out`, which failed once under load and passed 3/3 alone.
+- Mockup parity (port 8494, 150%): app-frame 19.7% → 17.5% (the seven main-screen screens share it), dm-sidebar 14.9% → 13.6%, dm-group 9.7% → 8.4%; status-menu 18.5%, emoji-picker 20.7%, threads-list 14.8%, pins 14.6% open in the right place. By eye the panels line up in position, size, gaps, radii, borders and colours. Remaining: stand-in art, message rows (M05), composer and typing line (M16), new-messages bar, member search field.
+- Deviations: window controls sit visually inside the header's right end (as every mockup); header search fixed at 240 (31's widening dropped); the member list keeps 29's "Search members" field, restyled (decision pending with the user); not built for lack of data: sidebar guild icon, "1 New" labels, pins unread dot, device chevrons, the DM profile panel of `dm.html`; thread rows use the channel dot offsets; settings still start at `title_bar_height` 22 as full-window views, so the controls overlay their corner until M19.
+- For later tickets: wrap new regions in `components/panel.luau`; in zgx absolute `top`/`left`/`right` ignore token strings (use `theme.number(theme.size.x)`), and an absolute node pinned by `right` needs an explicit width; hover slides via `motion.slide(hovered, rest, shift_token)`. Capture pointer coordinates in `capture.rs`: `USER_PANEL_AVATAR` (115,760), `COMPOSER_PICKER` (952,742), `SILENT_TYPING_BUTTON` (848,742), `TOP_BAR_THREADS` (721,37), `TOP_BAR_PINS` (801,37), `LAST_MESSAGE` (640,690); a ticket moving these regions updates them. Header button ids `top_bar_threads`/`top_bar_pins` are relied on by `ui::root`. M05: rows get Midnight's 4 left / 12 right margins inside the slot, `radius_md`, `message_hover`; the new-messages bar is still oxidcord's (draw Midnight's, inset 12 in `accent_3`, in Rust above the slot). M16: composer still has 16 side padding, a 44 field and the typing line below; Midnight wants the 47 chatbar inset 8 so its top lines up with the user panel, and the typing line above. M19: settings as a dialog inset `settings_dialog_inset` 52. M21: split `home_cover` into the friends header, list and Active Now (360) panels. Imported Discord-variable themes no longer colour the shell (they reach only oxidcord tokens): M25.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 03, 04; v1 25, 26, 28
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/midnight-discord.html`, `docs/design/mockups/expressions-in-messages.html`, `docs/design/mockups/expressions-in-messages-emoji-popout.html`, `docs/design/mockups/expressions-in-messages-sticker-popout.html`, `docs/design/mockups/link-preview-while-typing.html`
 
