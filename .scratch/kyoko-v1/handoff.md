@@ -3,6 +3,7 @@
 ## Decisions during the fifth orchestrator (chat `051e1203`)
 
 - The Midnight design is the authority: where a mockup differs from a v1 behaviour, follow the mockup (user, 2026-10-26). M03's member search field is dropped (M26).
+- Verification gotcha: stopping a background verification task (TaskStop) leaves its `verify.sh` child running, which then interleaves with the next run in the same `target/orch-verify.log`. Before rerunning in a lane, check for stray `cargo`/`rustc`/`verify.sh` processes of that lane, and read the log for one `=== exit` line per step.
 
 ## Earlier: fourth orchestrator hands off (main `f9ececd` + this note)
 
