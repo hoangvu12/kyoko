@@ -4,7 +4,7 @@
 
 **Blocked by:** 43 (Web login)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The native form and the 2FA step work against mockcord's auth endpoints
 - [ ] A captcha response hands the user over to web login
