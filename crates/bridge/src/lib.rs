@@ -21,6 +21,7 @@ mod lightbox;
 mod member_list;
 mod message;
 mod password_login;
+mod playback;
 mod profile;
 mod qr_login;
 mod rail;
@@ -98,8 +99,8 @@ pub use hidden::{
 };
 pub use images::{
 	app_icon_request, attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request,
-	embed_request, emoji_request, guild_icon_request, is_image, is_video, local_media, media_fetcher,
-	refresh_command, sticker_request,
+	embed_request, emoji_request, guild_icon_request, is_image, is_video, local_audio, local_media,
+	media_fetcher, refresh_command, sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
@@ -117,6 +118,10 @@ pub use message::{
 pub use password_login::{
 	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,
 	PasswordWork,
+};
+pub use playback::{
+	AudioFailure, AudioPhase, AudioPlayer, AudioSpeed, AudioState, AudioTrack, FLAT_BAR, PROBE_LIMIT_BYTES,
+	WAVEFORM_BARS, audio_clock, is_audio, is_voice_message, waveform,
 };
 pub use profile::{
 	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, MutualFriend, MutualGuild, PanelUser, ProfileBadge,

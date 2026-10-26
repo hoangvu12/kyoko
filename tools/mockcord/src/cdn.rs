@@ -311,6 +311,12 @@ pub async fn attachment(
 	Query(query): Query<AttachmentQuery>,
 ) -> Response {
 	let path = attachment_path(channel_id, attachment_id, &file);
+	if crate::audio::is_audio(&file) {
+		if !valid(&path, &query) {
+			return (StatusCode::NOT_FOUND, "This content is no longer available.").into_response();
+		}
+		return crate::audio::respond(&file).unwrap_or_else(|| StatusCode::NOT_FOUND.into_response());
+	}
 	let Some((_, stored)) = split_file(&file) else {
 		return StatusCode::NOT_FOUND.into_response();
 	};

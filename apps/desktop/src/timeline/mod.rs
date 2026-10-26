@@ -21,6 +21,7 @@ mod rows;
 mod scroll;
 mod unread;
 mod uploads;
+mod voice;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -548,10 +549,27 @@ impl TimelineView {
 		true
 	}
 
+	pub fn scroll_to_end(&self, key: &RowKey) -> bool {
+		let index = self.keys.borrow().iter().position(|candidate| candidate == key);
+		let Some(index) = index else {
+			return false;
+		};
+		let (_, viewport) = self.viewport();
+		let offset = self.runtime.untracked(|| {
+			let end =
+				self.heights.row_offset(index) + self.heights.row_height(index).unwrap_or(DEFAULT_HEIGHT);
+			(end - viewport).max(0.)
+		});
+		self.offset.set(offset);
+		true
+	}
+
 	pub fn view(self: &Rc<Self>) -> View {
 		let this = self.clone();
 		component(move |cx| {
-			*this.tasks.borrow_mut() = Some(cx.tasks());
+			let tasks = cx.tasks();
+			this.pictures.listening().run(&tasks);
+			*this.tasks.borrow_mut() = Some(tasks);
 			this.env.links.attach(cx.try_service::<PlatformService>());
 			this.watch();
 			let keys = this.keys.clone();
@@ -702,7 +720,11 @@ impl TimelineView {
 
 	pub fn apply(&self, timeline: &Timeline, delta: &Delta, channel_name: &str) {
 		let channel = timeline.open().map(|open| open.channel_id);
-		let switched = channel != self.channel.replace(channel);
+		let previous = self.channel.replace(channel);
+		let switched = channel != previous;
+		if let Some(left) = previous.filter(|_| switched) {
+			self.pictures.listening().left(left);
+		}
 		if switched {
 			self.pending_jump.set(None);
 			self.pending_action.set(None);

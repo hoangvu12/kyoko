@@ -3,12 +3,14 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Duration, Utc};
 use protocol::{
 	Attachment, Channel, ChannelType, Embed, EmbedAuthor, EmbedField, EmbedFooter, EmbedKind, EmbedMedia,
-	EmbedProvider, Emoji, LenientVec, Message, MessageReference, MessageReferenceKind, MessageType,
-	PartialEmoji, Poll, PollAnswer, PollAnswerCount, PollLayout, PollMedia, PollResults, Reaction,
-	ReactionCountDetails, ReadState, ReadStateKind, Role, Snowflake, StickerFormat, StickerItem, User,
+	EmbedProvider, Emoji, LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind,
+	MessageType, PartialEmoji, Poll, PollAnswer, PollAnswerCount, PollLayout, PollMedia, PollResults,
+	Reaction, ReactionCountDetails, ReadState, ReadStateKind, Role, Snowflake, StickerFormat, StickerItem,
+	User,
 };
 use serde_json::Value;
 
+use crate::audio;
 use crate::ids::snowflake_at;
 use crate::json::to_json;
 
@@ -35,6 +37,8 @@ pub const SECTIONS: [(&str, &str); 8] = [
 ];
 
 pub const REACTIONS_SECTION: &str = "showcase: reactions";
+pub const VOICE_SECTION: &str = "showcase: voice messages";
+pub const AUDIO_CAPTION: &str = "here is the loop as a file";
 pub const REACTIONS_MESSAGE: &str =
 	"midnight 2.1.1 is out: picker shadow fixed, reaction chips use the theme tokens now";
 pub const TOOLTIP_EMOJI: &str = "\u{1f44d}";
@@ -157,6 +161,14 @@ fn attachment(
 		height: dimensions.map(|(_, height)| height),
 		flags: Some(0),
 		..Attachment::default()
+	}
+}
+
+fn voice_attachment(id: u64, channel: u64, name: &str, seconds: f64) -> Attachment {
+	Attachment {
+		duration_secs: Some(seconds),
+		waveform: Some(audio::VOICE_WAVEFORM.to_owned()),
+		..attachment(id, channel, name, audio::OGG, audio::size_of(name) as i64, None)
 	}
 }
 
@@ -594,6 +606,38 @@ pub fn build(spec: &Showcase) -> Built {
 		message.content = CHANNEL_NAME.to_owned();
 	});
 	writer.say(2, "and that is every kind of message");
+
+	writer.section(VOICE_SECTION);
+	let base = writer.time().timestamp_millis() as u64;
+	writer.post(1, |message| {
+		message.flags = MessageFlags::IS_VOICE_MESSAGE;
+		message.attachments = LenientVec::from(vec![voice_attachment(
+			base + 1,
+			channel,
+			audio::VOICE_MESSAGE_FILENAME,
+			audio::VOICE_MESSAGE_SECS,
+		)]);
+	});
+	writer.post(2, |message| {
+		message.flags = MessageFlags::IS_VOICE_MESSAGE;
+		message.attachments = LenientVec::from(vec![voice_attachment(
+			base + 2,
+			channel,
+			audio::VOICE_REPLY_FILENAME,
+			audio::VOICE_REPLY_SECS,
+		)]);
+	});
+	writer.post(0, |message| {
+		message.content = AUDIO_CAPTION.to_owned();
+		message.attachments = LenientVec::from(vec![attachment(
+			base + 3,
+			channel,
+			audio::AUDIO_FILENAME,
+			audio::MP3,
+			audio::AUDIO_FILE_SIZE,
+			None,
+		)]);
+	});
 
 	writer.section(REACTIONS_SECTION);
 	writer.post(1, |message| {

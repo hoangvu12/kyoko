@@ -3,6 +3,7 @@
 *.ico binary
 *.wasm binary
 *.ogg binary
+*.mp3 binary
 *.kyoko-plugin binary
 *.sig text eol=lf
 *.pack binary

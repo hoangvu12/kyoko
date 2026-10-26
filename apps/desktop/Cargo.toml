@@ -13,6 +13,7 @@ path = "src/main.rs"
 bridge.workspace = true
 plugins.workspace = true
 media.workspace = true
+audio.workspace = true
 markdown.workspace = true
 twemoji.workspace = true
 platform.workspace = true

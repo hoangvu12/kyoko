@@ -465,6 +465,8 @@ fn uploaded_attachment(
 		description: descriptor.and_then(|descriptor| descriptor.description.clone()),
 		content_type: file.content_type.clone(),
 		size: Some(file.size as i64),
+		duration_secs: descriptor.and_then(|descriptor| descriptor.duration_secs),
+		waveform: descriptor.and_then(|descriptor| descriptor.waveform.clone()),
 		flags: Some(0),
 		..Attachment::default()
 	}
@@ -476,6 +478,8 @@ fn host_attachment(attachment: &mut Attachment, origin: &str, channel_id: u64, s
 	let (width, height) = cdn::attachment_size();
 	attachment.url = Some(url.clone());
 	attachment.proxy_url = Some(url);
-	attachment.width = Some(i64::from(width));
-	attachment.height = Some(i64::from(height));
+	if !crate::audio::is_audio(&attachment.filename) {
+		attachment.width = Some(i64::from(width));
+		attachment.height = Some(i64::from(height));
+	}
 }

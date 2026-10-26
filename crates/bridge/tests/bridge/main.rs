@@ -18,6 +18,7 @@ mod members;
 mod message;
 mod message_logger;
 mod password_login;
+mod playback;
 mod popouts;
 mod profile;
 mod qr_login;

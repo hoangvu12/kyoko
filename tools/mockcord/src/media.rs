@@ -2,7 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use axum::extract::Path;
 use axum::http::header::CONTENT_TYPE;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder, Rgb, RgbImage};
 
@@ -34,7 +34,10 @@ fn render(seed: u64) -> RgbImage {
 	})
 }
 
-pub async fn media(Path(name): Path<String>) -> impl IntoResponse {
+pub async fn media(Path(name): Path<String>) -> Response {
+	if let Some(audio) = crate::audio::respond(&name) {
+		return audio;
+	}
 	let image = render(seed_of(&name));
 	let mut encoded = Vec::new();
 	let written =
@@ -42,5 +45,5 @@ pub async fn media(Path(name): Path<String>) -> impl IntoResponse {
 	if let Err(error) = written {
 		tracing::warn!(%error, "could not encode the mock image");
 	}
-	([(CONTENT_TYPE, "image/png")], encoded)
+	([(CONTENT_TYPE, "image/png")], encoded).into_response()
 }

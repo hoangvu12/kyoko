@@ -1,5 +1,6 @@
 mod admin;
 mod alt;
+pub mod audio;
 mod cdn;
 mod community;
 mod config;

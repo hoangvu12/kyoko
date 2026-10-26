@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, ReplyPreview, STICKER_SIDE};
@@ -11,6 +12,8 @@ use protocol::{
 };
 use zgx::image::ImageData;
 use zgx::reactive::{Runtime, Signal};
+
+use super::voice::Listening;
 
 pub const AVATAR: f64 = 40.;
 pub const REPLY_AVATAR: f64 = 16.;
@@ -26,6 +29,7 @@ pub type Picture = Signal<Option<Arc<ImageData>>>;
 pub struct Pictures {
 	runtime: Runtime,
 	gallery: Gallery,
+	listening: Rc<Listening>,
 	cdn: String,
 	mock_origin: Option<String>,
 	scale: Cell<f64>,
@@ -38,6 +42,7 @@ pub struct Pictures {
 impl Pictures {
 	pub fn new(runtime: Runtime, gallery: Gallery, cdn: String, mock_origin: Option<String>) -> Self {
 		Self {
+			listening: Rc::new(Listening::new(&runtime, &gallery, mock_origin.clone())),
 			runtime,
 			gallery,
 			cdn,
@@ -52,6 +57,10 @@ impl Pictures {
 
 	pub fn runtime(&self) -> &Runtime {
 		&self.runtime
+	}
+
+	pub fn listening(&self) -> Rc<Listening> {
+		self.listening.clone()
 	}
 
 	pub fn set_quality(&self, quality: Quality) {

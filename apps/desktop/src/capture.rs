@@ -104,6 +104,7 @@ pub enum Screen {
 	MemberNotes,
 	Reactions(ReactionShot),
 	FriendConfirm(FriendShot),
+	VoiceMessage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,6 +246,7 @@ impl Screen {
 			"reactions-list" => Some(Screen::Reactions(ReactionShot::List)),
 			"friend-remove-dialog" => Some(Screen::FriendConfirm(FriendShot::Remove)),
 			"friend-block-dialog" => Some(Screen::FriendConfirm(FriendShot::Block)),
+			"voice-message" => Some(Screen::VoiceMessage),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -306,7 +308,8 @@ impl Screen {
 			| Screen::HiddenChannel
 			| Screen::MemberNotes
 			| Screen::Reactions(_)
-			| Screen::FriendConfirm(_) => Some(Opening::First),
+			| Screen::FriendConfirm(_)
+			| Screen::VoiceMessage => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

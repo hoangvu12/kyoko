@@ -27,6 +27,7 @@ mod settings;
 mod sign_in;
 mod themes;
 mod threads;
+mod voice_shots;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -891,6 +892,7 @@ impl Link {
 			}
 			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
+			capture::Screen::VoiceMessage => self.drive_voice_message().await,
 			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
 			capture::Screen::ComposerShot(shot) => self.drive_composer_shot(*shot).await,
 			capture::Screen::CloneDialog => {

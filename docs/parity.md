@@ -168,6 +168,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `command-options-optional` | `command-options-optional.html` |
 | `command-options-remind` | `command-options-remind.html` |
 | `command-choices-invalid` | `command-choices-invalid.html` |
+| `voice-message` | `voice-message.html` |
 
 `inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
 
@@ -175,7 +176,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-loading`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-loading`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -506,6 +507,14 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The messages are the `-# showca
 |---|---|---|---|
 | `reactions` | 06 | Open `#showcase` at its newest messages, then hover the 👍 chip of "midnight 2.1.1 is out…" through `Ui::dispatch`: the row's hover bar, the add-reaction and add-super-reaction buttons, and the chip's tooltip naming who reacted (loaded from the reactions route). | yes |
 | `reactions-list` | 06 | As `reactions`, then open the Reactions list of that message on 🔥 (`TimelineView::open_reactions`, what View Reactions does) and hover its second reactor, which shows the remove button (the mock user has Manage Messages there). | yes |
+
+### Midnight 18 Voice message and audio playback
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The messages are the `-# showcase: voice messages` section of mockcord's `#showcase` channel, just before the reactions: two voice messages (Ogg Opus, 8 and 7 seconds, with a waveform) and an MP3 under its file card. In capture mode the player's output is a frozen clock (`Listening::freeze`, the manual sink), so nothing sounds and the position stays where the steps leave it.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `voice-message` | 18 | Open `#showcase` with the audio file message at the bottom of the timeline, then click the first voice message's play button and its waveform at half its width through `Ui::dispatch`: the first pill playing at 0:04 with half its waveform in `accent_2`, the second at rest showing 0:07, and the audio player under the file card at 0:00 / 1:24 (its length read through the media pipeline). | yes |
 
 ### 38 Toasts, transitions and connection status
 

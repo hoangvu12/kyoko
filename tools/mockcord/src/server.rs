@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use protocol::Snowflake;
+use protocol::{AttachmentDescriptor, MessageFlags, Snowflake};
 use serde_json::json;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -161,6 +161,43 @@ impl Server {
 				content_type: None,
 				size: 0,
 			}],
+			hosted: Some(signature),
+			..Draft::default()
+		};
+		let message = self.shared.post_message(channel_id.0, &author, draft).ok()?;
+		parse_id(&message["id"]).map(Snowflake)
+	}
+
+	pub fn post_audio(
+		&self,
+		channel_id: Snowflake,
+		filename: &str,
+		voice: bool,
+		signature: Signature,
+	) -> Option<Snowflake> {
+		let author = self.shared.fixtures.someone_in(channel_id.0)?.clone();
+		let descriptors = if voice {
+			vec![AttachmentDescriptor {
+				id: Snowflake(0),
+				duration_secs: Some(crate::audio::seconds_of(filename)),
+				waveform: Some(crate::audio::VOICE_WAVEFORM.to_owned()),
+				..AttachmentDescriptor::default()
+			}]
+		} else {
+			Vec::new()
+		};
+		let draft = Draft {
+			files: vec![UploadedFile {
+				filename: filename.to_owned(),
+				content_type: crate::audio::content_type(filename).map(str::to_owned),
+				size: crate::audio::size_of(filename),
+			}],
+			descriptors,
+			flags: if voice {
+				MessageFlags::IS_VOICE_MESSAGE
+			} else {
+				MessageFlags::empty()
+			},
 			hosted: Some(signature),
 			..Draft::default()
 		};

@@ -510,6 +510,7 @@ impl Link {
 		self.luau_visible.borrow_mut().clear();
 		gallery.set_visible(std::iter::empty::<&str>());
 		gallery.set_budget(0);
+		self.timeline_view.pictures().listening().stop();
 		*self.avatar.borrow_mut() = None;
 		self.avatar_requested_at.set(None);
 		self.avatar_shown.set(false);

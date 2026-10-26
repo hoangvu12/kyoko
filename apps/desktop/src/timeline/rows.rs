@@ -59,6 +59,8 @@ const POLL_CHROME: f32 = 110.;
 const POLL_ROW: f32 = 48.;
 const REACTIONS: f32 = 28.;
 const FILE_CARD: f32 = 70.;
+const VOICE_MESSAGE: f32 = 52.;
+const AUDIO_CARD: f32 = 118.;
 
 const DEFAULT_LINE: f32 = 1.618;
 
@@ -211,6 +213,10 @@ fn rich_height(entry: &MessageEntry) -> f32 {
 		.map(|attachment| {
 			if bridge::is_image(attachment) {
 				bridge::fit_box(attachment.width, attachment.height, ATTACHMENT_BOX).1 + 4.
+			} else if bridge::is_voice_message(message, attachment) {
+				VOICE_MESSAGE
+			} else if bridge::is_audio(attachment) {
+				AUDIO_CARD
 			} else {
 				FILE_CARD
 			}

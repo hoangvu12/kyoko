@@ -110,6 +110,11 @@ icon_files!(
 	"user_plus",
 	"smile",
 	"refresh",
+	"play_fill",
+	"pause_fill",
+	"volume_fill",
+	"volume_mute_fill",
+	"file_audio",
 );
 
 const PLUGIN_ICONS: usize = 64;

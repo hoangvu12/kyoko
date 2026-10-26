@@ -17,6 +17,7 @@ use super::icons::icon;
 use super::pictures::{EMBED_ICON, Pictures, bare_box, bare_media, large_media, side_thumbnail};
 use super::popout;
 use super::rows::{RowEnv, TypeSize, tok};
+use super::voice;
 
 const EMBED_WIDTH: f32 = 432.;
 const EMBED_ACCENT: f32 = 4.;
@@ -59,6 +60,10 @@ pub fn attachments(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.map(|attachment| {
 			if env.prefs.get().inline_media && bridge::is_image(attachment) {
 				image_attachment(entry, attachment, env)
+			} else if bridge::is_voice_message(message, attachment) {
+				voice::voice_message(message, attachment, env).unwrap_or_else(|| file_card(attachment, env))
+			} else if bridge::is_audio(attachment) {
+				voice::audio_card(message, attachment, env).unwrap_or_else(|| file_card(attachment, env))
 			} else {
 				file_card(attachment, env)
 			}
