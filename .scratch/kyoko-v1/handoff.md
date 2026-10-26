@@ -1,6 +1,10 @@
 # kyoko v1 orchestrator handoff
 
-## Latest: fourth orchestrator hands off (main `f9ececd` + this note)
+## Decisions during the fifth orchestrator (chat `051e1203`)
+
+- The Midnight design is the authority: where a mockup differs from a v1 behaviour, follow the mockup (user, 2026-10-26). M03's member search field is dropped (M26).
+
+## Earlier: fourth orchestrator hands off (main `f9ececd` + this note)
 
 Written by the fourth orchestrator (roboco chat `bde24e85`, "kyoko orchestrator 4", same machine) when the user asked to hand off. Everything below still applies unless this section says otherwise.
 
