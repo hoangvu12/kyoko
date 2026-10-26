@@ -4,7 +4,7 @@
 
 **Blocked by:** 01; v1 21, 42, 43, 44
 
-**Status:** ready-for-agent
+**Status:** claimed (with v1 44 on lane B, which restyles the card and every login state)
 
 **Mockups:** `docs/design/mockups/login.html`, `docs/design/mockups/login-*.html`
 
