@@ -4,7 +4,7 @@
 
 **Blocked by:** 01; v1 28, 30, 32, 35, 36, 38
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/message-menu.html`, `docs/design/mockups/message-menu-own.html`, `docs/design/mockups/status-menu.html`, `docs/design/mockups/delete-message-dialog.html`, `docs/design/mockups/dialog-*.html`, `docs/design/mockups/toast-rate-limited.html`, `docs/design/mockups/connection-lost.html`, `docs/design/mockups/lightbox.html`
 
