@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 04; v1 32
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/gif-picker.html`, `docs/design/mockups/gif-picker-results.html`, `docs/design/mockups/sticker-picker.html`, `docs/design/mockups/emoji-picker.html`, `docs/design/mockups/emoji-picker-search.html`, `docs/design/mockups/emoji-picker-no-nitro.html`
 
