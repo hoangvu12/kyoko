@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 16 (Keep deleted and edited messages), 26 (Message rendering)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The message render hook can access kept deleted and edited versions
 - [ ] Deleted messages show inline in a deleted style, and edit history can be viewed
