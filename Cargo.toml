@@ -25,6 +25,7 @@ mockcord = { path = "tools/mockcord" }
 bridge = { path = "crates/bridge", package = "kyoko-bridge" }
 plugins = { path = "crates/plugins", package = "kyoko-plugins" }
 twemoji = { path = "crates/twemoji", package = "kyoko-twemoji" }
+audio = { path = "crates/audio", package = "kyoko-audio" }
 
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
@@ -73,6 +74,10 @@ fast_image_resize = "6.1"
 blurhash = "0.2"
 thumbhash = "0.1"
 lru = "0.19"
+symphonia = { version = "0.6.1", default-features = false, features = ["ogg", "vorbis", "flac", "mp3", "pcm", "wav", "aac", "isomp4", "mkv"] }
+ogg = "0.9.2"
+opus-decoder = "0.1.1"
+cpal = "0.18.2"
 base64 = "0.23"
 notify-rust = "4.18"
 tray-icon = { version = "0.26", default-features = false }

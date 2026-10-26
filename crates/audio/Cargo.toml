@@ -1,0 +1,19 @@
+[package]
+name = "kyoko-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "audio"
+
+[dependencies]
+symphonia.workspace = true
+ogg.workspace = true
+opus-decoder.workspace = true
+cpal.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
