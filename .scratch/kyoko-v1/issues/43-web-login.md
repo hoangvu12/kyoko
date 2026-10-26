@@ -6,7 +6,7 @@
 
 **Status:** resolved
 
-- [x] The window uses a temporary profile and the same reduced Chrome user agent as the client
+- [x] The window uses a temporary profile and presents WebView2's own user agent (ticket 66; it used the client's reduced Chrome user agent until then)
 - [x] The token is read only from discord.com, by a document-start script, and handed to the app
 - [x] Browsing data is cleared afterwards
 - [x] Captchas, TOTP, SMS and security keys work on the page

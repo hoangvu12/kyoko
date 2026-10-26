@@ -4,7 +4,7 @@
 
 **Blocked by:** 36 (Moderation and server settings)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The Roles submenu opened from a member-list row near the right edge of the window appears inside the window (flipped or clamped like 28's context menu), confirmed in the running app
 - [ ] Roles the member already has show a check in the Roles submenu, and choosing one removes it
