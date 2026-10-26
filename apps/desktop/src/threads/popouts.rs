@@ -5,13 +5,14 @@ use media::ImageName;
 use protocol::Snowflake;
 use zgx::compose::prelude::*;
 use zgx::input::InputEvent;
+use zgx::reactive::Runtime;
 use zgx::scene::{Color, Insets};
 use zgx::theme::Themed;
 
 use super::{PinsShown, Request, ThreadsLayer, ThreadsShown};
 use crate::kit::{self, Variant};
 use crate::profile::parts;
-use crate::timeline::{icon, tok};
+use crate::timeline::{Pictures, icon, tok};
 
 const GLYPH: f32 = 20.;
 const ROW_AVATAR: f32 = 16.;
@@ -317,15 +318,21 @@ fn pin_cards(layer: &Rc<ThreadsLayer>, channel_id: Snowflake, shown: &PinsShown)
 	)
 }
 
+pub struct CardHead<'a> {
+	pub avatar: Option<&'a ImageName>,
+	pub author: &'a str,
+	pub author_color: Themed<Color>,
+	pub time: &'a str,
+}
+
 pub fn message_card(
-	layer: &Rc<ThreadsLayer>,
-	avatar: Option<&ImageName>,
-	author: &str,
-	time: &str,
+	runtime: &Runtime,
+	pictures: &Rc<Pictures>,
+	head: CardHead<'_>,
 	body: View,
 	tools: View,
 ) -> View {
-	let hovered = layer.runtime.signal(false);
+	let hovered = runtime.signal(false);
 	let (enter, leave, shown, border) = (hovered.clone(), hovered.clone(), hovered.clone(), hovered);
 	div()
 		.relative()
@@ -348,28 +355,28 @@ pub fn message_card(
 			}
 			_ => {}
 		})
-		.child(
-			div()
-				.absolute()
-				.left(12.)
-				.top(8.)
-				.child(portrait(layer, avatar, CARD_AVATAR)),
-		)
+		.child(div().absolute().left(12.).top(8.).child(parts::avatar(
+			pictures,
+			head.avatar,
+			CARD_AVATAR,
+			None,
+			"bg_4",
+		)))
 		.child(
 			row()
 				.w_full()
 				.items_end()
 				.gap(tok("space_6"))
 				.child(
-					text(author.to_owned())
+					text(head.author.to_owned())
 						.shrink_0()
 						.text_size(tok("font_size_md"))
 						.line_height(tok("line_height_md"))
 						.font_weight(500)
-						.text_color(tok("text_2")),
+						.text_color(head.author_color),
 				)
 				.child(
-					text(time.to_owned())
+					text(head.time.to_owned())
 						.min_w(0.)
 						.truncate()
 						.text_size(tok("font_size_xs"))
@@ -458,7 +465,13 @@ fn pin_card(
 		.text_size(tok("font_size_md"))
 		.line_height(tok("line_height_md"))
 		.text_color(tok("text_3"));
-	message_card(layer, avatar, &entry.author, &entry.time, body, tools)
+	let head = CardHead {
+		avatar,
+		author: &entry.author,
+		author_color: Themed::Token(tok("text_2")),
+		time: &entry.time,
+	};
+	message_card(&layer.runtime, &layer.pictures, head, body, tools)
 }
 
 fn portrait(layer: &Rc<ThreadsLayer>, avatar: Option<&ImageName>, side: f32) -> View {

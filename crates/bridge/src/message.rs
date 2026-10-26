@@ -204,14 +204,66 @@ pub fn person_name(state: &State, guild_id: Option<Snowflake>, user: &User) -> S
 	user_name(state, guild_id, user.id, std::slice::from_ref(user)).unwrap_or_else(|| user_display(user))
 }
 
+const MARK_OPEN: char = '\u{e000}';
+const MARK_CLOSE: char = '\u{e001}';
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+	pub text: String,
+	pub mention: bool,
+}
+
 pub fn snippet(document: &Document, names: &Names, limit: usize) -> String {
 	let mut out = String::new();
-	write_text(&document.nodes, names, &mut out);
+	write_text(&document.nodes, names, &mut out, false);
 	let flat = out.split_whitespace().collect::<Vec<_>>().join(" ");
 	flat.chars().take(limit).collect()
 }
 
-fn write_text(nodes: &[Node], names: &Names, out: &mut String) {
+pub fn snippet_spans(document: &Document, names: &Names, limit: usize) -> Vec<Span> {
+	let mut out = String::new();
+	write_text(&document.nodes, names, &mut out, true);
+	let flat = out.split_whitespace().collect::<Vec<_>>().join(" ");
+	let mut spans: Vec<Span> = Vec::new();
+	let mut current = String::new();
+	let mut kept = 0;
+	for character in flat.chars() {
+		match character {
+			MARK_OPEN | MARK_CLOSE => {
+				if !current.is_empty() {
+					spans.push(Span {
+						text: std::mem::take(&mut current),
+						mention: character == MARK_CLOSE,
+					});
+				}
+			}
+			_ if kept < limit => {
+				current.push(character);
+				kept += 1;
+			}
+			_ => {}
+		}
+	}
+	if !current.is_empty() {
+		spans.push(Span {
+			text: current,
+			mention: false,
+		});
+	}
+	spans
+}
+
+fn push_mention(out: &mut String, text: &str, mark: bool) {
+	if mark {
+		out.push(MARK_OPEN);
+		out.push_str(text);
+		out.push(MARK_CLOSE);
+	} else {
+		out.push_str(text);
+	}
+}
+
+fn write_text(nodes: &[Node], names: &Names, out: &mut String, mark: bool) {
 	for (index, node) in nodes.iter().enumerate() {
 		if index > 0 && (node.is_block() || nodes[index - 1].is_block()) {
 			out.push('\n');
@@ -227,20 +279,20 @@ fn write_text(nodes: &[Node], names: &Names, out: &mut String) {
 			| Node::Heading { children, .. }
 			| Node::Link {
 				text: Some(children), ..
-			} => write_text(children, names, out),
+			} => write_text(children, names, out, mark),
 			Node::Spoiler(_) => out.push_str("[spoiler]"),
 			Node::CodeBlock { code, .. } => out.push_str(code),
 			Node::List { items, .. } => {
 				for item in items {
 					out.push(' ');
-					write_text(item, names, out);
+					write_text(item, names, out, mark);
 				}
 			}
-			Node::UserMention(id) => out.push_str(&names.user(*id)),
-			Node::RoleMention(id) => out.push_str(&names.role(*id).0),
+			Node::UserMention(id) => push_mention(out, &names.user(*id), mark),
+			Node::RoleMention(id) => push_mention(out, &names.role(*id).0, mark),
 			Node::ChannelMention(id) => out.push_str(&names.channel(*id)),
-			Node::Everyone => out.push_str("@everyone"),
-			Node::Here => out.push_str("@here"),
+			Node::Everyone => push_mention(out, "@everyone", mark),
+			Node::Here => push_mention(out, "@here", mark),
 			Node::CustomEmoji { name, .. } => {
 				out.push(':');
 				out.push_str(name);

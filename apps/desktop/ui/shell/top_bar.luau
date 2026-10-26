@@ -254,7 +254,14 @@ return function()
 			shrink = 0,
 			items = "center",
 			gap = theme.size.space_8,
-			tool { name = "inbox", tooltip = "Inbox" },
+			tool {
+				name = "inbox",
+				id = "top_bar_inbox",
+				tooltip = "Inbox",
+				on_press = function(point: any)
+					actions.open_inbox(point.x, point.y)
+				end,
+			},
 			ui.div { w = theme.size.window_controls_width, h_full = true, shrink = 0 },
 		},
 	}

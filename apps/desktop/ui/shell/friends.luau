@@ -181,7 +181,16 @@ local function header()
 			shrink = 0,
 			items = "center",
 			gap = theme.size.space_8,
-			icon_button { name = "inbox", tooltip = "Inbox", hit_size = button(), icon_size = icon_md() },
+			icon_button {
+				name = "inbox",
+				id = "friends_inbox",
+				tooltip = "Inbox",
+				hit_size = button(),
+				icon_size = icon_md(),
+				on_press = function(point: any)
+					actions.open_inbox(point.x, point.y)
+				end,
+			},
 			ui.div { w = theme.size.window_controls_width, h_full = true, shrink = 0 },
 		},
 	}

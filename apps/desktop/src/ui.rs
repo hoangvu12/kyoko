@@ -10,6 +10,7 @@ mod expressions;
 mod friends;
 mod hidden;
 mod home;
+mod inbox;
 mod kept;
 mod members;
 mod message_actions;
@@ -239,6 +240,7 @@ pub fn run(
 			let community = link.community.view();
 			let toasts = link.toasts.view();
 			let friend_dialog = link.friend_dialog.view();
+			let inbox_layer = link.inbox_popout.view();
 			let scrim = link.scrim.view();
 			let composer_layer = link.composer_layer.view();
 			let apps = link.apps.view();
@@ -274,6 +276,7 @@ pub fn run(
 						composer_layer,
 						friend_dialog,
 						apps,
+						inbox_layer,
 					],
 				)
 				.on_event(move |event| {
@@ -463,6 +466,7 @@ pub(crate) struct Link {
 	maximized: Shared,
 	frame_effect: RefCell<Option<Effect>>,
 	ui: RefCell<Option<zgx::widgets::WeakUi>>,
+	inbox_popout: Rc<crate::inbox::InboxLayer>,
 }
 
 impl Link {
@@ -534,6 +538,7 @@ impl Link {
 		let friend_dialog = FriendDialog::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let server = server_settings::ServerSettingsView::new(host, &window.runtime);
+		let inbox_popout = crate::inbox::InboxLayer::new(&window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -610,6 +615,7 @@ impl Link {
 			frame_effect: RefCell::new(None),
 			observer: RefCell::new(None),
 			ui: RefCell::new(None),
+			inbox_popout,
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -634,6 +640,7 @@ impl Link {
 		Link::install_community(host, &link);
 		Link::install_connection(host, &link);
 		link.install_toasts();
+		Link::install_inbox(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -982,6 +989,7 @@ impl Link {
 				self.until_capture(|link| link.toast_settled()).await;
 			}
 			capture::Screen::Disconnected => self.drive_disconnected(),
+			capture::Screen::Inbox => self.drive_inbox().await,
 			capture::Screen::FirstChannel
 			| capture::Screen::LoginTos
 			| capture::Screen::LoginToken
@@ -1168,6 +1176,7 @@ impl Link {
 			self.server_settings_apply(&state, changes);
 			self.connection_apply(&state, changes);
 			self.toasts_apply(&state, changes);
+			self.inbox_apply(&state, changes);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
@@ -1368,6 +1377,7 @@ impl Link {
 		names.extend(self.dm_panel.images());
 		names.extend(self.composer_layer.images().iter().map(|name| name.to_string()));
 		names.extend(self.login_images());
+		names.extend(self.inbox_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

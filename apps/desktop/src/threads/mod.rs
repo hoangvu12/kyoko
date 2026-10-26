@@ -1,5 +1,7 @@
 mod popouts;
 
+pub use popouts::{CardHead, clear, jump_button, message_card};
+
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;

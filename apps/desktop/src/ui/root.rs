@@ -21,7 +21,7 @@ use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
-const LAYERS: [&str; 14] = [
+const LAYERS: [&str; 15] = [
 	"timeline slot",
 	"thread slot",
 	"scrim",
@@ -36,11 +36,13 @@ const LAYERS: [&str; 14] = [
 	"composer menu, attachment dialog and drop card",
 	"friend confirmations",
 	"apps launcher",
+	"inbox popout",
 ];
 
-const LUAU_BUTTONS: [(&str, &str); 2] = [
+const LUAU_BUTTONS: [(&str, &str); 3] = [
 	("top_bar_threads", "threads.open_list"),
 	("top_bar_pins", "threads.open_pins"),
+	("top_bar_inbox", "inbox.open"),
 ];
 
 #[test]
@@ -180,6 +182,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		}
 		"friend confirmations" => crate::friend_dialog::FriendDialog::new(runtime).view(),
 		"apps launcher" => super::apps::Apps::new(runtime, pictures).view(),
+		"inbox popout" => crate::inbox::InboxLayer::new(runtime, pictures).view(),
 		_ => unreachable!("no layer named {name}"),
 	}
 }

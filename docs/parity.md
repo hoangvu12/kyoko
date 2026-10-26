@@ -171,6 +171,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `command-options-remind` | `command-options-remind.html` |
 | `command-choices-invalid` | `command-choices-invalid.html` |
 | `voice-message` | `voice-message.html` |
+| `inbox` | `inbox.html` |
 | `command-choices-and-autocomplete` | `command-choices-and-autocomplete.html` |
 | `command-choices-loading` | `command-choices-loading.html` |
 | `command-choices-failed` | `command-choices-failed.html` |
@@ -187,13 +188,11 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `poll-in-messages-ended` | `poll-in-messages-ended.html` |
 | `apps-launcher` | `apps-launcher.html` |
 
-`inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
-
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -599,3 +598,11 @@ Kyoko only (`--apps kyoko`): oxidcord's member menu has no Roles submenu to comp
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `moderation-roles-submenu` | 62 | As `member-list`, then right-click, through `Ui::dispatch`, the name of the first member whose roles the current user can change (at the window's right edge), and hover the menu's Roles item: the submenu opens to the left of the member menu, inside the window, with a checked box on the roles the member holds. | yes |
+
+### Midnight 27 Inbox
+
+Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no inbox. The mentions are mockcord's recent mentions of the mock user (`GET /users/@me/mentions`), so the channels, authors and texts differ from the mockup's.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `inbox` | 27 | Default selection, then open the inbox from the channel header's inbox button at (1137, 37) (`Link::toggle_inbox`): the Mentions tab, fetched when it opens, with the newest mentions grouped by channel under their server, once every avatar and server icon has loaded. | yes |

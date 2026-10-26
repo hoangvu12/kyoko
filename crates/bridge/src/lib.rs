@@ -18,6 +18,7 @@ mod guild_admin;
 mod hidden;
 mod images;
 mod inbox;
+mod inbox_popout;
 mod lightbox;
 mod member_list;
 mod message;
@@ -107,6 +108,10 @@ pub use images::{
 	local_media, media_fetcher, refresh_command, sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
+pub use inbox_popout::{
+	ForYouEntry, InboxTab, MentionCard, MentionGroup, Place, UnreadGroup, UnreadRow, for_you, mention_groups,
+	unread_groups,
+};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
 pub use login::{MfaMethod, MfaMethods, QrEvent, REMOTE_AUTH_URL, Scanner};
 pub use member_list::{
@@ -115,9 +120,9 @@ pub use member_list::{
 };
 pub use message::{
 	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, Quote,
-	ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL, UNKNOWN_ROLE,
+	ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, Span, SystemIcon, SystemLine, UNKNOWN_CHANNEL, UNKNOWN_ROLE,
 	UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name, reaction_key,
-	snippet, system_line, timestamp_in, timestamp_text, user_display,
+	snippet, snippet_spans, system_line, timestamp_in, timestamp_text, user_display,
 };
 pub use password_login::{
 	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,

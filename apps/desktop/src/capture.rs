@@ -23,6 +23,7 @@ pub const SWITCHER_QUERY: &str = "gen";
 pub const COMPOSER_PICKER: (f32, f32) = (954., 755.);
 pub const TOP_BAR_THREADS: (f32, f32) = (721., 37.);
 pub const TOP_BAR_PINS: (f32, f32) = (801., 37.);
+pub const TOP_BAR_INBOX: (f32, f32) = (1137., 37.);
 pub const TOAST: &str = "You are sending messages too quickly.";
 pub const PLUGINS_VARIABLE: &str = "KYOKO_CAPTURE_PLUGINS";
 pub const THEMES_VARIABLE: &str = "KYOKO_CAPTURE_THEMES";
@@ -86,6 +87,7 @@ pub enum Screen {
 	ThreadPanel,
 	ThreadCreate,
 	Pins,
+	Inbox,
 	Forum,
 	ForumPost,
 	ForumPostCreate,
@@ -235,6 +237,7 @@ impl Screen {
 			"thread-panel" => Some(Screen::ThreadPanel),
 			"thread-create" => Some(Screen::ThreadCreate),
 			"pins" => Some(Screen::Pins),
+			"inbox" => Some(Screen::Inbox),
 			"forum" => Some(Screen::Forum),
 			"forum-post" => Some(Screen::ForumPost),
 			"forum-post-create" => Some(Screen::ForumPostCreate),
@@ -331,6 +334,7 @@ impl Screen {
 			| Screen::ThreadPanel
 			| Screen::ThreadCreate
 			| Screen::Pins
+			| Screen::Inbox
 			| Screen::Forum
 			| Screen::ForumPost
 			| Screen::ForumPostCreate

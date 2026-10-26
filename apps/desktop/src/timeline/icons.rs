@@ -39,6 +39,7 @@ icon_files!(
 	"unpin",
 	"new_thread",
 	"inbox",
+	"funnel",
 	"trash",
 	"flag",
 	"emoji",

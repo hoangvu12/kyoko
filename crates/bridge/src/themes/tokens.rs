@@ -480,6 +480,8 @@ pub const SIZES: &[(&str, f32)] = &[
 	("thread_popout_height", 560.),
 	("pins_popout_width", 420.),
 	("pins_popout_height", 560.),
+	("inbox_popout_width", 480.),
+	("inbox_popout_height", 600.),
 	("settings_search_height", 38.),
 	("settings_profile_top", 30.),
 	("settings_divider_bottom", 48.),

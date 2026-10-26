@@ -12,6 +12,7 @@ mod fonts;
 mod frame;
 mod friend_dialog;
 mod friends;
+mod inbox;
 mod integration;
 mod kit;
 mod member_list;

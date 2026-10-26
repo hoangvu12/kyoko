@@ -369,6 +369,10 @@ function M.open_pins(x: number, y: number)
 	ui.invoke("threads.open_pins", { x = x, y = y })
 end
 
+function M.open_inbox(x: number, y: number)
+	ui.invoke("inbox.open", { x = x, y = y })
+end
+
 function M.close_thread()
 	ui.invoke("threads.close")
 end
