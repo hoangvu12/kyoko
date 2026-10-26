@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 07; v1 31, 33
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/threads-list.html`, `docs/design/mockups/threads-split-view.html`, `docs/design/mockups/threads-create.html`, `docs/design/mockups/forum.html`, `docs/design/mockups/forum-post.html`, `docs/design/mockups/forum-new-post.html`, `docs/design/mockups/inbox.html`, `docs/design/mockups/pins.html`, `docs/design/mockups/search-results.html`, `docs/design/mockups/quick-switcher.html`
 
