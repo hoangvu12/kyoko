@@ -4,207 +4,335 @@ use bridge::StatusChoice;
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
 
-use super::parts::{self, label};
-use super::{AccountRow, AccountsShown, MenuShown, ProfileLayer, Request};
-use crate::kit::separator;
+use super::parts::{self, Badge, words};
+use super::{AccountRow, AccountsShown, MenuShown, ProfileLayer, Request, Submenu};
+use crate::kit::{MENU_ITEM, id_badge, separator};
 use crate::timeline::icons::icon;
 use crate::timeline::tok;
 
-const LEADING: f32 = 20.;
-const AVATAR: f32 = 40.;
-const DOT: f32 = 12.;
-const REMOVE: f32 = 24.;
-const CHOSEN: f32 = 16.;
+const LEADING: f32 = 16.;
+const ACCOUNT_AVATAR: f32 = 20.;
 const CHOSEN_ICON: f32 = 12.;
 
+fn stop_presses(view: View) -> View {
+	view.on_event(|event| {
+		if event.phase != EventPhase::Capture && matches!(event.event, InputEvent::PointerDown { .. }) {
+			event.stop_propagation();
+		}
+	})
+}
+
 pub fn menu(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> View {
-	let frame = column()
-		.w(tok("status_menu_width"))
+	let submenu = layer.submenu.clone();
+	let this = layer.clone();
+	let accounts = shown.accounts.clone();
+	row()
+		.items_end()
+		.gap(tok("space_8"))
+		.child(account_popout(layer, shown))
+		.child(div().child_when(
+			move || Some(submenu.get()),
+			move |open: Submenu, _| match (open, accounts.as_ref()) {
+				(Submenu::Statuses, _) => statuses(&this),
+				(Submenu::Accounts, Some(accounts)) => accounts_menu(&this, accounts),
+				_ => div(),
+			},
+		))
+}
+
+fn menu_card(view: View) -> View {
+	stop_presses(view)
 		.px(tok("space_8"))
 		.py(tok("space_6"))
 		.gap(tok("space_2"))
 		.rounded(tok("radius_sm"))
 		.border(tok("border_thickness"))
 		.border_color(tok("border"))
-		.bg(tok("bg_3"))
-		.on_event(|event| {
-			if event.phase != EventPhase::Capture && matches!(event.event, InputEvent::PointerDown { .. }) {
-				event.stop_propagation();
-			}
-		});
-	match &shown.accounts {
-		Some(accounts) => frame.children(accounts_view(layer, accounts)),
-		None => frame.children(main_view(layer, shown)),
-	}
 }
 
-fn main_view(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> Vec<View> {
+fn account_popout(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> View {
 	let panel = shown.panel.clone();
 	let pictures = layer.pictures.clone();
-	let choices: Vec<View> = StatusChoice::ALL
-		.into_iter()
-		.map(|choice| {
-			let layer = layer.clone();
-			entry(
-				parts::status_dot(choice.dot(), DOT, "bg_3"),
-				choice.label(),
-				false,
-			)
-			.when(choice == panel.status, |entry| entry.child(chosen()))
-			.on_click(move || layer.choose_status(choice))
-		})
-		.collect();
+	let badge = Badge::of(&layer.runtime, panel.status.dot(), "_lg", 0.);
+	let current = panel.status;
 	let custom_label = panel
 		.custom_status
 		.text
 		.clone()
 		.unwrap_or_else(|| "Set Custom Status".to_owned());
-	let (edit, custom, switch, sign_out) = (layer.clone(), layer.clone(), layer.clone(), layer.clone());
-	let mut view = vec![
-		row()
-			.items_center()
-			.gap(8.)
-			.p(8.)
-			.child(parts::avatar(
-				&pictures,
-				shown.avatar.as_ref(),
-				AVATAR,
-				Some(panel.status.dot()),
-				"bg_3",
-			))
-			.child(
-				column()
-					.min_w(0.)
-					.child(
-						label(panel.name.clone(), "font_md")
-							.font_weight(700)
-							.truncate()
-							.text_color(tok("text_2")),
-					)
-					.child(
-						label(panel.username.clone(), "font_xs")
-							.truncate()
-							.text_color(tok("text_4")),
+	let (edit, custom, copy) = (layer.clone(), layer.clone(), layer.clone());
+	let (status_hover, status_click) = (layer.clone(), layer.clone());
+	let (switch_hover, switch_click) = (layer.clone(), layer.clone());
+	let user_id = panel.user.id;
+	let leaving = |layer: &Rc<ProfileLayer>| {
+		let layer = layer.clone();
+		move || layer.show_submenu(Submenu::None)
+	};
+	let items = column()
+		.id("account-popout-menu")
+		.w_full()
+		.bg(tok("bg_4"))
+		.child(
+			entry(icon("edit", LEADING, "text_4"), "Edit Profile", None)
+				.id("status-menu-edit-profile")
+				.on_hover_enter(leaving(layer))
+				.on_click(move || {
+					edit.menu.set(None);
+					edit.request(Request::EditProfile);
+				}),
+		)
+		.child(separator())
+		.child(
+			entry(
+				dot(layer, current),
+				current.label(),
+				Some(icon("chevron_right", LEADING, "text_4")),
+			)
+			.id("status-menu-status")
+			.on_hover_enter(move || status_hover.show_submenu(Submenu::Statuses))
+			.on_click(move || status_click.show_submenu(Submenu::Statuses)),
+		)
+		.child(
+			entry(icon("emoji", LEADING, "text_4"), &custom_label, None)
+				.id("status-menu-custom-status")
+				.on_hover_enter(leaving(layer))
+				.on_click(move || custom.open_custom_status()),
+		)
+		.child(separator())
+		.child(
+			entry(
+				icon("refresh", LEADING, "text_4"),
+				"Switch Accounts",
+				Some(icon("chevron_right", LEADING, "text_4")),
+			)
+			.id("status-menu-switch-accounts")
+			.on_hover_enter(move || switch_hover.open_accounts())
+			.on_click(move || switch_click.open_accounts()),
+		)
+		.child(separator())
+		.child(
+			entry(div(), "Copy User ID", Some(id_badge()))
+				.id("status-menu-copy-id")
+				.on_hover_enter(leaving(layer))
+				.on_click(move || {
+					copy.menu.set(None);
+					crate::toasts::copy(&user_id.to_string(), "User ID copied");
+				}),
+		);
+	column()
+		.id("account-popout")
+		.relative()
+		.w(tok("popout_width"))
+		.rounded(tok("radius_lg"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_3"))
+		.overflow_hidden()
+		.text_color(tok("text_3"))
+		.on_event(|event| {
+			if event.phase != EventPhase::Capture && matches!(event.event, InputEvent::PointerDown { .. }) {
+				event.stop_propagation();
+			}
+		})
+		.child(parts::banner(
+			&pictures,
+			panel.accent(),
+			shown.banner.as_ref(),
+			"account_banner_height",
+		))
+		.child(
+			column()
+				.w_full()
+				.pt(tok("account_body_top"))
+				.px(tok("space_16"))
+				.pb(tok("space_16"))
+				.gap(tok("space_12"))
+				.child(
+					column()
+						.w_full()
+						.child(
+							words(panel.name.clone(), "lg")
+								.font_weight(700)
+								.truncate()
+								.text_color(tok("text_2")),
+						)
+						.child(words(panel.username.clone(), "sm").truncate()),
+				)
+				.child(menu_card(items)),
+		)
+		.child(
+			div()
+				.absolute()
+				.left(parts::size(&layer.runtime, "space_16"))
+				.top(parts::size(&layer.runtime, "account_avatar_top"))
+				.child(parts::avatar_ring(
+					"profile_avatar_ring",
+					"space_6",
+					parts::avatar(
+						&pictures,
+						shown.avatar.as_ref(),
+						parts::size(&layer.runtime, "avatar_size_lg"),
+						Some(badge),
+						"bg_3",
 					),
-			),
-		separator(),
-		entry(icon("profile", LEADING, "text_4"), "Edit Profile", false).on_click(move || {
-			edit.menu.set(None);
-			edit.request(Request::EditProfile);
-		}),
-		separator(),
-	];
-	view.extend(choices);
-	view.extend([
-		separator(),
-		entry(icon("emoji", LEADING, "text_4"), &custom_label, false)
-			.on_click(move || custom.open_custom_status()),
-		separator(),
-		entry(icon("account", LEADING, "text_4"), "Switch Accounts", false)
-			.on_click(move || switch.request(Request::SwitchAccounts)),
-		entry(icon("log_out", LEADING, "red_2"), "Log Out", true).on_click(move || {
-			sign_out.menu.set(None);
-			sign_out.request(Request::SignOut);
-		}),
-	]);
-	view
+				)),
+		)
 }
 
-fn accounts_view(layer: &Rc<ProfileLayer>, accounts: &AccountsShown) -> Vec<View> {
-	let (back, add, manage) = (layer.clone(), layer.clone(), layer.clone());
-	let mut view = vec![
-		entry(icon("chevron_left", LEADING, "text_4"), "Switch Accounts", false)
-			.on_click(move || back.close_accounts()),
-		separator(),
-	];
-	view.extend(
-		accounts
-			.rows
-			.iter()
-			.map(|account| account_row(layer, account, accounts.managing)),
-	);
+fn dot(layer: &Rc<ProfileLayer>, choice: StatusChoice) -> View {
+	parts::status_dot(choice.dot(), parts::size(&layer.runtime, "status_size"), "bg_3")
+}
+
+fn statuses(layer: &Rc<ProfileLayer>) -> View {
+	let current = layer.panel.borrow().as_ref().map(|panel| panel.status);
+	menu_card(column())
+		.id("status-submenu")
+		.w(tok("status_menu_width"))
+		.bg(tok("bg_3"))
+		.children(
+			StatusChoice::ALL
+				.into_iter()
+				.map(|choice| {
+					let pick = layer.clone();
+					noted_entry(
+						dot(layer, choice),
+						choice.label(),
+						choice.description(),
+						(current == Some(choice)).then(chosen),
+					)
+					.id(format!("status-choice-{}", choice.key()))
+					.on_click(move || pick.choose_status(choice))
+				})
+				.collect::<Vec<_>>(),
+		)
+}
+
+fn accounts_menu(layer: &Rc<ProfileLayer>, accounts: &AccountsShown) -> View {
+	let (add, manage) = (layer.clone(), layer.clone());
 	let (manage_label, manage_icon) = if accounts.managing {
 		("Done", "check")
 	} else {
 		("Manage Accounts", "user_cog")
 	};
-	view.extend([
-		separator(),
-		entry(icon("plus", LEADING, "text_4"), "Add an Account", false).on_click(move || {
-			add.menu.set(None);
-			add.request(Request::AddAccount);
-		}),
-		entry(icon(manage_icon, LEADING, "text_4"), manage_label, false)
-			.on_click(move || manage.toggle_managing()),
-	]);
-	view
+	menu_card(column())
+		.id("accounts-submenu")
+		.w(tok("status_menu_width"))
+		.bg(tok("bg_3"))
+		.children(
+			accounts
+				.rows
+				.iter()
+				.map(|account| account_row(layer, account, accounts.managing))
+				.collect::<Vec<_>>(),
+		)
+		.child(separator())
+		.child(
+			entry(icon("plus", LEADING, "text_4"), "Add an Account", None).on_click(move || {
+				add.menu.set(None);
+				add.request(Request::AddAccount);
+			}),
+		)
+		.child(
+			entry(icon(manage_icon, LEADING, "text_4"), manage_label, None)
+				.on_click(move || manage.toggle_managing()),
+		)
 }
 
 fn account_row(layer: &Rc<ProfileLayer>, account: &AccountRow, managing: bool) -> View {
-	let leading = parts::avatar(&layer.pictures, account.avatar.as_ref(), LEADING, None, "bg_3");
-	let entry = entry(leading, &account.name, false);
+	let leading = parts::avatar(
+		&layer.pictures,
+		account.avatar.as_ref(),
+		ACCOUNT_AVATAR,
+		None,
+		"bg_3",
+	);
 	let user_id = account.user_id;
 	if managing {
 		if account.current {
-			return entry;
+			return entry(leading, &account.name, None);
 		}
 		let remove = layer.clone();
-		return entry.child(
-			row()
-				.size(REMOVE, REMOVE)
-				.shrink_0()
-				.items_center()
-				.justify_center()
-				.rounded(tok("radius_sm"))
-				.cursor(Cursor::Pointer)
-				.hover(|style| style.bg(tok("background_feedback_critical")))
-				.child(icon("trash", LEADING - 4., "red_2"))
-				.on_click(move || remove.request(Request::RemoveAccount(user_id))),
-		);
+		let trash = row()
+			.w(tok("icon_size_lg"))
+			.h(tok("icon_size_lg"))
+			.shrink_0()
+			.items_center()
+			.justify_center()
+			.rounded(tok("radius_xs"))
+			.cursor(Cursor::Pointer)
+			.hover(|style| style.bg(tok("background_feedback_critical")))
+			.child(icon("trash", LEADING, "red_2"))
+			.on_click(move || remove.request(Request::RemoveAccount(user_id)));
+		return entry(leading, &account.name, Some(trash));
 	}
 	let switch = layer.clone();
-	entry
-		.when(account.current, |entry| {
-			entry.child(icon("check", LEADING, "text_4"))
-		})
-		.on_click(move || {
-			switch.menu.set(None);
-			switch.request(Request::SwitchTo(user_id));
-		})
+	entry(
+		leading,
+		&account.name,
+		account.current.then(|| icon("check", LEADING, "text_4")),
+	)
+	.on_click(move || {
+		switch.menu.set(None);
+		switch.request(Request::SwitchTo(user_id));
+	})
 }
 
-fn entry(leading: View, caption: &str, danger: bool) -> View {
-	let (color, wash) = if danger {
-		("red_2", "background_feedback_critical")
-	} else {
-		("text_3", "hover")
-	};
+trait Hovered {
+	fn on_hover_enter(self, action: impl Fn() + 'static) -> Self;
+}
+
+impl Hovered for View {
+	fn on_hover_enter(self, action: impl Fn() + 'static) -> Self {
+		self.on_event(move |event| {
+			if matches!(event.event, InputEvent::PointerEnter) {
+				action();
+			}
+		})
+	}
+}
+
+fn entry(leading: View, caption: &str, trailing: Option<View>) -> View {
+	noted_entry(leading, caption, None, trailing)
+}
+
+fn noted_entry(leading: View, caption: &str, note: Option<&str>, trailing: Option<View>) -> View {
 	row()
+		.w_full()
 		.items_center()
 		.gap(tok("space_8"))
-		.h(tok("menu_item_height"))
+		.min_h(MENU_ITEM)
 		.px(tok("space_8"))
+		.py(tok("space_6"))
 		.rounded(tok("radius_xs"))
 		.cursor(Cursor::Pointer)
-		.text_color(tok(color))
-		.hover(move |style| style.bg(tok(wash)))
+		.text_color(tok("text_3"))
+		.hover(|style| style.bg(tok("hover")))
 		.child(row().w(LEADING).shrink_0().justify_center().child(leading))
 		.child(
-			label(caption.to_owned(), "font_sm")
-				.font_weight(500)
+			column()
 				.grow()
 				.min_w(0.)
-				.truncate(),
+				.child(
+					words(caption.to_owned(), "sm")
+						.font_weight(500)
+						.min_w(0.)
+						.truncate(),
+				)
+				.when_some(note.map(str::to_owned), |label, note| {
+					label.child(words(note, "xs").text_wrap(true).text_color(tok("text_4")))
+				}),
 		)
+		.when_some(trailing, |item, trailing| item.child(trailing))
 }
 
 fn chosen() -> View {
 	row()
-		.size(CHOSEN, CHOSEN)
+		.w(tok("icon_size_sm"))
+		.h(tok("icon_size_sm"))
 		.shrink_0()
 		.items_center()
 		.justify_center()
-		.rounded(CHOSEN)
+		.rounded(tok("icon_size_sm"))
 		.bg(tok("accent_2"))
 		.child(icon("check", CHOSEN_ICON, "text_0"))
 }

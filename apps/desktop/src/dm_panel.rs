@@ -31,7 +31,7 @@ impl DmPanelView {
 			panel: RefCell::new(DmPanel::Empty),
 			images: RefCell::new(HashMap::new()),
 			shown: RefCell::new(Vec::new()),
-			profile: host.shared("dms.profile", profile_value(None, None, None)),
+			profile: host.shared("dms.profile", profile_value(None, [None, None, None])),
 			members: host.shared("dms.members", Value::List(Rc::new([]))),
 		}
 	}
@@ -41,7 +41,7 @@ impl DmPanelView {
 		*self.panel.borrow_mut() = DmPanel::Empty;
 		self.images.borrow_mut().clear();
 		self.shown.borrow_mut().clear();
-		self.profile.set(profile_value(None, None, None));
+		self.profile.set(profile_value(None, [None, None, None]));
 		self.members.set(Value::List(Rc::new([])));
 	}
 
@@ -93,10 +93,19 @@ impl DmPanelView {
 					.card
 					.banner_request()
 					.map(|request| self.image(request, icons));
+				let tag = profile
+					.card
+					.tag
+					.as_ref()
+					.and_then(bridge::GuildTag::badge_request)
+					.map(|request| self.image(request, icons));
 				names.extend(avatar.clone());
 				names.extend(banner.clone());
-				self.profile
-					.set(profile_value(Some(profile), avatar.as_deref(), banner.as_deref()));
+				names.extend(tag.clone());
+				self.profile.set(profile_value(
+					Some(profile),
+					[avatar.as_deref(), banner.as_deref(), tag.as_deref()],
+				));
 				self.members.set(Value::List(Rc::new([])));
 			}
 			DmPanel::Members(members) => {
@@ -110,11 +119,11 @@ impl DmPanelView {
 						member_value(member, avatar.as_deref())
 					})
 					.collect();
-				self.profile.set(profile_value(None, None, None));
+				self.profile.set(profile_value(None, [None, None, None]));
 				self.members.set(Value::List(rows.into()));
 			}
 			DmPanel::Empty => {
-				self.profile.set(profile_value(None, None, None));
+				self.profile.set(profile_value(None, [None, None, None]));
 				self.members.set(Value::List(Rc::new([])));
 			}
 		}
@@ -142,13 +151,15 @@ fn accent_text(accent: Option<u32>) -> String {
 		.unwrap_or_default()
 }
 
-fn profile_value(profile: Option<&DmProfile>, avatar: Option<&str>, banner: Option<&str>) -> Value {
+fn profile_value(profile: Option<&DmProfile>, [avatar, banner, tag_badge]: [Option<&str>; 3]) -> Value {
 	let Some(profile) = profile else {
 		return record([
 			("open", false.into()),
 			("id", "".into()),
 			("name", "".into()),
 			("username", "".into()),
+			("tag", "".into()),
+			("tag_badge", "".into()),
 			("avatar", "".into()),
 			("banner", "".into()),
 			("accent", "".into()),
@@ -165,6 +176,11 @@ fn profile_value(profile: Option<&DmProfile>, avatar: Option<&str>, banner: Opti
 		("id", card.id.to_string().as_str().into()),
 		("name", card.name.as_str().into()),
 		("username", card.handle.as_str().into()),
+		(
+			"tag",
+			card.tag.as_ref().map_or("", |tag| tag.text.as_str()).into(),
+		),
+		("tag_badge", host_image(tag_badge).as_str().into()),
 		("avatar", host_image(avatar).as_str().into()),
 		("banner", host_image(banner).as_str().into()),
 		("accent", accent_text(card.accent).as_str().into()),

@@ -102,6 +102,10 @@ pub async fn profile(
 		}
 	}
 	let friends = extras["mutual_friends"].as_array().map_or(0, Vec::len);
+	let mut user = to_json(user);
+	if let Some(tag) = admin::guild_tag(&shared, id) {
+		user["primary_guild"] = tag;
+	}
 	Ok(Json(json!({
 		"user": user,
 		"user_profile": meta,

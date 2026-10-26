@@ -117,8 +117,8 @@ pub use password_login::{
 	PasswordWork,
 };
 pub use profile::{
-	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
-	ProfileCard, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,
+	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
+	ProfileCard, ProfileConnection, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,
 };
 pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{

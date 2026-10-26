@@ -266,3 +266,10 @@ pub fn guild_member_avatar_url(
 pub fn badge_icon_url(icon: &str) -> String {
 	format!("{CDN}/badge-icons/{icon}.png")
 }
+
+pub fn guild_tag_badge_url(guild_id: u64, badge: &str, size: u32) -> String {
+	format!(
+		"{CDN}/clan-badges/{guild_id}/{badge}.png?size={}",
+		clamp_size(size)
+	)
+}

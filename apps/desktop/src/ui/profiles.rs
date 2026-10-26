@@ -10,9 +10,9 @@ use zgx::input::{InputEvent, PointerButton};
 use zgx::widgets::WeakUi;
 use zgx_script::ScriptHost;
 
-use super::{Link, number, record};
+use super::{Link, record};
 use crate::capture;
-use crate::profile::{Anchor, Opening, Request};
+use crate::profile::{Anchor, Opening, Request, Submenu};
 
 const PANEL_EMOJI: f64 = 14.;
 
@@ -37,11 +37,9 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
-		host.action("user.status_menu", move |argument| {
-			if let (Some(link), Some(x), Some(y)) =
-				(actions.upgrade(), number(&argument, "x"), number(&argument, "y"))
-			{
-				link.profile.open_status_menu((x, y));
+		host.action("user.status_menu", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.profile.open_status_menu();
 			}
 		});
 		let window = Rc::downgrade(link);
@@ -168,7 +166,6 @@ impl Link {
 			Request::Message(user_id) => self.message_user(user_id),
 			Request::FullProfile(user_id) => self.open_full_profile(user_id),
 			Request::Block(user_id) => self.ask_block(user_id),
-			Request::SignOut => self.sign_out(),
 			Request::EditProfile => self.open_settings("profiles"),
 			Request::SwitchAccounts => self.show_accounts(),
 			Request::SwitchTo(user_id) => self.switch_account(user_id),
@@ -210,6 +207,7 @@ impl Link {
 			capture::Screen::StatusMenu => {
 				let (x, y) = capture::USER_PANEL_AVATAR;
 				self.press_at(x, y).await;
+				self.profile.show_submenu(Submenu::Statuses);
 			}
 			capture::Screen::AccountSwitcher => {
 				let (x, y) = capture::USER_PANEL_AVATAR;

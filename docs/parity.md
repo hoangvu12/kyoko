@@ -282,8 +282,8 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `user-panel` | 30 | Default selection. | yes |
-| `status-menu` | 30 | Default selection, then open the status menu from the user panel at (99, 774). | yes |
-| `account-switcher` | 41 | `status-menu`, then Switch Accounts: the accounts view with the signed-in account checked, Add an Account and Manage Accounts. | yes |
+| `status-menu` | 30 | Default selection, then open the status menu from the user panel at (99, 774) and its status submenu (Midnight 20). | yes |
+| `account-switcher` | 41 | `status-menu`, then Switch Accounts: the accounts submenu with the signed-in account checked, Add an Account and Manage Accounts. | yes |
 | `custom-status` | 30 | Default selection, then open the custom status dialog. | yes |
 | `profile-popout` | 30 | Default selection, then open the profile popout of the newest other author at (348, 404), anchored top left. | yes |
 | `full-profile` | 30 | Default selection, then open the full profile of the newest other author. | yes |

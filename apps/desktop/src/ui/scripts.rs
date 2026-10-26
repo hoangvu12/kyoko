@@ -1424,7 +1424,8 @@ pub(super) fn member_window() -> serde_json::Value {
 
 fn dm_profile(open: bool) -> serde_json::Value {
 	json!({
-		"open": open, "id": "50", "name": "ada", "username": "ada", "avatar": "", "banner": "",
+		"open": open, "id": "50", "name": "ada", "username": "ada", "tag": "RUST", "tag_badge": "",
+		"avatar": "", "banner": "",
 		"accent": "", "status": "online", "bio": "hi, i am ada", "since": "Mar 3, 2019",
 		"servers": "Mutual Servers — 2", "friends": "Mutual Friends — 1",
 	})
@@ -1457,6 +1458,7 @@ fn the_dm_columns_show_the_profile_and_the_group_members() {
 		],
 	);
 	shows(&mut app, "the profile's bio", "hi, i am ada", &[]);
+	shows(&mut app, "the profile's guild tag", "RUST", &[]);
 	app.click("dm_profile_full");
 	app.frames(2);
 	assert_eq!(last_call(&calls, "dms.full_profile"), Some(json!("50")));

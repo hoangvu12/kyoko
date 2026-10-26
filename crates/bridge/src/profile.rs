@@ -4,7 +4,9 @@ use std::time::Duration;
 use chrono::{DateTime, NaiveDate, Utc};
 use media::cdn;
 use media::{ImageRequest, Shape, SizeHint, Variant};
-use protocol::{Activity, ActivityKind, ChannelType, RelationshipKind, Snowflake, StatusKind, User};
+use protocol::{
+	Activity, ActivityKind, ChannelType, PrimaryGuild, RelationshipKind, Snowflake, StatusKind, User,
+};
 use state::{ConnectionStatus, CustomStatus, RiskyLock, State};
 
 use crate::display::Display;
@@ -13,6 +15,7 @@ use crate::images::{avatar_request, device_pixels, emoji_request, guild_icon_req
 
 pub const BANNER_PIXELS: (u32, u32) = (600, 300);
 pub const BADGE_PIXELS: u32 = 64;
+pub const TAG_BADGE_PIXELS: u32 = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Relation {
@@ -27,6 +30,49 @@ pub enum Relation {
 pub struct ProfileBadge {
 	pub icon_url: String,
 	pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuildTag {
+	pub text: String,
+	pub guild_id: Option<Snowflake>,
+	pub badge: Option<String>,
+}
+
+impl GuildTag {
+	fn of(user: &User) -> Option<Self> {
+		[user.primary_guild.as_ref(), user.clan.as_ref()]
+			.into_iter()
+			.flatten()
+			.find_map(Self::from_primary)
+	}
+
+	fn from_primary(primary: &PrimaryGuild) -> Option<Self> {
+		if primary.identity_enabled == Some(false) {
+			return None;
+		}
+		let text = primary.tag.clone().filter(|tag| !tag.trim().is_empty())?;
+		Some(Self {
+			text,
+			guild_id: primary.identity_guild_id,
+			badge: primary.badge.clone().filter(|badge| !badge.is_empty()),
+		})
+	}
+
+	pub fn badge_request(&self) -> Option<ImageRequest> {
+		let (guild_id, badge) = (self.guild_id?, self.badge.as_deref()?);
+		Some(ImageRequest::new(
+			cdn::guild_tag_badge_url(guild_id.0, badge, TAG_BADGE_PIXELS),
+			Variant::new(SizeHint::square(TAG_BADGE_PIXELS), Shape::Square),
+		))
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileConnection {
+	pub kind: String,
+	pub name: String,
+	pub verified: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,15 +164,17 @@ pub struct ProfileCard {
 	pub banner: Option<String>,
 	pub accent: Option<u32>,
 	pub pronouns: Option<String>,
+	pub tag: Option<GuildTag>,
 	pub bio: Option<String>,
 	pub badges: Vec<ProfileBadge>,
 	pub roles: Vec<RoleChip>,
 	pub created: NaiveDate,
 	pub joined: Option<NaiveDate>,
+	pub guild_name: Option<String>,
 	pub mutual_guilds: Vec<MutualGuild>,
 	pub mutual_friends: Vec<MutualFriend>,
 	pub mutual_friend_count: usize,
-	pub connections: Vec<(String, String)>,
+	pub connections: Vec<ProfileConnection>,
 	pub status: DmStatus,
 	pub custom_status: StatusLine,
 	pub activities: Vec<ActivityLine>,
@@ -149,7 +197,12 @@ impl ProfileCard {
 		let profile = state.profile(user_id);
 		let member = guild_id
 			.and_then(|id| state.guild(id))
-			.and_then(|guild| guild.members.get(&user_id));
+			.and_then(|guild| guild.members.get(&user_id))
+			.or_else(|| {
+				guild_id
+					.and(profile)
+					.and_then(|profile| profile.guild_member.as_ref())
+			});
 		let mine = state.current_user_id() == Some(user_id);
 		let handle = match user.discriminator.as_deref() {
 			Some(tag) if tag != "0" && !tag.is_empty() => format!("{}#{tag}", user.username),
@@ -201,6 +254,9 @@ impl ProfileCard {
 			pronouns: profile
 				.and_then(|profile| profile.pronouns.clone())
 				.filter(|pronouns| !pronouns.is_empty()),
+			tag: profile
+				.and_then(|profile| GuildTag::of(&profile.user))
+				.or_else(|| GuildTag::of(&user)),
 			bio: profile
 				.and_then(|profile| profile.bio.clone())
 				.filter(|bio| !bio.trim().is_empty()),
@@ -221,6 +277,10 @@ impl ProfileCard {
 			joined: member
 				.and_then(|member| member.joined_at)
 				.map(|joined| joined.date_naive()),
+			guild_name: member
+				.and(guild_id)
+				.and_then(|id| state.guild(id))
+				.map(|guild| guild.name.clone()),
 			mutual_friend_count: profile
 				.map_or(0, |profile| profile.mutual_friends_count as usize)
 				.max(mutual_friends.len()),
@@ -231,7 +291,11 @@ impl ProfileCard {
 					profile
 						.connected_accounts
 						.iter()
-						.map(|account| (account.kind.clone(), account.name.clone()))
+						.map(|account| ProfileConnection {
+							kind: account.kind.clone(),
+							name: account.name.clone(),
+							verified: account.verified,
+						})
 						.collect()
 				})
 				.unwrap_or_default(),
@@ -263,12 +327,7 @@ impl ProfileCard {
 	}
 
 	pub fn banner_request(&self) -> Option<ImageRequest> {
-		let hash = self.banner.as_deref()?;
-		let (width, height) = BANNER_PIXELS;
-		Some(ImageRequest::new(
-			cdn::banner_url(self.id.0, hash, width, false),
-			Variant::new(SizeHint::new(width, height), Shape::Square),
-		))
+		banner_request(self.id, self.banner.as_deref()?)
 	}
 
 	pub fn badge_requests(&self) -> Vec<ImageRequest> {
@@ -311,6 +370,14 @@ impl ProfileCard {
 	pub fn mutual_server_count(&self) -> usize {
 		self.mutual_guilds.len()
 	}
+}
+
+fn banner_request(user_id: Snowflake, hash: &str) -> Option<ImageRequest> {
+	let (width, height) = BANNER_PIXELS;
+	Some(ImageRequest::new(
+		cdn::banner_url(user_id.0, hash, width, false),
+		Variant::new(SizeHint::new(width, height), Shape::Square),
+	))
 }
 
 fn presence_of(
@@ -458,6 +525,23 @@ impl StatusChoice {
 		}
 	}
 
+	pub fn key(self) -> &'static str {
+		match self {
+			Self::Online => "online",
+			Self::Idle => "idle",
+			Self::Dnd => "dnd",
+			Self::Invisible => "invisible",
+		}
+	}
+
+	pub fn description(self) -> Option<&'static str> {
+		match self {
+			Self::Online | Self::Idle => None,
+			Self::Dnd => Some("You will not receive desktop notifications"),
+			Self::Invisible => Some("You will appear offline"),
+		}
+	}
+
 	pub fn dot(self) -> DmStatus {
 		match self {
 			Self::Online => DmStatus::Online,
@@ -497,6 +581,14 @@ impl PanelUser {
 			latency,
 			user: user.clone(),
 		})
+	}
+
+	pub fn banner_request(&self) -> Option<ImageRequest> {
+		banner_request(self.user.id, self.user.banner.as_deref()?)
+	}
+
+	pub fn accent(&self) -> Option<u32> {
+		self.user.accent_color.and_then(|color| u32::try_from(color).ok())
 	}
 
 	pub fn subtitle(&self) -> &str {

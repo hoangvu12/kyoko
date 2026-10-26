@@ -20,14 +20,10 @@ pub use self::full::FullTab;
 use crate::pickers::{ExpressionPicker, Mode, Tab};
 use crate::timeline::pictures::Pictures;
 
-const POPOUT_AVATAR: f64 = 80.;
-const FULL_AVATAR: f64 = 120.;
-const MENU_AVATAR: f64 = 40.;
 const ACCOUNT_AVATAR: f64 = 20.;
 const STATUS_EMOJI: f64 = 16.;
 const LIST_ICON: f64 = 40.;
 const SNAP_MARGIN: f32 = 8.;
-const MENU_RAISE: f32 = 20.;
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 
@@ -57,8 +53,14 @@ pub enum Request {
 	SwitchTo(Snowflake),
 	AddAccount,
 	RemoveAccount(Snowflake),
-	SignOut,
 	Picker,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Submenu {
+	None,
+	Statuses,
+	Accounts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -78,6 +80,7 @@ pub struct CardImages {
 	pub avatar: Option<ImageName>,
 	pub banner: Option<ImageName>,
 	pub badges: Vec<ImageName>,
+	pub tag: Option<ImageName>,
 	pub emoji: Option<ImageName>,
 	pub guilds: Vec<Option<ImageName>>,
 	pub friends: Vec<Option<ImageName>>,
@@ -89,6 +92,7 @@ impl CardImages {
 			.iter()
 			.chain(&self.banner)
 			.chain(&self.badges)
+			.chain(&self.tag)
 			.chain(&self.emoji)
 			.chain(self.guilds.iter().flatten())
 			.chain(self.friends.iter().flatten())
@@ -113,9 +117,9 @@ impl PartialEq for Shown {
 #[derive(Clone)]
 pub struct MenuShown {
 	serial: u64,
-	at: (f32, f32),
 	pub panel: Rc<PanelUser>,
 	pub avatar: Option<ImageName>,
+	pub banner: Option<ImageName>,
 	pub accounts: Option<Rc<AccountsShown>>,
 }
 
@@ -149,6 +153,8 @@ pub struct ProfileLayer {
 	tab: Signal<FullTab>,
 	target: Cell<Option<(Snowflake, Option<Snowflake>)>>,
 	menu: Signal<Option<MenuShown>>,
+	submenu: Signal<Submenu>,
+	full_open: Signal<bool>,
 	panel: RefCell<Option<Rc<PanelUser>>>,
 	custom: Rc<CustomStatusForm>,
 	serials: Cell<u64>,
@@ -171,9 +177,11 @@ impl ProfileLayer {
 			window: runtime.signal((0., 0.)),
 			surface: runtime.signal(None),
 			shown: runtime.signal(None),
-			tab: runtime.signal(FullTab::Info),
+			tab: runtime.signal(FullTab::Activity),
 			target: Cell::new(None),
 			menu: runtime.signal(None),
+			submenu: runtime.signal(Submenu::None),
+			full_open: runtime.signal(false),
 			panel: RefCell::new(None),
 			serials: Cell::new(0),
 			popout_size: runtime.signal((0., 0.)),
@@ -255,13 +263,18 @@ impl ProfileLayer {
 		self.close_menus();
 		self.shown.set(None);
 		self.target.set(Some((user_id, guild_id)));
-		self.tab.set(FullTab::Info);
+		self.tab.set(FullTab::Activity);
 		self.surface.set(Some(Surface::Full {
 			serial: self.serial(),
 		}));
+		self.full_open.set(true);
 	}
 
-	pub fn open_status_menu(&self, at: (f32, f32)) {
+	fn points(&self, name: &str) -> f64 {
+		f64::from(parts::size(&self.runtime, name))
+	}
+
+	pub fn open_status_menu(&self) {
 		if self.menu.with_untracked(Option::is_some) {
 			self.menu.set(None);
 			return;
@@ -271,23 +284,45 @@ impl ProfileLayer {
 		};
 		self.close_profile();
 		self.custom.close();
-		let avatar = bridge::avatar_request(
-			self.pictures.cdn(),
-			&panel.user,
-			MENU_AVATAR,
-			self.pictures.scale(),
-			false,
-		)
-		.map(|request| self.pictures.request(request));
+		let avatar = self.own_avatar(&panel);
+		let banner = panel
+			.banner_request()
+			.map(|request| self.pictures.request(request));
 		self.menu_size.set((0., 0.));
+		self.submenu.set(Submenu::None);
 		self.menu.set(Some(MenuShown {
 			serial: self.serial(),
-			at: (at.0, at.1 - MENU_RAISE),
 			panel,
 			avatar,
+			banner,
 			accounts: None,
 		}));
 		self.refresh_images();
+	}
+
+	fn own_avatar(&self, panel: &PanelUser) -> Option<ImageName> {
+		bridge::avatar_request(
+			self.pictures.cdn(),
+			&panel.user,
+			self.points("avatar_size_lg"),
+			self.pictures.scale(),
+			false,
+		)
+		.map(|request| self.pictures.request(request))
+	}
+
+	pub fn show_submenu(&self, submenu: Submenu) {
+		if self.submenu.with_untracked(|current| *current != submenu) {
+			self.submenu.set(submenu);
+		}
+	}
+
+	pub fn open_accounts(&self) {
+		if self.accounts_shown().is_some() {
+			self.show_submenu(Submenu::Accounts);
+		} else {
+			self.request(Request::SwitchAccounts);
+		}
 	}
 
 	pub fn accounts_shown(&self) -> Option<Rc<AccountsShown>> {
@@ -302,6 +337,7 @@ impl ProfileLayer {
 			.map(|entry| self.account_row(entry))
 			.collect();
 		self.replace_accounts(Some(Rc::new(AccountsShown { rows, managing })));
+		self.show_submenu(Submenu::Accounts);
 	}
 
 	pub fn toggle_managing(&self) {
@@ -311,10 +347,6 @@ impl ProfileLayer {
 				managing: !shown.managing,
 			})));
 		}
-	}
-
-	pub fn close_accounts(&self) {
-		self.replace_accounts(None);
 	}
 
 	fn replace_accounts(&self, accounts: Option<Rc<AccountsShown>>) {
@@ -354,12 +386,17 @@ impl ProfileLayer {
 	pub fn open_custom_status(&self) {
 		self.close_menus();
 		self.close_profile();
-		let current = self
-			.panel
-			.borrow()
-			.as_ref()
-			.map(|panel| panel.custom_status.clone());
-		self.custom.open(current.unwrap_or_default());
+		let Some(panel) = self.panel.borrow().clone() else {
+			return;
+		};
+		let avatar = self.own_avatar(&panel);
+		self.custom.open(
+			panel.custom_status.clone(),
+			panel.status,
+			panel.name.clone(),
+			avatar,
+		);
+		self.refresh_images();
 	}
 
 	pub fn set_panel(&self, panel: Option<PanelUser>) {
@@ -367,6 +404,7 @@ impl ProfileLayer {
 	}
 
 	pub fn close_profile(&self) {
+		self.full_open.set(false);
 		self.surface.set(None);
 		self.target.set(None);
 		self.shown.set(None);
@@ -382,6 +420,7 @@ impl ProfileLayer {
 		self.close_menus();
 		self.custom.close();
 		self.close_profile();
+		self.refresh_images();
 	}
 
 	pub fn escape(&self) -> bool {
@@ -421,9 +460,9 @@ impl ProfileLayer {
 		let request =
 			|request: Option<media::ImageRequest>| request.map(|request| self.pictures.request(request));
 		let points = if self.has_full_profile() {
-			FULL_AVATAR
+			self.points("avatar_size_xl")
 		} else {
-			POPOUT_AVATAR
+			self.points("avatar_size_lg")
 		};
 		CardImages {
 			avatar: request(card.avatar_request(&cdn, points, scale)),
@@ -433,6 +472,7 @@ impl ProfileLayer {
 				.into_iter()
 				.map(|request| self.pictures.request(request))
 				.collect(),
+			tag: request(card.tag.as_ref().and_then(bridge::GuildTag::badge_request)),
 			emoji: request(card.custom_status.emoji_request(&cdn, STATUS_EMOJI, scale)),
 			guilds: card
 				.mutual_guilds
@@ -463,10 +503,12 @@ impl ProfileLayer {
 					.unwrap_or_default(),
 			);
 		}
-		names.extend(
-			self.menu
-				.with_untracked(|menu| menu.as_ref().and_then(|menu| menu.avatar.clone())),
-		);
+		self.menu.with_untracked(|menu| {
+			if let Some(menu) = menu {
+				names.extend(menu.avatar.iter().chain(&menu.banner).cloned());
+			}
+		});
+		names.extend(self.custom.avatar());
 		names.extend(
 			self.accounts_shown()
 				.iter()
@@ -604,12 +646,16 @@ impl ProfileLayer {
 	fn full_view(self: &Rc<Self>) -> View {
 		let (surface, shown) = (self.surface.clone(), self.shown.clone());
 		let this = self.clone();
+		let tracked = crate::scrim::track(&self.full_open);
 		div().child_when(
 			move || match (surface.get(), shown.get()) {
 				(Some(Surface::Full { serial }), Some(shown)) => Some((serial, shown)),
 				_ => None,
 			},
-			move |(_, shown): (u64, Shown), _| full::scrim(&this, &shown),
+			move |(_, shown): (u64, Shown), _| {
+				let _ = &tracked;
+				full::scrim(&this, &shown)
+			},
 		)
 	}
 
@@ -622,11 +668,14 @@ impl ProfileLayer {
 				let (size, window) = (this.menu_size.clone(), this.window.clone());
 				let measured = this.clone();
 				let target = this.menu_size.clone();
-				let at = shown.at;
+				let left = parts::size(&this.runtime, "account_popout_left");
+				let bottom = parts::size(&this.runtime, "account_popout_bottom");
 				status_menu::menu(&this, &shown)
 					.absolute()
 					.reactive_style(move || {
-						let (x, y) = ProfileLayer::place(at, Anchor::BottomLeft, size.get(), window.get());
+						let room = window.get();
+						let at = (left, room.1 - bottom);
+						let (x, y) = ProfileLayer::place(at, Anchor::BottomLeft, size.get(), room);
 						Styles::new().left(x).top(y)
 					})
 					.on_mount(move |node| measured.measured(&node, &target))

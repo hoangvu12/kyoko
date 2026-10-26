@@ -1,5 +1,5 @@
 mod dialogs;
-mod kit;
+pub(crate) mod kit;
 mod menu;
 
 use std::cell::{Cell, RefCell};

@@ -59,6 +59,34 @@ local function portrait(profile: state.DmProfile)
 	}
 end
 
+local function tag(profile: state.DmProfile)
+	if profile.tag == "" then
+		return nil
+	end
+	return ui.row {
+		id = "dm_profile_tag",
+		shrink = 0,
+		items = "center",
+		gap = theme.size.space_2,
+		h = theme.size.tag_height,
+		px = theme.size.space_4,
+		rounded = theme.size.radius_xs,
+		bg = theme.color.bg_2,
+		ui.show(
+			profile.tag_badge ~= "",
+			ui.image { src = profile.tag_badge, w = theme.size.icon_size_xs, h = theme.size.icon_size_xs, fit = "contain" }
+		),
+		ui.text {
+			profile.tag,
+			literal = true,
+			text_size = theme.size.font_size_xs,
+			line_height = theme.size.tag_height,
+			weight = theme.weight.semibold,
+			color = theme.color.text_2,
+		},
+	}
+end
+
 local function names(profile: state.DmProfile)
 	return ui.column {
 		w_full = true,
@@ -72,14 +100,21 @@ local function names(profile: state.DmProfile)
 			weight = theme.weight.bold,
 			color = theme.color.accent_1,
 		},
-		ui.text {
-			profile.username,
-			literal = true,
+		ui.row {
 			w_full = true,
-			truncate = true,
-			text_size = theme.size.font_size_sm,
-			line_height = theme.size.line_height_sm,
-			color = theme.color.text_3,
+			items = "center",
+			gap = theme.size.space_6,
+			ui.text {
+				profile.username,
+				literal = true,
+				shrink = 1,
+				min_w = 0,
+				truncate = true,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				color = theme.color.text_3,
+			},
+			tag(profile),
 		},
 	}
 end

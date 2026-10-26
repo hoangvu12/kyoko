@@ -107,6 +107,9 @@ icon_files!(
 	"sparkle",
 	"add_reaction",
 	"add_super_reaction",
+	"user_plus",
+	"smile",
+	"refresh",
 );
 
 const PLUGIN_ICONS: usize = 64;

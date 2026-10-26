@@ -1,23 +1,27 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use bridge::StatusLine;
+use bridge::{StatusChoice, StatusLine};
 use chrono::{DateTime, Duration, Local, TimeDelta, Utc};
+use media::ImageName;
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
 use zgx::reactive::{Runtime, Signal};
 
-use super::parts::label;
+use super::parts::{self, words};
 use super::{ProfileLayer, Request};
 use crate::emoji;
 use crate::kit::{self, Variant};
-use crate::timeline::icons::icon;
+use crate::moderation::kit::select;
+use crate::timeline::icons::{glyph, icon};
 use crate::timeline::tok;
 
-const FIELD: f32 = 40.;
 const MAX_LENGTH: usize = 128;
-const STATUS_GLYPH: f32 = 24.;
+const FIELD_GLYPH: f32 = 20.;
+const BUBBLE_GLYPH: f32 = 16.;
+const CLEAR_GLYPH: f32 = 16.;
+const STATUS_LABELS: [&str; 4] = ["Online", "Idle", "Do Not Disturb", "Invisible"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClearAfter {
@@ -37,15 +41,7 @@ impl ClearAfter {
 		Self::Never,
 	];
 
-	pub fn label(self) -> &'static str {
-		match self {
-			Self::Today => "Today",
-			Self::FourHours => "4 hours",
-			Self::OneHour => "1 hour",
-			Self::ThirtyMinutes => "30 minutes",
-			Self::Never => "Don't clear",
-		}
-	}
+	pub const LABELS: [&'static str; 5] = ["Today", "4 hours", "1 hour", "30 minutes", "Don't clear"];
 
 	pub fn expires(self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
 		match self {
@@ -67,7 +63,13 @@ pub struct CustomStatusForm {
 	open: Signal<bool>,
 	text: Signal<String>,
 	emoji: Signal<Option<String>>,
-	clear_after: Signal<ClearAfter>,
+	clear_after: Signal<usize>,
+	clear_open: Signal<bool>,
+	status: Signal<usize>,
+	status_open: Signal<bool>,
+	initial_status: Cell<usize>,
+	name: RefCell<String>,
+	avatar: RefCell<Option<ImageName>>,
 	spot: Cell<(f32, f32)>,
 }
 
@@ -77,20 +79,36 @@ impl CustomStatusForm {
 			open: runtime.signal(false),
 			text: runtime.signal(String::new()),
 			emoji: runtime.signal(None),
-			clear_after: runtime.signal(ClearAfter::Today),
+			clear_after: runtime.signal(0),
+			clear_open: runtime.signal(false),
+			status: runtime.signal(0),
+			status_open: runtime.signal(false),
+			initial_status: Cell::new(0),
+			name: RefCell::new(String::new()),
+			avatar: RefCell::new(None),
 			spot: Cell::new((0., 0.)),
 		}
 	}
 
-	pub fn open(&self, current: StatusLine) {
+	pub fn open(&self, current: StatusLine, status: StatusChoice, name: String, avatar: Option<ImageName>) {
 		self.text.set(current.text.unwrap_or_default());
 		self.emoji
 			.set(current.emoji_id.is_none().then_some(current.emoji_name).flatten());
-		self.clear_after.set(ClearAfter::Today);
+		self.clear_after.set(0);
+		let index = StatusChoice::ALL
+			.iter()
+			.position(|choice| *choice == status)
+			.unwrap_or(0);
+		self.status.set(index);
+		self.initial_status.set(index);
+		*self.name.borrow_mut() = name;
+		*self.avatar.borrow_mut() = avatar;
 		self.open.set(true);
 	}
 
 	pub fn close(&self) {
+		self.clear_open.set(false);
+		self.status_open.set(false);
 		self.open.set(false);
 	}
 
@@ -100,6 +118,10 @@ impl CustomStatusForm {
 
 	pub fn open_signal(&self) -> Signal<bool> {
 		self.open.clone()
+	}
+
+	pub fn avatar(&self) -> Option<ImageName> {
+		self.is_open().then(|| self.avatar.borrow().clone()).flatten()
 	}
 
 	pub fn set_emoji(&self, glyph: Option<String>) {
@@ -117,12 +139,23 @@ impl CustomStatusForm {
 		let text = (!text.is_empty()).then_some(text);
 		let emoji = self.emoji.with_untracked(Clone::clone);
 		let content = text.is_some() || emoji.is_some();
-		let clear_after = self.clear_after.with_untracked(|choice| *choice);
+		let clear_after = self
+			.clear_after
+			.with_untracked(|index| ClearAfter::ALL.get(*index).copied())
+			.unwrap_or(ClearAfter::Today);
 		Command::SetCustomStatus {
 			text,
 			emoji,
 			expires: content.then(|| clear_after.expires(now)).flatten(),
 		}
+	}
+
+	pub fn status_change(&self) -> Option<Command> {
+		let index = self.status.with_untracked(|index| *index);
+		(index != self.initial_status.get())
+			.then(|| StatusChoice::ALL.get(index).copied())
+			.flatten()
+			.map(|choice| Command::SetStatus(choice.kind()))
 	}
 }
 
@@ -165,8 +198,10 @@ fn scrim(layer: &Rc<ProfileLayer>) -> View {
 
 fn panel(layer: &Rc<ProfileLayer>) -> View {
 	let form = layer.custom.clone();
-	let (close, clear, cancel, save) = (layer.clone(), layer.clone(), layer.clone(), layer.clone());
+	let (close, cancel, save) = (layer.clone(), layer.clone(), layer.clone());
+	let question = format!("What's cookin', {}?", form.name.borrow());
 	column()
+		.id("custom-status")
 		.w(tok("modal_width_sm"))
 		.overflow_hidden()
 		.rounded(tok("radius_lg"))
@@ -185,65 +220,152 @@ fn panel(layer: &Rc<ProfileLayer>) -> View {
 		}))
 		.child(
 			kit::body()
-				.child(kit::field(
-					"What's cookin', good lookin'?",
-					row()
-						.w_full()
-						.items_center()
-						.gap(tok("space_8"))
-						.child(emoji_button(layer))
-						.child(
-							kit::input("Custom status", form.text.clone(), "Support has arrived!")
-								.w(0.)
-								.grow()
-								.min_w(0.),
-						),
-				))
+				.child(preview(layer))
+				.child(kit::field(&question, status_field(layer)))
 				.child(kit::field(
 					"Clear after",
-					row().w_full().flex_wrap().gap(tok("space_8")).children(
-						ClearAfter::ALL
-							.into_iter()
-							.map(|choice| clear_chip(&form.clear_after, choice))
-							.collect::<Vec<_>>(),
+					select(
+						"Clear after",
+						&ClearAfter::LABELS,
+						&form.clear_after,
+						form.clear_open.clone(),
 					),
 				))
+				.child(kit::field(
+					"Status",
+					select("Status", &STATUS_LABELS, &form.status, form.status_open.clone()),
+				))
 				.child(kit::footer(vec![
-					kit::action("Clear Status", Variant::Link, move || {
-						clear.request(Request::Command(Command::SetCustomStatus {
-							text: None,
-							emoji: None,
-							expires: None,
-						}));
-						clear.custom.close();
-					}),
 					kit::action("Cancel", Variant::Link, move || {
 						cancel.custom.close();
 						cancel.picker.close();
 					}),
 					kit::action("Save", Variant::Primary, move || {
 						save.request(Request::Command(save.custom.command(Utc::now())));
+						if let Some(change) = save.custom.status_change() {
+							save.request(Request::Command(change));
+						}
 						save.custom.close();
 						save.picker.close();
-					}),
+					})
+					.id("custom-status-save"),
 				])),
 		)
+}
+
+fn preview(layer: &Rc<ProfileLayer>) -> View {
+	let form = layer.custom.clone();
+	let (text_signal, emoji_signal) = (form.text.clone(), form.emoji.clone());
+	let avatar = form.avatar.borrow().clone();
+	row()
+		.w_full()
+		.items_start()
+		.gap(tok("space_12"))
+		.child(parts::avatar(
+			&layer.pictures,
+			avatar.as_ref(),
+			parts::size(&layer.runtime, "avatar_size_lg"),
+			None,
+			"bg_4",
+		))
+		.child(div().min_w(0.).child_when(
+			move || {
+				let text = text_signal.get();
+				let emoji = emoji_signal.get();
+				(!text.trim().is_empty() || emoji.is_some()).then_some((text, emoji))
+			},
+			|(value, glyph_text): (String, Option<String>), _| {
+				row()
+					.mt(tok("space_8"))
+					.items_center()
+					.gap(tok("space_4"))
+					.min_w(0.)
+					.px(tok("space_12"))
+					.py(tok("space_8"))
+					.rounded(tok("radius_md"))
+					.bg(tok("bg_3"))
+					.border(tok("border_thickness"))
+					.border_color(tok("border"))
+					.when_some(glyph_text, |bubble, glyph_text| {
+						bubble.child(emoji::glyph(glyph_text, BUBBLE_GLYPH))
+					})
+					.child(words(value, "sm").min_w(0.).truncate().text_color(tok("text_3")))
+			},
+		))
+}
+
+fn status_field(layer: &Rc<ProfileLayer>) -> View {
+	let form = layer.custom.clone();
+	let (text_value, emoji_value) = (form.text.clone(), form.emoji.clone());
+	let (clear_text, clear_emoji) = (form.text.clone(), form.emoji.clone());
+	row()
+		.w_full()
+		.h(tok("input_height"))
+		.items_center()
+		.gap(tok("space_8"))
+		.px(tok("space_12"))
+		.rounded(tok("radius_sm"))
+		.bg(tok("bg_3"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border_light"))
+		.hover(|style| style.border_color(tok("border")))
+		.child(emoji_button(layer))
+		.child(
+			text_input("Custom status".to_owned(), form.text.clone())
+				.id("custom-status-text")
+				.placeholder("Support has arrived!".to_owned())
+				.w(0.)
+				.grow()
+				.min_w(0.)
+				.h_full()
+				.p(0.)
+				.border(0.)
+				.bg(kit::clear())
+				.text_color(tok("text_3"))
+				.text_size(tok("font_size_md"))
+				.focus(|style| style.outline_width(0.)),
+		)
+		.child(div().child_when(
+			move || (!text_value.get().is_empty() || emoji_value.get().is_some()).then_some(()),
+			move |(), _| {
+				let (text, emoji) = (clear_text.clone(), clear_emoji.clone());
+				button()
+					.id("custom-status-clear")
+					.focusable(false)
+					.w(tok("icon_size_md"))
+					.h(tok("icon_size_md"))
+					.p(0.)
+					.border(0.)
+					.items_center()
+					.justify_center()
+					.bg(kit::clear())
+					.cursor(Cursor::Pointer)
+					.text_color(tok("text_4"))
+					.hover(|style| style.text_color(tok("text_3")))
+					.child(glyph("close", CLEAR_GLYPH))
+					.tooltip("Clear")
+					.on_click(move || {
+						text.set(String::new());
+						emoji.set(None);
+					})
+			},
+		))
 }
 
 fn emoji_button(layer: &Rc<ProfileLayer>) -> View {
 	let emoji = layer.custom.emoji.clone();
 	let picker = layer.clone();
 	button()
-		.size(FIELD, FIELD)
+		.id("custom-status-emoji")
+		.focusable(false)
+		.w(tok("icon_size_md"))
+		.h(tok("icon_size_md"))
 		.shrink_0()
 		.p(0.)
+		.border(0.)
 		.items_center()
 		.justify_center()
-		.rounded(tok("radius_sm"))
-		.border(tok("border_thickness"))
-		.border_color(tok("border_light"))
-		.bg(tok("bg_3"))
-		.hover(|style| style.border_color(tok("border")))
+		.bg(kit::clear())
 		.cursor(Cursor::Pointer)
 		.on_event(move |event| {
 			if let InputEvent::PointerDown { x, y, .. } = event.event {
@@ -256,37 +378,9 @@ fn emoji_button(layer: &Rc<ProfileLayer>) -> View {
 		})
 		.child(switch(
 			move || emoji.get(),
-			|glyph: Option<String>, _| match glyph {
-				Some(glyph) => emoji::glyph(glyph, STATUS_GLYPH),
-				None => icon("emoji", 24., "interactive_normal"),
+			|glyph_text: Option<String>, _| match glyph_text {
+				Some(glyph_text) => emoji::glyph(glyph_text, FIELD_GLYPH),
+				None => icon("emoji", FIELD_GLYPH, "text_4"),
 			},
 		))
-}
-
-fn clear_chip(selected: &Signal<ClearAfter>, choice: ClearAfter) -> View {
-	let (chosen, pick) = (selected.clone(), selected.clone());
-	button()
-		.h(tok("button_height_sm"))
-		.px(tok("space_12"))
-		.border(tok("border_thickness"))
-		.items_center()
-		.rounded(tok("radius_sm"))
-		.cursor(Cursor::Pointer)
-		.reactive_style(move || {
-			if chosen.get() == choice {
-				Styles::new()
-					.bg(tok("accent_3"))
-					.border_color(tok("button_border"))
-					.text_color(tok("text_0"))
-			} else {
-				Styles::new()
-					.bg(tok("bg_2"))
-					.border_color(tok("border_light"))
-					.text_color(tok("text_3"))
-			}
-		})
-		.on_click(move || {
-			pick.set(choice);
-		})
-		.child(label(choice.label(), "font_sm").font_weight(500))
 }

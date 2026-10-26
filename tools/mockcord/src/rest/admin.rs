@@ -511,6 +511,19 @@ pub async fn reactions(
 	shared.reaction_users(id, message_id, &emoji, page).map(Json)
 }
 
+pub fn guild_tag(shared: &Shared, user_id: u64) -> Option<Value> {
+	if !user_id.is_multiple_of(3) {
+		return None;
+	}
+	let guild = shared.fixtures.guilds.first()?;
+	Some(json!({
+		"identity_guild_id": guild.id.to_string(),
+		"identity_enabled": true,
+		"tag": "RUST",
+		"badge": "3f1c0e0a5b7d9e2f4a6c8b0d1e3f5a7c",
+	}))
+}
+
 pub fn profile_extras(shared: &Shared, user_id: u64, guild_id: Option<u64>) -> Value {
 	let fixtures = &shared.fixtures;
 	let user = fixtures.users.get(&user_id);
