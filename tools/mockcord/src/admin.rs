@@ -40,6 +40,20 @@ const ACTION_PIN: i64 = 74;
 const ACTION_UNPIN: i64 = 75;
 const ACTION_BULK_DELETE: i64 = 73;
 
+pub fn seed_favorite_emojis(fixtures: &Fixtures) -> Vec<String> {
+	let wave = fixtures.guilds.first().and_then(|guild| {
+		guild
+			.emojis
+			.iter()
+			.find(|emoji| emoji.name.as_deref() == Some("blob_wave"))?
+			.id
+	});
+	wave.map(|id| id.to_string())
+		.into_iter()
+		.chain(["heart".to_owned()])
+		.collect()
+}
+
 pub fn seed_bans(fixtures: &Fixtures) -> HashMap<u64, BTreeMap<u64, Option<String>>> {
 	fixtures
 		.guilds

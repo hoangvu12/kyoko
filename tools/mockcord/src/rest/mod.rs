@@ -45,7 +45,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/users/@me/settings", patch(admin::patch_settings))
 		.route(
 			"/users/@me/settings-proto/{kind}",
-			patch(admin::patch_settings_proto),
+			get(admin::settings_proto).patch(admin::patch_settings_proto),
 		)
 		.route("/users/@me/guilds", get(users::my_guilds))
 		.route("/guilds", post(admin::create_guild))

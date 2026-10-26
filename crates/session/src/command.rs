@@ -6,7 +6,7 @@ use protocol::{
 use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
-use state::{RiskyReason, RiskyTarget, Viewport};
+use state::{EmojiCandidate, RiskyReason, RiskyTarget, Viewport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FriendSource {
@@ -531,6 +531,11 @@ pub enum Command {
 		id: Snowflake,
 		name: String,
 		roles: Vec<Snowflake>,
+	},
+	RankEmoji {
+		guild_id: Option<Snowflake>,
+		query: String,
+		candidates: Vec<EmojiCandidate>,
 	},
 	Reconnect,
 	Logout,

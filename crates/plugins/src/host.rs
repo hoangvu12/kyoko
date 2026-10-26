@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use protocol::Snowflake;
 use serde_json::{Map, Value as Json, json};
-use session::{Commander, Person, RelativeTime, ShownName};
+use session::{Commander, EmojiRankRequest, Person, RankedEmoji, RelativeTime, ShownName};
 use state::SharedState;
 
 use crate::bundled;
@@ -586,6 +586,41 @@ impl PluginHost {
 		(current.text != time.text).then_some(current.text)
 	}
 
+	pub(crate) fn ranks(&self) -> bool {
+		!self
+			.inner
+			.targets(Hook::EmojiRank, crate::calls::RANK_EMOJI, false)
+			.is_empty()
+	}
+
+	pub(crate) fn rank(&self, request: &EmojiRankRequest) -> Option<Vec<String>> {
+		let deadline = self.inner.config.limits.rank_deadline;
+		let mut emojis = request.emojis.clone();
+		let mut changed = false;
+		for target in self
+			.inner
+			.targets(Hook::EmojiRank, crate::calls::RANK_EMOJI, true)
+		{
+			let call = Call::RankEmoji {
+				guild_id: request.guild_id,
+				query: request.query.clone(),
+				emojis: emojis.clone(),
+			};
+			match target.worker.call(call, deadline) {
+				Ok(Reply::Order(Some(order))) => {
+					let reordered = reordered(&emojis, &order);
+					if reordered != emojis {
+						emojis = reordered;
+						changed = true;
+					}
+				}
+				Ok(_) => {}
+				Err(fault) => self.inner.strike(&target.id, fault),
+			}
+		}
+		changed.then(|| emojis.into_iter().map(|ranked| ranked.emoji.key).collect())
+	}
+
 	pub(crate) fn deliver(&self, event: crate::calls::PluginEvent) {
 		let registry = self.inner.registry.lock();
 		for entry in registry.entries.values() {
@@ -616,6 +651,29 @@ impl PluginHost {
 		let state = attachment.state.read();
 		state.channel_guild(channel_id)
 	}
+}
+
+fn reordered(emojis: &[RankedEmoji], order: &[String]) -> Vec<RankedEmoji> {
+	let mut taken = vec![false; emojis.len()];
+	let mut reordered = Vec::with_capacity(emojis.len());
+	for key in order {
+		if let Some(index) = emojis
+			.iter()
+			.enumerate()
+			.position(|(index, ranked)| !taken[index] && ranked.emoji.key == *key)
+		{
+			taken[index] = true;
+			reordered.push(emojis[index].clone());
+		}
+	}
+	reordered.extend(
+		emojis
+			.iter()
+			.zip(taken)
+			.filter(|(_, taken)| !taken)
+			.map(|(ranked, _)| ranked.clone()),
+	);
+	reordered
 }
 
 struct Target {

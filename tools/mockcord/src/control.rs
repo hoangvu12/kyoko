@@ -150,6 +150,24 @@ impl Control {
 		self.shared.ban_users(guild_id, user_ids);
 	}
 
+	pub fn favorite_emojis(&self) -> Vec<String> {
+		self.shared.store.lock().favorite_emojis.clone()
+	}
+
+	pub fn set_favorite_emojis(&self, favorites: &[&str]) {
+		self.shared.store.lock().favorite_emojis =
+			favorites.iter().map(|favorite| (*favorite).to_owned()).collect();
+	}
+
+	pub fn update_favorite_emojis(&self, favorites: &[&str]) {
+		self.set_favorite_emojis(favorites);
+		let encoded = protocol::encode_favorite_emojis(&self.favorite_emojis());
+		self.shared.hub.broadcast(
+			"USER_SETTINGS_PROTO_UPDATE",
+			&json!({ "settings": { "type": 2, "proto": encoded }, "partial": false }),
+		);
+	}
+
 	pub fn add_audit_entries(&self, guild_id: u64, count: usize) {
 		self.shared.add_audit_entries(guild_id, count);
 	}

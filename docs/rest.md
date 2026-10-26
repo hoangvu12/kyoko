@@ -67,6 +67,16 @@ The web client keeps the rail's order and folders in the preloaded settings prot
 
 The settings-proto gateway capability (bit 9) is still not advertised: Discord sends `user_settings_proto` in READY and the update event without it, and the write path does not depend on it.
 
+## Favourite emoji
+
+The web client keeps favourite emoji in the frecency settings protobuf (settings type 2, `FrecencyUserSettings`), beside frequently used emoji, GIF and sticker favourites. Unlike the preloaded settings it is not in READY: the client loads it lazily with `GET /users/@me/settings-proto/2` (no query, no body, the usual headers) the first time something needs it, and Discord answers `{"settings":"<base64>"}`.
+
+- kyoko reads it the first time the composer asks for an emoji ranking (the `:` autocomplete with two letters or more; `Command::RankEmoji`), once per session (`crates/session/src/task/emoji_rank.rs`). A failed read is retried at most once a minute, on the next emoji query; it never shows an error. It is read whether or not a plugin ranks emoji.
+- `protocol::decode_favorite_emojis` takes field 5 (`favorite_emojis`) and its repeated string `emojis` (field 1): a custom emoji's id, or a Unicode emoji's name (`skull_crossbones`). Duplicates, empty and non-UTF-8 entries are dropped, at most 512 are kept, and every other field is ignored. `State::favorite_position(id, glyph)` matches a custom emoji by id and a Unicode emoji through any of its shortcodes or its own characters, with or without U+FE0F.
+- USER_SETTINGS_PROTO_UPDATE with `type` 2 replaces the favourites (a partial update without field 5 leaves them), so favouriting on another device shows at once. Each change bumps `State::favorites_generation`.
+- Read-only for now: writing favourites (the picker's star, Midnight 08) is a `PATCH /users/@me/settings-proto/2` with `{"settings":"<base64>"}`; `protocol::encode_favorite_emojis` writes field 5 only, and mockcord already stores such a write and echoes the update.
+- To confirm on real traffic: exactly when the web client first loads type 2 (it is documented as lazy; the picker and the autocomplete are its users) and whether a partial type 2 update ever arrives.
+
 ## Collapsed categories
 
 A category's collapsed state is the `collapsed` flag of its channel override in the user guild settings, which is where the web client keeps it and where oxidcord reads it from. kyoko saves it there with `PATCH /users/@me/guilds/{guild_id}/settings` and `{"channel_overrides":{"<category_id>":{"collapsed":true}}}`.

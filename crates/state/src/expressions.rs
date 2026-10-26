@@ -117,6 +117,8 @@ pub(crate) struct Expressions {
 	pub(crate) recent_emoji: Vec<EmojiRef>,
 	pub(crate) recent_gifs: Vec<Gif>,
 	pub(crate) recent_stickers: Vec<Sticker>,
+	pub(crate) favorites: crate::favorites::Favorites,
+	pub(crate) emoji_ranking: Option<crate::favorites::EmojiRanking>,
 }
 
 fn emoji_usable(

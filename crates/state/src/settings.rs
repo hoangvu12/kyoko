@@ -7,6 +7,9 @@ use serde_json::{Map, Value, json};
 use crate::changes::Changes;
 use crate::state::State;
 
+const PRELOADED: i64 = 1;
+const FRECENCY: i64 = 2;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GuildFolder {
 	pub id: Option<i64>,
@@ -103,10 +106,14 @@ impl State {
 			.and_then(|settings| settings.get("type"))
 			.and_then(Value::as_i64);
 		match proto {
-			Some(encoded) if kind.is_none_or(|kind| kind == 1) => {
+			Some(encoded) if kind.is_none_or(|kind| kind == PRELOADED) => {
 				let mut changes = self.apply_settings_proto(encoded);
 				changes.merge(self.apply_status_proto(encoded));
 				changes
+			}
+			Some(encoded) if kind == Some(FRECENCY) => {
+				let partial = update.get("partial").and_then(Value::as_bool) == Some(true);
+				self.frecency_updated(encoded, partial)
 			}
 			_ => Changes::default(),
 		}

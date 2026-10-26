@@ -59,6 +59,10 @@ impl RestClient {
 			.await
 	}
 
+	pub async fn frecency_settings(&self) -> Result<Value> {
+		self.send(Request::get("/users/@me/settings-proto/2")).await
+	}
+
 	pub async fn auth_sessions(&self) -> Result<Value> {
 		self.send(Request::get("/auth/sessions")).await
 	}

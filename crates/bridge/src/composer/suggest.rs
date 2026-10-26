@@ -1,12 +1,14 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
 use protocol::expressions::unicode::search_unicode;
 use protocol::{ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, ChannelType, Snowflake};
-use state::{MemberListRow, State};
+use state::{EmojiCandidate, MemberListRow, State};
 
 const MAX_SUGGESTIONS: usize = 8;
 const MIN_EMOJI_QUERY: usize = 2;
 const RECENT_AUTHORS: usize = 200;
+const RANK_CANDIDATES: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
@@ -218,7 +220,12 @@ fn channels(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<(u8,
 	found
 }
 
-fn emojis(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<(u8, Suggestion)> {
+struct EmojiMatch {
+	suggestion: Suggestion,
+	candidate: EmojiCandidate,
+}
+
+fn emoji_matches(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<EmojiMatch> {
 	let mut found = Vec::new();
 	for section in state.emoji_catalog(guild_id).guilds {
 		for emoji in section.emojis.iter().filter(|emoji| emoji.usable) {
@@ -226,13 +233,23 @@ fn emojis(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<(u8, S
 				let prefix = if emoji.animated { "a" } else { "" };
 				found.push((
 					hit,
-					Suggestion {
-						label: format!(":{}:", emoji.name),
-						detail: Some(section.name.clone()),
-						insert: format!("<{prefix}:{}:{}> ", emoji.name, emoji.id),
-						visual: Visual::Emoji {
-							id: emoji.id,
+					EmojiMatch {
+						suggestion: Suggestion {
+							label: format!(":{}:", emoji.name),
+							detail: Some(section.name.clone()),
+							insert: format!("<{prefix}:{}:{}> ", emoji.name, emoji.id),
+							visual: Visual::Emoji {
+								id: emoji.id,
+								animated: emoji.animated,
+							},
+						},
+						candidate: EmojiCandidate {
+							key: emoji.id.to_string(),
+							name: emoji.name.clone(),
+							id: Some(emoji.id),
 							animated: emoji.animated,
+							guild_id: Some(section.guild_id),
+							unicode: None,
 						},
 					},
 				));
@@ -242,15 +259,66 @@ fn emojis(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<(u8, S
 	for (order, emoji) in search_unicode(query).into_iter().enumerate() {
 		found.push((
 			u8::from(order > 0 && !emoji.shortcode.starts_with(query)),
-			Suggestion {
-				label: format!(":{}:", emoji.shortcode),
-				detail: None,
-				insert: format!("{} ", emoji.emoji),
-				visual: Visual::Glyph(emoji.emoji.to_owned()),
+			EmojiMatch {
+				suggestion: Suggestion {
+					label: format!(":{}:", emoji.shortcode),
+					detail: None,
+					insert: format!("{} ", emoji.emoji),
+					visual: Visual::Glyph(emoji.emoji.to_owned()),
+				},
+				candidate: EmojiCandidate {
+					key: emoji.shortcode.to_owned(),
+					name: emoji.shortcode.to_owned(),
+					id: None,
+					animated: false,
+					guild_id: None,
+					unicode: Some(emoji.emoji.to_owned()),
+				},
 			},
 		));
 	}
-	found
+	found.sort_by_key(|(hit, _)| *hit);
+	found.into_iter().map(|(_, found)| found).collect()
+}
+
+fn ranked(matches: Vec<EmojiMatch>, order: Option<&[String]>) -> Vec<Suggestion> {
+	let order = order.unwrap_or_default();
+	let positions: HashMap<&str, usize> = matches
+		.iter()
+		.enumerate()
+		.map(|(index, found)| (found.candidate.key.as_str(), index))
+		.collect();
+	let first: Vec<usize> = order
+		.iter()
+		.filter_map(|key| positions.get(key.as_str()).copied())
+		.collect();
+	let mut slots: Vec<Option<Suggestion>> =
+		matches.into_iter().map(|found| Some(found.suggestion)).collect();
+	let mut ranked: Vec<Suggestion> = first
+		.into_iter()
+		.filter_map(|index| slots[index].take())
+		.take(MAX_SUGGESTIONS)
+		.collect();
+	ranked.extend(slots.into_iter().flatten());
+	ranked.truncate(MAX_SUGGESTIONS);
+	ranked
+}
+
+pub fn emoji_candidates(state: &State, guild_id: Option<Snowflake>, query: &Query) -> Vec<EmojiCandidate> {
+	if query.trigger != Trigger::Emoji {
+		return Vec::new();
+	}
+	emoji_matches(state, guild_id, &query.text)
+		.into_iter()
+		.enumerate()
+		.filter(|(index, found)| {
+			*index < RANK_CANDIDATES
+				|| state
+					.favorite_position(found.candidate.id, found.candidate.unicode.as_deref())
+					.is_some()
+		})
+		.map(|(_, found)| found.candidate)
+		.collect()
 }
 
 pub(super) fn chat_commands(index: &ApplicationCommandIndex) -> impl Iterator<Item = &ApplicationCommand> {
@@ -300,7 +368,10 @@ pub fn suggestions(
 	let mut found = match query.trigger {
 		Trigger::Mention => mentions(state, guild_id, channel_id, &query.text),
 		Trigger::Channel => channels(state, guild_id, &query.text),
-		Trigger::Emoji => emojis(state, guild_id, &query.text),
+		Trigger::Emoji => {
+			let matches = emoji_matches(state, guild_id, &query.text);
+			return ranked(matches, state.emoji_ranking(guild_id, &query.text));
+		}
 		Trigger::Command => commands(state.command_index(channel_id).map(AsRef::as_ref), &query.text),
 	};
 	found.sort_by_key(|(hit, _)| *hit);

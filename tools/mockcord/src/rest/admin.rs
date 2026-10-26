@@ -5,7 +5,10 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
-use protocol::{decode_guild_folders, decode_status_settings, encode_guild_folders, encode_status_settings};
+use protocol::{
+	decode_favorite_emojis, decode_guild_folders, decode_status_settings, encode_favorite_emojis,
+	encode_guild_folders, encode_status_settings,
+};
 use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult};
@@ -19,6 +22,7 @@ const AUDIT_REASON: &str = "x-audit-log-reason";
 const DEFAULT_REACTION_LIMIT: usize = 25;
 const THREAD_SEARCH_LIMIT: usize = 25;
 const PRELOADED_SETTINGS: u32 = 1;
+const FRECENCY_SETTINGS: u32 = 2;
 
 fn audit_reason(headers: &HeaderMap) -> Option<String> {
 	let raw = headers.get(AUDIT_REASON)?.to_str().ok()?;
@@ -92,12 +96,25 @@ pub async fn patch_settings_proto(
 	Path(kind): Path<u32>,
 	Json(body): Json<Value>,
 ) -> ApiResult {
-	if kind != PRELOADED_SETTINGS {
-		return Err(ApiError::invalid_body("Only preloaded settings are kept"));
-	}
 	let encoded = body["settings"]
 		.as_str()
 		.ok_or(ApiError::invalid_body("settings is required"))?;
+	if kind == FRECENCY_SETTINGS {
+		let favorites =
+			decode_favorite_emojis(encoded).ok_or(ApiError::invalid_body("Only favourite emoji are kept"))?;
+		let stored = encode_favorite_emojis(&favorites);
+		shared.store.lock().favorite_emojis = favorites;
+		shared.hub.broadcast(
+			"USER_SETTINGS_PROTO_UPDATE",
+			&json!({ "settings": { "type": FRECENCY_SETTINGS, "proto": stored }, "partial": true }),
+		);
+		return Ok(Json(json!({ "settings": stored })));
+	}
+	if kind != PRELOADED_SETTINGS {
+		return Err(ApiError::invalid_body(
+			"Only preloaded and frecency settings are kept",
+		));
+	}
 	let folders = decode_guild_folders(encoded);
 	let status = decode_status_settings(encoded);
 	if folders.is_none() && status.is_none() {
@@ -132,6 +149,14 @@ pub async fn patch_settings_proto(
 	}
 	Ok(Json(json!({ "settings": encoded })))
 }
+pub async fn settings_proto(State(shared): Mock, Path(kind): Path<u32>) -> ApiResult {
+	if kind != FRECENCY_SETTINGS {
+		return Err(ApiError::invalid_body("Only frecency settings are served"));
+	}
+	let encoded = encode_favorite_emojis(&shared.store.lock().favorite_emojis);
+	Ok(Json(json!({ "settings": encoded })))
+}
+
 pub async fn patch_guild_settings(
 	State(shared): Mock,
 	Path(scope): Path<String>,

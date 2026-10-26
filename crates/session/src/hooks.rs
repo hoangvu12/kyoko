@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use protocol::{DispatchEvent, Message, Snowflake};
+use state::EmojiCandidate;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rewrite {
@@ -51,9 +52,30 @@ pub trait SessionHooks: Send + Sync {
 		Ok(true)
 	}
 
+	fn ranks_emoji(&self) -> bool {
+		false
+	}
+
+	fn rank_emoji(&self, _request: &EmojiRankRequest) -> Result<Option<Vec<String>>> {
+		Ok(None)
+	}
+
 	fn on_dispatch(&self, _event: &DispatchEvent) -> Result<()> {
 		Ok(())
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RankedEmoji {
+	pub emoji: EmojiCandidate,
+	pub favorite: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmojiRankRequest {
+	pub guild_id: Option<Snowflake>,
+	pub query: String,
+	pub emojis: Vec<RankedEmoji>,
 }
 
 pub(crate) type Hooks = Option<Arc<dyn SessionHooks>>;

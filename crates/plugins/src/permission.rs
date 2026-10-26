@@ -117,7 +117,12 @@ impl Hook {
 	pub fn available(self) -> bool {
 		matches!(
 			self,
-			Hook::Send | Hook::Edit | Hook::Typing | Hook::Notify | Hook::DisplayName | Hook::Timestamp
+			Hook::Send
+				| Hook::Edit | Hook::Typing
+				| Hook::Notify
+				| Hook::DisplayName
+				| Hook::Timestamp
+				| Hook::EmojiRank
 		)
 	}
 }
@@ -203,7 +208,10 @@ impl Permission {
 			}
 			Permission::Hook(Hook::DisplayName) => "Change how names are shown.".to_owned(),
 			Permission::Hook(Hook::Timestamp) => "Change how relative times are shown.".to_owned(),
-			Permission::Hook(Hook::EmojiRank) => "Reorder emoji suggestions.".to_owned(),
+			Permission::Hook(Hook::EmojiRank) => {
+				"Reorder emoji suggestions, seeing what you type after a colon and your favourite emoji."
+					.to_owned()
+			}
 			Permission::Hook(Hook::MessageRender) => {
 				"Show kept deleted and edited versions of messages.".to_owned()
 			}

@@ -92,6 +92,7 @@ pub struct Changes {
 	pub locks: bool,
 	pub alerts: bool,
 	pub commands: bool,
+	pub emoji_ranking: bool,
 }
 
 impl Changes {
@@ -125,6 +126,7 @@ impl Changes {
 			locks: true,
 			alerts: true,
 			commands: true,
+			emoji_ranking: true,
 		}
 	}
 
@@ -148,7 +150,8 @@ impl Changes {
 			|| self.deletions
 			|| self.locks
 			|| self.alerts
-			|| self.commands)
+			|| self.commands
+			|| self.emoji_ranking)
 			&& self.channel_lists.is_empty()
 			&& self.messages.is_empty()
 			&& self.members.is_empty()
@@ -180,6 +183,7 @@ impl Changes {
 		self.locks |= other.locks;
 		self.alerts |= other.alerts;
 		self.commands |= other.commands;
+		self.emoji_ranking |= other.emoji_ranking;
 		self.channel_lists.merge(&other.channel_lists);
 		self.messages.merge(&other.messages);
 		self.members.merge(&other.members);

@@ -1,5 +1,5 @@
 use protocol::{DispatchEvent, Message, Snowflake};
-use session::{Person, RelativeTime, ShownName};
+use session::{Person, RankedEmoji, RelativeTime, ShownName};
 
 use crate::permission::Scope;
 
@@ -53,6 +53,11 @@ pub(crate) enum Call {
 		shown: ShownName,
 	},
 	FormatRelative(RelativeTime),
+	RankEmoji {
+		guild_id: Option<Snowflake>,
+		query: String,
+		emojis: Vec<RankedEmoji>,
+	},
 	Action {
 		key: String,
 		context: Vec<(String, String)>,
@@ -69,6 +74,7 @@ impl Call {
 			Call::AllowNotification(_) => "allow_notification",
 			Call::FormatName { .. } => "format_name",
 			Call::FormatRelative(_) => "format_relative",
+			Call::RankEmoji { .. } => RANK_EMOJI,
 			Call::Action { .. } => "on_action",
 			Call::SettingsChanged => "on_settings_changed",
 		}
@@ -84,6 +90,7 @@ pub(crate) enum Reply {
 	Text(Option<String>),
 	Name(Option<ShownName>),
 	Allow(bool),
+	Order(Option<Vec<String>>),
 	Done,
 }
 
@@ -107,6 +114,7 @@ impl Fault {
 }
 
 pub(crate) const ON_EVENT: &str = "on_event";
+pub(crate) const RANK_EMOJI: &str = "rank_emoji";
 
 #[derive(Clone, Debug)]
 pub(crate) enum PluginEvent {

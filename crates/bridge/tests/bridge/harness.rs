@@ -5,7 +5,7 @@ use std::time::Duration;
 use bridge::{DmList, FriendsView, Inbox, MemberPanel, Rail, Sidebar, Timeline, changes_notifier};
 use mockcord::{MockConfig, Server};
 use protocol::{Snowflake, Token};
-use session::{Command, GatewayTuning, Session, SessionConfig};
+use session::{Command, GatewayTuning, Session, SessionConfig, SessionHooks};
 use state::{Changes, State};
 use store::{Paths, Settings, Store};
 use tokio::time::{Instant, timeout_at};
@@ -31,6 +31,7 @@ pub struct Running {
 	session: Option<Session>,
 	inbox: Inbox<Changes>,
 	gateway: GatewayTuning,
+	hooks: Option<Arc<dyn SessionHooks>>,
 }
 
 impl Running {
@@ -42,7 +43,20 @@ impl Running {
 		Self::start_tuned(name, config, GatewayTuning::default()).await
 	}
 
+	pub async fn start_hooked(name: &str, hooks: Arc<dyn SessionHooks>) -> Running {
+		Self::launch(name, MockConfig::default(), GatewayTuning::default(), Some(hooks)).await
+	}
+
 	pub async fn start_tuned(name: &str, config: MockConfig, gateway: GatewayTuning) -> Running {
+		Self::launch(name, config, gateway, None).await
+	}
+
+	async fn launch(
+		name: &str,
+		config: MockConfig,
+		gateway: GatewayTuning,
+		hooks: Option<Arc<dyn SessionHooks>>,
+	) -> Running {
 		let server = Server::start(MockConfig {
 			record: true,
 			..config
@@ -52,7 +66,7 @@ impl Running {
 		let scratch = std::env::temp_dir().join(format!("kyoko-bridge-{name}-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&scratch);
 		let inbox = Inbox::new();
-		let session = open_session(&server, &scratch, &inbox, gateway);
+		let session = open_session(&server, &scratch, &inbox, gateway, hooks.clone());
 		let mut running = Running {
 			server,
 			view: View::default(),
@@ -60,6 +74,7 @@ impl Running {
 			session: Some(session),
 			inbox,
 			gateway,
+			hooks,
 		};
 		running
 			.until("the guild list to arrive", |view| {
@@ -83,6 +98,7 @@ impl Running {
 			&self.scratch,
 			&self.inbox,
 			self.gateway,
+			self.hooks.clone(),
 		));
 		self.until("the guild list after a restart", |view| {
 			view.sidebar.channels().next().is_some()
@@ -171,7 +187,13 @@ impl Running {
 	}
 }
 
-fn open_session(server: &Server, scratch: &Path, inbox: &Inbox<Changes>, gateway: GatewayTuning) -> Session {
+fn open_session(
+	server: &Server,
+	scratch: &Path,
+	inbox: &Inbox<Changes>,
+	gateway: GatewayTuning,
+	hooks: Option<Arc<dyn SessionHooks>>,
+) -> Session {
 	let paths = Paths::at(scratch).expect("scratch paths");
 	let mut settings = Settings::load(&paths);
 	settings.storage.plaintext_token = true;
@@ -186,7 +208,7 @@ fn open_session(server: &Server, scratch: &Path, inbox: &Inbox<Changes>, gateway
 		token: Token::new(server.token()),
 		runtime: None,
 		notify: changes_notifier(inbox.clone()),
-		hooks: None,
+		hooks,
 		gateway,
 		rest: Default::default(),
 		caches: Default::default(),

@@ -50,6 +50,7 @@ pub struct Store {
 	pub settings_version: Versions,
 	pub guild_folders: Option<Vec<Value>>,
 	pub status_settings: Option<protocol::ProtoStatusSettings>,
+	pub favorite_emojis: Vec<String>,
 	pub uploads: HashMap<String, UploadedFile>,
 	last_id: u64,
 }
@@ -154,6 +155,7 @@ impl Store {
 			settings_version: Versions::default(),
 			guild_folders: None,
 			status_settings: None,
+			favorite_emojis: crate::admin::seed_favorite_emojis(fixtures),
 			uploads: HashMap::new(),
 			last_id,
 		}

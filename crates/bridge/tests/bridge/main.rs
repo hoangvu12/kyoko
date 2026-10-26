@@ -5,6 +5,7 @@ mod deep_links;
 mod display;
 mod dms;
 mod expressions;
+mod favourites;
 mod friends;
 mod guild_admin;
 mod harness;

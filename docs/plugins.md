@@ -111,7 +111,7 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `hook:notify` | `allow_notification`: read messages that would notify you, and silence them | yes |
 | `hook:display_name` | `format_name`: change how people's names show in the timeline, the member list and profiles | yes |
 | `hook:timestamp` | `format_relative`: change the text of relative times (`<t:...:R>`) | yes |
-| `hook:emoji_rank` | emoji autocomplete ranking | reserved for 50 |
+| `hook:emoji_rank` | `rank_emoji`: reorder the emoji autocomplete, seeing the query and your favourite emoji | yes |
 | `hook:message_render` | message render access to kept deleted and edited versions | reserved for 52 |
 | `action:mark_read` | `kyoko.actions.mark_all_read`, `mark_guild_read` | yes |
 | `action:upload_expression` | emoji and sticker upload | reserved for 53 |
@@ -138,6 +138,7 @@ return {
 	allow_notification = function(message) return true end,
 	format_name = function(person) return nil end,
 	format_relative = function(time) return nil end,
+	rank_emoji = function(request) return nil end,
 	on_event = function(event) end,
 	on_action = function(key, context) end,
 	on_settings_changed = function() end,
@@ -156,6 +157,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `allow_notification(message)` | `hook:notify` | after kyoko's own notification rules and the burst limit, for each OS notification and its sound about to be shown (never for in-window toasts) | `{ id, channel_id, guild_id?, author_id, author_name, content }` | `false` silences; anything else allows | 100 ms |
 | `format_name(person)` | `hook:display_name` | off the UI thread, once per person and inputs, then cached (below) | `{ user_id, guild_id?, username, global_name?, nick?, name, extra? }`; `name` is what kyoko shows (the server nickname, else the display name, else the username) | a string to show instead of `name`, or `{ name?, extra? }`, where `extra` is shown after it, dimmed; `nil` for no change | 50 ms |
 | `format_relative(time)` | `hook:timestamp` | off the UI thread, once per distinct span, then cached | `{ seconds, past, unit, value, text }`: whole seconds between now and the time, whether it is in the past, the largest unit that fits (`second`, `minute`, `hour`, `day`, `month` of 30 days, `year` of 365 days), the exact count of that unit (`2.96`), and kyoko's own text (`3 days ago`) | a string to show instead, or `nil` | 50 ms |
+| `rank_emoji(request)` | `hook:emoji_rank` | after typing pauses on a `:` query (below) | `{ query, guild_id?, emojis }` | an array of keys to put first, or `nil` | 100 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting or one of its slot buttons | the key, and `{ source = "settings" }` or `{ source = "slot", slot = "composer.buttons" }` | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
@@ -165,6 +167,16 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 - Display hooks chain too: each sees the previous plugin's `name` and `extra` (or `text`). A name or text that is empty or longer than 100 characters counts as no change; an empty or too long `extra` is dropped. See "Display hooks" below for when they run.
 - A failing or overrunning hook counts as a strike (below) and the session goes on with the unmodified value; a veto hook that fails allows.
 - `allow_notification` is asked only about alerts the burst limit would show: the session reserves the alert's place first and a veto gives it back, so a plugin that remembers what it allowed is never told about an alert the user did not get. Calls for separate messages may run in either order. Silencing a notification changes nothing else: unread counts, mention badges and the tray badge stay as they are. `guild_id` is filled from state when the gateway leaves it out.
+
+### Emoji ranking
+
+`rank_emoji` reorders the composer's `:` autocomplete. It never runs on the UI thread and never holds up typing:
+
+- The autocomplete shows kyoko's own order at once. Each new query (two letters or more after `:`) sends `Command::RankEmoji` with the candidates; the session waits until no new query has come for 100 ms (`RANK_DELAY` in `crates/session/src/task/emoji_rank.rs`), runs at most one ranking at a time, and keeps only the latest query waiting. The result is stored in `State` for that server, query and favourites generation and replaces kyoko's order when it arrives; a stale result is ignored.
+- Plugin calls: one per query typing pauses on, per plugin with the permission. Typing `:smile` quickly is one call; at one keystroke per 150 ms it is one per letter from the second. Moving the selection, new messages or member updates never call it, and the same query is asked once per favourites generation (a second call only when favourites arrive or change while it is shown). With no running plugin holding `hook:emoji_rank`, nothing is called at all.
+- `request.query` is the text after `:` in lowercase; `request.guild_id` is the composer's server. `request.emojis` are kyoko's first 100 matches in its own order, plus every later match that is a favourite. Each is `{ key, name, animated, id?, guild_id?, emoji?, favorite? }`: `key` is a custom emoji's id or a Unicode emoji's shortcode, `emoji` a Unicode emoji's characters, `favorite` its 1-based place in your favourite emoji (`docs/rest.md`, "Favourite emoji").
+- The return value is a list of keys: those emoji go first in that order, unknown and repeated keys are ignored, and every emoji not listed follows in the order it had. Anything that is not a table changes nothing. Ranking hooks chain in plugin id order, each seeing the previous order.
+- A ranking that fails or overruns its 100 ms counts a strike and leaves the order as it was, kyoko's own if no plugin ranked; the autocomplete is never emptied or held.
 
 ### Events
 
@@ -233,6 +245,7 @@ A Discord action runs only inside a user gesture:
 | send and edit hooks | 250 ms |
 | typing and notification vetoes | 100 ms |
 | `format_name`, `format_relative` (`name_deadline`, `time_deadline`) | 50 ms each |
+| emoji ranking | 100 ms |
 | events, `on_settings_changed` | 200 ms |
 | `on_action` | 500 ms |
 | loading `logic.luau` | 1 s |
@@ -354,6 +367,10 @@ Vencord's ShowMeYourName is the behaviour reference for the modes; no code is sh
 
 `plugins/dont-round-my-timestamps/` (`hook:timestamp`, ships disabled). Its `format_relative` rounds relative times down instead of to the nearest unit: `math.floor(time.value)` of the unit that fits, so 2 days and 23 hours ago reads "2 days ago" where kyoko says "3 days ago", and 59 minutes 59 seconds reads "59 minutes ago" rather than "1 hour ago". Vencord's DontRoundMyTimestamps is the behaviour reference.
 
+## FavoriteEmojiFirst
+
+`plugins/favorite-emoji-first/` (`hook:emoji_rank`, ships disabled). Its `rank_emoji` puts every suggested emoji that is one of your favourites first, in the order you favourited them, and leaves the rest in kyoko's order. Favourites are Discord's own, read from the frecency settings the web client uses, so favourites set in the official client count, and favouriting on another device reorders the next suggestions. It changes only the composer's `:` suggestions; the expression picker's search keeps kyoko's order until the picker gains a Favorites section (Midnight 08). Vencord's FavoriteEmojiFirst is the behaviour reference; no code is shared.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -367,7 +384,7 @@ While writing it, run `cargo run -p kyoko -- --mock --plugins-dir plugins` and e
 
 Behaviour tests drive a session against an in-process mockcord with the plugin host as its hooks: `crates/plugins/tests/plugins/` (it reuses the session harness, `crates/session/tests/session/harness.rs`). `support::write_plugin` writes a test plugin into a scratch development folder, `support::start` starts the host and a session, `support::approve` approves what the manifest asks for. Observe behaviour through the session seam: the echoed message text, `State`, and mockcord's recorded traffic (`recording().requests_to(...)`). A handy trick for observing a plugin's internals is a `before_send` that appends what it saw to the message.
 
-What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read), ShowMeYourName and DontRoundMyTimestamps (every author of the loaded channel shown through `bridge::Display`, no calls on re-projection, a relative time rounded down) and a failing plugin against the mock.
+What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), FavoriteEmojiFirst (`favorite_emoji_first.rs`: favourites first in their favourite order and after favourites change, the hook only with its permission, failing and endless rankings leaving kyoko's order beside a working one, nothing while off), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read), ShowMeYourName and DontRoundMyTimestamps (every author of the loaded channel shown through `bridge::Display`, no calls on re-projection, a relative time rounded down), FavoriteEmojiFirst (the mock's favourite ranked first) and a failing plugin against the mock. The session side of ranking (one read of the frecency proto, updates, the debounce and a failing hook) is covered in `crates/session/tests/session/favourites.rs`, and the real composer with the real plugin in the bridge test `favourites::the_emoji_autocomplete_lists_favourites_first_once_favorite_emoji_first_runs`.
 
 Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
 

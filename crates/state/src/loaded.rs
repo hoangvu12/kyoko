@@ -106,6 +106,8 @@ pub enum Loaded {
 	RecentEmoji(Vec<EmojiRef>),
 	RecentGifs(Vec<Gif>),
 	RecentStickers(Vec<Sticker>),
+	Frecency(String),
+	EmojiRanked(crate::favorites::EmojiRanking),
 	UserSettings(Value),
 	AuthSessions(Value),
 }
@@ -655,6 +657,8 @@ impl State {
 				self.lazy.expressions.recent_stickers.clone_from(stickers);
 				changes.loaded.insert(EXPRESSIONS_KEY);
 			}
+			Loaded::Frecency(encoded) => return self.frecency_loaded(encoded),
+			Loaded::EmojiRanked(ranking) => return self.emoji_ranked(ranking),
 		}
 		changes
 	}

@@ -547,7 +547,12 @@ impl Link {
 		if changes.typing.contains(channel_id) || changes.members.contains(channel_id) {
 			self.publish_composer_typing(pane, state);
 		}
+		if changes.emoji_ranking {
+			let request = view.composer.borrow_mut().rank_request(state);
+			self.composer_send(request.into_iter().collect());
+		}
 		if changes.commands
+			|| changes.emoji_ranking
 			|| !changes.members.is_empty()
 			|| changes.messages.contains(channel_id)
 			|| !changes.channel_lists.is_empty()

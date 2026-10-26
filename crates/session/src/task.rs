@@ -42,6 +42,7 @@ mod collapse;
 mod commands;
 mod community;
 mod deletes;
+mod emoji_rank;
 mod expressions;
 mod failures;
 mod guild_writes;
@@ -147,6 +148,7 @@ pub(crate) enum Internal {
 		guild_id: Option<Snowflake>,
 		outcome: profiles::ProfileOutcome,
 	},
+	EmojiRanked(Option<state::EmojiRanking>),
 }
 
 pub(crate) struct CoreParts {
@@ -224,6 +226,7 @@ pub(crate) struct Core {
 	backfill: backfill::Backfill,
 	outbox: outbox::Outbox,
 	interactions: interactions::Interactions,
+	ranker: emoji_rank::EmojiRanker,
 }
 
 fn page_query(
@@ -303,6 +306,7 @@ impl Core {
 			backfill: backfill::Backfill::new(&parts.tuning),
 			outbox: outbox::Outbox::default(),
 			interactions: interactions::Interactions::default(),
+			ranker: emoji_rank::EmojiRanker::default(),
 		}
 	}
 
@@ -694,6 +698,7 @@ impl Core {
 				deleted: kept.deleted,
 				versions: kept.versions,
 			}),
+			Internal::EmojiRanked(ranking) => self.emoji_ranked(ranking),
 		}
 	}
 
@@ -1188,6 +1193,7 @@ impl Core {
 			self.status.deadline(),
 			self.status_deadline(),
 			self.searcher.deadline(),
+			self.ranker.deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1215,6 +1221,9 @@ impl Core {
 		self.expire_custom_status();
 		if self.searcher.deadline().is_some_and(|due| due <= now) {
 			self.flush_search();
+		}
+		if self.ranker.deadline().is_some_and(|due| due <= now) {
+			self.flush_emoji_rank();
 		}
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {

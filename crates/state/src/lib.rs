@@ -7,6 +7,7 @@ mod dispatch;
 mod event;
 mod eviction;
 mod expressions;
+mod favorites;
 mod guild;
 mod kept;
 mod loaded;
@@ -39,6 +40,7 @@ pub use event::{Event, LoadDirection, LocalEvent};
 pub use expressions::{
 	CatalogEmoji, EXPRESSIONS_KEY, EmojiCatalog, EmojiRef, GuildEmojis, RECENT_CAP, UnicodeSection,
 };
+pub use favorites::{EmojiCandidate, EmojiRanking};
 pub use guild::GuildState;
 pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{

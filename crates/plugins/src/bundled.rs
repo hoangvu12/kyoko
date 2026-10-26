@@ -79,13 +79,25 @@ const DONT_ROUND_MY_TIMESTAMPS: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 6] = [
+const FAVORITE_EMOJI_FIRST: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/favorite-emoji-first/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/favorite-emoji-first/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 7] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
 	ONE_PING_PER_DM,
 	SHOW_ME_YOUR_NAME,
 	DONT_ROUND_MY_TIMESTAMPS,
+	FAVORITE_EMOJI_FIRST,
 ];
 
 pub fn packages() -> Vec<Package> {

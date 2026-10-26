@@ -17,7 +17,7 @@ pub use command::{Command, FriendSource, InviteSource};
 pub use config::{NotifyFn, SessionConfig};
 pub use display::{DisplayHooks, Formatting, Person, RelativeTime, ShownName};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
-pub use hooks::{Rewrite, SessionHooks};
+pub use hooks::{EmojiRankRequest, RankedEmoji, Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};
 pub use rest::{RestTuning, UploadFile};
 pub use search::{SearchFailure, SearchResults, SearchStatus};

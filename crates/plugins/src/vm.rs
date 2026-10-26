@@ -8,7 +8,7 @@ use mlua::{Error, Function, Lua, RegistryKey, Table, Value, VmState};
 use session::ShownName;
 
 use crate::api;
-use crate::calls::{Call, Fault, MessageView, ON_EVENT, PluginEvent, Reply};
+use crate::calls::{Call, Fault, MessageView, ON_EVENT, PluginEvent, RANK_EMOJI, Reply};
 use crate::context::Context;
 use crate::manifest::clip;
 use crate::package::Package;
@@ -16,13 +16,15 @@ use crate::package::Package;
 const ERROR_LIMIT: usize = 160;
 const TEXT_LIMIT: usize = 4000;
 const LABEL_LIMIT: usize = 100;
-const HOOK_NAMES: [&str; 9] = [
+const ORDER_LIMIT: usize = 512;
+const HOOK_NAMES: [&str; 10] = [
 	"before_send",
 	"before_edit",
 	"allow_typing",
 	"allow_notification",
 	"format_name",
 	"format_relative",
+	RANK_EMOJI,
 	"on_action",
 	"on_settings_changed",
 	ON_EVENT,
@@ -121,6 +123,7 @@ impl LogicVm {
 			}
 			Call::FormatName { shown, .. } => Reply::Name(shown_name(&value, shown)),
 			Call::FormatRelative(time) => Reply::Text(label(&value).filter(|text| *text != time.text)),
+			Call::RankEmoji { .. } => Reply::Order(order(&value)),
 			Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 		})
 	}
@@ -221,6 +224,25 @@ impl LogicVm {
 				argument.raw_set("past", time.past)?;
 				argument.raw_set("value", time.value)?;
 				vec![Value::Table(argument)]
+			}
+			Call::RankEmoji {
+				guild_id,
+				query,
+				emojis,
+			} => {
+				let request = table(
+					lua,
+					&[
+						("query", Some(query.clone())),
+						("guild_id", guild_id.map(|id| id.to_string())),
+					],
+				)?;
+				let list = lua.create_table_with_capacity(emojis.len(), 0)?;
+				for ranked in emojis {
+					list.raw_push(emoji_table(lua, ranked)?)?;
+				}
+				request.raw_set("emojis", list)?;
+				vec![Value::Table(request)]
 			}
 			Call::Action { key, context } => {
 				let details = lua.create_table()?;
@@ -329,12 +351,47 @@ fn message_table(lua: &Lua, message: &MessageView) -> mlua::Result<Table> {
 	)
 }
 
+fn emoji_table(lua: &Lua, ranked: &session::RankedEmoji) -> mlua::Result<Table> {
+	let emoji = &ranked.emoji;
+	let entry = table(
+		lua,
+		&[
+			("key", Some(emoji.key.clone())),
+			("name", Some(emoji.name.clone())),
+			("id", emoji.id.map(|id| id.to_string())),
+			("guild_id", emoji.guild_id.map(|id| id.to_string())),
+			("emoji", emoji.unicode.clone()),
+		],
+	)?;
+	entry.raw_set("animated", emoji.animated)?;
+	if let Some(position) = ranked.favorite {
+		entry.raw_set("favorite", position + 1)?;
+	}
+	Ok(entry)
+}
+
+fn order(value: &Value) -> Option<Vec<String>> {
+	let Value::Table(keys) = value else {
+		return None;
+	};
+	let order = keys
+		.sequence_values::<Value>()
+		.take(ORDER_LIMIT)
+		.filter_map(|key| match key {
+			Ok(Value::String(key)) => key.to_str().ok().map(|key| key.to_owned()),
+			_ => None,
+		})
+		.collect();
+	Some(order)
+}
+
 fn default_reply(call: &Call) -> Reply {
 	match call {
 		Call::BeforeSend { .. } | Call::BeforeEdit { .. } => Reply::Text(None),
 		Call::AllowTyping { .. } | Call::AllowNotification(_) => Reply::Allow(true),
 		Call::FormatName { .. } => Reply::Name(None),
 		Call::FormatRelative(_) => Reply::Text(None),
+		Call::RankEmoji { .. } => Reply::Order(None),
 		Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 	}
 }

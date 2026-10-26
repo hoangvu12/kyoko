@@ -95,6 +95,11 @@ impl Core {
 			| Command::EditSticker { .. }
 			| Command::DeleteSticker { .. }
 			| Command::EditEmoji { .. }) => self.on_expression_command(command),
+			Command::RankEmoji {
+				guild_id,
+				query,
+				candidates,
+			} => self.rank_emoji(guild_id, query, candidates),
 			command @ (Command::AddFriend { .. }
 			| Command::AcceptFriend { .. }
 			| Command::RemoveRelationship { .. }

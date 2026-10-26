@@ -9,6 +9,7 @@ mod composer;
 mod deletes;
 mod dms;
 mod expressions;
+mod favourites;
 mod fingerprint;
 mod friends;
 mod gateway;

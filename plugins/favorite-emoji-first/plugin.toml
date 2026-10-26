@@ -1,0 +1,7 @@
+id = "favorite-emoji-first"
+name = "FavoriteEmojiFirst"
+version = "1.0.0"
+api = 1
+description = "Your favourite emoji come first in emoji suggestions, in the order you favourited them."
+authors = ["Kyoko"]
+permissions = ["hook:emoji_rank"]

@@ -1,6 +1,8 @@
 use anyhow::Result;
 use protocol::{DispatchEvent, Message, Snowflake};
-use session::{DisplayHooks, Formatting, Person, RelativeTime, Rewrite, SessionHooks, ShownName};
+use session::{
+	DisplayHooks, EmojiRankRequest, Formatting, Person, RelativeTime, Rewrite, SessionHooks, ShownName,
+};
 
 use crate::calls::{Call, MessageView, PluginEvent};
 use crate::host::PluginHost;
@@ -54,6 +56,14 @@ impl SessionHooks for PluginHost {
 		let mut view = MessageView::of(message);
 		view.guild_id = view.guild_id.or_else(|| self.guild_of(message.channel_id));
 		Ok(self.allow(Hook::Notify, Call::AllowNotification(view)))
+	}
+
+	fn ranks_emoji(&self) -> bool {
+		self.ranks()
+	}
+
+	fn rank_emoji(&self, request: &EmojiRankRequest) -> Result<Option<Vec<String>>> {
+		Ok(self.rank(request))
 	}
 
 	fn on_dispatch(&self, event: &DispatchEvent) -> Result<()> {

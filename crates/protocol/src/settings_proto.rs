@@ -21,6 +21,9 @@ const FOLDER_ID: u32 = 2;
 const FOLDER_NAME: u32 = 3;
 const FOLDER_COLOR: u32 = 4;
 const WRAPPED_VALUE: u32 = 1;
+const FRECENCY_FAVORITE_EMOJIS: u32 = 5;
+const FAVORITE_EMOJIS: u32 = 1;
+const FAVORITE_LIMIT: usize = 512;
 
 const LENIENT: GeneralPurpose = GeneralPurpose::new(
 	&STANDARD_ALPHABET,
@@ -245,6 +248,39 @@ pub fn decode_status_settings(encoded: &str) -> Option<ProtoStatusSettings> {
 		(PRELOADED_STATUS, Wire::Bytes(inner)) => Some(decode_status(inner)),
 		_ => None,
 	})
+}
+
+fn decode_favorites(bytes: &[u8]) -> Vec<String> {
+	let mut favorites: Vec<String> = Vec::new();
+	for (number, wire) in Fields::new(bytes) {
+		if let (FAVORITE_EMOJIS, Wire::Bytes(value)) = (number, wire)
+			&& let Ok(emoji) = std::str::from_utf8(value)
+			&& !emoji.is_empty()
+			&& !favorites.iter().any(|known| known == emoji)
+			&& favorites.len() < FAVORITE_LIMIT
+		{
+			favorites.push(emoji.to_owned());
+		}
+	}
+	favorites
+}
+
+pub fn decode_favorite_emojis(encoded: &str) -> Option<Vec<String>> {
+	let bytes = LENIENT.decode(encoded.trim()).ok()?;
+	Fields::new(&bytes).find_map(|(number, wire)| match (number, wire) {
+		(FRECENCY_FAVORITE_EMOJIS, Wire::Bytes(inner)) => Some(decode_favorites(inner)),
+		_ => None,
+	})
+}
+
+pub fn encode_favorite_emojis(favorites: &[String]) -> String {
+	let mut inner = Writer::new();
+	for emoji in favorites {
+		inner.bytes_field(FAVORITE_EMOJIS, emoji.as_bytes());
+	}
+	let mut settings = Writer::new();
+	settings.bytes_field(FRECENCY_FAVORITE_EMOJIS, &inner.bytes);
+	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
 }
 
 fn encode_custom_status(custom: &ProtoCustomStatus) -> Vec<u8> {

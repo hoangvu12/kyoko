@@ -12,7 +12,7 @@ use plugins::{HostConfig, PluginHost};
 use protocol::{Channel, ChannelType, Snowflake, Token};
 use serde_json::json;
 use session::{Command, Formatting, Session, SessionConfig, SessionHooks};
-use state::{SharedState, State};
+use state::{EmojiCandidate, SharedState, State};
 use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
 use tokio::time::{Instant, sleep_until, timeout_at};
@@ -53,6 +53,10 @@ const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
 const DONT_ROUND: &str = "dont-round-my-timestamps";
 const FORMAT_POLL: Duration = Duration::from_millis(20);
 const REDRAWS: usize = 100;
+const FAVORITE_EMOJI_FIRST: &str = "favorite-emoji-first";
+const FAVORITE_QUERY: &str = "wave";
+const FAVORITE_EMOJI: &str = "blob_wave";
+const WAVE: &str = "👋";
 const PING_TEXT: &str = "headless ping";
 const ALERT_QUIET: Duration = Duration::from_millis(500);
 const BROKEN_HOOK_TEXT: &str = "headless hook fails";
@@ -186,6 +190,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		ONE_PING_PER_DM,
 		SHOW_ME_YOUR_NAME,
 		DONT_ROUND,
+		FAVORITE_EMOJI_FIRST,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -391,6 +396,53 @@ impl Harness {
 			tokio::time::sleep(FORMAT_POLL).await;
 		}
 		Ok(display.calls())
+	}
+
+	async fn favourites_first(&self, server: &Server) -> Result<()> {
+		let guild = server.fixtures().guilds.first().context("no mock server")?;
+		let favourite = guild
+			.emojis
+			.iter()
+			.find(|emoji| emoji.name.as_deref() == Some(FAVORITE_EMOJI))
+			.and_then(|emoji| emoji.id)
+			.context("the mock server has no favourite emoji")?;
+		let candidates = vec![
+			EmojiCandidate {
+				key: FAVORITE_QUERY.to_owned(),
+				name: FAVORITE_QUERY.to_owned(),
+				id: None,
+				animated: false,
+				guild_id: None,
+				unicode: Some(WAVE.to_owned()),
+			},
+			EmojiCandidate {
+				key: favourite.to_string(),
+				name: FAVORITE_EMOJI.to_owned(),
+				id: Some(favourite),
+				animated: false,
+				guild_id: Some(Snowflake(guild.id)),
+				unicode: None,
+			},
+		];
+		let ask = |candidates: Vec<EmojiCandidate>| {
+			self.session.send(Command::RankEmoji {
+				guild_id: None,
+				query: FAVORITE_QUERY.to_owned(),
+				candidates,
+			});
+		};
+		ask(candidates.clone());
+		self.until("the favourite emoji", |state| state.favorites_loaded())
+			.await?;
+		ask(candidates);
+		let key = favourite.to_string();
+		self.until("FavoriteEmojiFirst to rank the favourite first", |state| {
+			state
+				.emoji_ranking(None, FAVORITE_QUERY)
+				.and_then(<[String]>::first)
+				== Some(&key)
+		})
+		.await
 	}
 
 	async fn stop(self) -> Result<()> {
@@ -653,6 +705,7 @@ async fn scenario(
 		})
 		.await?;
 	harness.pings_once(server).await?;
+	harness.favourites_first(server).await?;
 
 	if args.chaos {
 		let session_id = harness.state.read().session().session_id.clone();

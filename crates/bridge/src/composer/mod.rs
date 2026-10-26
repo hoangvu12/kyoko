@@ -14,7 +14,8 @@ use crate::sticker_picker::StickerCell;
 
 pub use slash::{Slash, parse_slash};
 pub use suggest::{
-	Query, Suggestion, Trigger, Visual, apply_suggestion, placeholder, query_at, suggestions, typing_line,
+	Query, Suggestion, Trigger, Visual, apply_suggestion, emoji_candidates, placeholder, query_at,
+	suggestions, typing_line,
 };
 
 const MIB: f64 = 1024.0 * 1024.0;
@@ -80,6 +81,7 @@ pub struct Composer {
 	seen_rejection: u64,
 	acted_at: Option<DateTime<Utc>>,
 	member_query: Option<String>,
+	ranked_for: Option<(String, u64)>,
 	dirty: bool,
 }
 
@@ -212,7 +214,25 @@ impl Composer {
 			}
 			_ => {}
 		}
+		commands.extend(self.rank_request(state));
 		commands
+	}
+
+	pub fn rank_request(&mut self, state: &State) -> Option<Command> {
+		let query = self
+			.query
+			.as_ref()
+			.filter(|query| query.trigger == Trigger::Emoji)?;
+		let asked = (query.text.clone(), state.favorites_generation());
+		if self.ranked_for.as_ref() == Some(&asked) {
+			return None;
+		}
+		self.ranked_for = Some(asked);
+		Some(Command::RankEmoji {
+			guild_id: self.guild_id,
+			query: query.text.clone(),
+			candidates: emoji_candidates(state, self.guild_id, query),
+		})
 	}
 
 	pub fn refresh_suggestions(&mut self, state: &State) -> bool {
