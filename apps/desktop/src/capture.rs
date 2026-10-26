@@ -12,6 +12,7 @@ pub const POLL: Duration = Duration::from_millis(100);
 pub const SETTLE: Duration = Duration::from_millis(1500);
 pub const LIMIT: Duration = Duration::from_secs(30);
 pub const SCROLL_PASSES: usize = 10;
+pub const BUG_TITLE_TEXT: &str = "Reaction tooltip wraps to three lines";
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
@@ -106,6 +107,16 @@ pub enum Screen {
 	Reactions(ReactionShot),
 	FriendConfirm(FriendShot),
 	VoiceMessage,
+	Components(ComponentShot),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentShot {
+	Buttons,
+	MultiSelect,
+	V2,
+	Modal,
+	ModalError,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,6 +271,11 @@ impl Screen {
 			"friend-remove-dialog" => Some(Screen::FriendConfirm(FriendShot::Remove)),
 			"friend-block-dialog" => Some(Screen::FriendConfirm(FriendShot::Block)),
 			"voice-message" => Some(Screen::VoiceMessage),
+			"message-components" => Some(Screen::Components(ComponentShot::Buttons)),
+			"message-components-multi-select" => Some(Screen::Components(ComponentShot::MultiSelect)),
+			"message-components-v2" => Some(Screen::Components(ComponentShot::V2)),
+			"app-modal" => Some(Screen::Components(ComponentShot::Modal)),
+			"app-modal-error" => Some(Screen::Components(ComponentShot::ModalError)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -322,7 +338,8 @@ impl Screen {
 			| Screen::MemberNotes
 			| Screen::Reactions(_)
 			| Screen::FriendConfirm(_)
-			| Screen::VoiceMessage => Some(Opening::First),
+			| Screen::VoiceMessage
+			| Screen::Components(_) => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

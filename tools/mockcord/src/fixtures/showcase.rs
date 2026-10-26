@@ -11,6 +11,7 @@ use protocol::{
 use serde_json::Value;
 
 use crate::audio;
+use crate::components;
 use crate::ids::snowflake_at;
 use crate::json::to_json;
 
@@ -36,6 +37,8 @@ pub const SECTIONS: [(&str, &str); 8] = [
 	("timeline-system", "showcase: system messages"),
 ];
 
+pub const COMPONENTS_SECTION: &str = "showcase: components";
+pub const RELEASE_QUESTION: &str = "did the release post go out";
 pub const REACTIONS_SECTION: &str = "showcase: reactions";
 pub const VOICE_SECTION: &str = "showcase: voice messages";
 pub const AUDIO_CAPTION: &str = "here is the loop as a file";
@@ -118,6 +121,25 @@ impl Writer<'_> {
 	fn section(&mut self, title: &str) -> u64 {
 		self.index += 10;
 		self.say(0, &marker(title))
+	}
+
+	fn components(&mut self, components: Vec<Value>, flags: MessageFlags) -> u64 {
+		let id = self.post(0, |message| {
+			message.author = crate::rest::mockbot();
+			message.flags = flags;
+		});
+		if let Some(stored) = self.messages.get_mut(&id) {
+			stored["components"] = Value::Array(components);
+		}
+		id
+	}
+
+	fn components_said(&mut self, content: &str, components: Vec<Value>) -> u64 {
+		let id = self.components(components, MessageFlags::empty());
+		if let Some(stored) = self.messages.get_mut(&id) {
+			stored["content"] = Value::String(content.to_owned());
+		}
+		id
 	}
 
 	fn stored(&self, id: u64) -> Option<Message> {
@@ -638,6 +660,27 @@ pub fn build(spec: &Showcase) -> Built {
 			None,
 		)]);
 	});
+
+	writer.section(COMPONENTS_SECTION);
+	writer.components_said(components::BUTTONS_PROMPT, components::buttons());
+	writer.components_said(components::FRUIT_PROMPT, components::fruit_select("fruit", false));
+	writer.components_said(
+		components::FRUITS_PROMPT,
+		components::fruit_select("fruits", true),
+	);
+	writer.say(1, "the select menus look right now");
+	writer.say(2, RELEASE_QUESTION);
+	writer.components(
+		components::release(
+			"https://example.com/static/refact0r.png",
+			[
+				"https://example.com/static/midnight-hero.png",
+				"https://example.com/static/midnight-picker.png",
+				"https://example.com/static/midnight-chips.png",
+			],
+		),
+		MessageFlags::IS_COMPONENTS_V2,
+	);
 
 	writer.section(REACTIONS_SECTION);
 	writer.post(1, |message| {

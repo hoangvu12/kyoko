@@ -86,6 +86,7 @@ pub struct ChannelMessages {
 	ephemeral: Vec<Arc<Message>>,
 	expired: HashSet<Snowflake>,
 	failed_components: HashSet<Snowflake>,
+	waiting_components: HashMap<Snowflake, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -526,6 +527,17 @@ impl ChannelMessages {
 
 	pub fn has_failed_component(&self, id: Snowflake) -> bool {
 		self.failed_components.contains(&id)
+	}
+
+	pub fn component_waiting(&mut self, id: Snowflake, custom_id: Option<String>) -> bool {
+		match custom_id {
+			Some(custom_id) => self.waiting_components.insert(id, custom_id.clone()) != Some(custom_id),
+			None => self.waiting_components.remove(&id).is_some(),
+		}
+	}
+
+	pub fn waiting_component(&self, id: Snowflake) -> Option<&str> {
+		self.waiting_components.get(&id).map(String::as_str)
 	}
 
 	pub fn take_pending(&mut self, nonce: &Nonce) -> Option<PendingMessage> {

@@ -132,6 +132,7 @@ impl Links {
 	fn content(self: &Rc<Self>, pending: Pending) -> View {
 		let (close, cancel, trust, open) = (self.clone(), self.clone(), self.clone(), self.clone());
 		column()
+			.id("leave-kyoko")
 			.w_full()
 			.child(kit::header(kit::title("Leave Kyoko?"), None, move || {
 				close.close()

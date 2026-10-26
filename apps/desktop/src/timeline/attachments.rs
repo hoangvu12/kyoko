@@ -237,7 +237,7 @@ fn opens(frame: View, target: bridge::LightboxImage, env: &Rc<RowEnv>) -> View {
 		.on_click(move || lightbox.open(target.clone()))
 }
 
-fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
+pub(super) fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
 	let url = attachment.url.clone().unwrap_or_default();
 	let size = attachment
 		.size

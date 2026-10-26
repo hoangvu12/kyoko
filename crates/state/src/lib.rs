@@ -14,6 +14,7 @@ mod loaded;
 mod locks;
 mod member_list;
 mod messages;
+mod modal;
 mod notifications;
 mod own_status;
 mod permissions;
@@ -54,6 +55,7 @@ pub use messages::{
 	ChannelMessages, CommandStage, DEFERRED_REPLY_WINDOW, PendingFile, PendingMessage, SendFailure,
 	UploadProgress, Viewport, apply_update, reaction_name,
 };
+pub use modal::{AppModal, MODAL_FAILED, ModalStatus};
 pub use notifications::{AlertKind, Attention};
 pub use own_status::{CustomStatus, StatusEmoji, status_kind};
 pub use permissions::DM_PERMISSIONS;

@@ -7,6 +7,7 @@ mod collapse;
 mod command_options;
 mod command_replies;
 mod community;
+mod components;
 mod composer;
 mod deletes;
 mod dms;

@@ -63,6 +63,8 @@ pub struct MessageEntry {
 	pub ephemeral: bool,
 	pub reply_state: Option<ReplyState>,
 	pub interaction_failed: bool,
+	pub waiting_component: Option<String>,
+	pub select_options: Arc<crate::components::SelectOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +184,8 @@ impl PartialEq for MessageEntry {
 			&& self.ephemeral == other.ephemeral
 			&& self.reply_state == other.reply_state
 			&& self.interaction_failed == other.interaction_failed
+			&& self.waiting_component == other.waiting_component
+			&& self.select_options == other.select_options
 	}
 }
 
@@ -581,6 +585,7 @@ fn entry(
 ) -> MessageEntry {
 	let reply_state = reply_state(&view, Utc::now());
 	let message = view.message;
+	crate::components::note_unknown(&message.components);
 	let shown = author_name(state, guild_id, &message, display);
 	let names = Names::of(state, guild_id, &message, body.documents());
 	let reply = ReplyPreview::of(state, guild_id, &message);
@@ -620,6 +625,12 @@ fn entry(
 		interaction,
 		reply_state,
 		interaction_failed: view.interaction_failed,
+		waiting_component: view.waiting_component,
+		select_options: Arc::new(crate::components::select_options(
+			state,
+			guild_id,
+			&message.components,
+		)),
 		rendered: view.rendered,
 		message,
 	}

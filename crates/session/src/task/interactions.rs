@@ -306,6 +306,11 @@ impl Core {
 		}
 	}
 
+	pub(super) fn command_became_modal(&mut self, nonce: Nonce) {
+		self.interactions.settle(&nonce.0);
+		self.apply_local(LocalEvent::PendingDiscarded { nonce });
+	}
+
 	pub(super) fn interaction_created(&mut self, value: &Value) {
 		let Some(nonce) = value.get("nonce").and_then(Value::as_str) else {
 			return;
@@ -322,6 +327,9 @@ impl Core {
 		let Some(nonce) = value.get("nonce").and_then(Value::as_str) else {
 			return;
 		};
+		if self.component_settled(nonce, failed) || self.modal_settled(nonce, failed) {
+			return;
+		}
 		if self.interactions.settle(nonce).is_some() && failed {
 			self.apply_local(LocalEvent::CommandAdvanced {
 				nonce: Nonce(nonce.to_owned()),

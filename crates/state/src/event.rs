@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use protocol::{
-	ApplicationCommandIndex, DispatchEvent, Message, Nonce, Ready, ReadySupplemental, Snowflake, StickerItem,
-	User,
+	ApplicationCommandIndex, DispatchEvent, InteractionModal, Message, Nonce, Ready, ReadySupplemental,
+	Snowflake, StickerItem, User,
 };
 
 use crate::deletions::{DeleteBatch, DeleteStatus};
@@ -12,6 +12,7 @@ use crate::kept::MessageVersion;
 use crate::loaded::Loaded;
 use crate::locks::{RiskyReason, RiskyTarget};
 use crate::messages::{CommandStage, PendingFile, SendFailure, Viewport};
+use crate::modal::ModalStatus;
 use crate::state::{ConnectionStatus, SecretStorage};
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
@@ -89,6 +90,17 @@ pub enum LocalEvent {
 		id: Snowflake,
 		failed: bool,
 	},
+	ComponentWaiting {
+		channel_id: Snowflake,
+		id: Snowflake,
+		custom_id: Option<String>,
+	},
+	ModalOpened(Box<InteractionModal>),
+	ModalChanged {
+		status: ModalStatus,
+		missing: Vec<String>,
+	},
+	ModalClosed,
 	DraftChanged {
 		channel_id: Snowflake,
 		content: String,

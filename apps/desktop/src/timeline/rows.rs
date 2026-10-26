@@ -155,12 +155,20 @@ pub struct RowEnv {
 	pub favorite_gifs: Signal<Rc<HashSet<String>>>,
 	pub favorites_asked: Cell<bool>,
 	pub gif_frames: RefCell<Vec<zgx::compose::NodeHandle>>,
+	pub selects: RefCell<HashMap<(Snowflake, String), Rc<super::components::SelectState>>>,
 }
 
 impl RowEnv {
 	pub fn want_favorites(&self) {
 		if !self.favorites_asked.replace(true) {
 			self.send(Command::LoadFavorites);
+		}
+	}
+
+	pub fn pick_in_select(&self, message_id: Snowflake, custom_id: &str, values: &[&str], open: bool) {
+		let key = (message_id, custom_id.to_owned());
+		if let Some(state) = self.selects.borrow().get(&key) {
+			state.pick(values.iter().map(|value| (*value).to_owned()).collect(), open);
 		}
 	}
 
@@ -261,7 +269,7 @@ fn rich_height(entry: &MessageEntry) -> f32 {
 	} else {
 		REACTIONS
 	};
-	attachments + embeds + stickers + poll + reactions
+	attachments + embeds + stickers + poll + reactions + super::components::height(entry)
 }
 
 fn body_lines(content: &str, width: f32) -> f32 {
@@ -394,6 +402,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump:
 	if !entry.message.flags.contains(MessageFlags::SUPPRESS_EMBEDS) {
 		out.extend(attachments::embeds(entry, env, bump));
 	}
+	out.extend(super::components::components(entry, env, bump));
 	out.extend(attachments::stickers(entry, env));
 	out.extend(extras::thread_chip(entry, env));
 	out.extend(extras::poll(entry, env, bump));

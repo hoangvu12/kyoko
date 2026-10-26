@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::channels::read_body;
+use crate::components;
 use crate::config::AutocompleteReply;
 use crate::error::{ApiError, ApiResult};
 use crate::fixtures::CURRENT_USER_ID;
@@ -36,6 +37,7 @@ pub const BROKEN_COMMAND: u64 = 9_100_000_000_000_000_104;
 pub const THINK_COMMAND: u64 = 9_100_000_000_000_000_106;
 pub const WHISPER_COMMAND: u64 = 9_100_000_000_000_000_107;
 pub const IGNORE_COMMAND: u64 = 9_100_000_000_000_000_108;
+pub const BUG_COMMAND: u64 = 9_100_000_000_000_000_109;
 pub const THOUGHT: &str = "Thought it over: the answer is 42";
 pub const WHISPERED: &str = "Only you can read this one";
 pub const SHRUG_COMMAND: &str = "-1";
@@ -47,7 +49,7 @@ pub const LANGUAGES: [(&str, &str); 6] = [
 	("日本語", "ja"),
 	("Português", "pt"),
 ];
-const COMMAND_IDS: [(u64, u64, &str); 12] = [
+const COMMAND_IDS: [(u64, u64, &str); 13] = [
 	(PING_COMMAND, MOCKBOT_ID, "ping"),
 	(9_100_000_000_000_000_102, MOCKBOT_ID, "echo"),
 	(ROLL_COMMAND, MOCKBOT_ID, "roll"),
@@ -56,6 +58,7 @@ const COMMAND_IDS: [(u64, u64, &str); 12] = [
 	(THINK_COMMAND, MOCKBOT_ID, "think"),
 	(WHISPER_COMMAND, MOCKBOT_ID, "whisper"),
 	(IGNORE_COMMAND, MOCKBOT_ID, "ignore"),
+	(BUG_COMMAND, MOCKBOT_ID, "bug"),
 	(REMIND_COMMAND, REMINDY_ID, "remind"),
 	(9_100_000_000_000_000_301, POLLY_ID, "poll"),
 	(9_100_000_000_000_000_401, SNAPPER_ID, "snap"),
@@ -63,6 +66,8 @@ const COMMAND_IDS: [(u64, u64, &str); 12] = [
 ];
 const APPLICATION_COMMAND: i64 = 2;
 const APPLICATION_COMMAND_AUTOCOMPLETE: i64 = 4;
+const MESSAGE_COMPONENT: i64 = 3;
+const MODAL_SUBMIT: i64 = 5;
 const APPLICATIONS: [(u64, &str); 4] = [
 	(MOCKBOT_ID, "Mockbot"),
 	(REMINDY_ID, "Remindy"),
@@ -86,7 +91,7 @@ struct SlotsRequest {
 	files: Vec<SlotRequest>,
 }
 
-fn mockbot() -> User {
+pub(crate) fn mockbot() -> User {
 	User {
 		id: Snowflake(MOCKBOT_ID),
 		username: "mockbot".to_owned(),
@@ -178,6 +183,7 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 		"think" => ("Takes a moment before answering", json!([])),
 		"whisper" => ("Answers so only you can see it", json!([])),
 		"ignore" => ("Never answers, to test timeouts", json!([])),
+		"bug" => ("Report a bug in a form", json!([])),
 		_ => ("Always fails, to test error states", json!([])),
 	};
 	json!({
@@ -426,6 +432,14 @@ pub async fn create_interaction(
 	request: Request,
 ) -> Result<StatusCode, ApiError> {
 	let (body, _) = read_body(request).await?;
+	if body["session_id"].as_str().is_none_or(str::is_empty) {
+		return Err(ApiError::invalid_body("Invalid Form Body"));
+	}
+	match body["type"].as_i64() {
+		Some(MESSAGE_COMPONENT) => return component(shared, &body),
+		Some(MODAL_SUBMIT) => return modal_submit(&shared, &body),
+		_ => {}
+	}
 	let data = &body["data"];
 	let known = data["id"]
 		.as_str()
@@ -435,9 +449,6 @@ pub async fn create_interaction(
 	let (Some((_, _, name)), Some(channel_id)) = (known, channel_id) else {
 		return Err(ApiError::invalid_body("Invalid Form Body"));
 	};
-	if body["session_id"].as_str().is_none_or(str::is_empty) {
-		return Err(ApiError::invalid_body("Invalid Form Body"));
-	}
 	match body["type"].as_i64() {
 		Some(APPLICATION_COMMAND) => {}
 		Some(APPLICATION_COMMAND_AUTOCOMPLETE) => return autocomplete(shared, &body, name).await,
@@ -482,6 +493,20 @@ pub async fn create_interaction(
 					let _ = shared.complete_deferred(channel_id, id, THOUGHT);
 				}
 			});
+			return Ok(StatusCode::NO_CONTENT);
+		}
+		"bug" => {
+			let modal = json!({
+				"id": interaction_id,
+				"channel_id": channel_id.to_string(),
+				"custom_id": components::BUG_MODAL,
+				"application": { "id": MOCKBOT_ID.to_string(), "name": "Mockbot", "icon": null },
+				"title": components::BUG_TITLE,
+				"components": components::bug_modal(),
+				"nonce": nonce,
+			});
+			shared.hub.broadcast("INTERACTION_MODAL_CREATE", &modal);
+			shared.hub.broadcast("INTERACTION_SUCCESS", &event);
 			return Ok(StatusCode::NO_CONTENT);
 		}
 		"whisper" => {
@@ -566,4 +591,94 @@ pub fn claim_uploads(shared: &Shared, draft: &mut Draft) -> Result<(), ApiError>
 		draft.files.push(file);
 	}
 	Ok(())
+}
+
+fn parsed(value: &Value) -> Option<u64> {
+	value.as_str().and_then(|id| id.parse().ok())
+}
+
+fn pressed_label(custom_id: &str) -> Option<&'static str> {
+	match custom_id {
+		"primary" => Some("Primary"),
+		"secondary" => Some("Secondary"),
+		"success" => Some("Success"),
+		"celebrate" => Some("Celebrate"),
+		_ => None,
+	}
+}
+
+fn component(shared: Arc<Shared>, body: &Value) -> Result<StatusCode, ApiError> {
+	let (Some(channel_id), Some(message_id), Some(custom_id)) = (
+		parsed(&body["channel_id"]),
+		parsed(&body["message_id"]),
+		body["data"]["custom_id"].as_str(),
+	) else {
+		return Err(ApiError::invalid_body("Invalid Form Body"));
+	};
+	let (known, interaction_id, timing) = {
+		let mut store = shared.store.lock();
+		let known = store
+			.message(channel_id, message_id)
+			.is_some_and(|message| parsed(&message["author"]["id"]) == Some(MOCKBOT_ID));
+		(known, store.next_snowflake().to_string(), store.interactions)
+	};
+	if !known {
+		return Err(ApiError::unknown_message());
+	}
+	let event = json!({ "id": interaction_id, "nonce": body["nonce"].clone() });
+	shared.hub.broadcast("INTERACTION_CREATE", &event);
+	match custom_id {
+		"danger" => {
+			tokio::spawn(async move {
+				tokio::time::sleep(timing.window).await;
+				shared.hub.broadcast("INTERACTION_FAILURE", &event);
+			});
+		}
+		"refresh" => {
+			tokio::spawn(async move {
+				tokio::time::sleep(timing.followup).await;
+				shared.hub.broadcast("INTERACTION_SUCCESS", &event);
+			});
+		}
+		"fruit" | "fruits" => shared.hub.broadcast("INTERACTION_SUCCESS", &event),
+		other => match pressed_label(other) {
+			Some(label) => {
+				shared.hub.broadcast("INTERACTION_SUCCESS", &event);
+				shared.post_message(
+					channel_id,
+					&mockbot(),
+					Draft::text(format!("{} {label}", components::PRESSED)),
+				)?;
+			}
+			None => shared.hub.broadcast("INTERACTION_FAILURE", &event),
+		},
+	}
+	Ok(StatusCode::NO_CONTENT)
+}
+
+fn modal_submit(shared: &Shared, body: &Value) -> Result<StatusCode, ApiError> {
+	let data = &body["data"];
+	let channel_id = parsed(&body["channel_id"]);
+	let (Some(channel_id), Some(components::BUG_MODAL)) = (channel_id, data["custom_id"].as_str()) else {
+		return Err(ApiError::invalid_body("Invalid Form Body"));
+	};
+	let title = components::submitted_text(&data["components"], "title")
+		.ok_or(ApiError::invalid_body("Invalid Form Body"))?;
+	let (interaction_id, failing) = {
+		let mut store = shared.store.lock();
+		(store.next_snowflake().to_string(), store.failing_modals)
+	};
+	let event = json!({ "id": interaction_id, "nonce": body["nonce"].clone() });
+	shared.hub.broadcast("INTERACTION_CREATE", &event);
+	if failing {
+		shared.hub.broadcast("INTERACTION_FAILURE", &event);
+		return Ok(StatusCode::NO_CONTENT);
+	}
+	shared.hub.broadcast("INTERACTION_SUCCESS", &event);
+	shared.post_message(
+		channel_id,
+		&mockbot(),
+		Draft::text(format!("{} {title}", components::BUG_FILED)),
+	)?;
+	Ok(StatusCode::NO_CONTENT)
 }

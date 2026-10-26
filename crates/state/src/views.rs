@@ -73,6 +73,7 @@ pub struct MessageView {
 	pub command: Option<CommandStage>,
 	pub expired: bool,
 	pub interaction_failed: bool,
+	pub waiting_component: Option<String>,
 	pub upload: Option<UploadProgress>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,

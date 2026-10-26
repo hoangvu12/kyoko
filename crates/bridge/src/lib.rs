@@ -3,6 +3,7 @@ mod alerts;
 mod clock;
 mod cloner;
 mod community;
+pub mod components;
 mod composer;
 mod connection;
 mod deep_link;

@@ -83,6 +83,10 @@ impl Link {
 			self.timeline_view
 				.set_progress(DeleteProgress::of(state, open.channel_id));
 		}
+		if changes.commands {
+			self.timeline_view
+				.set_modal(bridge::components::ModalForm::of(state));
+		}
 		if changes.rejected
 			&& let Some(rejection) = state.last_rejection()
 		{

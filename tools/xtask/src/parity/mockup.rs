@@ -114,6 +114,14 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 		"command-attachment-option-picked",
 	),
 	("command-response-states", "command-response-states"),
+	("message-components", "message-components"),
+	(
+		"message-components-multi-select",
+		"message-components-multi-select",
+	),
+	("message-components-v2", "message-components-v2"),
+	("app-modal", "app-modal"),
+	("app-modal-error", "app-modal-error"),
 ];
 
 pub struct Pairing {

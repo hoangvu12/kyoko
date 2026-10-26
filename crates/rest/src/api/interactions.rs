@@ -61,6 +61,10 @@ impl RestClient {
 			.await
 	}
 
+	pub async fn post_interaction(&self, body: &Value) -> Result<()> {
+		self.send_empty(Request::post("/interactions").json(body)).await
+	}
+
 	pub async fn attachment_slots(
 		&self,
 		channel_id: Snowflake,

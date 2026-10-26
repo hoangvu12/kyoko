@@ -126,6 +126,7 @@ pub struct State {
 	pub(crate) kept_writes: Vec<KeptWrite>,
 	pub(crate) commands: HashMap<Snowflake, Arc<ApplicationCommandIndex>>,
 	pub(crate) autocomplete: Option<crate::composer::Autocomplete>,
+	pub(crate) app_modal: Option<crate::modal::AppModal>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -532,6 +533,17 @@ impl State {
 					changes.messages.insert(*channel_id);
 				}
 			}
+			LocalEvent::ComponentWaiting {
+				channel_id,
+				id,
+				custom_id,
+			} => {
+				if let Some(cache) = self.messages.get_mut(channel_id)
+					&& cache.component_waiting(*id, custom_id.clone())
+				{
+					changes.messages.insert(*channel_id);
+				}
+			}
 			LocalEvent::InteractionExpired { channel_id, id } => {
 				if let Some(cache) = self.messages.get_mut(channel_id)
 					&& cache.expire(*id)
@@ -693,6 +705,9 @@ impl State {
 			}
 			LocalEvent::StatusSettings(settings) => changes.merge(self.set_status_settings(settings.clone())),
 			LocalEvent::Autocomplete(autocomplete) => self.autocomplete_changed(autocomplete, &mut changes),
+			LocalEvent::ModalOpened(modal) => self.modal_opened(modal, &mut changes),
+			LocalEvent::ModalChanged { status, missing } => self.modal_changed(status, missing, &mut changes),
+			LocalEvent::ModalClosed => self.modal_closed(&mut changes),
 		}
 		changes
 	}

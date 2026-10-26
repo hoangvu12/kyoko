@@ -1,12 +1,33 @@
 use chrono::{DateTime, Utc};
 use protocol::{
-	ChannelType, FavoriteGif, Gif, InteractionOption, Nonce, NotificationLevel, PermissionOverwriteKind,
-	Permissions, Snowflake, StatusKind,
+	ChannelType, ComponentType, FavoriteGif, Gif, InteractionOption, Nonce, NotificationLevel,
+	PermissionOverwriteKind, Permissions, Snowflake, StatusKind,
 };
 use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
 use state::{EmojiCandidate, RiskyReason, RiskyTarget, Viewport};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModalAnswer {
+	pub custom_id: String,
+	pub value: ModalValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModalValue {
+	Text(String),
+	Values(Vec<String>),
+}
+
+impl ModalValue {
+	pub fn is_empty(&self) -> bool {
+		match self {
+			ModalValue::Text(text) => text.trim().is_empty(),
+			ModalValue::Values(values) => values.is_empty(),
+		}
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FriendSource {
@@ -75,6 +96,17 @@ pub enum Command {
 		options: Vec<InteractionOption>,
 		files: Vec<UploadFile>,
 	},
+	PressComponent {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		custom_id: String,
+		kind: ComponentType,
+		values: Option<Vec<String>>,
+	},
+	SubmitModal {
+		answers: Vec<ModalAnswer>,
+	},
+	CloseModal,
 	AutocompleteCommand {
 		channel_id: Snowflake,
 		command_id: Snowflake,
@@ -599,6 +631,7 @@ impl Command {
 			| Command::SendMessage { channel_id, .. }
 			| Command::LoadApplicationCommands { channel_id }
 			| Command::RunApplicationCommand { channel_id, .. }
+			| Command::PressComponent { channel_id, .. }
 			| Command::AddReaction { channel_id, .. }
 			| Command::Typing { channel_id }
 			| Command::AckChannel { channel_id, .. }

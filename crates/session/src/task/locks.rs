@@ -32,6 +32,7 @@ impl Core {
 				thread_id: channel_id,
 			}
 			| Command::RunApplicationCommand { channel_id, .. }
+			| Command::PressComponent { channel_id, .. }
 			| Command::AutocompleteCommand { channel_id, .. }
 			| Command::ForwardMessage {
 				to_channel_id: channel_id,

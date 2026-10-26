@@ -435,6 +435,7 @@ impl State {
 			command: pending.and_then(|pending| pending.command.clone()),
 			expired: cache.is_expired(message.id),
 			interaction_failed: cache.has_failed_component(message.id),
+			waiting_component: cache.waiting_component(message.id).map(str::to_owned),
 			upload: pending.and_then(|pending| pending.upload.clone()),
 			plugin,
 			altered_by,

@@ -33,6 +33,7 @@ pub struct Draft {
 	pub files: Vec<UploadedFile>,
 	pub hosted: Option<Signature>,
 	pub interaction: Value,
+	pub components: Vec<Value>,
 }
 
 impl Draft {
@@ -57,6 +58,7 @@ impl Draft {
 			files,
 			hosted: None,
 			interaction: Value::Null,
+			components: Vec::new(),
 		}
 	}
 }
@@ -215,6 +217,7 @@ impl Shared {
 			.is_some_and(|reference| reference.kind == Some(MessageReferenceKind::Forward));
 		let loading = draft.flags.contains(MessageFlags::LOADING);
 		if draft.content.is_empty()
+			&& draft.components.is_empty()
 			&& draft.files.is_empty()
 			&& draft.sticker_ids.is_empty()
 			&& !forward
@@ -225,6 +228,7 @@ impl Shared {
 		let mut store = self.store.lock();
 		let guild_id = Self::guild_of(&store, channel_id)?;
 		let id = draft.id.unwrap_or_else(|| store.next_snowflake());
+		let components = draft.components;
 		let (user_ids, mention_roles) = scan_mentions(&draft.content);
 		let mentions: Vec<User> = user_ids
 			.iter()
@@ -304,7 +308,10 @@ impl Shared {
 				(None, _) => return Err(ApiError::unknown_message()),
 			}
 		}
-		let value = to_json(&message);
+		let mut value = to_json(&message);
+		if !components.is_empty() {
+			value["components"] = Value::Array(components);
+		}
 		if message.flags.contains(MessageFlags::EPHEMERAL) {
 			let gateway = self.gateway_message(&store, &value);
 			drop(store);

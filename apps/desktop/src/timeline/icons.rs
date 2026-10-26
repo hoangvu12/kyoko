@@ -117,6 +117,8 @@ icon_files!(
 	"volume_fill",
 	"volume_mute_fill",
 	"file_audio",
+	"chevron_up",
+	"spinner",
 );
 
 const PLUGIN_ICONS: usize = 64;

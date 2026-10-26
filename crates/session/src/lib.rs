@@ -13,7 +13,7 @@ mod task;
 mod theme_links;
 
 pub use alerts::{Alert, AlertKind, AlertPacing};
-pub use command::{Command, FriendSource, InviteSource};
+pub use command::{Command, FriendSource, InviteSource, ModalAnswer, ModalValue};
 pub use config::{NotifyFn, SessionConfig};
 pub use display::{
 	Accessory, DeletedLook, DisplayHooks, Formatting, HistoryLook, KeptMessage, KeptVersion, MessageLook,

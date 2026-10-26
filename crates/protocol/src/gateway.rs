@@ -6,6 +6,7 @@ use serde_json::value::RawValue;
 
 use crate::channel::{Channel, ChannelType, ThreadMember};
 use crate::command::AutocompleteResponse;
+use crate::component::InteractionModal;
 use crate::emoji::{Emoji, PartialEmoji, Sticker};
 use crate::error::DecodeError;
 use crate::fingerprint::IdentifyProperties;
@@ -533,6 +534,7 @@ pub enum DispatchEvent {
 	InteractionSuccess(Value),
 	InteractionFailure(Value),
 	AutocompleteResponse(AutocompleteResponse),
+	InteractionModalCreate(Box<InteractionModal>),
 	Unknown { name: String, data: Box<RawValue> },
 }
 
@@ -607,6 +609,7 @@ impl DispatchEvent {
 			"INTERACTION_SUCCESS" => Self::InteractionSuccess(decode(name, data)?),
 			"INTERACTION_FAILURE" => Self::InteractionFailure(decode(name, data)?),
 			"APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE" => Self::AutocompleteResponse(decode(name, data)?),
+			"INTERACTION_MODAL_CREATE" => Self::InteractionModalCreate(decode(name, data)?),
 			_ => Self::Unknown {
 				name: name.to_owned(),
 				data: data.to_owned(),

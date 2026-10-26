@@ -41,6 +41,7 @@ mod backfill;
 mod collapse;
 mod commands;
 mod community;
+mod components;
 mod deletes;
 mod embeds;
 mod emoji_rank;
@@ -133,6 +134,8 @@ pub(crate) enum Internal {
 		channel_id: Snowflake,
 		id: Snowflake,
 	},
+	ComponentFailed(String),
+	ModalFailed(String),
 	ThemeLinksChanged,
 	Alert(Alert),
 	AlertVetoed(StdInstant),
@@ -242,6 +245,7 @@ pub(crate) struct Core {
 	backfill: backfill::Backfill,
 	outbox: outbox::Outbox,
 	interactions: interactions::Interactions,
+	components: components::Components,
 	ranker: emoji_rank::EmojiRanker,
 	favorite_writes: favorite_writes::FavoriteWrites,
 }
@@ -323,6 +327,7 @@ impl Core {
 			backfill: backfill::Backfill::new(&parts.tuning),
 			outbox: outbox::Outbox::default(),
 			interactions: interactions::Interactions::default(),
+			components: components::Components::default(),
 			ranker: emoji_rank::EmojiRanker::default(),
 			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
 		}
@@ -604,6 +609,7 @@ impl Core {
 			DispatchEvent::InteractionSuccess(value) => self.interaction_settled(&value, false),
 			DispatchEvent::InteractionFailure(value) => self.interaction_settled(&value, true),
 			DispatchEvent::AutocompleteResponse(response) => self.autocomplete_answered(response),
+			DispatchEvent::InteractionModalCreate(modal) => self.modal_created(*modal),
 			_ => {}
 		}
 	}
@@ -664,6 +670,8 @@ impl Core {
 			Internal::InteractionExpired { channel_id, id } => {
 				self.apply_local(LocalEvent::InteractionExpired { channel_id, id });
 			}
+			Internal::ComponentFailed(nonce) => self.component_failed(&nonce),
+			Internal::ModalFailed(nonce) => self.modal_failed(&nonce),
 			Internal::Searched {
 				serial,
 				offset,
@@ -834,6 +842,15 @@ impl Core {
 				options,
 				request,
 			} => self.autocomplete(channel_id, command_id, options, request),
+			Command::PressComponent {
+				channel_id,
+				message_id,
+				custom_id,
+				kind,
+				values,
+			} => self.press_component(channel_id, message_id, custom_id, kind, values),
+			Command::SubmitModal { answers } => self.submit_modal(answers),
+			Command::CloseModal => self.close_modal(),
 			Command::EditMessage {
 				channel_id,
 				message_id,

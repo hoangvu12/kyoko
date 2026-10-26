@@ -39,6 +39,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--failing-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Fail,
 			"--slow-followups" => config.interactions.followup = SLOW_FOLLOWUP,
 			"--hold-ping" => config.interactions.hold_ping = true,
+			"--failing-modals" => config.failing_modals = true,
 			other => return Err(format!("unknown flag {other}")),
 		}
 	}

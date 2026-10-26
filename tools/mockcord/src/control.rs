@@ -220,6 +220,22 @@ impl Control {
 		self.shared.store.lock().autocomplete = reply;
 	}
 
+	pub fn set_failing_modals(&self, failing: bool) {
+		self.shared.store.lock().failing_modals = failing;
+	}
+
+	pub fn post_components(&self, channel_id: u64, content: &str, components: Vec<Value>) -> Option<u64> {
+		let draft = Draft {
+			components,
+			..Draft::text(content)
+		};
+		let message = self
+			.shared
+			.post_message(channel_id, &crate::rest::mockbot(), draft)
+			.ok()?;
+		parse_id(&message["id"])
+	}
+
 	pub fn set_interaction_timing(&self, timing: crate::config::InteractionTiming) {
 		self.shared.store.lock().interactions = timing;
 	}

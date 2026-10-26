@@ -1,8 +1,12 @@
 mod actions;
+mod app_modal;
 mod attachments;
 mod body;
 #[cfg(test)]
 mod clone_tests;
+#[cfg(test)]
+mod component_tests;
+mod components;
 mod dialogs;
 #[cfg(test)]
 mod emoji_tests;
@@ -119,6 +123,7 @@ pub struct TimelineView {
 	pending_jump: Cell<Option<Snowflake>>,
 	pending_action: Cell<Option<MessageAction>>,
 	unread: Signal<Option<unread::Unread>>,
+	app_modal: Rc<app_modal::AppModal>,
 }
 
 impl TimelineView {
@@ -176,6 +181,7 @@ impl TimelineView {
 				favorite_gifs: runtime.signal(Rc::default()),
 				favorites_asked: Cell::new(false),
 				gif_frames: RefCell::default(),
+				selects: RefCell::default(),
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,
@@ -191,13 +197,14 @@ impl TimelineView {
 			pinned: Cell::new(None),
 			layout_watcher: RefCell::new(None),
 			watcher: RefCell::new(None),
-			commands,
+			commands: commands.clone(),
 			visible_changed: RefCell::new(None),
 			actions,
 			lightbox,
 			pending_jump: Cell::new(None),
 			pending_action: Cell::new(None),
 			unread: runtime.signal(None),
+			app_modal: app_modal::AppModal::new(runtime, commands.clone()),
 		});
 		let jumper = Rc::downgrade(&view);
 		view.actions.on_jump(move |message_id| {
@@ -230,6 +237,26 @@ impl TimelineView {
 		if let Some(changed) = self.visible_changed.borrow().as_ref() {
 			changed(());
 		}
+	}
+
+	pub fn set_modal(&self, form: Option<bridge::components::ModalForm>) {
+		self.app_modal.set(form);
+	}
+
+	pub fn modal_open(&self) -> bool {
+		self.app_modal.is_open()
+	}
+
+	pub fn type_into_modal(&self, custom_id: &str, value: &str) {
+		self.app_modal.type_into(custom_id, value);
+	}
+
+	pub fn pick_in_select(&self, message_id: Snowflake, custom_id: &str, values: &[&str], open: bool) {
+		self.env.pick_in_select(message_id, custom_id, values, open);
+	}
+
+	pub fn submit_modal(&self) {
+		self.app_modal.submit();
 	}
 
 	pub fn lightbox_view(&self) -> View {
@@ -616,6 +643,7 @@ impl TimelineView {
 				.child(this.actions.picker.view())
 				.child(this.env.links.view())
 				.child(this.actions.dialogs.view())
+				.child(this.app_modal.view())
 				.child(this.actions.reactions.view())
 				.child(this.actions.popout.view())
 				.on_mount(move |node| {

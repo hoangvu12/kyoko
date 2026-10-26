@@ -177,6 +177,11 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `command-attachment-option` | `command-attachment-option.html` |
 | `command-attachment-option-picked` | `command-attachment-option-picked.html` |
 | `command-response-states` | `command-response-states.html` |
+| `message-components` | `message-components.html` |
+| `message-components-multi-select` | `message-components-multi-select.html` |
+| `message-components-v2` | `message-components-v2.html` |
+| `app-modal` | `app-modal.html` |
+| `app-modal-error` | `app-modal-error.html` |
 
 `inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
 
@@ -184,7 +189,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -501,6 +506,18 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The parity tool adds `--slow-fo
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `command-response-states` | 12 | Default selection, then run `/think` (thinking), `/roll sides:20` (answered), `/whisper` (ephemeral, with "Only you can see this · Dismiss message"), `/ping` (sending) and `/broken` (failed: "The application did not respond", ephemeral), each once the previous one shows. | yes |
+
+### Midnight 13 Message components and app modals
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The component messages are Mockbot's in mockcord's `showcase: components` section of `#showcase`; the modal is Mockbot's `/bug`. For `message-components` the parity tool adds `--slow-followups` (Mockbot answers Refresh after ten minutes), for `app-modal-error` `--failing-modals` (Mockbot fails every modal submit).
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `message-components` | 13 | Open `#showcase` at the components section with "Pick an action" on top, press Refresh (spinner while Mockbot has not answered), choose Banana in the fruit select, then open it again: the list with Banana checked. | yes |
+| `message-components-multi-select` | 13 | As `message-components` without pressing anything, Apple and Grapes picked in the "Which fruits do you like?" select with its list open. | yes |
+| `message-components-v2` | 13 | Open `#showcase` with "did the release post go out" on top: Mockbot's Components V2 container below it (text, a section with a thumbnail, a separator, a three-image gallery and a section with the Changelog link button). | yes |
+| `app-modal` | 13 | Default selection, run `/bug`, then type "Reaction tooltip wraps to three lines" into Title: the app modal over the window. | yes |
+| `app-modal-error` | 13 | As `app-modal`, with What happened? filled in too and Submit pressed while Mockbot fails modals: "Something went wrong. Try again." above the footer. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

@@ -274,6 +274,7 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 		listed[1].1,
 		[
 			"broken",
+			"bug",
 			"echo",
 			"ignore",
 			"ping",

@@ -1,5 +1,6 @@
 mod cloner;
 mod community;
+mod component_shots;
 mod composer;
 mod connection;
 mod display;
@@ -897,6 +898,7 @@ impl Link {
 			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::VoiceMessage => self.drive_voice_message().await,
+			capture::Screen::Components(shot) => self.drive_component_shot(*shot).await,
 			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
 			capture::Screen::ComposerShot(shot) => self.drive_composer_shot(*shot).await,
 			capture::Screen::CloneDialog => {
