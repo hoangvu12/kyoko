@@ -14,6 +14,7 @@ mod media;
 mod members;
 mod message;
 mod profile;
+mod qr_login;
 mod rail;
 mod reorder;
 mod search;

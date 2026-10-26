@@ -39,14 +39,38 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(
 		&mut app,
 		"the terms notice",
-		"Accept the notice below to use QR login.",
+		"Accept the notice below to continue",
 		&[],
 	);
 	shows(
 		&mut app,
 		"the token form",
-		"QR login is coming soon.",
+		"Getting a code...",
 		&[("login.acknowledged", json!(true))],
+	);
+	shows(
+		&mut app,
+		"the QR code",
+		"Scan this with the Discord mobile app to log in instantly.",
+		&[("login.qr", json!({ "stage": "code", "image": "" }))],
+	);
+	shows(
+		&mut app,
+		"the scanned QR code",
+		"Check your phone!",
+		&[(
+			"login.qr",
+			json!({ "stage": "scanned", "username": "oxid", "avatar": "" }),
+		)],
+	);
+	shows(
+		&mut app,
+		"the expired QR code",
+		"This code has expired",
+		&[(
+			"login.qr",
+			json!({ "stage": "ended", "image": "", "message": "Could not reach Discord.", "error": true }),
+		)],
 	);
 	shows(
 		&mut app,

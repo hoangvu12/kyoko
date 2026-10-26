@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 session.workspace = true
+login.workspace = true
 bridge.workspace = true
 media.workspace = true
 plugins.workspace = true

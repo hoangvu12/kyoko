@@ -18,6 +18,7 @@ mod lightbox;
 mod member_list;
 mod message;
 mod profile;
+mod qr_login;
 mod rail;
 mod search;
 mod settings;
@@ -80,6 +81,7 @@ pub use images::{
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
+pub use login::{QrEvent, REMOTE_AUTH_URL, Scanner};
 pub use member_list::{
 	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
 	MemberRowKind, OpenMembers, SEARCH_GROUP, layout_of,
@@ -94,6 +96,7 @@ pub use profile::{
 	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
 	ProfileCard, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,
 };
+pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{
 	DEFAULT_FOLDER_COLOR, Drop, Rail, RailFolder, RailGuild, RailItem, acronym, new_folder_id, rearranged,
 	rearranged_folder, reorder_command, reorder_folder_command,

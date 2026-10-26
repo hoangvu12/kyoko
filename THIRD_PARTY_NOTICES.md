@@ -66,7 +66,7 @@ Settings → Advanced → Credits names Twemoji and its licence in the app.
 
 ## Lucide icons
 
-`apps/desktop/ui/icons/` holds the icon set oxidcord 0.2.0-beta.1 uses, taken from the `gpui-kit-assets` 0.8.0 crate that bundles them. Each file is named after oxidcord's `IconKind` in snake case, except `circle_x`, `circle_check` and `info`, the icons gpui-component's in-app notifications draw, which oxidcord's toasts use. 121 of the 125 files are [Lucide](https://lucide.dev) 1.43.0 icons, unchanged. The SilentTyping plugin's `plugins/silent-typing/keyboard.svg` and `keyboard_off.svg` are Lucide's `keyboard` and `keyboard-off`, and the ExpressionCloner plugin's `plugins/expression-cloner/copy_plus.svg` is Lucide's `copy-plus`, unchanged. Lucide is distributed under the ISC licence, and the icons Lucide derived from Feather under the MIT licence:
+`apps/desktop/ui/icons/` holds the icon set oxidcord 0.2.0-beta.1 uses, taken from the `gpui-kit-assets` 0.8.0 crate that bundles them. Each file is named after oxidcord's `IconKind` in snake case, except `circle_x`, `circle_check` and `info`, the icons gpui-component's in-app notifications draw, which oxidcord's toasts use. 121 of those 125 files are [Lucide](https://lucide.dev) 1.43.0 icons, unchanged. `kyoko_mark.svg`, `refresh.svg` and `circle_alert.svg` beside them are kyoko's own, drawn for the Midnight mockups. The SilentTyping plugin's `plugins/silent-typing/keyboard.svg` and `keyboard_off.svg` are Lucide's `keyboard` and `keyboard-off`, and the ExpressionCloner plugin's `plugins/expression-cloner/copy_plus.svg` is Lucide's `copy-plus`, unchanged. Lucide is distributed under the ISC licence, and the icons Lucide derived from Feather under the MIT licence:
 
 ```
 ISC License

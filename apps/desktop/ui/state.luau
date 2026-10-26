@@ -21,6 +21,14 @@ export type RailFolder = {
 	guilds: { RailGuild },
 }
 export type RailItem = RailGuild | RailFolder
+export type LoginQr = {
+	stage: string,
+	image: string?,
+	username: string?,
+	avatar: string?,
+	message: string?,
+	error: boolean?,
+}
 export type VoiceMember = {
 	key: string,
 	id: string,
@@ -264,6 +272,7 @@ M.login = {
 	error = ui.shared("login.error", false),
 	unsaved = ui.shared("login.unsaved", false),
 	adding = ui.shared("login.adding", false),
+	qr = ui.shared("login.qr", nil :: LoginQr?),
 }
 
 M.rail = {

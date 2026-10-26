@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
 local title_bar = require("./title_bar")
+local qr_column = require("./login_qr")
 
 local NOTICE =
 	"Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk."
@@ -257,39 +258,6 @@ local function token_column(token: any)
 			},
 			ui.show(web_message, label("Web login is coming soon.", theme.size.font_sm, theme.color.text_muted)),
 		},
-	}
-end
-
-local function qr_column()
-	return ui.column {
-		w = theme.size.login_qr_column,
-		shrink = 0,
-		items = "center",
-		gap = theme.size.space_16,
-		label(
-			"Log in with QR Code",
-			theme.size.font_xl,
-			theme.color.header_primary,
-			{ weight = theme.weight.bold, align = "center" }
-		),
-		ui.column {
-			w = theme.size.login_qr_size,
-			h = theme.size.login_qr_size,
-			p = theme.size.space_12,
-			rounded = theme.size.radius_md,
-			bg = theme.color.background_tertiary,
-			items = "center",
-			justify = "center",
-			label(function()
-				return if locked() then "Accept the notice below to use QR login." else "QR login is coming soon."
-			end, theme.size.font_sm, theme.color.text_muted, { wrap = true, align = "center", w_full = true }),
-		},
-		label(
-			"Scan this with the Discord mobile app to log in instantly.",
-			theme.size.font_sm,
-			theme.color.text_muted,
-			{ wrap = true, align = "center", w_full = true }
-		),
 	}
 end
 

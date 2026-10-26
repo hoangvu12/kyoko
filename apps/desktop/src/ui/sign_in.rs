@@ -1,20 +1,29 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 
-use bridge::{Arrival, Checked, Flow, Handover, Inbox, Screen, Status};
+use bridge::themes::parse_color;
+use bridge::{
+	Arrival, Checked, Failure, Flow, Handover, Inbox, QrEvent, QrEvents, QrSignIn, QrStage, Scanner, Screen,
+	Status,
+};
+use media::ImageName;
 use protocol::Snowflake;
 use session::Session;
 use state::{Changes, SecretStorage, State};
 use tokio::runtime::Handle;
-use zgx_script::{ScriptHost, Shared};
+use zgx_script::{ScriptHost, Shared, Value};
 
-use super::{Link, Slot, text};
-use crate::capture;
+use super::{Link, Slot, qr_code, text};
+use crate::{capture, theme};
+
+const QR_IMAGE: &str = "login-qr";
 
 pub struct SignIn {
 	pub flow: Flow,
 	pub runtime: Handle,
 	pub storage_warnings: bool,
+	pub qr: QrSignIn,
 }
 
 enum Event {
@@ -22,6 +31,8 @@ enum Event {
 	SignedOut,
 	Arrived(Box<Arrival>),
 	AccountsChanged,
+	Qr(u64, Box<QrEvent>),
+	QrChecked(Box<Checked>),
 }
 
 pub(super) struct Account {
@@ -37,10 +48,21 @@ pub(super) struct Account {
 	unsaved: Shared,
 	adding: Shared,
 	storage_warning: Shared,
+	qr: RefCell<QrSignIn>,
+	qr_view: Shared,
+	qr_image: RefCell<Option<String>>,
+	qr_codes: Cell<u64>,
+	scanner_avatar: RefCell<Option<ImageName>>,
+	scanner_ready: Cell<bool>,
 }
 
 impl Account {
-	pub(super) fn install(host: &ScriptHost, runtime: Handle, storage_warnings: bool) -> Account {
+	pub(super) fn install(
+		host: &ScriptHost,
+		runtime: Handle,
+		storage_warnings: bool,
+		qr: QrSignIn,
+	) -> Account {
 		Account {
 			runtime,
 			events: Inbox::new(),
@@ -54,6 +76,12 @@ impl Account {
 			unsaved: host.shared("login.unsaved", false),
 			adding: host.shared("login.adding", false),
 			storage_warning: host.shared("session.storage_warning", ""),
+			qr: RefCell::new(qr),
+			qr_view: host.shared("login.qr", Value::Nil),
+			qr_image: RefCell::new(None),
+			qr_codes: Cell::new(0),
+			scanner_avatar: RefCell::new(None),
+			scanner_ready: Cell::new(false),
 		}
 	}
 }
@@ -86,6 +114,12 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
+		host.action("login.qr_refresh", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.refresh_qr();
+			}
+		});
+		let actions = Rc::downgrade(link);
 		host.action("login.cancel_add", move |_| {
 			if let Some(link) = actions.upgrade() {
 				link.flow.borrow_mut().cancel_add();
@@ -106,6 +140,11 @@ impl Link {
 						self.announce_switch();
 					}
 					Event::AccountsChanged => self.show_accounts(),
+					Event::Qr(generation, event) => self.on_qr(generation, *event),
+					Event::QrChecked(checked) => {
+						let failure = self.flow.borrow_mut().redeemed(*checked);
+						self.account.qr.borrow_mut().signed_in(failure);
+					}
 				}
 				self.after_flow_change();
 			}
@@ -129,7 +168,7 @@ impl Link {
 	}
 
 	pub(super) fn drive_capture(&self, screen: capture::Screen) {
-		if screen == capture::Screen::LoginToken {
+		if screen != capture::Screen::LoginTos {
 			self.acknowledge();
 		}
 	}
@@ -137,13 +176,15 @@ impl Link {
 	pub(super) fn login_settled(&self, screen: capture::Screen) -> bool {
 		let flow = self.flow.borrow();
 		matches!(flow.screen(), Screen::Login(_))
-			&& (screen != capture::Screen::LoginToken || flow.gate().acknowledged())
+			&& (screen == capture::Screen::LoginTos || flow.gate().acknowledged())
+			&& self.qr_settled(screen)
 	}
 
 	fn acknowledge(&self) {
 		if let Err(error) = self.flow.borrow().gate().acknowledge() {
 			tracing::warn!(%error, "the notice acknowledgement was not saved");
 		}
+		self.follow_qr();
 		self.publish_sign_in();
 	}
 
@@ -266,7 +307,183 @@ impl Link {
 		if self.account.generation.replace(generation) != generation {
 			self.session_started();
 		}
+		self.follow_qr();
 		self.publish_sign_in();
+	}
+
+	fn follow_qr(&self) {
+		let started = {
+			let _runtime = self.account.runtime.enter();
+			self.account.qr.borrow_mut().follow(&self.flow.borrow())
+		};
+		if let Some(events) = started {
+			self.listen_qr(events);
+		}
+	}
+
+	fn refresh_qr(&self) {
+		let started = {
+			let _runtime = self.account.runtime.enter();
+			self.account.qr.borrow_mut().refresh(&self.flow.borrow())
+		};
+		if let Some(events) = started {
+			self.listen_qr(events);
+		}
+		self.publish_qr();
+	}
+
+	fn listen_qr(&self, events: QrEvents) {
+		let inbox = self.account.events.clone();
+		self.account.runtime.spawn(async move {
+			let QrEvents {
+				generation,
+				mut events,
+			} = events;
+			while let Some(event) = events.recv().await {
+				inbox.push(Event::Qr(generation, Box::new(event)));
+			}
+		});
+	}
+
+	fn on_qr(&self, generation: u64, event: QrEvent) {
+		let token = self.account.qr.borrow_mut().apply(generation, event);
+		if let Some(token) = token {
+			let check = self.flow.borrow_mut().redeem(token);
+			match check {
+				Some(check) => {
+					let events = self.account.events.clone();
+					self.account
+						.runtime
+						.spawn(async move { events.push(Event::QrChecked(Box::new(check.await))) });
+				}
+				None => self.account.qr.borrow_mut().signed_in(Some(Failure::Rejected)),
+			}
+		}
+		let stage = self.account.qr.borrow().stage().clone();
+		match &stage {
+			QrStage::Code { url } => self.show_code(url),
+			QrStage::Scanned(scanner) => self.request_scanner_avatar(scanner),
+			_ => {}
+		}
+	}
+
+	fn palette_size(&self, key: &str) -> f64 {
+		let current = theme::current(&self.window.runtime);
+		let settings = self.settings_view();
+		let catalog = settings.catalog();
+		let size = catalog
+			.palettes
+			.iter()
+			.find(|palette| palette.name == current)
+			.and_then(|palette| palette.size(key));
+		f64::from(size.unwrap_or_default())
+	}
+
+	fn palette_color(&self, key: &str) -> Option<bridge::themes::Rgba> {
+		let current = theme::current(&self.window.runtime);
+		let settings = self.settings_view();
+		let catalog = settings.catalog();
+		catalog
+			.palettes
+			.iter()
+			.find(|palette| palette.name == current)
+			.and_then(|palette| palette.color(key))
+			.and_then(parse_color)
+	}
+
+	fn show_code(&self, url: &str) {
+		let points = self.palette_size("qr_size") - 2. * self.palette_size("space_8");
+		let Some(ink) = self.palette_color("text_0") else {
+			tracing::warn!("the theme has no colour for the QR code");
+			return;
+		};
+		let side = (points * self.scale_factor()).round() as u32;
+		let Some(image) = qr_code::render(url, side, ink) else {
+			tracing::warn!("the QR code could not be drawn");
+			return;
+		};
+		let count = self.account.qr_codes.get() + 1;
+		self.account.qr_codes.set(count);
+		let name = format!("{QR_IMAGE}-{count}");
+		self.host.image(&name, Some(Arc::new(image)));
+		if let Some(old) = self.account.qr_image.replace(Some(name)) {
+			self.host.image(&old, None);
+		}
+	}
+
+	fn request_scanner_avatar(&self, scanner: &Scanner) {
+		let points = self.palette_size("avatar_size_xl");
+		let scale = self.scale_factor();
+		let Some(request) = bridge::scanner_avatar_request(&self.images.cdn, scanner, points, scale) else {
+			return;
+		};
+		let name = self.images.gallery.request(request);
+		self.account.scanner_ready.set(false);
+		*self.account.scanner_avatar.borrow_mut() = Some(name);
+		self.refresh_visible();
+	}
+
+	pub(super) fn login_images(&self) -> Vec<String> {
+		self.account
+			.scanner_avatar
+			.borrow()
+			.iter()
+			.map(|name| name.as_str().to_owned())
+			.collect()
+	}
+
+	pub(super) fn login_image_shown(&self, name: &ImageName) {
+		if self.account.scanner_avatar.borrow().as_ref() == Some(name) {
+			self.account.scanner_ready.set(true);
+			self.publish_qr();
+		}
+	}
+
+	pub(super) fn qr_settled(&self, wanted: capture::Screen) -> bool {
+		let qr = self.account.qr.borrow();
+		match (wanted, qr.stage()) {
+			(capture::Screen::LoginQrScanned, QrStage::Scanned(_)) => self.account.scanner_ready.get(),
+			(capture::Screen::LoginQrExpired, QrStage::Ended(_)) => true,
+			(capture::Screen::LoginToken, QrStage::Code { .. }) => self.account.qr_image.borrow().is_some(),
+			(capture::Screen::LoginTos, _) => true,
+			_ => false,
+		}
+	}
+
+	fn publish_qr(&self) {
+		let account = &self.account;
+		let image = account
+			.qr_image
+			.borrow()
+			.as_ref()
+			.map(|name| format!("host:{name}"))
+			.unwrap_or_default();
+		let avatar = account
+			.scanner_avatar
+			.borrow()
+			.as_ref()
+			.filter(|_| account.scanner_ready.get())
+			.map(|name| format!("host:{name}"))
+			.unwrap_or_default();
+		let view = match account.qr.borrow().stage() {
+			QrStage::Idle | QrStage::Waiting => serde_json::json!({ "stage": "waiting" }),
+			QrStage::Code { .. } => serde_json::json!({ "stage": "code", "image": image }),
+			QrStage::Scanned(scanner) => serde_json::json!({
+				"stage": "scanned",
+				"username": scanner.username,
+				"avatar": avatar,
+			}),
+			QrStage::SigningIn => serde_json::json!({ "stage": "signing_in" }),
+			QrStage::Ended(end) => serde_json::json!({
+				"stage": "ended",
+				"image": image,
+				"message": end.message().unwrap_or_default(),
+				"error": end.is_error(),
+			}),
+		};
+		if let Some(value) = Value::from_json(&view.to_string()) {
+			account.qr_view.set(value);
+		}
 	}
 
 	fn session_started(&self) {
@@ -344,6 +561,8 @@ impl Link {
 				.set(matches!(status, Some(Status::Unsaved(_))).into());
 			account.adding.set(flow.adding().into());
 		});
+		drop(flow);
+		self.publish_qr();
 	}
 }
 

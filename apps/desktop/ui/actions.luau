@@ -112,6 +112,10 @@ function M.login_cancel_add()
 	ui.invoke("login.cancel_add")
 end
 
+function M.login_qr_refresh()
+	ui.invoke("login.qr_refresh")
+end
+
 function M.sign_out()
 	return ui.action("login.sign_out")
 end

@@ -40,6 +40,8 @@ pub enum Screen {
 	TextReplaceSettings,
 	LoginTos,
 	LoginToken,
+	LoginQrScanned,
+	LoginQrExpired,
 	SidebarCollapsed,
 	NewestImage,
 	Showcase(&'static str),
@@ -95,6 +97,8 @@ impl Screen {
 			"settings-text-replace" => Some(Screen::TextReplaceSettings),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
+			"login-qr-scanned" => Some(Screen::LoginQrScanned),
+			"login-qr-expired" => Some(Screen::LoginQrExpired),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
 			"timeline-media" => Some(Screen::NewestImage),
 			"dm-sidebar" => Some(Screen::DmSidebar),
@@ -185,12 +189,23 @@ impl Screen {
 			| Screen::Friends(_)
 			| Screen::CloneMenu
 			| Screen::CloneDialog => Some(Opening::First),
-			Screen::LoginTos | Screen::LoginToken => None,
+			Screen::LoginTos | Screen::LoginToken | Screen::LoginQrScanned | Screen::LoginQrExpired => None,
 		}
 	}
 
 	pub fn is_login(self) -> bool {
-		matches!(self, Screen::LoginTos | Screen::LoginToken)
+		matches!(
+			self,
+			Screen::LoginTos | Screen::LoginToken | Screen::LoginQrScanned | Screen::LoginQrExpired
+		)
+	}
+
+	pub fn phone(self) -> Option<&'static str> {
+		match self {
+			Screen::LoginQrScanned => Some("scan"),
+			Screen::LoginQrExpired => Some("expire"),
+			_ => None,
+		}
 	}
 }
 

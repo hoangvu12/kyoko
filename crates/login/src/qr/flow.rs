@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use protocol::Token;
+use protocol::fingerprint::LOGIN_REFERER;
+use protocol::{Snowflake, Token};
 use rest::{Request, RestClient, RestConfig};
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
@@ -14,11 +15,11 @@ use tokio_tungstenite::tungstenite::{Error as SocketError, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
 use url::{Host, Url};
 
-use super::bitmap::QrBitmap;
 use super::crypto::{SessionKey, nonce_proof};
 use super::messages::{Incoming, Outgoing, TicketExchange, TokenGrant};
-use super::{QrConfig, QrEvent};
+use super::{QrConfig, QrEvent, Scanner};
 use crate::error::{LoginError, Result};
+use crate::token_login::without_retries;
 
 type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
@@ -28,7 +29,6 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(15);
 const MIN_HEARTBEAT: Duration = Duration::from_secs(1);
 const CODE_URL_PREFIX: &str = "https://discord.com/ra/";
 const LOGIN_PATH: &str = "/users/@me/remote-auth/login";
-const CAPTCHA_HINT: &str = "Discord refused the ticket exchange, it may need a captcha. Use the web login";
 
 struct Flow<'a> {
 	events: &'a Sender<QrEvent>,
@@ -41,7 +41,7 @@ pub(super) async fn drive(config: QrConfig, events: Sender<QrEvent>) {
 		Ok(token) => QrEvent::Token(token),
 		Err(LoginError::Expired) => QrEvent::Expired,
 		Err(LoginError::Cancelled) => QrEvent::Cancelled,
-		Err(error) => QrEvent::Error(error.to_string()),
+		Err(error) => QrEvent::Failed(error),
 	};
 	let _ = events.send(event).await;
 }
@@ -79,6 +79,7 @@ fn close_error(code: u16) -> LoginError {
 	match code {
 		4003 => LoginError::Expired,
 		1000 => LoginError::Cancelled,
+		4001 | 4002 => LoginError::Protocol("the handshake failed".to_owned()),
 		other => LoginError::Protocol(format!("gateway closed with code {other}")),
 	}
 }
@@ -164,11 +165,12 @@ async fn run(config: &QrConfig, events: &Sender<QrEvent>) -> Result<Token> {
 		},
 	)
 	.await?;
-	let flow = Flow {
-		events,
-		key,
-		rest: RestClient::new(RestConfig::new(config.rest_base.clone(), config.identity.clone())),
-	};
+	let rest = RestClient::new(RestConfig {
+		tuning: without_retries(),
+		..RestConfig::new(config.rest_base.clone(), config.identity.clone())
+	});
+	rest.set_referer(LOGIN_REFERER);
+	let flow = Flow { events, key, rest };
 	flow.listen(&mut socket, heartbeat_interval, Instant::now() + session_length)
 		.await
 }
@@ -223,27 +225,19 @@ impl Flow<'_> {
 		if fingerprint != self.key.fingerprint() {
 			return Err(LoginError::Protocol("fingerprint mismatch".to_owned()));
 		}
-		let url = format!("{CODE_URL_PREFIX}{fingerprint}");
-		let bitmap = QrBitmap::render(&url)?;
-		self.emit(QrEvent::Code { url, bitmap }).await
+		self.emit(QrEvent::Code {
+			url: format!("{CODE_URL_PREFIX}{fingerprint}"),
+		})
+		.await
 	}
 
 	async fn announce_scan(&self, encrypted_payload: &str) -> Result<()> {
 		let payload = self.key.decrypt(encrypted_payload)?;
 		let text = std::str::from_utf8(&payload)
 			.map_err(|_| LoginError::Protocol("user payload is not utf-8".to_owned()))?;
-		let mut fields = text.splitn(4, ':');
-		let (Some(id), Some(_discriminator), Some(avatar), Some(username)) =
-			(fields.next(), fields.next(), fields.next(), fields.next())
-		else {
-			return Err(LoginError::Protocol("malformed user payload".to_owned()));
-		};
-		self.emit(QrEvent::Scanned {
-			username: username.to_owned(),
-			avatar: (avatar != "0" && !avatar.is_empty()).then(|| avatar.to_owned()),
-			id: id.to_owned(),
-		})
-		.await
+		let scanner =
+			scanner(text).ok_or_else(|| LoginError::Protocol("malformed user payload".to_owned()))?;
+		self.emit(QrEvent::Scanned(scanner)).await
 	}
 
 	async fn exchange(&self, ticket: &str) -> Result<Token> {
@@ -255,10 +249,25 @@ impl Flow<'_> {
 
 fn exchange_error(error: rest::RestError) -> LoginError {
 	match error {
-		rest::RestError::Captcha { .. } => LoginError::Protocol(CAPTCHA_HINT.to_owned()),
-		rest::RestError::Http(status, _) if status.as_u16() == 400 => {
-			LoginError::Protocol(CAPTCHA_HINT.to_owned())
-		}
+		rest::RestError::Captcha { .. } => LoginError::Captcha,
 		other => LoginError::from(other),
 	}
+}
+
+fn present(field: &str) -> Option<String> {
+	(!field.is_empty() && field != "0").then(|| field.to_owned())
+}
+
+fn scanner(payload: &str) -> Option<Scanner> {
+	let mut fields = payload.splitn(4, ':');
+	let id = fields.next()?.parse().ok()?;
+	let discriminator = present(fields.next()?);
+	let avatar = present(fields.next()?);
+	let username = fields.next().filter(|name| !name.is_empty())?;
+	Some(Scanner {
+		id: Snowflake(id),
+		discriminator,
+		avatar,
+		username: username.to_owned(),
+	})
 }

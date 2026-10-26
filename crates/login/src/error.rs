@@ -12,6 +12,8 @@ pub enum LoginError {
 	Network(String),
 	#[error("discord refused the request for now")]
 	Refused,
+	#[error("discord asked for a captcha")]
+	Captcha,
 	#[error("unexpected response: {0}")]
 	Protocol(String),
 	#[error("login cancelled")]

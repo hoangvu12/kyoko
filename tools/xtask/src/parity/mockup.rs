@@ -10,6 +10,8 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("app-frame", "midnight-discord"),
 	("login-tos", "login"),
 	("login-token", "login-token"),
+	("login-qr-scanned", "login-qr-scanned"),
+	("login-qr-expired", "login-qr-expired"),
 	("server-rail", "midnight-discord"),
 	("server-rail-folder", "midnight-discord"),
 	("channel-sidebar", "midnight-discord"),

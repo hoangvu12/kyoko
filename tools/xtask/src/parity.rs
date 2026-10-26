@@ -26,6 +26,7 @@ const POLL: Duration = Duration::from_millis(100);
 const UNKNOWN_SCREEN: i32 = 3;
 const DEFAULT_ANCHOR: &str = "2026-10-01T12:00:00Z";
 const REFERENCE_DIR: &str = "oxidcord-ref";
+const MOCKUP_ONLY: &[&str] = &["login-qr-scanned", "login-qr-expired"];
 const PARITY_LIST: &str = "docs/parity.md";
 const MOCKUP: &str = "mockup";
 
@@ -264,7 +265,8 @@ fn capture(args: CaptureArgs) -> Result<()> {
 fn capture_screen(args: &CaptureArgs, paths: &Paths, screen: ScreenEntry) -> Result<Outcome> {
 	let dir = fresh_dir(&paths.out.join(&screen.name))?;
 	let side = |app: App| -> Result<Side> {
-		if !args.apps.contains(&app) {
+		let unmatched = app == App::Oxidcord && MOCKUP_ONLY.contains(&screen.name.as_str());
+		if !args.apps.contains(&app) || unmatched {
 			return Ok(Side::skipped());
 		}
 		Side::timed(|| capture_app(&args.run, paths, &screen.name, app, &dir, Scale::Standard))

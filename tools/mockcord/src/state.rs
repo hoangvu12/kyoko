@@ -15,6 +15,7 @@ use crate::hub::Hub;
 use crate::ids::snowflake_at;
 use crate::ops::UploadedFile;
 use crate::record::Recorder;
+use crate::remote_auth::RemoteAuth;
 use crate::scenario::Scenario;
 
 pub struct Urls {
@@ -216,6 +217,7 @@ pub struct Shared {
 	pub shutdown: watch::Receiver<bool>,
 	pub recorder: Recorder,
 	pub scenario: Scenario,
+	pub remote_auth: RemoteAuth,
 	token: Mutex<String>,
 	windows: Mutex<HashMap<String, Window>>,
 }
@@ -234,6 +236,7 @@ impl Shared {
 			shutdown,
 			recorder,
 			scenario: Scenario::default(),
+			remote_auth: RemoteAuth::default(),
 			token,
 			windows: Mutex::new(HashMap::new()),
 		}
@@ -245,6 +248,10 @@ impl Shared {
 
 	pub fn is_alt_token(&self, token: &str) -> bool {
 		self.config.alt_token == token
+	}
+
+	pub fn current_token(&self) -> String {
+		self.token.lock().clone()
 	}
 
 	pub fn replace_token(&self, token: &str) {

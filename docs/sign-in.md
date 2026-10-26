@@ -36,7 +36,7 @@ Without `--data-dir`, a run against Discord now uses the real data directory (`P
 
 The screen is oxidcord's: a card with the token column and the QR column, and the Terms of Service notice under it. The notice reads "Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk." Until "I understand" is ticked, the token field and both buttons are disabled and the QR column asks for the notice. Ticking it sets `settings.first_run_acknowledged`, so the notice stays acknowledged across launches and sign-outs.
 
-"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. The QR column and "Web login" say "coming soon" until tickets 42 and 43.
+"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Web login" says "coming soon" until ticket 43.
 
 `Flow::submit` validates with `login::TokenLogin::validate` (`GET /users/@me` with the web client's headers). Validation never retries: a 429 comes back at once (`max_retry_wait` of zero). Errors:
 
@@ -49,6 +49,37 @@ The screen is oxidcord's: a card with the token column and the QR column, and th
 
 A valid token is saved with `store.accounts.save` and made the current account. Each account has its own cache database, so signing in as another user wipes nothing and never shows the previous account's data. When the keyring fails, nothing is written to disk; the screen shows the error and a "Continue for this session only" button, which starts the session with `remember_account: false`. A new sign-in is always a new `Session`, so safety locks are read again and earlier risky-action confirmations are gone.
 
+## QR login
+
+The QR column (`shell/login_qr.luau`, styled to the Midnight mockups `login.html`, `login-token.html`, `login-qr-scanned.html` and `login-qr-expired.html`) signs in with Discord's remote-auth gateway, the way discord.com/login does. Code: `crates/login/src/qr/` (the socket, the keys and the ticket exchange), `crates/bridge/src/qr_login.rs` (`QrSignIn`, UI-free, tested at the session seam in `crates/bridge/tests/bridge/qr_login.rs`), `apps/desktop/src/ui/sign_in.rs` and `ui/qr_code.rs` (the window side and the drawn code).
+
+The handshake, from docs.discord.food's Remote Authentication page (read 2026-10-26; protocol facts only):
+
+1. Open `wss://remote-auth-gateway.discord.gg/?v=2` with `Origin: https://discord.com` and the web client's user agent. The server sends `hello` with `heartbeat_interval` and `timeout_ms`.
+2. Make a 2048-bit RSA key (off the async threads) and send `init` with the base64 SPKI DER public key. Heartbeat from then on, the first beat jittered; a missed `heartbeat_ack` ends the attempt.
+3. `nonce_proof`: decrypt `encrypted_nonce` with RSA-OAEP (SHA-256) and send it back base64url without padding.
+4. `pending_remote_init`: the fingerprint must be the base64url SHA-256 of the public key; the code is `https://discord.com/ra/<fingerprint>`.
+5. `pending_ticket`: the decrypted payload is `id:discriminator:avatar:username`; the column shows that user's avatar and name and "Check your phone!" before anything is confirmed.
+6. `pending_login` with a ticket, or `cancel`. The ticket goes to `POST /users/@me/remote-auth/login` as `{"ticket"}`, with the web client's REST headers (super-properties, client hints, `Origin`, `Referer: https://discord.com/login`) and no `Authorization`; it is never retried. The answer's `encrypted_token` is decrypted with the same key.
+7. The token goes through `Flow::redeem`, which is `Gate::check` (validate, save to Credential Manager, make current) like a pasted token, so `login.adding` and "Back to your account" work the same. `Flow::redeemed` hands a failed check back to the QR column instead of the token form.
+
+Nothing of the exchange is logged: not the token, the ticket, the keys or any payload.
+
+`QrSignIn::follow(&Flow)` starts a code whenever the login screen is up and the notice is accepted, and stops it when the screen leaves. A code that ends stays ended until Refresh (`login.qr_refresh`, also "Not me, start over" after a scan) asks for a new one with a new key. Events of an older code are ignored by generation.
+
+| End | Shown |
+|---|---|
+| Timeout (`timeout_ms`, or close 4003) | The dimmed code, "This code has expired" and Refresh. |
+| Cancelled on the phone (`cancel`, or close 1000) | As expired, plus "The login was cancelled on your phone." |
+| Captcha on the ticket exchange | As expired, plus "Discord wants a captcha. Kyoko can't show Discord's captcha and won't retry by itself. Finish any check in the official client, then refresh." Kyoko never solves or skips a captcha. |
+| Rate limit or suspended route | As expired, plus the token form's "Discord refused the sign-in for now..." |
+| Network | As expired, plus "Could not reach Discord." |
+| A bad nonce proof, fingerprint or payload (close 4001 or 4002) | As expired, plus "The QR login stopped unexpectedly. Refresh to try again." |
+
+The code is drawn in Rust at the window's scale, `qr_size` less its `space_8` padding, error correction Q (so kyoko's mark can sit in the middle), dark modules in `text_0` on the box's `text_1`. The colours are read when a code arrives, so after a theme switch the next code takes the new colours. The scanning user's avatar goes through the gallery like any other avatar.
+
+Under `--mock` the gateway is mockcord's `/remote-auth` (`Server::remote_auth_url`), which plays the phone (`docs/testing.md`). The signed-in user is mockcord's current user.
+
 ## Leaving the main view
 
 A 401 or close 4004 at any time publishes `Disconnected(AuthenticationFailed)`. `Flow::observe` sees it on the next change batch, hands the session back to be shut down off the UI thread, and shows the login screen with "Your session expired. Sign in again to continue." The session has already forgotten the rejected token (`docs/storage.md`), so the next launch starts at the login screen too.
@@ -59,7 +90,7 @@ Whenever the window leaves the main view it collapses the timeline slot, so a Ru
 
 ## Several accounts
 
-Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with "Paste token" (and later QR and web login) is saved there, with its token in Credential Manager under `account-<user id>`.
+Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with "Paste token" or the QR code (and later web login) is saved there, with its token in Credential Manager under `account-<user id>`.
 
 - Switching: `Flow::switch(user_id)` takes the running session and returns a `Handover`; the screen is `Switching`, and the window closes overlays, settings and the quick switcher's recent list, drops the gallery budget and empties every view at once, so nothing of the old account stays on screen. `Handover::finish` runs on the blocking pool: `Session::shutdown` closes the gateway normally (close 1000) and flushes the persist queue, while unsent paced writes (folder order, collapse, status) are dropped as on quit. It then reads the other account's token and makes that account current. `Flow::arrived` starts the new session with the launch's `ClientIdentity` on that account's own database. Only one session runs at a time. A new session re-reads the safety-lock setting and starts without risky-action confirmations.
 - Add an Account: `Flow::add_account` stops the session the same way and shows the login screen with "Back to your account" (`login.cancel_add`), which starts the current account again. A token that validates is saved and becomes current, so the new account starts.

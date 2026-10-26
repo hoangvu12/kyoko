@@ -11,20 +11,20 @@ use store::{Keyring, MemoryKeyring, Paths, Store};
 use tokio::time::Instant;
 use url::Url;
 
-const STEP_TIMEOUT: Duration = Duration::from_secs(15);
+pub(super) const STEP_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL: Duration = Duration::from_millis(10);
 const CACHE_KEY: &str = "cache-key";
 
-struct Desk {
-	server: Server,
+pub(super) struct Desk {
+	pub(super) server: Server,
 	keyring: Arc<MemoryKeyring>,
-	store: Arc<Store>,
+	pub(super) store: Arc<Store>,
 	scratch: PathBuf,
-	flow: Flow,
+	pub(super) flow: Flow,
 }
 
 impl Desk {
-	async fn open(name: &str) -> Desk {
+	pub(super) async fn open(name: &str) -> Desk {
 		Self::open_with(name, Arc::new(MemoryKeyring::new())).await
 	}
 
@@ -59,7 +59,7 @@ impl Desk {
 		self.server.token().to_owned()
 	}
 
-	fn acknowledge(&self) {
+	pub(super) fn acknowledge(&self) {
 		self.flow
 			.gate()
 			.acknowledge()
@@ -76,11 +76,11 @@ impl Desk {
 		self.flow.checked(checked);
 	}
 
-	fn session(&self) -> &Session {
+	pub(super) fn session(&self) -> &Session {
 		self.flow.session().expect("a session is running")
 	}
 
-	fn user_id(&self) -> Snowflake {
+	pub(super) fn user_id(&self) -> Snowflake {
 		self.session()
 			.state()
 			.read()
@@ -109,7 +109,7 @@ impl Desk {
 		self.connected().await;
 	}
 
-	async fn connected(&self) {
+	pub(super) async fn connected(&self) {
 		let state = self.session().state().clone();
 		eventually("the session to connect", || {
 			let state = state.read();
@@ -126,7 +126,7 @@ impl Desk {
 			.collect()
 	}
 
-	async fn stop(mut self) {
+	pub(super) async fn stop(mut self) {
 		if let Some(session) = self.flow.shutdown() {
 			shut_down(session).await;
 		}
@@ -211,7 +211,7 @@ fn flow_for(server: &Server, store: Arc<Store>, rest_base: Url) -> Flow {
 	Flow::new(gate, start)
 }
 
-async fn eventually(what: &str, done: impl Fn() -> bool) {
+pub(super) async fn eventually(what: &str, done: impl Fn() -> bool) {
 	let deadline = Instant::now() + STEP_TIMEOUT;
 	while !done() {
 		if Instant::now() >= deadline {

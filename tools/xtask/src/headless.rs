@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
+use login::{QrConfig, QrEvent, QrLogin};
 use mockcord::{FixtureSummary, MockConfig, Server};
 use plugins::{HostConfig, PluginHost};
 use protocol::{Channel, ChannelType, Snowflake, Token};
@@ -220,6 +221,7 @@ impl Harness {
 		store: Arc<Store>,
 		rest_base: &str,
 		gateway_url: &str,
+		token: Token,
 		hooks: Option<Arc<dyn SessionHooks>>,
 	) -> Result<Self> {
 		let wake = Arc::new(Notify::new());
@@ -230,7 +232,7 @@ impl Harness {
 			store,
 			rest_base: Url::parse(rest_base).context("rest url is invalid")?,
 			gateway_url: gateway_url.to_owned(),
-			token: Token::new(MOCK_TOKEN),
+			token,
 			runtime: None,
 			notify: Arc::new(move |_| notifier.notify_one()),
 			hooks,
@@ -579,6 +581,48 @@ fn quiet_direct_message(state: &State, server: &Server) -> Option<(Snowflake, u6
 		})
 }
 
+async fn qr_sign_in(server: &Server, store: &Store) -> Result<Token> {
+	let mut gateway_url = Url::parse(&server.remote_auth_url()).context("remote auth url is invalid")?;
+	gateway_url.query_pairs_mut().append_pair("phone", "login");
+	let mut login = QrLogin::start(QrConfig {
+		gateway_url,
+		origin: protocol::fingerprint::WEB_ORIGIN.to_owned(),
+		rest_base: Url::parse(server.rest_base_url()).context("rest url is invalid")?,
+		identity: session::client_identity(store),
+	});
+	let mut events = login.events().context("the QR login has no events")?;
+	let mut code_shown = false;
+	let mut scanned = false;
+	loop {
+		let event = tokio::time::timeout(STEP_TIMEOUT, events.recv())
+			.await
+			.context("timed out waiting for the QR login")?
+			.context("the QR login stopped without a token")?;
+		match event {
+			QrEvent::Code { url } => code_shown = url.starts_with("https://discord.com/ra/"),
+			QrEvent::Scanned(scanner) => {
+				scanned = scanner.username == server.fixtures().current_user.username;
+			}
+			QrEvent::Token(token) => {
+				ensure!(code_shown, "the QR login gave a token before showing a code");
+				ensure!(
+					scanned,
+					"the QR login gave a token before showing the scanning user"
+				);
+				ensure!(
+					token.as_str() == server.token(),
+					"the QR login gave the wrong token"
+				);
+				tracing::info!("signed in with the QR code");
+				return Ok(token);
+			}
+			QrEvent::Expired => bail!("the QR code expired"),
+			QrEvent::Cancelled => bail!("the QR login was cancelled"),
+			QrEvent::Failed(error) => bail!("the QR login failed: {error}"),
+		}
+	}
+}
+
 fn scratch_dir() -> Result<std::path::PathBuf> {
 	let root = std::env::temp_dir().join(format!("kyoko-headless-{}", std::process::id()));
 	match fs::remove_dir_all(&root) {
@@ -642,10 +686,12 @@ async fn scenario(
 	settings.save(&paths)?;
 	let store = Arc::new(Store::open(paths)?);
 	let plugins = plugin_host(root)?;
+	let token = qr_sign_in(server, &store).await?;
 	let harness = Harness::start(
 		store.clone(),
 		server.rest_base_url(),
 		server.gateway_url(),
+		token,
 		Some(Arc::new(plugins.clone())),
 	)?;
 	plugins.attach(harness.state.clone(), harness.session.commander());
@@ -880,7 +926,13 @@ async fn cached_start(
 	channel_id: Snowflake,
 	guilds: usize,
 ) -> Result<()> {
-	let offline = Harness::start(store.clone(), UNREACHABLE_REST, UNREACHABLE_GATEWAY, None)?;
+	let offline = Harness::start(
+		store.clone(),
+		UNREACHABLE_REST,
+		UNREACHABLE_GATEWAY,
+		Token::new(MOCK_TOKEN),
+		None,
+	)?;
 	offline
 		.until("cached guilds to load", |state| state.guilds().count() == guilds)
 		.await?;

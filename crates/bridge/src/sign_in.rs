@@ -90,6 +90,15 @@ impl Gate {
 		&self.store
 	}
 
+	pub fn qr_config(&self, gateway_url: Url) -> login::QrConfig {
+		login::QrConfig {
+			gateway_url,
+			origin: protocol::fingerprint::WEB_ORIGIN.to_owned(),
+			rest_base: self.rest_base.clone(),
+			identity: self.identity.clone(),
+		}
+	}
+
 	pub fn stored_token(&self) -> Option<Token> {
 		self.stored_sign_in().map(|(token, _)| token)
 	}
@@ -123,6 +132,14 @@ impl Gate {
 			Ok(validated) => validated,
 			Err(error) => return Checked::Failed(failure(&error)),
 		};
+		self.keep_verified(token, user).await
+	}
+
+	pub async fn check_token(self, token: Token) -> Checked {
+		self.check(token.as_str().to_owned()).await
+	}
+
+	async fn keep_verified(&self, token: Token, user: User) -> Checked {
 		let verified = Verified { token, user };
 		let store = self.store.clone();
 		let user = verified.user.clone();
@@ -404,9 +421,17 @@ impl Flow {
 		if !idle || !self.gate.acknowledged() {
 			return None;
 		}
+		self.begin_check();
+		Some(self.gate.clone().check(pasted))
+	}
+
+	pub(crate) fn begin_check(&mut self) {
 		self.unsaved = None;
 		self.screen = Screen::Login(Status::Checking);
-		Some(self.gate.clone().check(pasted))
+	}
+
+	pub(crate) fn end_check(&mut self) {
+		self.screen = Screen::Login(Status::Ready);
 	}
 
 	pub fn checked(&mut self, checked: Checked) {

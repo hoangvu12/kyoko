@@ -12,6 +12,7 @@ mod notices;
 mod plugin_slots;
 mod plugins;
 mod profiles;
+mod qr_code;
 #[cfg(test)]
 mod root;
 #[cfg(test)]
@@ -503,7 +504,7 @@ impl Link {
 			window,
 			host: host.clone(),
 			flow: RefCell::new(sign_in.flow),
-			account: sign_in::Account::install(host, sign_in.runtime, sign_in.storage_warnings),
+			account: sign_in::Account::install(host, sign_in.runtime, sign_in.storage_warnings, sign_in.qr),
 			inbox,
 			images,
 			image_wakes,
@@ -703,6 +704,7 @@ impl Link {
 				if self.avatar.borrow().as_ref() == Some(&name) {
 					self.avatar_shown();
 				}
+				self.login_image_shown(&name);
 			}
 			Update::Clear { name } => {
 				self.timeline_view.show_image(&name, None);
@@ -901,7 +903,11 @@ impl Link {
 				self.until_capture(|link| link.toast_settled()).await;
 			}
 			capture::Screen::Disconnected => self.drive_disconnected(),
-			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
+			capture::Screen::FirstChannel
+			| capture::Screen::LoginTos
+			| capture::Screen::LoginToken
+			| capture::Screen::LoginQrScanned
+			| capture::Screen::LoginQrExpired => {}
 		}
 		self.until_capture(|link| link.display.pending() == 0).await;
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -1258,6 +1264,7 @@ impl Link {
 		names.extend(self.community_images());
 		names.extend(self.server_images());
 		names.extend(self.friends_images());
+		names.extend(self.login_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

@@ -168,6 +168,34 @@ impl Control {
 		);
 	}
 
+	pub fn scan_qr_code(&self) {
+		self.shared.remote_auth.scan();
+	}
+
+	pub fn confirm_qr_login(&self) {
+		self.shared.remote_auth.confirm();
+	}
+
+	pub fn cancel_qr_login(&self) {
+		self.shared.remote_auth.cancel();
+	}
+
+	pub fn expire_qr_code(&self) {
+		self.shared.remote_auth.expire();
+	}
+
+	pub fn garble_next_qr_nonce(&self) {
+		self.shared.remote_auth.garble_next_nonce();
+	}
+
+	pub fn qr_connections(&self) -> Vec<crate::record::Headers> {
+		self.shared.remote_auth.connections()
+	}
+
+	pub fn qr_codes_shown(&self) -> usize {
+		self.shared.remote_auth.waiting_phones()
+	}
+
 	pub fn add_audit_entries(&self, guild_id: u64, count: usize) {
 		self.shared.add_audit_entries(guild_id, count);
 	}

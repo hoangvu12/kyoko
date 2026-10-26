@@ -189,8 +189,6 @@ pub const SIZES: &[(&str, f32)] = &[
 	("space_24", 24.),
 	("space_32", 32.),
 	("login_card_width", 784.),
-	("login_qr_column", 240.),
-	("login_qr_size", 184.),
 	("login_logo", 56.),
 	("login_logo_icon", 30.),
 	("icon_sm", 16.),

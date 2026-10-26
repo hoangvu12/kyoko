@@ -16,6 +16,7 @@ mod member_list;
 mod ops;
 mod ready;
 mod record;
+mod remote_auth;
 mod rest;
 mod scenario;
 mod server;
@@ -37,5 +38,5 @@ pub use record::{
 };
 pub use rest::MOCKBOT_ID;
 pub use scenario::{HeartbeatAcks, Reply};
-pub use server::Server;
+pub use server::{Server, remote_auth_url};
 pub use web::{DEVICE_COOKIE, device_cookie_value, installation_id};

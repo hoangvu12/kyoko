@@ -20,7 +20,7 @@ pub(crate) fn plausible(token: &str) -> bool {
 	!token.is_empty() && token.len() <= 512 && token.bytes().all(|byte| byte.is_ascii_graphic())
 }
 
-fn without_retries() -> RestTuning {
+pub(crate) fn without_retries() -> RestTuning {
 	RestTuning {
 		max_retry_wait: Duration::ZERO,
 		..RestTuning::default()

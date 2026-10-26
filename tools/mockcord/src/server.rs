@@ -31,6 +31,11 @@ pub struct Server {
 	tasks: Vec<JoinHandle<()>>,
 }
 
+pub fn remote_auth_url(origin: &str) -> String {
+	let socket_origin = origin.replacen("http", "ws", 1);
+	format!("{socket_origin}{}?v=2", crate::remote_auth::PATH)
+}
+
 fn fixture_anchor() -> DateTime<Utc> {
 	let now_ms = Utc::now().timestamp_millis();
 	DateTime::from_timestamp_millis(now_ms - now_ms % ANCHOR_GRANULARITY_MS).unwrap_or_default()
@@ -87,6 +92,10 @@ impl Server {
 
 	pub fn gateway_url(&self) -> &str {
 		&self.shared.urls.gateway
+	}
+
+	pub fn remote_auth_url(&self) -> String {
+		remote_auth_url(&self.shared.urls.origin)
 	}
 
 	pub fn address(&self) -> SocketAddr {
