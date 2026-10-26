@@ -1,17 +1,42 @@
 # kyoko v1 orchestrator handoff
 
-## Fourth orchestrator (roboco chat `bde24e85`), running notes
+## Latest: fourth orchestrator hands off (main `f9ececd` + this note)
 
-- 34 resolved (`3837ceb`). The shared `oxidcord-ref` was not reset: 41's worker has an uncommitted `account-switcher` capture step there, so 34's one-line `SETTLE` wait was added by hand on top and the shared exe rebuilt. After 41 lands, `git -C ..\oxidcord-ref diff` should equal `tools/parity/oxidcord-ref.patch`.
-- A second effort landed on main: `.scratch/kyoko-midnight/` (tickets called M01–M24 here), spec `docs/design/midnight.md`, mockups `docs/design/mockups/`. It restyles kyoko to Discord's layout in refact0r's Midnight theme; behaviour stays with the v1 tickets.
-- User decisions (2026-10-26):
-  - Scheduling: Midnight foundation now. Free lanes take M01 (tokens and Inter; after 57 lands, both touch the theme code) and M02 (mockup capture tooling), then M03 (floating-panel shell) and M04 (Twemoji). The third lane keeps doing v1 behaviour tickets. Restyles M05 and later come after the shell lands.
-  - Look target: v1 UI tickets that haven't started (42, 43, 44, 62, 63, the slot-based plugins 49/52/54/56, 39) match the Midnight mockup where one exists, checked with M02's tooling, once M01–M03 have landed. Until then v1 tickets with UI wait or build behaviour only. Tickets in flight (41, 47, 57) finish to oxidcord's look.
-- User decision (2026-10-26): nobody uses kyoko yet, so no backward compatibility, migrations or shims; change formats and defaults directly (also in `rules.md`).
-- Disk: on 2026-10-26 C: filled to 0 bytes; lane targets had grown to 90–124 GB each (incremental dirs, test binaries, PDBs, captures that build an older commit in the lane). Check `Get-PSDrive C` before launching a worker; `cargo clean` an idle lane whose `target` passes about 60 GB (sccache makes the rebuild cheap). Never clean a lane while its worker is building.
-- 57 was told its CSS import must recognise Midnight's variable names (one mapping table) so M01 can make the mapping one-to-one.
+Written by the fourth orchestrator (roboco chat `bde24e85`, "kyoko orchestrator 4", same machine) when the user asked to hand off. Everything below still applies unless this section says otherwise.
 
-## Latest: third orchestrator hands off (main `85cd454` + this note)
+### State
+
+- Resolved this session: 34, 41, 47, 46, 51, 57, 48, 50, 64 (new: flaky headless display check), and Midnight M02, M04, M01. Resolved overall (v1): 01–38, 40, 41, 45–48, 50, 51, 57, 59–61, 64.
+- Open v1: 39, 43, 44, 49, 52, 54, 55, 56, 58, 62, 63 (plus 42 and 53 in flight). Open Midnight: M05–M24 (plus M03 in flight). Count with the `Status:` lines in both `issues/` folders.
+- In flight (completion notices go to `bde24e85`, not to you: send each a short message so its next turn reports to you, or poll with `get_chat`/`read_chat`):
+
+| Ticket | Lane | Worker | State |
+|---|---|---|---|
+| M03 floating-panel shell | A | `44a487c1` | Started on `7df0010` (lane A target was cleaned first). Big restyle of every shell region; told to recommend whether Discord variable names in `CSS_MAPPING` should also land on the Midnight tokens. One queued "main moved to `f9ececd`" message. |
+| 42 QR login | B | `e2a36be9` | Started on `f9ececd`. Look target is the Midnight login mockups (`login.html`, `login-qr-scanned.html`, `login-qr-expired.html`); ticket 42's first box was rewritten to say so. Remote-auth handshake in the session, mockcord plays it, captcha only shown, never solved. |
+| 53 ExpressionCloner | C | `5e8ce6a8` | Done and reported (`ui:message.menu` slot with `[[menu]]` manifest items, `PluginHost::menu_gesture`, clone dialog `Dialog::Clone`, session-side upload validation, `CreateEmoji { image }` / `CreateSticker { file }`). Told to drop its commit `1daeb4f` (duplicate of 64's fix), rebase onto main, run the checks once and reply. Then verify in lane C (rebase, checks, look at `message-menu-clone` and `clone-dialog` captures), merge, write the Answer from its report. |
+
+- Next, in suggested order. Lane A after M03: M05 timeline restyle (needs M03, M04 done), then M07 menus/dialogs/toasts, M16 composer. Lane B after 42: 43 web login, then 44 (both to the Midnight login mockups; 41's and 42's answers say what to reuse). Lane C after 53: v1 behaviour or Midnight work that doesn't touch the shell while M03 is in flight (55 hidden channels touches the sidebar, so after M03; 49/52 need Rust drawing per 47's answer; 54/56 use 47's slots and need M03's rail and user panel). Once M03 lands, M08/M09/M10 (expressions, autocomplete, commands) and M21 open up, and v1 62/63 take the Midnight look. 39 translations when few UI tickets are in flight. 58 last; releases and tags need the user.
+
+### Decisions the user made this session
+
+- Midnight effort (`.scratch/kyoko-midnight/`, spec `docs/design/midnight.md`, 101 mockups in `docs/design/mockups/`): foundation first (M01, M02, M04 done, M03 in flight), the third lane keeps doing v1 behaviour tickets.
+- Look target: v1 UI tickets that haven't started match the Midnight mockup where one exists, checked with `cargo xtask parity mockup` (M02); tickets in flight when this was decided finished to oxidcord's look. Screens outside the shell (login) can start before M03.
+- Nobody uses kyoko yet: no backward compatibility, migrations or shims (also in `rules.md`). M01's settings migration was removed because of this.
+
+### Things to know
+
+- Disk: on 2026-10-26 C: filled to 0 bytes; lane targets had grown to 90–124 GB each. Check `Get-PSDrive C` before launching a worker; `cargo clean` an idle lane whose `target` passes about 60 GB (sccache makes the rebuild cheap); never clean a lane while its worker builds. Lanes A and B were cleaned; lane C's target was about 90 GB and its worker builds with `CARGO_INCREMENTAL=0`; clean it between 53 and the next ticket.
+- Verification recipe that worked: a background PowerShell loop over fmt, clippy, `build --locked`, `test --workspace --locked`, `xtask test`, `xtask headless-run --mock`, `deny check` (plus a capture) logging to `target/orch-verify.log` with `=== exit N for <cmd>` lines, then `Select-String` for `^=== exit|\.\.\. FAILED`.
+- Known load flakes still seen: `alerts::the_channel_in_view_stays_silent_until_the_window_loses_focus`, `community::forwards_are_paced_sends_and_respect_locks`, `storage::turning_the_opt_in_on_and_off_moves_the_secrets`, `permissions::edited_plugin_files_reload_while_kyoko_runs`; each passed alone. The plugin "took too long to load" flake is fixed (46, 15 s test load deadline); 48's headless display flake is fixed (64).
+- Queued "main moved" messages pile up: a worker answers each one after its turn and may re-run all checks for each. Prefer one message per worker per merge, and steer (`mode: steer`) with "these are stale, rebase once" when several are queued.
+- Several tickets now add plugin hooks in the same files (`crates/plugins/src/{calls,hooks,host,limits,permission,vm,bundled}.rs`, `docs/plugins.md`, `tools/xtask/src/headless.rs`): the second to land conflicts. Send that rebase back to its worker.
+- Shared `oxidcord-ref`: its tree equals `tools/parity/oxidcord-ref.patch` on main (34's `SETTLE`, 41's `account-switcher`, 47's `composer-silent-typing`); the exe was rebuilt with 34's and 41's steps. New Midnight screens compare with mockups, so oxidcord changes should now be rare.
+- `KYOKO_CAPTURE_PLUGINS=<id,...>` (48) enables bundled plugins in a capture.
+- A worker once put the user's email in a crates.io User-Agent (told to the user); `rules.md` now forbids the user's identity in any request.
+- Open real-Discord confirmations added: 50 (when the web client first loads settings proto type 2), 53 (whether the web client sends `roles: []` on emoji create), M08 (GIF provider Klipy vs `provider=tenor`).
+
+## Earlier: third orchestrator hands off (main `85cd454` + this note)
 
 Written by the third orchestrator (roboco chat `6e78591a`, "Kyoko Orchestrator Handoff", on the new PC) when the user asked to hand off. Everything below this section still applies unless this section says otherwise.
 
