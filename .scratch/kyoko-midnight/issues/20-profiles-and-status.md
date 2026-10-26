@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 07; v1 30
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/profile-popout.html`, `docs/design/mockups/profile-full.html`, `docs/design/mockups/status-menu.html`, `docs/design/mockups/dialog-custom-status.html`
 
