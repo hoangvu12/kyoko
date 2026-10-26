@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 07; v1 37, 45, 57
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/settings-my-account.html`, `docs/design/mockups/settings-notifications.html`, `docs/design/mockups/settings-appearance.html`, `docs/design/mockups/settings-plugins.html`, `docs/design/mockups/settings-themes.html`
 
