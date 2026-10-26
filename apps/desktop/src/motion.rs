@@ -9,7 +9,7 @@ use zgx::reactive::Signal;
 
 const DIALOG_TRAVEL: f32 = 80.;
 const POPOVER_TRAVEL: f32 = 8.;
-const TOAST_TRAVEL: f32 = 96.;
+const TOAST_TRAVEL: f32 = 24.;
 const SOLVER_STEPS: usize = 24;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,13 +41,13 @@ pub const POPOVER: Transition = Transition {
 pub const TOAST_ENTER: Transition = Transition {
 	duration: Duration::from_millis(400),
 	ease: Ease::Standard,
-	travel: -TOAST_TRAVEL,
+	travel: TOAST_TRAVEL,
 };
 
 pub const TOAST_EXIT: Transition = Transition {
 	duration: bridge::TOAST_EXIT,
 	ease: Ease::Standard,
-	travel: -TOAST_TRAVEL,
+	travel: TOAST_TRAVEL,
 };
 
 impl Ease {
@@ -170,7 +170,9 @@ fn entering(view: View, open: Signal<bool>, transition: Transition) -> View {
 		let mut was = open.with_untracked(|open| *open);
 		let tween = Tween::new(cx, 1.);
 		let opened = tween.clone();
+		let tracked = crate::scrim::track(&open);
 		let effect = cx.runtime().effect(move || {
+			let _ = &tracked;
 			let now = open.get();
 			if now && !was {
 				opened.run(0., 1., transition);

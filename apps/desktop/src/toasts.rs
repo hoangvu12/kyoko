@@ -9,20 +9,16 @@ use zgx::input::InputEvent;
 use zgx::reactive::{Runtime, Signal};
 
 use crate::motion::{self, Tween};
-use crate::timeline::{TypeSize, icon, tok};
+use crate::timeline::{icon, tok};
 
-const TOP: f32 = 50.;
-const RIGHT: f32 = 16.;
-const WIDTH: f32 = 382.;
-const GAP: f32 = 12.;
-const PADDING_X: f32 = 16.;
-const PADDING_Y: f32 = 14.;
-const ICON: f32 = 16.;
-const ICON_TOP: f32 = 18.;
-const TEXT_INSET: f32 = 24.;
+const WIDTH: f32 = 360.;
+const GAP: f32 = 8.;
+const ABOVE_AREA: f32 = 8.;
+const ABOVE_WINDOW: f32 = 63.;
+const BADGE: f32 = 20.;
+const GLYPH: f32 = 14.;
 const CLOSE: f32 = 20.;
 const CLOSE_ICON: f32 = 12.;
-const CLOSE_EDGE: f32 = 4.;
 
 thread_local! {
 	static LAYER: RefCell<Weak<ToastLayer>> = RefCell::default();
@@ -54,10 +50,19 @@ struct Shown {
 	leaving: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Area {
+	pub x: f32,
+	pub y: f32,
+	pub width: f32,
+	pub height: f32,
+}
+
 pub struct ToastLayer {
 	toasts: RefCell<Toasts>,
 	shown: Signal<Vec<Shown>>,
 	window: Signal<(f32, f32)>,
+	area: Signal<Option<Area>>,
 	tasks: RefCell<Option<Tasks>>,
 	timer: Cell<u64>,
 }
@@ -68,6 +73,7 @@ impl ToastLayer {
 			toasts: RefCell::default(),
 			shown: runtime.signal(Vec::new()),
 			window: runtime.signal((0., 0.)),
+			area: runtime.signal(None),
 			tasks: RefCell::new(None),
 			timer: Cell::new(0),
 		})
@@ -80,6 +86,22 @@ impl ToastLayer {
 	pub fn set_window(&self, width: f32, height: f32) {
 		if self.window.with_untracked(|window| *window != (width, height)) {
 			self.window.set((width, height));
+		}
+	}
+
+	pub fn set_area(&self, area: Option<Area>) {
+		if self.area.with_untracked(|current| *current != area) {
+			self.area.set(area);
+		}
+	}
+
+	fn anchor(&self) -> (f32, f32) {
+		let (width, height) = self.window.get();
+		match self.area.get() {
+			Some(area) if area.width > 0. && area.height > 0. => {
+				(area.x + area.width / 2., area.y + area.height - ABOVE_AREA)
+			}
+			_ => (width / 2., height - ABOVE_WINDOW),
 		}
 	}
 
@@ -181,7 +203,7 @@ impl ToastLayer {
 			if cx.try_service::<TaskRunner>().is_some() {
 				*this.tasks.borrow_mut() = Some(cx.tasks());
 			}
-			let (sized, window, listed) = (this.shown.clone(), this.window.clone(), this.shown.clone());
+			let (sized, placed, listed) = (this.shown.clone(), this.clone(), this.shown.clone());
 			let (hover, rows) = (Rc::downgrade(&this), this.clone());
 			column()
 				.gap(GAP)
@@ -189,11 +211,11 @@ impl ToastLayer {
 					if sized.with(Vec::is_empty) {
 						return Styles::new().absolute().left(0.).top(0.).w(0.).h(0.);
 					}
-					let (width, _) = window.get();
+					let (center, bottom) = placed.anchor();
 					Styles::new()
 						.absolute()
-						.left((width - RIGHT - WIDTH).max(0.))
-						.top(TOP)
+						.left((center - WIDTH / 2.).max(0.))
+						.bottom(-bottom)
 						.w(WIDTH)
 				})
 				.on_event(move |event| {
@@ -239,15 +261,17 @@ impl ToastLayer {
 		cx.retain(effect);
 		let hovered = cx.state(false);
 		let (hover, shown, layer) = (hovered.clone(), hovered.clone(), Rc::downgrade(self));
-		div()
-			.relative()
+		row()
+			.id(format!("toast-{id}"))
 			.w_full()
-			.px(PADDING_X)
-			.py(PADDING_Y)
-			.rounded(tok("radius_md"))
-			.bg(tok("background_floating"))
-			.border(1.)
-			.border_color(tok("divider"))
+			.items_center()
+			.gap(tok("space_10"))
+			.px(tok("space_12"))
+			.py(tok("space_10"))
+			.rounded(tok("radius_sm"))
+			.bg(tok("bg_3"))
+			.border(tok("border_thickness"))
+			.border_color(tok("active"))
 			.reactive_style(move || tween.styles(motion::TOAST_ENTER, Styles::new()))
 			.on_event(move |event| match event.event {
 				InputEvent::PointerEnter => {
@@ -258,20 +282,16 @@ impl ToastLayer {
 				}
 				_ => {}
 			})
-			.child(
-				div()
-					.absolute()
-					.top(ICON_TOP)
-					.left(PADDING_X)
-					.child(kind_icon(toast.kind)),
-			)
+			.child(kind_badge(toast.kind))
 			.child(
 				text(toast.text)
-					.w_full()
-					.pl(TEXT_INSET)
+					.grow()
+					.min_w(0.)
 					.text_wrap(true)
-					.type_size("font_sm")
-					.text_color(tok("text_normal")),
+					.text_size(tok("font_size_sm"))
+					.line_height(tok("line_height_sm"))
+					.font_weight(500)
+					.text_color(tok("text_2")),
 			)
 			.child_when(
 				move || shown.get().then_some(()),
@@ -280,31 +300,37 @@ impl ToastLayer {
 	}
 }
 
-fn kind_icon(kind: ToastKind) -> View {
-	match kind {
-		ToastKind::Info => icon("info", ICON, "brand"),
-		ToastKind::Success => icon("circle_check", ICON, "success"),
-		ToastKind::Warning => icon("warning", ICON, "warning"),
-		ToastKind::Error => icon("circle_x", ICON, "danger"),
-	}
+fn kind_badge(kind: ToastKind) -> View {
+	let (glyph, color) = match kind {
+		ToastKind::Info => ("info", "blue_2"),
+		ToastKind::Success => ("check", "green_2"),
+		ToastKind::Warning => ("warning", "yellow_2"),
+		ToastKind::Error => ("close", "red_2"),
+	};
+	div()
+		.size(BADGE, BADGE)
+		.shrink_0()
+		.items_center()
+		.justify_center()
+		.rounded(BADGE)
+		.bg(tok(color))
+		.child(icon(glyph, GLYPH, "text_0"))
 }
 
 fn close_button(layer: Weak<ToastLayer>, id: u64) -> View {
 	div()
-		.absolute()
-		.top(CLOSE_EDGE)
-		.right(CLOSE_EDGE)
 		.size(CLOSE, CLOSE)
+		.shrink_0()
 		.items_center()
 		.justify_center()
-		.rounded(tok("radius_sm"))
+		.rounded(tok("radius_xs"))
 		.cursor(Cursor::Pointer)
-		.hover(|style| style.bg(tok("modifier_hover")))
+		.hover(|style| style.bg(tok("hover")))
 		.on_click(move || {
 			if let Some(layer) = layer.upgrade() {
 				layer.dismiss(id);
 			}
 		})
-		.child(icon("close", CLOSE_ICON, "interactive_normal"))
+		.child(icon("close", CLOSE_ICON, "text_4"))
 		.tooltip("Dismiss".to_owned())
 }

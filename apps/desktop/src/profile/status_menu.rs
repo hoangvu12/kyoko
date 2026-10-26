@@ -6,25 +6,27 @@ use zgx::input::{EventPhase, InputEvent};
 
 use super::parts::{self, label};
 use super::{AccountRow, AccountsShown, MenuShown, ProfileLayer, Request};
+use crate::kit::separator;
 use crate::timeline::icons::icon;
 use crate::timeline::tok;
 
-const WIDTH: f32 = 260.;
-const ENTRY: f32 = 32.;
 const LEADING: f32 = 20.;
 const AVATAR: f32 = 40.;
 const DOT: f32 = 12.;
 const REMOVE: f32 = 24.;
+const CHOSEN: f32 = 16.;
+const CHOSEN_ICON: f32 = 12.;
 
 pub fn menu(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> View {
 	let frame = column()
-		.w(WIDTH)
-		.p(8.)
-		.gap(2.)
-		.rounded(tok("radius_md"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.bg(tok("background_floating"))
+		.w(tok("status_menu_width"))
+		.px(tok("space_8"))
+		.py(tok("space_6"))
+		.gap(tok("space_2"))
+		.rounded(tok("radius_sm"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_3"))
 		.on_event(|event| {
 			if event.phase != EventPhase::Capture && matches!(event.event, InputEvent::PointerDown { .. }) {
 				event.stop_propagation();
@@ -44,11 +46,11 @@ fn main_view(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> Vec<View> {
 		.map(|choice| {
 			let layer = layer.clone();
 			entry(
-				parts::status_dot(choice.dot(), DOT, "background_floating"),
+				parts::status_dot(choice.dot(), DOT, "bg_3"),
 				choice.label(),
 				false,
 			)
-			.when(choice == panel.status, |entry| entry.bg(tok("modifier_hover")))
+			.when(choice == panel.status, |entry| entry.child(chosen()))
 			.on_click(move || layer.choose_status(choice))
 		})
 		.collect();
@@ -68,7 +70,7 @@ fn main_view(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> Vec<View> {
 				shown.avatar.as_ref(),
 				AVATAR,
 				Some(panel.status.dot()),
-				"background_floating",
+				"bg_3",
 			))
 			.child(
 				column()
@@ -77,39 +79,30 @@ fn main_view(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> Vec<View> {
 						label(panel.name.clone(), "font_md")
 							.font_weight(700)
 							.truncate()
-							.text_color(tok("header_primary")),
+							.text_color(tok("text_2")),
 					)
 					.child(
 						label(panel.username.clone(), "font_xs")
 							.truncate()
-							.text_color(tok("text_muted")),
+							.text_color(tok("text_4")),
 					),
 			),
-		parts::spaced_divider(),
-		entry(
-			icon("profile", LEADING, "interactive_normal"),
-			"Edit Profile",
-			false,
-		)
-		.on_click(move || {
+		separator(),
+		entry(icon("profile", LEADING, "text_4"), "Edit Profile", false).on_click(move || {
 			edit.menu.set(None);
 			edit.request(Request::EditProfile);
 		}),
-		parts::spaced_divider(),
+		separator(),
 	];
 	view.extend(choices);
 	view.extend([
-		parts::spaced_divider(),
-		entry(icon("emoji", LEADING, "interactive_normal"), &custom_label, false)
+		separator(),
+		entry(icon("emoji", LEADING, "text_4"), &custom_label, false)
 			.on_click(move || custom.open_custom_status()),
-		parts::spaced_divider(),
-		entry(
-			icon("account", LEADING, "interactive_normal"),
-			"Switch Accounts",
-			false,
-		)
-		.on_click(move || switch.request(Request::SwitchAccounts)),
-		entry(icon("log_out", LEADING, "danger"), "Log Out", true).on_click(move || {
+		separator(),
+		entry(icon("account", LEADING, "text_4"), "Switch Accounts", false)
+			.on_click(move || switch.request(Request::SwitchAccounts)),
+		entry(icon("log_out", LEADING, "red_2"), "Log Out", true).on_click(move || {
 			sign_out.menu.set(None);
 			sign_out.request(Request::SignOut);
 		}),
@@ -120,13 +113,9 @@ fn main_view(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> Vec<View> {
 fn accounts_view(layer: &Rc<ProfileLayer>, accounts: &AccountsShown) -> Vec<View> {
 	let (back, add, manage) = (layer.clone(), layer.clone(), layer.clone());
 	let mut view = vec![
-		entry(
-			icon("chevron_left", LEADING, "interactive_normal"),
-			"Switch Accounts",
-			false,
-		)
-		.on_click(move || back.close_accounts()),
-		parts::spaced_divider(),
+		entry(icon("chevron_left", LEADING, "text_4"), "Switch Accounts", false)
+			.on_click(move || back.close_accounts()),
+		separator(),
 	];
 	view.extend(
 		accounts
@@ -140,34 +129,19 @@ fn accounts_view(layer: &Rc<ProfileLayer>, accounts: &AccountsShown) -> Vec<View
 		("Manage Accounts", "user_cog")
 	};
 	view.extend([
-		parts::spaced_divider(),
-		entry(
-			icon("plus", LEADING, "interactive_normal"),
-			"Add an Account",
-			false,
-		)
-		.on_click(move || {
+		separator(),
+		entry(icon("plus", LEADING, "text_4"), "Add an Account", false).on_click(move || {
 			add.menu.set(None);
 			add.request(Request::AddAccount);
 		}),
-		entry(
-			icon(manage_icon, LEADING, "interactive_normal"),
-			manage_label,
-			false,
-		)
-		.on_click(move || manage.toggle_managing()),
+		entry(icon(manage_icon, LEADING, "text_4"), manage_label, false)
+			.on_click(move || manage.toggle_managing()),
 	]);
 	view
 }
 
 fn account_row(layer: &Rc<ProfileLayer>, account: &AccountRow, managing: bool) -> View {
-	let leading = parts::avatar(
-		&layer.pictures,
-		account.avatar.as_ref(),
-		LEADING,
-		None,
-		"background_floating",
-	);
+	let leading = parts::avatar(&layer.pictures, account.avatar.as_ref(), LEADING, None, "bg_3");
 	let entry = entry(leading, &account.name, false);
 	let user_id = account.user_id;
 	if managing {
@@ -183,15 +157,15 @@ fn account_row(layer: &Rc<ProfileLayer>, account: &AccountRow, managing: bool) -
 				.justify_center()
 				.rounded(tok("radius_sm"))
 				.cursor(Cursor::Pointer)
-				.hover(|style| style.bg(tok("modifier_hover")))
-				.child(icon("trash", LEADING - 4., "danger"))
+				.hover(|style| style.bg(tok("background_feedback_critical")))
+				.child(icon("trash", LEADING - 4., "red_2"))
 				.on_click(move || remove.request(Request::RemoveAccount(user_id))),
 		);
 	}
 	let switch = layer.clone();
 	entry
 		.when(account.current, |entry| {
-			entry.child(icon("check", LEADING, "interactive_normal"))
+			entry.child(icon("check", LEADING, "text_4"))
 		})
 		.on_click(move || {
 			switch.menu.set(None);
@@ -200,20 +174,20 @@ fn account_row(layer: &Rc<ProfileLayer>, account: &AccountRow, managing: bool) -
 }
 
 fn entry(leading: View, caption: &str, danger: bool) -> View {
-	let (rest, hover) = if danger {
-		("danger", "danger")
+	let (color, wash) = if danger {
+		("red_2", "background_feedback_critical")
 	} else {
-		("interactive_normal", "interactive_active")
+		("text_3", "hover")
 	};
 	row()
 		.items_center()
-		.gap(8.)
-		.h(ENTRY)
-		.px(8.)
-		.rounded(tok("radius_sm"))
+		.gap(tok("space_8"))
+		.h(tok("menu_item_height"))
+		.px(tok("space_8"))
+		.rounded(tok("radius_xs"))
 		.cursor(Cursor::Pointer)
-		.text_color(tok(rest))
-		.hover(move |style| style.bg(tok("modifier_selected")).text_color(tok(hover)))
+		.text_color(tok(color))
+		.hover(move |style| style.bg(tok(wash)))
 		.child(row().w(LEADING).shrink_0().justify_center().child(leading))
 		.child(
 			label(caption.to_owned(), "font_sm")
@@ -222,4 +196,15 @@ fn entry(leading: View, caption: &str, danger: bool) -> View {
 				.min_w(0.)
 				.truncate(),
 		)
+}
+
+fn chosen() -> View {
+	row()
+		.size(CHOSEN, CHOSEN)
+		.shrink_0()
+		.items_center()
+		.justify_center()
+		.rounded(CHOSEN)
+		.bg(tok("accent_2"))
+		.child(icon("check", CHOSEN_ICON, "text_0"))
 }

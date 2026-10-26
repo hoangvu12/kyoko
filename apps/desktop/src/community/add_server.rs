@@ -12,12 +12,15 @@ use zgx::reactive::Signal;
 use zgx::style::ObjectFit;
 
 use super::CommunityLayer;
-use super::parts::{
-	self, Tone, body, enabled_when, field, footer, hint, input, labelled_button, on_enter, panel, segmented,
-};
+use super::parts::{self, Tone, body, enabled_when, field, footer, hint, input, labelled_button, on_enter};
+use crate::kit;
 use crate::timeline::{TypeSize, icon, tok};
 
 const WIDTH: f32 = 440.;
+const JOIN: usize = 0;
+const CREATE: usize = 1;
+const START: usize = 2;
+const OPTION_ICON: f32 = 40.;
 const NAME_LIMIT: usize = 100;
 const ICON_SIDE: u32 = 512;
 const CARD_ICON: f32 = 56.;
@@ -102,7 +105,7 @@ fn read_icon(path: &Path) -> Option<Picked> {
 
 pub fn view(layer: &Rc<CommunityLayer>) -> View {
 	let runtime = &layer.runtime;
-	let path = runtime.signal(0usize);
+	let path = runtime.signal(START);
 	let code = runtime.signal(String::new());
 	let owner = layer
 		.read(|state| state.current_user_id().map(|me| state.display_name(None, me)))
@@ -119,7 +122,7 @@ pub fn view(layer: &Rc<CommunityLayer>) -> View {
 			picked.clone(),
 		);
 		Rc::new(move || {
-			if path.with_untracked(|path| *path) == 0 {
+			if path.with_untracked(|path| *path) == JOIN {
 				join(&layer, &code.with_untracked(Clone::clone));
 			} else {
 				create(&layer, &name, &picked);
@@ -143,20 +146,127 @@ pub fn view(layer: &Rc<CommunityLayer>) -> View {
 		}
 	});
 	let (close, cancel) = (layer.clone(), layer.clone());
-	panel(
-		WIDTH,
-		"Add a Server",
-		move || close.close(),
-		body()
-			.child(segmented(&["Join a server", "Create my own"], path.clone()))
-			.child(join_view)
-			.child(create_view)
-			.child(footer(
-				"Cancel",
-				confirm(layer, &path, &code, &name, submit),
-				move || cancel.close(),
-			)),
-	)
+	let (titled, described, started, finishing) = (path.clone(), path.clone(), path.clone(), path.clone());
+	column()
+		.w(WIDTH)
+		.overflow_hidden()
+		.rounded(tok("radius_lg"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_4"))
+		.text_color(tok("text_3"))
+		.child(kit::header_with(
+			kit::title_view(text_signal(move || {
+				match titled.get() {
+					JOIN => "Join a Server",
+					CREATE => "Customize Your Server",
+					_ => "Create Your Server",
+				}
+				.to_owned()
+			})),
+			div()
+				.w_full()
+				.reactive_style(move || {
+					if described.get() == START {
+						Styles::new().flex()
+					} else {
+						Styles::new().hidden()
+					}
+				})
+				.child(kit::note(
+					"Your server is where you and your friends hang out. Make yours and start talking.",
+				)),
+			move || close.close(),
+		))
+		.child(
+			body()
+				.child(start_body(&path).reactive_style(move || {
+					if started.get() == START {
+						Styles::new().flex()
+					} else {
+						Styles::new().hidden()
+					}
+				}))
+				.child(join_view)
+				.child(create_view)
+				.child(
+					footer("Cancel", confirm(layer, &path, &code, &name, submit), move || {
+						cancel.close()
+					})
+					.reactive_style(move || {
+						if finishing.get() == START {
+							Styles::new().hidden()
+						} else {
+							Styles::new().flex()
+						}
+					}),
+				),
+		)
+}
+
+fn start_body(path: &Signal<usize>) -> View {
+	let (create, join) = (path.clone(), path.clone());
+	column()
+		.w_full()
+		.gap(tok("space_16"))
+		.child(
+			button()
+				.focusable(false)
+				.w_full()
+				.items_center()
+				.justify_start()
+				.gap(tok("space_12"))
+				.px(tok("space_12"))
+				.py(tok("space_8"))
+				.rounded(tok("radius_sm"))
+				.border(tok("border_thickness"))
+				.border_color(tok("border"))
+				.bg(tok("bg_3"))
+				.hover(|style| style.bg(tok("bg_2")))
+				.cursor(Cursor::Pointer)
+				.on_click(move || {
+					create.set(CREATE);
+				})
+				.child(
+					div()
+						.size(OPTION_ICON, OPTION_ICON)
+						.shrink_0()
+						.items_center()
+						.justify_center()
+						.rounded(tok("radius_sm"))
+						.bg(tok("accent_3"))
+						.child(icon("plus", 20., "text_0")),
+				)
+				.child(
+					text("Create My Own")
+						.grow()
+						.text_size(tok("font_size_md"))
+						.line_height(tok("line_height_label"))
+						.font_weight(600)
+						.text_color(tok("text_2")),
+				)
+				.child(kit::menu_icon("chevron_right", false)),
+		)
+		.child(kit::footer_band(
+			column()
+				.w_full()
+				.items_center()
+				.gap(tok("space_8"))
+				.child(
+					text("Have an invite already?")
+						.text_size(tok("font_size_lg"))
+						.line_height(tok("line_height_lg"))
+						.font_weight(600)
+						.text_color(tok("text_2")),
+				)
+				.child(
+					kit::action("Join a Server", kit::Variant::Secondary, move || {
+						join.set(JOIN);
+					})
+					.focusable(false)
+					.w_full(),
+				),
+		))
 }
 
 fn join(layer: &CommunityLayer, typed: &str) {
@@ -200,7 +310,7 @@ fn confirm(
 		let revision = layer.revision.clone();
 		move || -> (&'static str, bool) {
 			revision.get();
-			if path.get() == 1 {
+			if path.get() == CREATE {
 				return ("Create Server", name.with(|name| !name.trim().is_empty()));
 			}
 			match lookup(&layer, &code.get()) {

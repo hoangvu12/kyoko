@@ -112,14 +112,14 @@ impl PluginMenu {
 		let Some(item) = shown.items.get(index).cloned() else {
 			return div();
 		};
-		let glyph = plugin_icon(item.icon.as_ref(), MENU_ICON, "text_normal");
+		let glyph = plugin_icon(item.icon.as_ref(), MENU_ICON, "text_4");
 		let (pressing, choosing) = (self.clone(), self.clone());
 		let choice = Choice {
 			item: item.clone(),
 			target: shown.facts.target.clone(),
 			message,
 		};
-		menu_row(item.label.clone(), glyph, "text_normal")
+		menu_row(item.label.clone(), glyph, "text_3")
 			.id(format!("plugin-menu-{}", item.key))
 			.on_event(move |event| {
 				if event.phase != EventPhase::Capture

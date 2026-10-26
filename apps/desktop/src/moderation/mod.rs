@@ -94,6 +94,7 @@ pub enum Dialog {
 		user_id: Snowflake,
 		name: String,
 		choice: Signal<usize>,
+		reason: Signal<String>,
 	},
 	Kick {
 		guild_id: Snowflake,
@@ -237,6 +238,7 @@ impl ModerationLayer {
 			user_id,
 			name: name.to_owned(),
 			choice: self.runtime.signal(DEFAULT_TIMEOUT),
+			reason: self.runtime.signal(String::new()),
 		});
 	}
 

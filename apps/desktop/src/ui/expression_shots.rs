@@ -66,7 +66,7 @@ impl Link {
 			.await;
 	}
 
-	async fn say(&self, channel_id: Snowflake, content: String) {
+	pub(super) async fn say(&self, channel_id: Snowflake, content: String) {
 		self.send_and_wait(
 			Command::SendMessage {
 				channel_id,

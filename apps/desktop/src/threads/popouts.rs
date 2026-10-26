@@ -18,7 +18,6 @@ const GLYPH: f32 = 24.;
 const PORTRAIT: f32 = 32.;
 const EMPTY_GLYPH: f32 = 48.;
 const SMALL_BUTTON: f32 = 24.;
-const BUTTON: f32 = 32.;
 const PILL: f32 = 32.;
 const CLOSE_HIT: f32 = 28.;
 const CLOSE_GLYPH: f32 = 20.;
@@ -30,7 +29,6 @@ const NO_PINS: &str = "This channel has no pinned messages yet.";
 pub enum Fill {
 	Primary,
 	Outline,
-	Ghost,
 }
 
 pub fn clear() -> Themed<Color> {
@@ -62,20 +60,11 @@ fn button_with(label: &str, fill: Fill, height: f32, padding: f32) -> View {
 			.bg(clear())
 			.text_color(tok("text_normal"))
 			.hover(|style| style.bg(tok("modifier_hover"))),
-		Fill::Ghost => base
-			.border(0.)
-			.bg(clear())
-			.text_color(tok("text_normal"))
-			.hover(|style| style.bg(tok("modifier_hover"))),
 	}
 }
 
 pub fn small_button(label: &str, fill: Fill) -> View {
 	button_with(label, fill, SMALL_BUTTON, 8.)
-}
-
-pub fn wide_button(label: &str, fill: Fill) -> View {
-	button_with(label, fill, BUTTON, 12.)
 }
 
 pub fn close_button(on_click: impl FnMut() + 'static) -> View {

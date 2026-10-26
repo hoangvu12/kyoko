@@ -7,7 +7,7 @@ local mention_badge = require("@components/mention_badge")
 local motion = require("@components/motion")
 local dm_sidebar = require("./dm_sidebar")
 
-local MENU_WIDTH = 224
+local MENU_WIDTH = theme.size.context_menu_width
 local CATEGORY_PLUS = 16
 local CATEGORY_PLUS_HIT = 18
 local LOCK_BADGE = 11
@@ -30,9 +30,13 @@ local dot_size = theme.number(theme.size.unread_dot_size)
 
 local menu_style = {
 	w = MENU_WIDTH,
-	p = 6,
-	rounded = 4,
-	bg = theme.color.background_floating,
+	px = theme.size.space_8,
+	py = theme.size.space_6,
+	gap = theme.size.space_2,
+	rounded = theme.size.radius_sm,
+	bg = theme.color.bg_3,
+	border = theme.size.border_thickness,
+	border_color = theme.color.border,
 }
 
 local function by_key(item: { key: string })
@@ -40,7 +44,7 @@ local function by_key(item: { key: string })
 end
 
 local function separator()
-	return ui.div { h = 1, my = 4, mx = 4, bg = theme.color.modifier_hover }
+	return ui.div { h = theme.size.border_thickness, my = theme.size.space_4, mx = theme.size.space_4, bg = theme.color.border }
 end
 
 local function item(label: string, on_click: () -> (), disabled: boolean?, id: string?)
@@ -80,9 +84,13 @@ local function submenu(id: string, label: string, open: any, items: { any })
 		trigger = ui.menu_item { label, id = id },
 		label = label,
 		w = MENU_WIDTH,
-		p = 6,
-		rounded = 4,
-		bg = theme.color.background_floating,
+		px = theme.size.space_8,
+		py = theme.size.space_6,
+		gap = theme.size.space_2,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
 		table.unpack(items),
 	}
 end
@@ -215,9 +223,13 @@ local header = ui.component(function()
 			open = open,
 			label = "Server menu",
 			w = MENU_WIDTH,
-			p = 6,
-			rounded = 4,
-			bg = theme.color.background_floating,
+			px = theme.size.space_8,
+			py = theme.size.space_6,
+			gap = theme.size.space_2,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.bg_3,
+			border = theme.size.border_thickness,
+			border_color = theme.color.border,
 			placement = { side = "bottom", align = "center", offset = 4 },
 			anchor = ui.button {
 				id = "server_menu",

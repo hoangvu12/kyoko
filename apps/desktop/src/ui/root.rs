@@ -21,9 +21,10 @@ use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
-const LAYERS: [&str; 10] = [
+const LAYERS: [&str; 11] = [
 	"timeline slot",
 	"thread slot",
+	"scrim",
 	"profiles",
 	"quick switcher",
 	"thread popouts and dialogs",
@@ -170,6 +171,94 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		"lightbox" => timeline().lightbox_view(),
 		"moderation dialogs and member menu" => ModerationLayer::new(runtime).view(),
 		"toasts" => ToastLayer::new(runtime).view(),
+		"scrim" => crate::scrim::Scrim::new(runtime).view(),
 		_ => unreachable!("no layer named {name}"),
+	}
+}
+
+const TOAST_SLOT: Slot = Slot {
+	x: 400.,
+	y: 80.,
+	width: 600.,
+	height: 500.,
+};
+const TOAST_ROWS: usize = 12;
+
+type ToastParts = (
+	Rc<ToastLayer>,
+	zgx::reactive::Signal<Slot>,
+	[zgx::reactive::Signal<bool>; 2],
+);
+
+#[test]
+fn a_toast_floats_over_the_timeline_and_never_moves_its_rows() {
+	let parts: Rc<RefCell<Option<ToastParts>>> = Rc::default();
+	let (made, used) = (parts.clone(), parts.clone());
+	let mut app = TestApp::wrapped(
+		move |runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "dark");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			let layer = ToastLayer::new(runtime);
+			layer.set_window(WIDE.0, WIDE.1);
+			layer.set_area(Some(crate::toasts::Area {
+				x: TOAST_SLOT.x,
+				y: TOAST_SLOT.y,
+				width: TOAST_SLOT.width,
+				height: TOAST_SLOT.height,
+			}));
+			*made.borrow_mut() = Some((
+				layer,
+				runtime.signal(TOAST_SLOT),
+				[runtime.signal(false), runtime.signal(false)],
+			));
+			host
+		},
+		move |luau| {
+			let (layer, slot, hidden) = used.borrow().clone().expect("the toast parts");
+			let rows = column().w_full().h_full().justify_end().children(
+				(0..TOAST_ROWS).map(|index| div().id(format!("timeline-row-{index}")).w_full().h(40.)),
+			);
+			layered(luau, [timeline_slot(slot, rows, hidden), layer.view()])
+		},
+	);
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	app.frames(2);
+	let rows = |app: &mut TestApp| -> Vec<_> {
+		(0..TOAST_ROWS)
+			.map(|index| app.bounds(&format!("timeline-row-{index}")))
+			.collect()
+	};
+	let before = rows(&mut app);
+	let layer = parts.borrow().as_ref().expect("the toast parts").0.clone();
+	layer.push(bridge::ToastKind::Error, "You are being rate limited.");
+	layer.push(bridge::ToastKind::Success, "Link copied");
+	app.frames(30);
+	assert_eq!(
+		before,
+		rows(&mut app),
+		"the timeline's rows moved while toasts showed"
+	);
+	let shown: Vec<_> = (0..4)
+		.filter_map(|id| {
+			let name = format!("toast-{id}");
+			app.find(&name).map(|_| app.bounds(&name))
+		})
+		.collect();
+	assert_eq!(shown.len(), 2, "both toasts show");
+	let slot_bottom = TOAST_SLOT.y + TOAST_SLOT.height;
+	for toast in &shown {
+		assert!(
+			toast.y >= TOAST_SLOT.y && toast.y + toast.height <= slot_bottom,
+			"a toast floats over the timeline, inside its box: {toast:?}"
+		);
+		let center = toast.x + toast.width / 2.;
+		assert!(
+			(center - (TOAST_SLOT.x + TOAST_SLOT.width / 2.)).abs() < 1.,
+			"a toast is centred on the timeline: {toast:?}"
+		);
 	}
 }

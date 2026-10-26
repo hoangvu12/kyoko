@@ -12,9 +12,12 @@ use super::links::Links;
 use super::pictures::Pictures;
 use super::rows::tok;
 
-const EDGE: f32 = 16.;
-const BUTTON: f32 = 36.;
-const BUTTON_ICON: f32 = 22.;
+const TOOLBAR: f32 = 64.;
+const SIDE_ROOM: f32 = 56.;
+const TOP_ROOM: f32 = 24.;
+const BOTTOM_ROOM: f32 = 56.;
+const BUTTON: f32 = 38.;
+const BUTTON_ICON: f32 = 20.;
 
 #[derive(Clone, PartialEq)]
 struct Shown {
@@ -120,32 +123,60 @@ impl Lightbox {
 				let (width, height) = window.get();
 				Styles::new().w(width).h(height)
 			})
-			.items_center()
-			.justify_center()
-			.gap(12.)
-			.bg(tok("overlay"))
+			.bg(tok("background_scrim_lightbox"))
 			.on_click(move || {
 				closer.close();
 			})
-			.child(self.buttons(shown))
-			.child(self.picture(shown))
+			.child(self.toolbar(shown))
 			.child(
-				text(shown.image.name.clone())
-					.text_size(tok("font_sm"))
-					.font_weight(500)
-					.text_color(tok("interactive_active")),
+				column()
+					.w_full()
+					.grow()
+					.min_h(0.)
+					.items_center()
+					.justify_center()
+					.pt(TOP_ROOM)
+					.pb(BOTTOM_ROOM)
+					.px(SIDE_ROOM)
+					.child(self.picture(shown)),
 			)
 	}
 
-	fn buttons(self: &Rc<Self>, shown: &Shown) -> View {
+	fn toolbar(self: &Rc<Self>, shown: &Shown) -> View {
 		let (links, url) = (self.links.clone(), shown.image.original_url().map(str::to_owned));
 		let closer = self.clone();
+		let (width, height) = (shown.image.width, shown.image.height);
 		row()
-			.absolute()
-			.top(EDGE)
-			.right(EDGE)
-			.gap(8.)
-			.on_event(swallow)
+			.w_full()
+			.h(TOOLBAR)
+			.shrink_0()
+			.items_center()
+			.gap(tok("space_8"))
+			.pt(tok("space_12"))
+			.px(tok("space_16"))
+			.child(
+				column()
+					.grow()
+					.min_w(0.)
+					.on_event(swallow)
+					.child(
+						text(shown.image.name.clone())
+							.w_full()
+							.truncate()
+							.text_size(tok("font_size_md"))
+							.line_height(tok("line_height_label"))
+							.font_weight(600)
+							.text_color(tok("text_1")),
+					)
+					.when(width > 0 && height > 0, |column| {
+						column.child(
+							text(format!("{width} \u{d7} {height}"))
+								.text_size(tok("font_size_xs"))
+								.line_height(tok("line_height_xs"))
+								.text_color(tok("text_3")),
+						)
+					}),
+			)
 			.when_some(url, |buttons, url| {
 				buttons.child(button("external_link", "Open original", move || {
 					links.download(&url)
@@ -157,12 +188,19 @@ impl Lightbox {
 	}
 
 	fn picture(&self, shown: &Shown) -> View {
+		let (window_width, window_height) = self.window.with_untracked(|window| *window);
+		let room = (
+			(window_width - 2. * SIDE_ROOM).max(1.),
+			(window_height - TOOLBAR - TOP_ROOM - BOTTOM_ROOM).max(1.),
+		);
 		let (width, height) = shown.size;
+		let fit = (room.0 / width).min(room.1 / height).min(1.);
+		let (width, height) = (width * fit, height * fit);
 		let picture = shown.name.as_ref().map(|name| self.pictures.picture(name));
 		let frame = div()
 			.size(width, height)
 			.shrink_0()
-			.rounded(tok("radius_md"))
+			.rounded(tok("radius_sm"))
 			.overflow_hidden()
 			.items_center()
 			.justify_center()
@@ -179,14 +217,14 @@ impl Lightbox {
 						move || loading.with(Option::is_none),
 						|waiting: bool, _| {
 							if waiting {
-								text("Loading image...").text_color(tok("text_muted"))
+								text("Loading image...").text_color(tok("text_4"))
 							} else {
 								div()
 							}
 						},
 					)))
 			}
-			None => frame.child(text("Loading image...").text_color(tok("text_muted"))),
+			None => frame.child(text("Loading image...").text_color(tok("text_4"))),
 		}
 	}
 }
@@ -203,12 +241,15 @@ fn swallow(event: &mut zgx::input::EventContext) {
 fn button(name: &'static str, tip: &str, action: impl Fn() + 'static) -> View {
 	div()
 		.size(BUTTON, BUTTON)
+		.shrink_0()
 		.items_center()
 		.justify_center()
 		.rounded(tok("radius_sm"))
+		.bg(tok("overlay_button_background"))
 		.cursor(Cursor::Pointer)
-		.hover(|style| style.bg(tok("modifier_hover")))
+		.hover(|style| style.bg(tok("active_2")))
+		.on_event(swallow)
 		.on_click(action)
-		.child(icon(name, BUTTON_ICON, "interactive_active"))
+		.child(icon(name, BUTTON_ICON, "text_1"))
 		.tooltip(tip.to_owned())
 }

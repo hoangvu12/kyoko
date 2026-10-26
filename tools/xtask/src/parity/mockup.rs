@@ -27,6 +27,8 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("composer-reply", "composer-markdown"),
 	("message-hover", "midnight-discord"),
 	("message-context-menu", "message-menu"),
+	("message-context-menu-own", "message-menu-own"),
+	("delete-message-dialog", "delete-message-dialog"),
 	("member-list", "midnight-discord"),
 	("user-panel", "midnight-discord"),
 	("status-menu", "status-menu"),

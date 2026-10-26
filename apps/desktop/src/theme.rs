@@ -7,6 +7,7 @@ use crate::fonts;
 pub const DEFAULT: &str = "midnight";
 pub const SYSTEM: &str = "system";
 pub const NAMESPACE: &str = "kyoko";
+const CLEAR: &str = "#00000000";
 
 const STANDARD: &[(&str, &str)] = &[
 	("background", "background_primary"),
@@ -62,6 +63,10 @@ pub fn to_theme(palette: &Palette, installed: &[String]) -> Theme {
 			TokenInput::parse(&format!("{{{}}}", token(source))).expect("a token reference"),
 		);
 	}
+	theme = theme.with(
+		zgx::theme::token("backdrop"),
+		TokenInput::parse(CLEAR).expect("a colour"),
+	);
 	let ui_font = fonts::pick(palette.ui_fonts(), installed);
 	let code_font = fonts::pick(palette.code_fonts(), installed);
 	theme

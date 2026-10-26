@@ -53,10 +53,6 @@ pub fn divider() -> View {
 	div().h(DIVIDER).shrink_0().bg(tok("divider"))
 }
 
-pub fn spaced_divider() -> View {
-	div().py(4.).child(divider())
-}
-
 pub fn status_color(status: DmStatus) -> &'static str {
 	match status {
 		DmStatus::Online => "status_online",

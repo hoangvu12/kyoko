@@ -41,7 +41,6 @@ use zgx::platform::PlatformService;
 use zgx::reactive::{Effect, Runtime, Signal};
 
 pub use self::actions::Compose;
-pub(crate) use self::actions::{MENU_ICON, menu_panel, menu_row};
 use self::actions::{MessageActions, Wiring};
 use self::dialogs::Dialogs;
 pub(crate) use self::icons::{icon, plugin_icon};
@@ -52,6 +51,7 @@ pub use self::rows::Prefs;
 use self::rows::{RowEnv, Sender};
 pub(crate) use self::rows::{TypeSize, tok};
 use self::scroll::{Anchor, Ends, Extent, Page, Paging, Reporter, Resize};
+pub(crate) use crate::kit::{MENU_ICON, menu_panel, menu_row};
 use crate::pickers::{ExpressionPicker, Mode};
 
 const OVERSCAN: usize = 4;
@@ -135,7 +135,7 @@ impl TimelineView {
 		let actions = Rc::new(MessageActions::new(
 			runtime,
 			Wiring {
-				dialogs: Rc::new(Dialogs::new(runtime, commands.clone())),
+				dialogs: Rc::new(Dialogs::new(runtime, commands.clone(), pictures.clone())),
 				picker: ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction),
 				popout,
 				links: links.clone(),
@@ -423,6 +423,10 @@ impl TimelineView {
 		wanted: impl Fn(&bridge::PopoutSubject) -> bool,
 	) -> Option<(bridge::PopoutSubject, zgx::scene::Rect)> {
 		self.actions.popout.anchor(wanted)
+	}
+
+	pub fn run_action(&self, action: bridge::MessageAction, entry: &bridge::MessageEntry) {
+		self.actions.run(action, entry, zgx::input::Modifiers::default());
 	}
 
 	pub fn open_popout(&self, subject: bridge::PopoutSubject, at: zgx::scene::Rect) {

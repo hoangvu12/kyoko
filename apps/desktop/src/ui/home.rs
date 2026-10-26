@@ -64,6 +64,12 @@ impl Link {
 		self.reported_slot.set(slot);
 		self.timeline_view.resize(slot.width, slot.height);
 		self.place_actions(slot);
+		self.toasts.set_area(Some(crate::toasts::Area {
+			x: slot.x,
+			y: slot.y,
+			width: slot.width,
+			height: slot.height,
+		}));
 		if self.dms.page().is_empty() && !self.settings_view().is_open() {
 			self.window.slot.set(slot);
 		}

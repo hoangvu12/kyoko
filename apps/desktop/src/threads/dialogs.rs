@@ -2,63 +2,31 @@ use std::rc::Rc;
 
 use bridge::TagChip;
 use zgx::compose::prelude::*;
-use zgx::compose::{ModalPlacement, Placement, PlacementEdge, PlacementSide};
+use zgx::compose::{Placement, PlacementEdge, PlacementSide};
 use zgx::reactive::Signal;
 
-use super::popouts::{Fill, clear, close_button, wide_button};
+use super::popouts::{clear, close_button};
 use super::{CreateShown, FileChip, PostShown, ThreadsLayer};
+use crate::kit::{self, Variant};
 use crate::motion;
 use crate::timeline::{TypeSize, icon, tok};
 
-const TOP: f32 = 80.;
 const SMALL: f32 = 440.;
 const MEDIUM: f32 = 540.;
-const INPUT: f32 = 35.;
 const SELECT: f32 = 32.;
-const FOCUS_RING: f32 = 2.;
 const BODY_HEIGHT: f32 = 95.;
 const CHIP: f32 = 28.;
 const FILE_CHIP: f32 = 36.;
 const FILE_CHIP_MAX: f32 = 240.;
 const STARTER_LINES: u32 = 3;
 const MENU_ITEM: f32 = 28.;
-const TITLE_SIZE: f32 = 18.;
-const CONTENT_TOP: f32 = 5.;
-const TITLE_LINE: f32 = 21.;
-const CLOSE_TOP: f32 = 10.;
-const CLOSE_RIGHT: f32 = 11.;
-const CLOSE_HIT: f32 = 22.;
-const CLOSE_GLYPH: f32 = 14.;
-
-fn caption(label: &str) -> View {
-	text(label.to_uppercase())
-		.type_size("font_tiny")
-		.font_weight(700)
-		.text_color(tok("header_secondary"))
-}
 
 fn field(label: &str, content: View) -> View {
-	column().w_full().gap(8.).child(caption(label)).child(content)
+	kit::field(label, content)
 }
 
 fn input(label: &str, placeholder: &str, value: Signal<String>) -> View {
-	text_input(label, value)
-		.placeholder(placeholder)
-		.w_full()
-		.h(INPUT)
-		.px(12.)
-		.rounded(tok("radius_sm"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.bg(tok("input_background"))
-		.text_color(tok("text_normal"))
-		.type_size("font_md")
-		.focus(|style| {
-			style
-				.border_color(tok("brand"))
-				.outline_color(tok("focus_ring"))
-				.outline_width(FOCUS_RING)
-		})
+	kit::input(label, value, placeholder)
 }
 
 fn dialog(
@@ -68,46 +36,10 @@ fn dialog(
 	content: View,
 	on_close: impl FnMut() + 'static,
 ) -> View {
-	motion::modal(label.to_owned(), open)
-		.modal_placement(ModalPlacement {
-			x: PlacementEdge::Center,
-			y: PlacementEdge::Start,
-			insets: [TOP, 0., 0., 0.],
-		})
-		.relative()
+	kit::dialog(motion::modal(label.to_owned(), open))
 		.w(width)
-		.p(16.)
-		.gap(8.)
-		.rounded(tok("radius_md"))
-		.bg(tok("background_primary"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.text_color(tok("text_normal"))
-		.child(
-			text(label.to_owned())
-				.text_size(TITLE_SIZE)
-				.line_height(TITLE_LINE)
-				.font_weight(600)
-				.text_color(tok("header_primary")),
-		)
+		.child(kit::header(kit::title(label), None, on_close))
 		.child(content)
-		.child(
-			button()
-				.absolute()
-				.top(CLOSE_TOP)
-				.right(CLOSE_RIGHT)
-				.size(CLOSE_HIT, CLOSE_HIT)
-				.p(0.)
-				.border(0.)
-				.items_center()
-				.justify_center()
-				.rounded(tok("radius_sm"))
-				.bg(clear())
-				.cursor(Cursor::Pointer)
-				.hover(|style| style.bg(tok("modifier_hover")))
-				.child(icon("close", CLOSE_GLYPH, "interactive_normal"))
-				.on_click(on_close),
-		)
 }
 
 fn footer(
@@ -116,18 +48,12 @@ fn footer(
 	on_cancel: impl FnMut() + 'static,
 	on_confirm: impl FnMut() + 'static,
 ) -> View {
-	row()
-		.w_full()
-		.justify_end()
-		.items_center()
-		.gap(8.)
-		.child(wide_button("Cancel", Fill::Ghost).on_click(on_cancel))
-		.child(
-			wide_button(confirm, Fill::Primary)
-				.disabled_when(move || !enabled())
-				.disabled_style(|style| style.opacity(0.5))
-				.on_click(on_confirm),
-		)
+	kit::footer(vec![
+		kit::action("Cancel", Variant::Link, on_cancel),
+		kit::action(confirm, Variant::Primary, on_confirm)
+			.disabled_when(move || !enabled())
+			.disabled_style(|style| style.opacity(0.5)),
+	])
 }
 
 pub fn create_dialog(layer: &Rc<ThreadsLayer>) -> View {
@@ -163,8 +89,8 @@ fn create_panel(layer: &Rc<ThreadsLayer>, shown: &CreateShown) -> View {
 		SMALL,
 		column()
 			.w_full()
-			.pt(CONTENT_TOP)
-			.gap(16.)
+			.p(tok("space_16"))
+			.gap(tok("space_16"))
 			.child(field(
 				"Thread name",
 				input("Thread name", "New Thread", layer.name.clone()).on_event(move |event| {
@@ -296,8 +222,8 @@ fn post_panel(layer: &Rc<ThreadsLayer>, shown: &PostShown) -> View {
 		MEDIUM,
 		column()
 			.w_full()
-			.pt(CONTENT_TOP)
-			.gap(16.)
+			.p(tok("space_16"))
+			.gap(tok("space_16"))
 			.child(field(
 				"Title",
 				input("Title", "Give your post a title", layer.title.clone()),

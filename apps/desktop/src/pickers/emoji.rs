@@ -233,7 +233,7 @@ impl ExpressionPicker {
 		self.expression_menu(view, target)
 	}
 
-	fn emoji_visual(&self, cell: &EmojiCell, side: f32, text_size: &str) -> View {
+	pub(crate) fn emoji_visual(&self, cell: &EmojiCell, side: f32, text_size: &str) -> View {
 		match (&cell.glyph, &cell.custom) {
 			(Some(glyph), _) => match emoji::svg_of(glyph) {
 				Some(art) => svg(glyph.clone(), art).size(side, side),

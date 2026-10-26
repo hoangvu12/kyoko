@@ -29,6 +29,7 @@ pub const GIF_LINK: &str = "https://klipy.com/gifs/cat-dance";
 pub const LINK_PREVIEW: &str = "docs are up https://github.com/refact0r/midnight-discord";
 pub const FAVOURITE_EMOJI: &str = "\u{1f64f}";
 pub const JUMBO_EMOJI: &str = "\u{1f62d}";
+pub const OWN_MESSAGE: &str = "can someone ping me";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -60,6 +61,7 @@ pub enum Screen {
 	DmGroup,
 	MessageHover,
 	MessageMenu,
+	OwnMessage(OwnShot),
 	MemberList,
 	MemberListScrolled,
 	Settings(&'static str),
@@ -104,6 +106,12 @@ pub enum ExpressionShot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnShot {
+	Menu,
+	DeleteDialog,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Community {
 	AddServer,
 	Forward,
@@ -134,6 +142,8 @@ impl Screen {
 			"dm-group" => Some(Screen::DmGroup),
 			"message-hover" => Some(Screen::MessageHover),
 			"message-context-menu" => Some(Screen::MessageMenu),
+			"message-context-menu-own" => Some(Screen::OwnMessage(OwnShot::Menu)),
+			"delete-message-dialog" => Some(Screen::OwnMessage(OwnShot::DeleteDialog)),
 			"member-list" => Some(Screen::MemberList),
 			"member-list-scrolled" => Some(Screen::MemberListScrolled),
 			"user-panel" => Some(Screen::UserPanel),
@@ -198,6 +208,7 @@ impl Screen {
 			| Screen::TextReplaceSettings
 			| Screen::MessageHover
 			| Screen::MessageMenu
+			| Screen::OwnMessage(_)
 			| Screen::MemberList
 			| Screen::MemberListScrolled
 			| Screen::Settings(_)

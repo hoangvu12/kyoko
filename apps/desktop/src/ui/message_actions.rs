@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use bridge::{Access, DeleteProgress, EmojiPicker};
+use bridge::{Access, DeleteProgress, EmojiPicker, MessageAction};
 use chrono::Utc;
 use state::{Changes, State};
 use zgx::input::{InputEvent, PointerButton};
 use zgx::widgets::WeakUi;
 
 use super::{Link, Slot};
-use crate::capture;
+use crate::capture::{self, OwnShot};
 use crate::timeline::Compose;
 
 impl Link {
@@ -69,6 +69,32 @@ impl Link {
 			&& let Some(rejection) = state.last_rejection()
 		{
 			self.timeline_view.rejected(&rejection.reason);
+		}
+	}
+
+	pub(super) async fn drive_own_message(&self, shot: OwnShot) {
+		let Some(channel_id) = self.timeline.borrow().open().map(|open| open.channel_id) else {
+			tracing::warn!("no open channel to send the message in");
+			return;
+		};
+		self.say(channel_id, capture::OWN_MESSAGE.to_owned()).await;
+		self.until_capture(|link| link.timeline_view.settled()).await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		match shot {
+			OwnShot::Menu => self.point_at_last_message(true).await,
+			OwnShot::DeleteDialog => {
+				let newest = self
+					.timeline
+					.borrow()
+					.messages()
+					.rev()
+					.find(|entry| entry.mine && !entry.pending)
+					.cloned();
+				match newest {
+					Some(entry) => self.timeline_view.run_action(MessageAction::Delete, &entry),
+					None => tracing::warn!("no message of yours to delete"),
+				}
+			}
 		}
 	}
 

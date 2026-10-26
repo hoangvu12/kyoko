@@ -93,24 +93,42 @@ async fn the_message_menu_follows_ownership_and_permissions() {
 	assert_eq!(
 		menu,
 		vec![
-			MenuEntry::Action(Reply),
+			MenuEntry::Action(React),
+			MenuEntry::Separator,
 			MenuEntry::Action(Edit),
+			MenuEntry::Action(Reply),
+			MenuEntry::Action(Forward),
+			MenuEntry::Action(CreateThread),
 			MenuEntry::Separator,
 			MenuEntry::Action(CopyText),
-			MenuEntry::Action(CopyLink),
-			MenuEntry::Action(Forward),
-			MenuEntry::Separator,
 			MenuEntry::Action(Pin),
-			MenuEntry::Action(CreateThread),
 			MenuEntry::Action(MarkUnread),
+			MenuEntry::Action(CopyLink),
+			MenuEntry::Separator,
 			MenuEntry::Action(Select),
 			MenuEntry::Action(Delete),
 		],
-		"oxidcord's order for an own message"
+		"Discord's order for an own message"
 	);
 	let theirs = someone_elses(&running);
 	let moderated = actions(&bridge::message_menu(&theirs, &admin, MenuContext::default()));
-	assert!(moderated.contains(&Delete) && moderated.contains(&Report) && !moderated.contains(&Edit));
+	assert_eq!(
+		moderated,
+		vec![
+			React,
+			Reply,
+			Forward,
+			CreateThread,
+			CopyText,
+			Pin,
+			MarkUnread,
+			CopyLink,
+			Select,
+			Delete,
+			Report
+		],
+		"Discord's order for someone else's message, with Manage Messages"
+	);
 	let member = Access {
 		manage_messages: false,
 		..admin
@@ -131,10 +149,10 @@ async fn the_message_menu_follows_ownership_and_permissions() {
 			selection: 2,
 		},
 	));
-	let forward = developer.iter().position(|action| *action == Forward);
-	assert_eq!(developer.get(forward.expect("forward") + 1), Some(&CopyId));
+	assert_eq!(developer.last(), Some(&CopyId), "Copy Message ID comes last");
 	assert!(developer.contains(&Deselect) && developer.contains(&DeleteSelected));
 	assert_eq!(DeleteSelected.label(2), "Delete 2 Selected");
+	assert_eq!(CopyLink.label(0), "Copy Message Link");
 	assert_eq!(
 		bridge::toolbar_actions(&own, &admin),
 		vec![React, Reply, Edit],

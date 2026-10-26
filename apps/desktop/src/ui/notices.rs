@@ -18,6 +18,7 @@ impl Link {
 				if width > 0 && height > 0 && scale > 0. {
 					link.toasts
 						.set_window(width as f32 / scale, height as f32 / scale);
+					link.scrim.set_window(width as f32 / scale, height as f32 / scale);
 				}
 			}
 		});

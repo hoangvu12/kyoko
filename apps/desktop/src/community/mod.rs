@@ -15,13 +15,11 @@ use protocol::Snowflake;
 use session::Command;
 use state::{Expression, SharedState, State};
 use zgx::compose::prelude::*;
-use zgx::compose::{ModalPlacement, PlacementEdge};
 use zgx::reactive::{Effect, Runtime, Signal};
 
 use crate::motion;
 use crate::timeline::Pictures;
 
-const TOP: f32 = 80.;
 const WIDTH: f32 = 440.;
 const WIDE: f32 = 540.;
 
@@ -245,11 +243,7 @@ impl CommunityLayer {
 		let shown = open.clone();
 		let this = self.clone();
 		motion::modal("Community dialog", open)
-			.modal_placement(ModalPlacement {
-				x: PlacementEdge::Center,
-				y: PlacementEdge::Start,
-				insets: [TOP, 0., 0., 0.],
-			})
+			.modal_placement(crate::kit::centered())
 			.autofocus(typing)
 			.p(0.)
 			.border(0.)

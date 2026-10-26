@@ -9,9 +9,8 @@ use zgx::platform::PlatformService;
 use zgx::reactive::{Runtime, Signal};
 
 use super::rows::tok;
+use crate::kit::{self, Variant};
 use crate::motion;
-
-const DIALOG_WIDTH: f32 = 460.;
 
 #[derive(Clone, PartialEq)]
 struct Pending {
@@ -120,78 +119,53 @@ impl Links {
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
-		let pending = self.pending.clone();
-		let host = self.pending.clone();
-		let (cancel, trust, open) = (self.clone(), self.clone(), self.clone());
-		motion::modal("Leave Kyoko?", self.open.clone())
-			.w(DIALOG_WIDTH)
-			.p(16.)
-			.gap(12.)
-			.rounded(tok("radius_md"))
-			.bg(tok("background_primary"))
-			.border(1.)
-			.border_color(tok("divider"))
-			.child(
-				text("Leave Kyoko?")
-					.text_size(tok("font_lg"))
-					.font_weight(700)
-					.text_color(tok("header_primary")),
-			)
-			.child(
-				column()
-					.gap(8.)
-					.text_size(tok("font_sm"))
-					.text_color(tok("text_normal"))
-					.child(text("This link goes to an external site:"))
-					.child(
-						div()
-							.p(8.)
-							.rounded(tok("radius_sm"))
-							.bg(tok("background_tertiary"))
-							.text_color(tok("link"))
-							.child(
-								text_signal(move || {
-									pending.with(|pending| {
-										pending
-											.as_ref()
-											.map(|pending| pending.url.clone())
-											.unwrap_or_default()
-									})
-								})
-								.text_wrap(true),
-							),
-					),
-			)
-			.child(
-				row()
-					.justify_end()
-					.gap(8.)
-					.child(dialog_button(text("Cancel"), "button_secondary", move || {
-						cancel.close()
-					}))
-					.child(dialog_button(
-						text_signal(move || {
-							let host = host.with(|pending| pending.as_ref().map(|p| p.host.clone()));
-							format!("Always trust {}", host.unwrap_or_default())
-						}),
-						"button_secondary",
-						move || trust.trust(),
-					))
-					.child(dialog_button(text("Open link"), "brand", move || open.confirm())),
+		let (shown, open) = (self.pending.clone(), self.open.clone());
+		let this = self.clone();
+		kit::dialog(motion::modal("Leave Kyoko?", self.open.clone()))
+			.w(tok("modal_width_sm"))
+			.child_when(
+				move || if open.get() { shown.get() } else { None },
+				move |pending: Pending, _| this.content(pending),
 			)
 	}
-}
 
-fn dialog_button(label: View, background: &str, action: impl FnMut() + 'static) -> View {
-	button()
-		.h(32.)
-		.px(16.)
-		.rounded(tok("radius_sm"))
-		.bg(tok(background))
-		.text_size(tok("font_sm"))
-		.font_weight(500)
-		.text_color(tok("text_on_brand"))
-		.cursor(Cursor::Pointer)
-		.child(label)
-		.on_click(action)
+	fn content(self: &Rc<Self>, pending: Pending) -> View {
+		let (close, cancel, trust, open) = (self.clone(), self.clone(), self.clone(), self.clone());
+		column()
+			.w_full()
+			.child(kit::header(kit::title("Leave Kyoko?"), None, move || {
+				close.close()
+			}))
+			.child(
+				kit::body()
+					.child(kit::paragraph("This link goes to an external site:"))
+					.child(
+						div()
+							.w_full()
+							.px(tok("space_12"))
+							.py(tok("space_10"))
+							.rounded(tok("radius_sm"))
+							.bg(tok("bg_3"))
+							.border(tok("border_thickness"))
+							.border_color(tok("border"))
+							.child(
+								text(pending.url)
+									.w_full()
+									.text_wrap(true)
+									.text_size(tok("font_size_md"))
+									.line_height(tok("line_height_md"))
+									.text_color(tok("accent_1")),
+							),
+					)
+					.child(kit::footer(vec![
+						kit::action("Cancel", Variant::Link, move || cancel.close()),
+						kit::action(
+							format!("Always trust {}", pending.host),
+							Variant::Secondary,
+							move || trust.trust(),
+						),
+						kit::action("Open link", Variant::Primary, move || open.confirm()),
+					])),
+			)
+	}
 }

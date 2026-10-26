@@ -7,23 +7,16 @@ use session::Command;
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
 use zgx::reactive::{Runtime, Signal};
-use zgx::scene::Color;
-use zgx::theme::Themed;
 
-use super::parts::{self, label};
+use super::parts::label;
 use super::{ProfileLayer, Request};
 use crate::emoji;
+use crate::kit::{self, Variant};
 use crate::timeline::icons::icon;
 use crate::timeline::tok;
 
-const WIDTH: f32 = 440.;
-const FIELD: f32 = 36.;
-const INPUT: f32 = 32.;
-const CLOSE: f32 = 16.;
-const CHIP: f32 = 32.;
-const BUTTON: f32 = 32.;
+const FIELD: f32 = 40.;
 const MAX_LENGTH: usize = 128;
-const TOP_SHARE: f32 = 0.1;
 const STATUS_GLYPH: f32 = 24.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,7 +130,14 @@ pub fn dialog(layer: &Rc<ProfileLayer>) -> View {
 	let form = layer.custom.clone();
 	let open = form.open.clone();
 	let this = layer.clone();
-	div().child_when(move || open.get().then_some(()), move |(), _| scrim(&this))
+	let tracked = crate::scrim::track(&form.open);
+	div().child_when(
+		move || open.get().then_some(()),
+		move |(), _| {
+			let _ = &tracked;
+			scrim(&this)
+		},
+	)
 }
 
 fn scrim(layer: &Rc<ProfileLayer>) -> View {
@@ -148,10 +148,10 @@ fn scrim(layer: &Rc<ProfileLayer>) -> View {
 		.left(0.)
 		.top(0.)
 		.items_center()
-		.bg(tok("overlay"))
+		.justify_center()
 		.reactive_style(move || {
 			let (width, height) = window.get();
-			Styles::new().w(width).h(height).pt(height * TOP_SHARE)
+			Styles::new().w(width).h(height)
 		})
 		.on_event(move |event| {
 			if event.phase == EventPhase::Target && matches!(event.event, InputEvent::PointerDown { .. }) {
@@ -165,85 +165,68 @@ fn scrim(layer: &Rc<ProfileLayer>) -> View {
 
 fn panel(layer: &Rc<ProfileLayer>) -> View {
 	let form = layer.custom.clone();
-	let (clear, cancel, save) = (layer.clone(), layer.clone(), layer.clone());
+	let (close, clear, cancel, save) = (layer.clone(), layer.clone(), layer.clone(), layer.clone());
 	column()
-		.w(WIDTH)
-		.p(16.)
-		.gap(16.)
-		.rounded(tok("radius_md"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.relative()
-		.bg(tok("background_primary"))
-		.text_color(tok("text_normal"))
+		.w(tok("modal_width_sm"))
+		.overflow_hidden()
+		.rounded(tok("radius_lg"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_4"))
+		.text_color(tok("text_3"))
 		.on_event(|event| {
 			if event.phase != EventPhase::Capture && matches!(event.event, InputEvent::PointerDown { .. }) {
 				event.stop_propagation();
 			}
 		})
-		.child(close_button(layer))
+		.child(kit::header(kit::title("Set a custom status"), None, move || {
+			close.custom.close();
+			close.picker.close();
+		}))
 		.child(
-			column()
-				.gap(4.)
-				.child(
-					label("Set a custom status", "font_md")
-						.font_weight(600)
-						.text_color(tok("header_primary")),
-				)
-				.child(parts::section_label("What's cookin', good lookin'?"))
-				.child(
+			kit::body()
+				.child(kit::field(
+					"What's cookin', good lookin'?",
 					row()
-						.mt(4.)
+						.w_full()
 						.items_center()
-						.gap(8.)
+						.gap(tok("space_8"))
 						.child(emoji_button(layer))
 						.child(
-							text_input("Custom status", form.text.clone())
-								.placeholder("Support has arrived!")
+							kit::input("Custom status", form.text.clone(), "Support has arrived!")
+								.w(0.)
 								.grow()
-								.min_w(0.)
-								.h(INPUT)
-								.px(12.)
-								.rounded(tok("radius_sm"))
-								.border(1.)
-								.border_color(tok("button_secondary"))
-								.bg(tok("input_background"))
-								.text_size(tok("font_sm"))
-								.text_color(tok("text_normal")),
+								.min_w(0.),
 						),
-				),
-		)
-		.child(
-			column().gap(8.).child(parts::section_label("Clear after")).child(
-				row().flex_wrap().gap(8.).children(
-					ClearAfter::ALL
-						.into_iter()
-						.map(|choice| clear_chip(&form.clear_after, choice))
-						.collect::<Vec<_>>(),
-				),
-			),
-		)
-		.child(
-			row()
-				.justify_end()
-				.gap(8.)
-				.child(footer_button("Clear Status", None, move || {
-					clear.request(Request::Command(Command::SetCustomStatus {
-						text: None,
-						emoji: None,
-						expires: None,
-					}));
-					clear.custom.close();
-				}))
-				.child(footer_button("Cancel", Some("button_secondary"), move || {
-					cancel.custom.close();
-					cancel.picker.close();
-				}))
-				.child(footer_button("Save", Some("brand"), move || {
-					save.request(Request::Command(save.custom.command(Utc::now())));
-					save.custom.close();
-					save.picker.close();
-				})),
+				))
+				.child(kit::field(
+					"Clear after",
+					row().w_full().flex_wrap().gap(tok("space_8")).children(
+						ClearAfter::ALL
+							.into_iter()
+							.map(|choice| clear_chip(&form.clear_after, choice))
+							.collect::<Vec<_>>(),
+					),
+				))
+				.child(kit::footer(vec![
+					kit::action("Clear Status", Variant::Link, move || {
+						clear.request(Request::Command(Command::SetCustomStatus {
+							text: None,
+							emoji: None,
+							expires: None,
+						}));
+						clear.custom.close();
+					}),
+					kit::action("Cancel", Variant::Link, move || {
+						cancel.custom.close();
+						cancel.picker.close();
+					}),
+					kit::action("Save", Variant::Primary, move || {
+						save.request(Request::Command(save.custom.command(Utc::now())));
+						save.custom.close();
+						save.picker.close();
+					}),
+				])),
 		)
 }
 
@@ -254,12 +237,13 @@ fn emoji_button(layer: &Rc<ProfileLayer>) -> View {
 		.size(FIELD, FIELD)
 		.shrink_0()
 		.p(0.)
-		.border(0.)
 		.items_center()
 		.justify_center()
 		.rounded(tok("radius_sm"))
-		.bg(tok("input_background"))
-		.hover(|style| style.bg(tok("modifier_selected")))
+		.border(tok("border_thickness"))
+		.border_color(tok("border_light"))
+		.bg(tok("bg_3"))
+		.hover(|style| style.border_color(tok("border")))
 		.cursor(Cursor::Pointer)
 		.on_event(move |event| {
 			if let InputEvent::PointerDown { x, y, .. } = event.event {
@@ -282,69 +266,27 @@ fn emoji_button(layer: &Rc<ProfileLayer>) -> View {
 fn clear_chip(selected: &Signal<ClearAfter>, choice: ClearAfter) -> View {
 	let (chosen, pick) = (selected.clone(), selected.clone());
 	button()
-		.h(CHIP)
-		.px(12.)
-		.border(0.)
+		.h(tok("button_height_sm"))
+		.px(tok("space_12"))
+		.border(tok("border_thickness"))
 		.items_center()
 		.rounded(tok("radius_sm"))
 		.cursor(Cursor::Pointer)
 		.reactive_style(move || {
 			if chosen.get() == choice {
-				Styles::new().bg(tok("brand")).text_color(tok("text_on_brand"))
+				Styles::new()
+					.bg(tok("accent_3"))
+					.border_color(tok("button_border"))
+					.text_color(tok("text_0"))
 			} else {
 				Styles::new()
-					.bg(tok("background_tertiary"))
-					.text_color(tok("interactive_normal"))
+					.bg(tok("bg_2"))
+					.border_color(tok("border_light"))
+					.text_color(tok("text_3"))
 			}
 		})
 		.on_click(move || {
 			pick.set(choice);
 		})
 		.child(label(choice.label(), "font_sm").font_weight(500))
-}
-
-fn footer_button(caption: &str, fill: Option<&'static str>, action: impl FnMut() + 'static) -> View {
-	let color = match fill {
-		Some("brand") => "text_on_brand",
-		_ => "text_normal",
-	};
-	button()
-		.h(BUTTON)
-		.px(16.)
-		.border(0.)
-		.items_center()
-		.justify_center()
-		.rounded(tok("radius_sm"))
-		.cursor(Cursor::Pointer)
-		.bg(match fill {
-			Some(fill) => Themed::Token(tok(fill)),
-			None => Themed::Value(Color(0, 0, 0, 0)),
-		})
-		.text_size(tok("font_sm"))
-		.font_weight(500)
-		.text_color(tok(color))
-		.child(text(caption.to_owned()))
-		.on_click(action)
-}
-
-fn close_button(layer: &Rc<ProfileLayer>) -> View {
-	let close = layer.clone();
-	button()
-		.absolute()
-		.top(12.)
-		.right(12.)
-		.size(CLOSE + 8., CLOSE + 8.)
-		.p(0.)
-		.border(0.)
-		.items_center()
-		.justify_center()
-		.rounded(tok("radius_sm"))
-		.bg(Themed::Value(Color(0, 0, 0, 0)))
-		.hover(|style| style.bg(tok("modifier_hover")))
-		.cursor(Cursor::Pointer)
-		.child(icon("close", CLOSE, "interactive_normal"))
-		.on_click(move || {
-			close.custom.close();
-			close.picker.close();
-		})
 }

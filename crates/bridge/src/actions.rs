@@ -76,9 +76,9 @@ impl MessageAction {
 			Self::Reply => "Reply".to_owned(),
 			Self::Edit => "Edit Message".to_owned(),
 			Self::CopyText => "Copy Text".to_owned(),
-			Self::CopyLink => "Copy Link".to_owned(),
+			Self::CopyLink => "Copy Message Link".to_owned(),
 			Self::Forward => "Forward".to_owned(),
-			Self::CopyId => "Copy ID".to_owned(),
+			Self::CopyId => "Copy Message ID".to_owned(),
 			Self::Pin => "Pin Message".to_owned(),
 			Self::Unpin => "Unpin Message".to_owned(),
 			Self::CreateThread => "Create Thread".to_owned(),
@@ -200,28 +200,33 @@ pub fn message_menu(entry: &MessageEntry, access: &Access, context: MenuContext)
 		return menu.0;
 	}
 	let deletable = can_delete(entry, access);
-	menu.add_if(can_reply(entry, access), Reply);
+	menu.add_if(can_add_reaction(entry, access), React);
+	menu.separator();
 	menu.add_if(can_edit(entry), Edit);
-	menu.separator();
-	menu.add(CopyText);
-	menu.add(CopyLink);
+	menu.add_if(can_reply(entry, access), Reply);
 	menu.add(Forward);
-	menu.add_if(context.developer_mode, CopyId);
-	menu.separator();
-	if access.can_pin() {
-		menu.add(if entry.message.pinned { Unpin } else { Pin });
-	}
 	menu.add_if(
 		access.create_threads && !access.in_thread && threadable(entry),
 		CreateThread,
 	);
+	menu.separator();
+	menu.add(CopyText);
+	if access.can_pin() {
+		menu.add(if entry.message.pinned { Unpin } else { Pin });
+	}
 	menu.add(MarkUnread);
+	menu.add(CopyLink);
+	menu.separator();
 	if deletable {
 		menu.add(if context.selected { Deselect } else { Select });
 	}
 	menu.add_if(context.selection > 0, DeleteSelected);
 	menu.add_if(deletable, Delete);
 	menu.add_if(!entry.mine, Report);
+	if context.developer_mode {
+		menu.separator();
+		menu.add(CopyId);
+	}
 	menu.0
 }
 

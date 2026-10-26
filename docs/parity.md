@@ -100,6 +100,8 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `composer-reply` | `composer-markdown.html` |
 | `message-hover` | `midnight-discord.html` |
 | `message-context-menu` | `message-menu.html` |
+| `message-context-menu-own` | `message-menu-own.html` |
+| `delete-message-dialog` | `delete-message-dialog.html` |
 | `member-list` | `midnight-discord.html` |
 | `user-panel` | `midnight-discord.html` |
 | `status-menu` | `status-menu.html` |
@@ -154,7 +156,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -416,6 +418,15 @@ Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no such states. Th
 |---|---|---|---|
 | `hidden-channel` | 55 | With `KYOKO_CAPTURE_PLUGINS=show-hidden-channels`. Default selection, then the first server with a channel the user cannot view (mockcord's `staff-only`, hidden from everyone but Admin), whose row shows locked and dimmed; kyoko opens its details through `Link::open_hidden_channel`, what a click on the row does: name, kind, topic, last activity, and who is let in or kept out. Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
 | `member-notes` | 55 | With `KYOKO_CAPTURE_PLUGINS=show-hidden-things`. As `member-list`; the fixture's timed-out member (also flagged by AutoMod) shows a red timer and a yellow shield after its name. Kyoko only, `--apps kyoko`. | yes |
+
+### Midnight 07 Menus, dialogs and toasts
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The message is sent through the composer's own commands into the default channel.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `message-context-menu-own` | 07 | Default selection, then send "can someone ping me" and right-click it at (640, 690), as `message-context-menu` does: the menu of your own message. | yes |
+| `delete-message-dialog` | 07 | As `message-context-menu-own`, but instead of the menu run Delete Message on that message (`TimelineView::run_action`), which opens the confirmation with its preview. | yes |
 
 ### 38 Toasts, transitions and connection status
 

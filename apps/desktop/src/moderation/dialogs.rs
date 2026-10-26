@@ -5,21 +5,15 @@ use chrono::{TimeDelta, Utc};
 use protocol::{ChannelType, Snowflake};
 use session::Command;
 use zgx::compose::prelude::*;
-use zgx::compose::{ModalPlacement, PlacementEdge};
 use zgx::reactive::Signal;
 
 use super::kit::{self, button, chips, field, footer, hint, input, label};
 use super::{Dialog, ModerationLayer, Request};
 use crate::motion;
-use crate::timeline::{TypeSize, tok};
+use crate::timeline::tok;
 
 const WIDTH: f32 = 440.;
 const WIDE: f32 = 540.;
-const PADDING: f32 = 16.;
-const TOP_SHARE: f32 = 0.1;
-const CLOSE_ROOM: f32 = 24.;
-const CLOSE_TOP: f32 = 9.;
-const CLOSE_RIGHT: f32 = 9.;
 const NAME_LIMIT: usize = 100;
 const TOPIC_LIMIT: usize = 1024;
 
@@ -115,6 +109,14 @@ impl Act {
 		let this = self.clone();
 		button("Cancel", None, move || this.close())
 	}
+
+	fn audit_reason(self: &Rc<Self>, caption: &str, reason: &Signal<String>, placeholder: &str) -> View {
+		field(
+			caption,
+			crate::kit::textarea("Reason", reason.clone(), placeholder),
+		)
+		.child(crate::kit::caption_note("This will be logged in the audit log."))
+	}
 }
 
 pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>) -> View {
@@ -134,9 +136,10 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			user_id,
 			name,
 			choice,
+			reason,
 		} => (
 			format!("Timeout {name}"),
-			timeout(&act, *guild_id, *user_id, name, choice),
+			timeout(&act, (*guild_id, *user_id), choice, reason),
 			WIDTH,
 		),
 		Dialog::Kick {
@@ -145,7 +148,7 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			name,
 			reason,
 		} => (
-			format!("Kick {name}"),
+			format!("Kick '{name}' from Server"),
 			kick(&act, *guild_id, *user_id, name, reason),
 			WIDTH,
 		),
@@ -156,7 +159,7 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			history,
 			reason,
 		} => (
-			format!("Ban {name}"),
+			format!("Ban '{name}'?"),
 			ban(&act, (*guild_id, *user_id), name, history, reason, layer),
 			WIDTH,
 		),
@@ -165,8 +168,8 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			let this = act.clone();
 			let body = column()
 				.w_full()
-				.gap(16.)
-				.pt(8.)
+				.gap(tok("space_16"))
+				.p(tok("space_16"))
 				.child(hint(confirm.body.clone()))
 				.child(footer(
 					act.cancel(),
@@ -212,44 +215,21 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			WIDE,
 		),
 	};
-	let top = layer.window.with_untracked(|(_, height)| height * TOP_SHARE);
 	let close = act.clone();
-	motion::modal(title.clone(), open)
-		.modal_placement(ModalPlacement {
-			x: PlacementEdge::Center,
-			y: PlacementEdge::Start,
-			insets: [top, 0., 0., 0.],
-		})
+	crate::kit::dialog(motion::modal(title.clone(), open))
 		.w(width)
-		.p(PADDING)
-		.rounded(tok("radius_md"))
-		.bg(tok("background_primary"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.text_color(tok("text_normal"))
-		.relative()
 		.autofocus(!matches!(
 			dialog.as_ref(),
 			Dialog::Timeout { .. } | Dialog::Confirm(_)
 		))
-		.child(
-			label(title, "font_md")
-				.font_weight(600)
-				.text_color(tok("header_primary"))
-				.w_full()
-				.pr(CLOSE_ROOM),
-		)
+		.child(crate::kit::header(crate::kit::title(title), None, move || {
+			close.close()
+		}))
 		.child(body)
-		.child(
-			kit::close_button(move || close.close())
-				.absolute()
-				.top(CLOSE_TOP)
-				.right(CLOSE_RIGHT),
-		)
 }
 
 fn nickname(act: &Rc<Act>, guild_id: Snowflake, user_id: Snowflake, value: &Signal<String>) -> View {
-	let (save, enter) = (act.clone(), act.clone());
+	let (save, enter, reset) = (act.clone(), act.clone(), act.clone());
 	let (saved, entered) = (value.clone(), value.clone());
 	let command = move |value: &Signal<String>| Command::SetNickname {
 		guild_id,
@@ -259,8 +239,8 @@ fn nickname(act: &Rc<Act>, guild_id: Snowflake, user_id: Snowflake, value: &Sign
 	let on_enter = command;
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
 		.child(field(
 			"Nickname",
 			input("Nickname", value.clone(), "No nickname").on_event(move |event| {
@@ -274,32 +254,51 @@ fn nickname(act: &Rc<Act>, guild_id: Snowflake, user_id: Snowflake, value: &Sign
 				}
 			}),
 		))
-		.child(hint("Leave this empty to remove the nickname."))
+		.child(
+			zgx::compose::button()
+				.p(0.)
+				.border(0.)
+				.bg(crate::kit::clear())
+				.cursor(Cursor::Pointer)
+				.text_size(tok("font_size_sm"))
+				.line_height(tok("line_height_sm"))
+				.font_weight(500)
+				.text_color(tok("accent_1"))
+				.hover(|style| style.text_color(tok("accent_2")))
+				.child(text("Reset Nickname"))
+				.on_click(move || {
+					reset.send(Command::SetNickname {
+						guild_id,
+						user_id,
+						nick: None,
+					})
+				}),
+		)
 		.child(footer(
 			act.cancel(),
-			button("Save Changes", Some("brand"), move || save.send(command(&saved))),
+			button("Save", Some("brand"), move || save.send(command(&saved))),
 		))
 }
 
 fn timeout(
 	act: &Rc<Act>,
-	guild_id: Snowflake,
-	user_id: Snowflake,
-	name: &str,
+	(guild_id, user_id): (Snowflake, Snowflake),
 	choice: &Signal<usize>,
+	reason: &Signal<String>,
 ) -> View {
-	let (confirm, chosen) = (act.clone(), choice.clone());
+	let (confirm, chosen, written) = (act.clone(), choice.clone(), reason.clone());
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
-		.child(hint(format!(
-			"{name} will not be able to send messages, react or join voice for the chosen time."
-		)))
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
+		.child(hint(
+			"Members who are in timeout are temporarily not allowed to chat or react in text channels, or connect to voice and stage channels.",
+		).text_color(tok("text_3")))
 		.child(field("Duration", chips(&TIMEOUT_LABELS, choice)))
+		.child(act.audit_reason("Reason", reason, "Optional"))
 		.child(footer(
 			act.cancel(),
-			button("Timeout", Some("brand"), move || {
+			button("Timeout", Some("danger"), move || {
 				let seconds = TIMEOUT_CHOICES
 					.get(chosen.with_untracked(|index| *index))
 					.map_or(0, |(_, seconds)| *seconds);
@@ -307,7 +306,7 @@ fn timeout(
 					guild_id,
 					user_id,
 					until: Some(Utc::now() + TimeDelta::seconds(seconds)),
-					reason: None,
+					reason: written.with_untracked(|text| trimmed(text, REASON_LIMIT)),
 				});
 			}),
 		))
@@ -317,14 +316,14 @@ fn kick(act: &Rc<Act>, guild_id: Snowflake, user_id: Snowflake, name: &str, reas
 	let (confirm, written) = (act.clone(), reason.clone());
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
-		.child(hint(format!(
-			"{name} will be removed from the server but can rejoin with a new invite."
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
+		.child(crate::kit::paragraph(format!(
+			"Are you sure you want to kick @{name} from the server? They will be able to rejoin again with a new invite."
 		)))
 		.child(field(
-			"Reason",
-			input("Reason", reason.clone(), "Optional reason"),
+			"Reason for kick",
+			crate::kit::textarea("Reason", reason.clone(), "Optional"),
 		))
 		.child(footer(
 			act.cancel(),
@@ -350,24 +349,24 @@ fn ban(
 	let menu_open = layer.runtime.signal(false);
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
-		.child(hint(format!(
-			"{name} will be removed and cannot rejoin until the ban is revoked."
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
+		.child(crate::kit::paragraph(format!(
+			"Are you sure you want to ban @{name}? They won't be able to rejoin with an invite."
 		)))
 		.child(field(
 			"Delete message history",
 			kit::select("Delete message history", &HISTORY_LABELS, history, menu_open),
 		))
-		.child(field(
-			"Reason",
-			input("Reason", reason.clone(), "Optional reason").on_mount(|node| {
-				let target = node.clone();
-				node.after_layout(move || {
-					target.focus();
-				});
-			}),
-		))
+		.child(
+			act.audit_reason("Reason for ban", reason, "Optional")
+				.on_mount(|node| {
+					let target = node.clone();
+					node.after_layout(move || {
+						target.focus();
+					});
+				}),
+		)
 		.child(footer(
 			act.cancel(),
 			button("Ban", Some("danger"), move || {
@@ -392,8 +391,8 @@ fn edit_sticker(
 	let (save, fields) = (act.clone(), (name.clone(), description.clone(), tags.clone()));
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
 		.child(field("Name", input("Name", name.clone(), "")))
 		.child(field(
 			"Description",
@@ -428,8 +427,8 @@ fn create_channel(
 	let (confirm, chosen, written) = (act.clone(), kind.clone(), name.clone());
 	column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
 		.child(field("Channel type", chips(&KIND_LABELS, kind)))
 		.child(field(
 			"Channel name",
@@ -498,13 +497,8 @@ fn edit_channel(
 		.iter()
 		.map(|(id, category)| {
 			let (pick, chosen, id) = (parent.clone(), parent.clone(), *id);
-			menu_item(category.clone())
-				.h(kit::MENU_ITEM)
-				.px(12.)
-				.py(0.)
-				.rounded(tok("radius_sm"))
+			kit::choice(category)
 				.menu_checked_when(move || chosen.get() == Some(id))
-				.child(label(category.clone(), "font_sm").text_color(tok("text_normal")))
 				.on_click(move || {
 					pick.set(Some(id));
 				})
@@ -513,41 +507,20 @@ fn edit_channel(
 	let shown_parent = parent.clone();
 	let names: Vec<(Snowflake, String)> = draft.categories.clone();
 	let category_open = layer.runtime.signal(false);
-	let toggle = category_open.clone();
-	let category_anchor = zgx::compose::button()
-		.w_full()
-		.h(32.)
-		.px(16.)
-		.items_center()
-		.justify_between()
-		.rounded(tok("radius_sm"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.bg(tok("input_background"))
-		.cursor(Cursor::Pointer)
-		.on_click(move || {
-			toggle.set(!toggle.with_untracked(|open| *open));
-		})
-		.child(
-			text_signal(move || {
-				let chosen = shown_parent.get();
-				names
-					.iter()
-					.find(|(id, _)| Some(*id) == chosen)
-					.map_or_else(|| "No category".to_owned(), |(_, name)| name.clone())
-			})
-			.type_size("font_md")
-			.text_color(tok("text_normal")),
-		)
-		.child(crate::timeline::icons::icon(
-			"chevron_down",
-			16.,
-			"interactive_normal",
-		));
+	let category_anchor = kit::select_anchor(
+		text_signal(move || {
+			let chosen = shown_parent.get();
+			names
+				.iter()
+				.find(|(id, _)| Some(*id) == chosen)
+				.map_or_else(|| "No category".to_owned(), |(_, name)| name.clone())
+		}),
+		category_open.clone(),
+	);
 	let mut form = column()
 		.w_full()
-		.gap(16.)
-		.pt(8.)
+		.gap(tok("space_16"))
+		.p(tok("space_16"))
 		.child(field("Channel name", input("Channel name", name.clone(), "")));
 	if texted {
 		form = form
@@ -581,8 +554,8 @@ fn edit_channel(
 					.min_w(0.)
 					.child(
 						label("Age-restricted channel", "font_md")
-							.font_weight(500)
-							.text_color(tok("header_primary")),
+							.font_weight(600)
+							.text_color(tok("text_2")),
 					)
 					.child(hint(
 						"Users must confirm they are of legal age to view this channel.",

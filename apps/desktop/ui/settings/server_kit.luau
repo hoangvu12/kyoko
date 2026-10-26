@@ -7,7 +7,7 @@ local INPUT_INSET = 11
 local BADGE = 20
 local SMALL_BUTTON = 28
 local BUTTON = 32
-local MENU_WIDTH = 224
+local MENU_WIDTH = theme.size.context_menu_width
 local MENU_ITEM = 28
 local EMPTY_ICON = 48
 
@@ -213,9 +213,13 @@ M.select = ui.component(function(props: { labels: { string }, current: () -> num
 		open = open,
 		label = "Choose",
 		w = MENU_WIDTH,
-		p = 6,
-		rounded = 4,
-		bg = theme.color.background_floating,
+		px = theme.size.space_8,
+		py = theme.size.space_6,
+		gap = theme.size.space_2,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
 		placement = { side = "bottom", align = "start", offset = 4 },
 		anchor = ui.button {
 			h = BUTTON,

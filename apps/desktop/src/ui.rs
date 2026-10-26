@@ -231,6 +231,7 @@ pub fn run(
 			let switcher = link.finder.view();
 			let community = link.community.view();
 			let toasts = link.toasts.view();
+			let scrim = link.scrim.view();
 			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
@@ -251,6 +252,7 @@ pub fn run(
 					[
 						timeline_slot(slot, transcript, [forum_shown, hidden_shown]),
 						thread_view,
+						scrim,
 						profiles,
 						switcher,
 						thread_layer,
@@ -404,6 +406,7 @@ pub(crate) struct Link {
 	community: Rc<CommunityLayer>,
 	cloner: cloner::Cloner,
 	toasts: Rc<ToastLayer>,
+	scrim: Rc<crate::scrim::Scrim>,
 	toast_window: RefCell<Option<Effect>>,
 	motion: Motion,
 	connection: RefCell<ConnectionWatch>,
@@ -507,6 +510,7 @@ impl Link {
 		let members = MemberListView::new(host);
 		members.set_display(display.clone());
 		let toasts = ToastLayer::new(&window.runtime);
+		let scrim = crate::scrim::Scrim::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let link = Rc::new(Link {
 			window,
@@ -541,6 +545,7 @@ impl Link {
 			cloner: cloner::Cloner::new(),
 			toasts,
 			toast_window: RefCell::new(None),
+			scrim,
 			motion,
 			connection: RefCell::new(ConnectionWatch::default()),
 			connection_pinned: Cell::new(false),
@@ -855,6 +860,7 @@ impl Link {
 			capture::Screen::TextReplaceSettings => self.drive_text_replace().await,
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
+			capture::Screen::OwnMessage(shot) => self.drive_own_message(*shot).await,
 			capture::Screen::CloneMenu => self.drive_clone_menu().await,
 			capture::Screen::KeptDeleted | capture::Screen::KeptEdits => {
 				self.drive_kept(capture.screen).await

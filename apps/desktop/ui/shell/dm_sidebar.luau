@@ -291,8 +291,10 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 			open = confirming,
 			label = "Close conversation",
 			p = theme.size.space_16,
-			rounded = 4,
-			bg = theme.color.background_floating,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.bg_3,
+			border = theme.size.border_thickness,
+			border_color = theme.color.border,
 			placement = { side = "bottom", align = "end", offset = 4 },
 			anchor = ui.row {
 				items = "center",

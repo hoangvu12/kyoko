@@ -36,9 +36,9 @@ mod toasts;
 mod web_login;
 
 pub use actions::{
-	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle, can_delete,
-	can_edit, can_remove_embeds, can_reply, has_actions, message_link, message_menu, reaction_allowed,
-	reaction_toggle, toolbar_actions,
+	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle,
+	can_add_reaction, can_delete, can_edit, can_remove_embeds, can_reply, has_actions, message_link,
+	message_menu, reaction_allowed, reaction_toggle, toolbar_actions,
 };
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};

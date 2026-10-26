@@ -6,47 +6,40 @@ use zgx::compose::prelude::*;
 use zgx::compose::{Placement, PlacementEdge, PlacementSide};
 use zgx::reactive::Signal;
 
-use super::kit::{MENU_BORDER, MENU_ICON, MENU_ITEM, MENU_PADDING, SEPARATOR, label, menu_panel, separator};
+use super::kit::{menu_panel, separator};
 use super::{MemberMenu, ModerationLayer, Request};
-use crate::timeline::icons::icon;
-use crate::timeline::tok;
+use crate::kit::{self, menu_icon, menu_row};
 
 const HEAD_ITEMS: usize = 3;
 const ROLE_LIMIT: usize = 30;
 
 pub fn size(menu: &MemberMenu) -> (f32, f32) {
-	let mut rows = 0.;
+	let (mut rows, mut separators) = (0, 0);
 	if menu.head {
-		rows += HEAD_ITEMS as f32 * MENU_ITEM;
+		rows += HEAD_ITEMS;
 		if menu.developer {
-			rows += SEPARATOR + MENU_ITEM;
+			rows += 1;
+			separators += 1;
 		}
 		if !menu.items.is_empty() {
-			rows += SEPARATOR;
+			separators += 1;
 		}
 	}
 	for item in &menu.items {
-		rows += match item {
-			ModerationItem::Separator => SEPARATOR,
-			_ => MENU_ITEM,
-		};
+		match item {
+			ModerationItem::Separator => separators += 1,
+			_ => rows += 1,
+		}
 	}
-	(super::kit::MENU_WIDTH, rows + 2. * (MENU_PADDING + MENU_BORDER))
+	(kit::MENU_WIDTH, kit::menu_height(rows, separators, 0.))
 }
 
 fn entry(name: &str, glyph: &'static str, color: &'static str) -> View {
-	menu_item(name.to_owned())
-		.h(MENU_ITEM)
-		.px(12.)
-		.py(0.)
-		.rounded(tok("radius_sm"))
-		.child(
-			row()
-				.items_center()
-				.gap(5.)
-				.child(icon(glyph, MENU_ICON, color))
-				.child(label(name.to_owned(), "font_sm").text_color(tok(color))),
-		)
+	menu_row(name.to_owned(), menu_icon(glyph, color == "danger"), color)
+}
+
+fn choice(name: &str, checked: bool) -> View {
+	menu_row(name.to_owned(), div(), "text_3").menu_checked(checked)
 }
 
 pub fn view(
@@ -61,19 +54,18 @@ pub fn view(
 		let (profile, message) = (layer.clone(), layer.clone());
 		let user_id = menu.user_id;
 		items.push(
-			entry("Profile", "profile", "text_normal")
+			entry("Profile", "profile", "text_3")
 				.on_click(move || profile.request(Request::Profile(user_id, (x, y)))),
 		);
 		items.push(
-			entry("Message", "chat", "text_normal")
-				.on_click(move || message.request(Request::Message(user_id))),
+			entry("Message", "chat", "text_3").on_click(move || message.request(Request::Message(user_id))),
 		);
-		items.push(entry("Add Friend", "friend_requests", "text_muted").disabled(true));
+		items.push(entry("Add Friend", "friend_requests", "text_5").disabled(true));
 		if menu.developer {
 			let copy = layer.clone();
 			items.push(separator());
 			items.push(
-				entry("Copy User ID", "copy", "text_normal")
+				entry("Copy User ID", "copy", "text_3")
 					.on_click(move || copy.request(Request::CopyId(user_id))),
 			);
 		}
@@ -95,7 +87,7 @@ pub fn view(
 }
 
 fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &ModerationItem) -> View {
-	let color = if item.is_danger() { "danger" } else { "text_normal" };
+	let color = if item.is_danger() { "danger" } else { "text_3" };
 	let (guild_id, user_id) = (menu.guild_id, menu.user_id);
 	match item {
 		ModerationItem::Separator => separator(),
@@ -105,29 +97,22 @@ fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &Mo
 				.take(ROLE_LIMIT)
 				.map(|role| {
 					let (toggle, held, role_id) = (layer.clone(), role.held, role.id);
-					menu_item(role.name.clone())
-						.h(MENU_ITEM)
-						.px(12.)
-						.py(0.)
-						.rounded(tok("radius_sm"))
-						.menu_checked(held)
-						.child(label(role.name.clone(), "font_sm").text_color(tok("text_normal")))
-						.on_click(move || {
-							let command = if held {
-								Command::RemoveMemberRole {
-									guild_id,
-									user_id,
-									role_id,
-								}
-							} else {
-								Command::AddMemberRole {
-									guild_id,
-									user_id,
-									role_id,
-								}
-							};
-							toggle.request(Request::Command(command));
-						})
+					choice(&role.name, held).on_click(move || {
+						let command = if held {
+							Command::RemoveMemberRole {
+								guild_id,
+								user_id,
+								role_id,
+							}
+						} else {
+							Command::AddMemberRole {
+								guild_id,
+								user_id,
+								role_id,
+							}
+						};
+						toggle.request(Request::Command(command));
+					})
 				})
 				.collect();
 			submenu_of(layer, item, color, choices)
@@ -137,25 +122,18 @@ fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &Mo
 				.iter()
 				.map(|channel| {
 					let (mover, channel_id) = (layer.clone(), channel.id);
-					menu_item(channel.name.clone())
-						.h(MENU_ITEM)
-						.px(12.)
-						.py(0.)
-						.rounded(tok("radius_sm"))
-						.menu_checked(channel.current)
-						.child(label(channel.name.clone(), "font_sm").text_color(tok("text_normal")))
-						.on_click(move || {
-							mover.request(Request::Command(Command::MoveMember {
-								guild_id,
-								user_id,
-								channel_id: Some(channel_id),
-							}));
-						})
+					choice(&channel.name, channel.current).on_click(move || {
+						mover.request(Request::Command(Command::MoveMember {
+							guild_id,
+							user_id,
+							channel_id: Some(channel_id),
+						}));
+					})
 				})
 				.collect();
 			let disconnect = layer.clone();
 			choices.push(separator());
-			choices.push(entry("Disconnect", "phone_off", "text_normal").on_click(move || {
+			choices.push(entry("Disconnect", "phone_off", "text_3").on_click(move || {
 				disconnect.request(Request::Command(Command::MoveMember {
 					guild_id,
 					user_id,
@@ -178,13 +156,11 @@ fn submenu_of(
 	choices: Vec<View>,
 ) -> View {
 	menu_panel(
-		submenu(item.label(), layer.runtime.signal(false)).trigger(
-			entry(item.label(), item.icon(), color).child(div().grow().child(icon(
-				"chevron_right",
-				MENU_ICON,
-				"interactive_normal",
-			))),
-		),
+		submenu(item.label(), layer.runtime.signal(false)).trigger(menu_row(
+			item.label().to_owned(),
+			menu_icon("chevron_right", false),
+			color,
+		)),
 	)
 	.children(choices)
 }

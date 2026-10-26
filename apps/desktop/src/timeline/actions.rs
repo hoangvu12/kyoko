@@ -4,7 +4,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use bridge::{
-	Access, DeleteProgress, EmojiPicker, MenuContext, MenuEntry, MessageAction, MessageEntry, ReactionToggle,
+	Access, DeleteProgress, EmojiCell, EmojiPicker, MenuContext, MenuEntry, MessageAction, MessageEntry,
+	PickerSection, ReactionToggle,
 };
 use protocol::Snowflake;
 use session::Command;
@@ -15,22 +16,21 @@ use zgx::input::{EventPhase, InputEvent, Modifiers, PointerButton};
 use zgx::reactive::{Runtime, Signal};
 
 use super::dialogs::{Confirm, Dialogs};
-use super::icons::{glyph, icon};
+use super::icons::glyph;
 use super::links::Links;
 use super::popout::ExpressionPopout;
 use super::rows::{Sender, tok};
+use crate::kit::{
+	self, MENU_BORDER, MENU_MARGIN, MENU_WIDTH, QUICK_REACTIONS, id_badge, menu_icon, menu_panel, menu_row,
+	separator,
+};
 use crate::pickers::{ExpressionPicker, Tab};
 use crate::plugin_menu::{PluginMenu, Shown};
 use crate::toasts;
 
-const MENU_WIDTH: f32 = 190.;
-const MENU_ITEM: f32 = 28.;
-pub const MENU_ICON: f32 = 12.;
-const MENU_MARGIN: f32 = 7.;
-const MENU_PADDING: f32 = 4.;
-const MENU_BORDER: f32 = 1.;
-const SEPARATOR: f32 = 7.;
 const TOOLBAR_RIGHT: f32 = 12.;
+const QUICK_REACTION_COUNT: usize = 4;
+const QUICK_EMOJI: f32 = 22.;
 const TOOLBAR_RISE: f32 = 16.;
 const TOOLBAR_BUTTON: f32 = 32.;
 const TOOLBAR_ICON: f32 = 20.;
@@ -408,11 +408,14 @@ impl MessageActions {
 			},
 			MessageAction::Pin | MessageAction::Unpin => {
 				self.acted_at.set(Some(Instant::now()));
-				self.dialogs.ask(Confirm::Pin {
-					channel_id,
-					message_id,
-					pin: action == MessageAction::Pin,
-				});
+				self.dialogs.ask_about(
+					Confirm::Pin {
+						channel_id,
+						message_id,
+						pin: action == MessageAction::Pin,
+					},
+					entry,
+				);
 			}
 			MessageAction::MarkUnread => self.send(Command::MarkUnread {
 				channel_id,
@@ -426,10 +429,13 @@ impl MessageActions {
 			}),
 			MessageAction::Delete => {
 				self.acted_at.set(Some(Instant::now()));
-				self.dialogs.ask(Confirm::Delete {
-					channel_id,
-					message_id,
-				});
+				self.dialogs.ask_about(
+					Confirm::Delete {
+						channel_id,
+						message_id,
+					},
+					entry,
+				);
 			}
 			MessageAction::Report => self.links.download(bridge::REPORT_URL),
 			MessageAction::RemoveEmbeds => self.send(Command::SuppressEmbeds {
@@ -533,8 +539,9 @@ impl MessageActions {
 		self.pointer.set((x, y));
 		let ((left, top), (width, height)) = (self.origin.get(), self.window.get());
 		let x = (x - MENU_BORDER).min(width - MENU_MARGIN - MENU_WIDTH).max(0.);
+		let quick = self.quick_reactions(entry, &access).is_empty();
 		let y = (y - MENU_BORDER)
-			.min(height - MENU_MARGIN - menu_height(&entries))
+			.min(height - MENU_MARGIN - menu_height(&entries, quick))
 			.max(0.);
 		self.context.set(Some(ContextMenu {
 			serial,
@@ -600,15 +607,57 @@ impl MessageActions {
 		let selection = self.selection_in(&access);
 		let menu = self.plugin_menu.borrow().clone();
 		let message = Some((entry.message.channel_id, entry.id));
-		self.menu_entries(entry, &access, shown)
+		let quick = self.quick_reactions(entry, &access);
+		let reactions = (!quick.is_empty()).then(|| self.quick_row(entry, quick));
+		reactions
 			.into_iter()
-			.map(|item| match (item, menu.as_ref()) {
-				(MenuEntry::Separator, _) => separator(),
-				(MenuEntry::Action(action), _) => self.menu_item(action, entry, selection, access),
-				(MenuEntry::Plugin(index), Some(menu)) => menu.item(shown, index, message, || {}),
-				(MenuEntry::Plugin(_), None) => div(),
-			})
+			.chain(self.menu_entries(entry, &access, shown).into_iter().map(|item| {
+				match (item, menu.as_ref()) {
+					(MenuEntry::Separator, _) => separator(),
+					(MenuEntry::Action(action), _) => self.menu_item(action, entry, selection, access),
+					(MenuEntry::Plugin(index), Some(menu)) => menu.item(shown, index, message, || {}),
+					(MenuEntry::Plugin(_), None) => div(),
+				}
+			}))
 			.collect()
+	}
+
+	fn quick_reactions(&self, entry: &MessageEntry, access: &Access) -> Vec<EmojiCell> {
+		if !self.is_open(access) || !bridge::can_add_reaction(entry, access) {
+			return Vec::new();
+		}
+		let model = self.emoji.borrow().as_ref().and_then(|source| source());
+		model.map_or_else(Vec::new, |model| {
+			let (_, cells) = model.section(PickerSection::Recent, 0);
+			cells
+				.into_iter()
+				.filter(|cell| !cell.locked)
+				.take(QUICK_REACTION_COUNT)
+				.collect()
+		})
+	}
+
+	fn quick_row(self: &Rc<Self>, entry: &Rc<MessageEntry>, cells: Vec<EmojiCell>) -> View {
+		row()
+			.w_full()
+			.gap(tok("space_4"))
+			.pt(tok("space_2"))
+			.pb(tok("space_4"))
+			.children(cells.into_iter().map(|cell| {
+				let (this, entry) = (self.clone(), entry.clone());
+				let visual = self.picker.emoji_visual(&cell, QUICK_EMOJI, "font_size_lg");
+				menu_item(cell.label.clone())
+					.id(format!("message-menu-react-{}", cell.key))
+					.grow()
+					.h(tok("button_height_md"))
+					.p(0.)
+					.items_center()
+					.justify_center()
+					.rounded(tok("radius_sm"))
+					.bg(tok("bg_4"))
+					.child(visual)
+					.on_click(move || this.toggle_reaction(&entry, &cell.reaction))
+			}))
 	}
 
 	fn menu_item(
@@ -619,13 +668,18 @@ impl MessageActions {
 		access: Access,
 	) -> View {
 		let label = action.label(selection);
-		let color = if action.is_danger() {
-			"danger"
+		let danger = action.is_danger();
+		let glyph = if action == MessageAction::CopyId {
+			id_badge()
 		} else {
-			"text_normal"
+			menu_icon(action.icon(), danger)
 		};
 		let (this, entry) = (self.clone(), entry.clone());
-		menu_row(label, icon(action.icon(), MENU_ICON, color), color)
+		menu_row(label, glyph, if danger { "danger" } else { "text_3" })
+			.id(format!(
+				"message-menu-{}",
+				action.label(0).to_lowercase().replace(' ', "-")
+			))
 			.on_click_with(move |modifiers| this.act(action, &entry, modifiers, access))
 	}
 
@@ -807,45 +861,17 @@ pub fn aimed(view: View, actions: &Rc<MessageActions>, target: Option<Expression
 		})
 }
 
-pub fn menu_row(label: String, glyph: View, color: &str) -> View {
-	menu_item(label.clone())
-		.h(MENU_ITEM)
-		.px(12.)
-		.py(0.)
-		.rounded(tok("radius_sm"))
-		.child(
-			row()
-				.items_center()
-				.gap(5.)
-				.child(glyph)
-				.child(text(label).text_size(tok("font_sm")).text_color(tok(color))),
-		)
-}
-
-pub fn menu_panel(panel: View) -> View {
-	panel
-		.w(MENU_WIDTH)
-		.px(0.)
-		.py(MENU_PADDING)
-		.rounded(tok("radius_sm"))
-		.bg(tok("background_floating"))
-		.border(MENU_BORDER)
-		.border_color(tok("divider"))
-}
-
-fn menu_height(entries: &[MenuEntry]) -> f32 {
-	let rows: f32 = entries
+fn menu_height(entries: &[MenuEntry], without_reactions: bool) -> f32 {
+	let separators = entries
 		.iter()
-		.map(|entry| match entry {
-			MenuEntry::Action(_) | MenuEntry::Plugin(_) => MENU_ITEM,
-			MenuEntry::Separator => SEPARATOR,
-		})
-		.sum();
-	rows + 2. * (MENU_PADDING + MENU_BORDER)
-}
-
-fn separator() -> View {
-	div().h(1.).my((SEPARATOR - 1.) / 2.).bg(tok("divider"))
+		.filter(|entry| matches!(entry, MenuEntry::Separator))
+		.count();
+	let reactions = if without_reactions {
+		0.
+	} else {
+		QUICK_REACTIONS + kit::MENU_GAP
+	};
+	kit::menu_height(entries.len() - separators, separators, reactions)
 }
 
 fn toolbar_button(name: &'static str, hovered: Signal<bool>) -> View {

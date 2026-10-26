@@ -197,6 +197,10 @@ fn right_clicking_an_emoji_then_clone_then_a_server_adds_it_there() {
 	let items = menu_items(&host);
 	let mut app = TestApp::wrapped(
 		move |runtime| {
+			crate::theme::Catalog::load(&[
+				std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes")
+			])
+			.install(runtime, crate::theme::DEFAULT);
 			let view = TimelineView::new(
 				runtime,
 				Setup {

@@ -1,14 +1,19 @@
 use std::rc::Rc;
 
+use bridge::MessageEntry;
 use protocol::Snowflake;
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::{Runtime, Signal};
+use zgx::style::ObjectFit;
 
+use super::Pictures;
 use super::rows::{Sender, tok};
+use crate::kit::{self, Variant};
 use crate::motion;
 
-const DIALOG_WIDTH: f32 = 440.;
+const PREVIEW_AVATAR: f32 = 40.;
+const PREVIEW_CHARACTERS: usize = 300;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Confirm {
@@ -39,7 +44,7 @@ impl Confirm {
 
 	fn body(&self) -> &'static str {
 		match self {
-			Self::Delete { .. } => "Are you sure you want to delete this message? This cannot be undone.",
+			Self::Delete { .. } => "Are you sure you want to delete this message?",
 			Self::DeleteMany { .. } => {
 				"The selected messages are removed for everyone. This cannot be undone."
 			}
@@ -52,16 +57,16 @@ impl Confirm {
 
 	fn confirm_label(&self) -> &'static str {
 		match self {
-			Self::Delete { .. } | Self::DeleteMany { .. } => "Delete Message",
+			Self::Delete { .. } | Self::DeleteMany { .. } => "Delete",
 			Self::Pin { pin: true, .. } => "Pin",
 			Self::Pin { pin: false, .. } => "Unpin",
 		}
 	}
 
-	fn confirm_color(&self) -> &'static str {
+	fn variant(&self) -> Variant {
 		match self {
-			Self::Pin { pin: true, .. } => "brand",
-			_ => "danger",
+			Self::Pin { pin: true, .. } => Variant::Primary,
+			_ => Variant::Critical,
 		}
 	}
 
@@ -97,20 +102,33 @@ impl Confirm {
 
 pub struct Dialogs {
 	pending: Signal<Option<Confirm>>,
+	preview: Signal<Option<Rc<MessageEntry>>>,
 	open: Signal<bool>,
 	commands: Rc<Sender>,
+	pictures: Rc<Pictures>,
 }
 
 impl Dialogs {
-	pub fn new(runtime: &Runtime, commands: Rc<Sender>) -> Self {
+	pub fn new(runtime: &Runtime, commands: Rc<Sender>, pictures: Rc<Pictures>) -> Self {
 		Self {
 			pending: runtime.signal(None),
+			preview: runtime.signal(None),
 			open: runtime.signal(false),
 			commands,
+			pictures,
 		}
 	}
 
 	pub fn ask(&self, confirm: Confirm) {
+		self.show(confirm, None);
+	}
+
+	pub fn ask_about(&self, confirm: Confirm, entry: &MessageEntry) {
+		self.show(confirm, Some(Rc::new(entry.clone())));
+	}
+
+	fn show(&self, confirm: Confirm, preview: Option<Rc<MessageEntry>>) {
+		self.preview.set(preview);
 		self.pending.set(Some(confirm));
 		self.open.set(true);
 	}
@@ -129,74 +147,132 @@ impl Dialogs {
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
-		let (title, body, label, color) = (
-			self.pending.clone(),
-			self.pending.clone(),
-			self.pending.clone(),
-			self.pending.clone(),
-		);
-		let (cancel, confirm) = (self.clone(), self.clone());
-		motion::modal("Confirm", self.open.clone())
-			.w(DIALOG_WIDTH)
-			.p(16.)
-			.gap(12.)
-			.rounded(tok("radius_md"))
-			.bg(tok("background_primary"))
-			.border(1.)
-			.border_color(tok("divider"))
-			.child(
-				text_signal(move || {
-					title.with(|pending| pending.as_ref().map(Confirm::title).unwrap_or_default())
-				})
-				.text_size(tok("font_lg"))
-				.font_weight(700)
-				.text_color(tok("header_primary")),
+		let (shown, open) = (self.pending.clone(), self.open.clone());
+		let this = self.clone();
+		kit::dialog(motion::modal("Confirm", self.open.clone()))
+			.w(tok("modal_width_sm"))
+			.child_when(
+				move || if open.get() { shown.get() } else { None },
+				move |confirm: Confirm, _| this.content(&confirm),
 			)
+	}
+
+	fn content(self: &Rc<Self>, confirm: &Confirm) -> View {
+		let (close, cancel, accept) = (self.clone(), self.clone(), self.clone());
+		let preview = self.preview.with_untracked(Clone::clone);
+		let deleting = matches!(confirm, Confirm::Delete { .. });
+		column()
+			.w_full()
+			.child(kit::header(kit::title(confirm.title()), None, move || {
+				close.close()
+			}))
 			.child(
-				text_signal(move || {
-					body.with(|pending| pending.as_ref().map(Confirm::body).unwrap_or_default().to_owned())
-				})
-				.text_wrap(true)
-				.text_size(tok("font_sm"))
-				.text_color(tok("text_normal")),
-			)
-			.child(
-				row()
-					.justify_end()
-					.gap(8.)
-					.child(dialog_button(text("Cancel"), move || cancel.close()).bg(tok("button_secondary")))
-					.child(
-						dialog_button(
-							text_signal(move || {
-								label.with(|pending| {
-									pending
-										.as_ref()
-										.map(Confirm::confirm_label)
-										.unwrap_or_default()
-										.to_owned()
-								})
-							}),
-							move || confirm.confirm(),
-						)
-						.reactive_style(move || {
-							let color = color
-								.with(|pending| pending.as_ref().map_or("danger", Confirm::confirm_color));
-							Styles::new().bg(tok(color))
+				kit::body()
+					.child(kit::paragraph(confirm.body()))
+					.when_some(preview, |body, entry| body.child(self.preview(&entry)))
+					.when(deleting, |body| body.child(protip()))
+					.child(kit::footer(vec![
+						kit::action("Cancel", Variant::Link, move || cancel.close()),
+						kit::action(confirm.confirm_label(), confirm.variant(), move || {
+							accept.confirm()
 						}),
+					])),
+			)
+	}
+
+	fn preview(&self, entry: &MessageEntry) -> View {
+		let snippet: String = entry.content.chars().take(PREVIEW_CHARACTERS).collect();
+		let author = match entry.author_color {
+			Some(color) => text(entry.author.clone()).text_color(rgb(color)),
+			None => text(entry.author.clone()).text_color(tok("text_2")),
+		};
+		row()
+			.w_full()
+			.items_start()
+			.gap(tok("space_16"))
+			.px(tok("space_12"))
+			.py(tok("space_8"))
+			.rounded(tok("radius_md"))
+			.bg(tok("bg_3"))
+			.border(tok("border_thickness"))
+			.border_color(tok("border"))
+			.child(self.avatar(entry))
+			.child(
+				column()
+					.grow()
+					.min_w(0.)
+					.child(
+						row()
+							.items_center()
+							.gap(tok("space_6"))
+							.child(
+								author
+									.text_size(tok("font_size_md"))
+									.line_height(tok("line_height_md"))
+									.font_weight(500),
+							)
+							.child(
+								text(bridge::message_time(entry.sent_at, bridge::today()))
+									.text_size(tok("font_size_xs"))
+									.line_height(tok("line_height_md"))
+									.font_weight(500)
+									.text_color(tok("text_5")),
+							),
+					)
+					.child(
+						text(snippet)
+							.w_full()
+							.text_wrap(true)
+							.text_size(tok("font_size_md"))
+							.line_height(tok("line_height_md"))
+							.text_color(tok("text_3")),
 					),
 			)
 	}
+
+	fn avatar(&self, entry: &MessageEntry) -> View {
+		let circle = div()
+			.size(PREVIEW_AVATAR, PREVIEW_AVATAR)
+			.shrink_0()
+			.rounded(PREVIEW_AVATAR / 2.)
+			.overflow_hidden()
+			.bg(tok("bg_2"));
+		let picture = self
+			.pictures
+			.avatar(&entry.message.author, f64::from(PREVIEW_AVATAR))
+			.map(|name| self.pictures.picture(&name));
+		match picture {
+			Some(picture) => circle.reactive_style(move || match picture.get() {
+				Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
+				None => Styles::new(),
+			}),
+			None => circle,
+		}
+	}
 }
 
-fn dialog_button(label: View, action: impl FnMut() + 'static) -> View {
-	button()
-		.h(32.)
-		.px(16.)
-		.rounded(tok("radius_sm"))
-		.text_size(tok("font_sm"))
-		.font_weight(500)
-		.text_color(tok("text_on_brand"))
-		.cursor(Cursor::Pointer)
-		.child(label)
-		.on_click(action)
+fn protip() -> View {
+	row()
+		.w_full()
+		.items_start()
+		.gap(tok("space_4"))
+		.child(
+			text("PROTIP:")
+				.shrink_0()
+				.text_size(tok("font_size_xs"))
+				.line_height(tok("line_height_xs"))
+				.font_weight(700)
+				.text_color(tok("green_2")),
+		)
+		.child(
+			text(
+				"You can hold down shift when clicking delete message to bypass this confirmation entirely.",
+			)
+			.grow()
+			.min_w(0.)
+			.text_wrap(true)
+			.text_size(tok("font_size_xs"))
+			.line_height(tok("line_height_xs"))
+			.text_color(tok("text_4")),
+		)
 }
