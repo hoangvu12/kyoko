@@ -4,7 +4,7 @@
 
 **Blocked by:** 34 (Friends)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 Decided with the user (2026-10-26): "do the same as Discord". Discord sends a friend request at once (it only steps in with a captcha, which 09 already handles by stopping and pointing to the official client), so kyoko adds no risky-action lock for friend requests. Discord asks for confirmation before removing a friend and before blocking someone, so kyoko does too.
 
