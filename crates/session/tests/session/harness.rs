@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
-use mockcord::{Control, Fixtures, MockConfig, Recording, Server};
+use mockcord::{Control, Fixtures, MockConfig, Recording, RestRequest, Server};
 use protocol::Opcode;
 use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
@@ -287,6 +287,45 @@ impl Running {
 		match self.mock.wait_for(STEP_TIMEOUT, found).await {
 			Some(value) => value,
 			None => panic!("timed out waiting on the wire for {what}"),
+		}
+	}
+
+	pub fn assert_released_apart(&self, requests: &[RestRequest], gap: Duration, what: &str) {
+		let releases = self.session().releases();
+		let mut routes: Vec<(&str, &str)> = requests
+			.iter()
+			.map(|request| (request.method.as_str(), request.path.as_str()))
+			.collect();
+		routes.sort_unstable();
+		routes.dedup();
+		let mut slots = Vec::new();
+		for (method, path) in routes {
+			let mut arrivals: Vec<std::time::Instant> = requests
+				.iter()
+				.filter(|request| request.method == method && request.path == path)
+				.map(|request| request.at)
+				.collect();
+			let mut released: Vec<std::time::Instant> = releases
+				.iter()
+				.filter(|release| release.method == method && release.path == path)
+				.map(|release| release.at)
+				.collect();
+			arrivals.sort_unstable();
+			released.sort_unstable();
+			assert_eq!(
+				released.len(),
+				arrivals.len(),
+				"every {what} to {path} passed the pacer once"
+			);
+			for (arrival, release) in arrivals.iter().zip(&released) {
+				assert!(arrival >= release, "a {what} to {path} went out before its slot");
+			}
+			slots.extend(released);
+		}
+		slots.sort_unstable();
+		for pair in slots.windows(2) {
+			let apart = pair[1].duration_since(pair[0]);
+			assert!(apart >= gap, "{what}s released {apart:?} apart");
 		}
 	}
 

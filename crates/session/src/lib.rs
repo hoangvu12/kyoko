@@ -22,7 +22,7 @@ pub use display::{
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{EmojiRankRequest, RankedEmoji, Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};
-pub use rest::{RestTuning, UploadFile};
+pub use rest::{Release, RestTuning, UploadFile};
 pub use search::{SearchFailure, SearchResults, SearchStatus};
 pub use session::{Commander, Session};
 pub use state::{CacheLimits, RiskyLock, RiskyReason, RiskyTarget, Viewport};

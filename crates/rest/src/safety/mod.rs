@@ -1,5 +1,6 @@
 mod breaker;
 mod pacing;
+mod releases;
 mod stop;
 
 use protocol::rest::{ApiError, CaptchaChallenge};
@@ -10,6 +11,7 @@ use crate::tuning::RestTuning;
 
 pub(crate) use breaker::{Admission, Breakers, Outcome};
 pub(crate) use pacing::{Pace, Pacer};
+pub use releases::{Release, Releases};
 pub(crate) use stop::Stop;
 
 const MISSING_PERMISSIONS: i64 = 50013;
@@ -17,6 +19,7 @@ const MISSING_PERMISSIONS: i64 = 50013;
 pub(crate) struct Safety {
 	pub stop: Stop,
 	pub pacer: Pacer,
+	pub releases: Releases,
 	pub breakers: Breakers,
 }
 
@@ -25,6 +28,7 @@ impl Safety {
 		Self {
 			stop: Stop::new(),
 			pacer: Pacer::new(tuning),
+			releases: Releases::default(),
 			breakers: Breakers::new(tuning),
 		}
 	}

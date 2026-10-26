@@ -14,7 +14,6 @@ const RELATIONSHIPS: &str = "/users/@me/relationships";
 const ONE_RELATIONSHIP: &str = "/users/@me/relationships/*";
 const SETTLE: Duration = Duration::from_millis(400);
 const MUTATION_GAP: Duration = Duration::from_millis(200);
-const GAP_SLACK: Duration = Duration::from_millis(20);
 
 fn context(request: &RestRequest) -> Option<Value> {
 	let header = request.header("x-context-properties")?;
@@ -161,27 +160,20 @@ async fn accepting_removing_and_blocking_are_paced_relationship_requests() {
 		assert_eq!(removed.len(), 1);
 		assert!(removed[0].body.is_empty());
 	}
-	let mut arrivals: Vec<_> = recording
+	let changes: Vec<RestRequest> = recording
 		.requests
 		.iter()
 		.filter(|request| request.is("PUT", ONE_RELATIONSHIP) || request.is("DELETE", ONE_RELATIONSHIP))
-		.map(|request| request.at)
+		.cloned()
 		.collect();
-	assert_eq!(arrivals.len(), 4);
+	assert_eq!(changes.len(), 4);
 	assert!(
 		recording
 			.requests
 			.iter()
 			.all(|request| request.header("x-context-properties").is_none())
 	);
-	arrivals.sort();
-	for pair in arrivals.windows(2) {
-		let gap = pair[1].duration_since(pair[0]);
-		assert!(
-			gap + GAP_SLACK >= MUTATION_GAP,
-			"relationship requests {gap:?} apart"
-		);
-	}
+	running.assert_released_apart(&changes, MUTATION_GAP, "relationship request");
 	running.stop().await;
 }
 

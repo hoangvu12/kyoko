@@ -15,7 +15,6 @@ const INVITE_PATH: &str = "/invites/mockcommunity";
 const SETTLE: Duration = Duration::from_millis(400);
 const NO_ARTIFICIAL_WAIT: Duration = Duration::from_millis(500);
 const SEND_GAP: Duration = Duration::from_millis(300);
-const GAP_SLACK: Duration = Duration::from_millis(20);
 
 fn rejections(running: &Running) -> u64 {
 	running
@@ -371,11 +370,7 @@ async fn forwards_are_paced_sends_and_respect_locks() {
 	nonces.sort();
 	nonces.dedup();
 	assert_eq!(nonces.len(), targets.len());
-	let mut sent = sent;
-	sent.sort_by_key(|request| request.at);
-	for pair in sent.windows(2) {
-		assert!(pair[1].at.duration_since(pair[0].at) + GAP_SLACK >= SEND_GAP);
-	}
+	running.assert_released_apart(&sent, SEND_GAP, "forward");
 	assert!(
 		requests(
 			&running.mock().recording(),

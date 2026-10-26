@@ -15,7 +15,6 @@ const TRANSLATE_ID: Snowflake = Snowflake(TRANSLATE_COMMAND);
 const RESIZE_ID: Snowflake = Snowflake(RESIZE_COMMAND);
 const QUIET: Duration = Duration::from_millis(600);
 const SEND_GAP: Duration = Duration::from_millis(1200);
-const GAP_SLACK: Duration = Duration::from_millis(50);
 const AUTOCOMPLETE: i64 = 4;
 const RUN: i64 = 2;
 
@@ -182,11 +181,8 @@ async fn typing_is_debounced_into_one_autocomplete_paced_like_other_interactions
 	let run = interactions(&recording, RUN);
 	let asked = interactions(&recording, AUTOCOMPLETE);
 	assert_eq!((run.len(), asked.len()), (1, 2));
-	let gap = asked[1].0.at.duration_since(run[0].0.at);
-	assert!(
-		gap + GAP_SLACK >= SEND_GAP,
-		"the autocomplete waited {gap:?} after the command"
-	);
+	let interactions: Vec<RestRequest> = asked.into_iter().chain(run).map(|(request, _)| request).collect();
+	running.assert_released_apart(&interactions, SEND_GAP, "interaction");
 	running.stop().await;
 }
 

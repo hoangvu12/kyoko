@@ -96,6 +96,6 @@ impl Pacer {
 			}
 		}
 		slots.mutation = Some(at + self.mutation_gap);
-		(at > now).then_some(at)
+		Some(at)
 	}
 }

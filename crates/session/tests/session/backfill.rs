@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mockcord::{Recording, Reply, RestRequest};
 use protocol::{ChannelType, Opcode, Snowflake};
@@ -131,10 +131,13 @@ fn backfill_requests(recording: &Recording) -> Vec<RestRequest> {
 	requests
 }
 
-fn assert_paced(requests: &[RestRequest]) {
-	for pair in requests.windows(2) {
-		let spacing = pair[1].at.saturating_duration_since(pair[0].at);
-		assert!(spacing >= GAP, "backfill fetches are paced, got {spacing:?}");
+fn assert_paced(requests: &[RestRequest], triggered: Instant) {
+	for (index, request) in requests.iter().enumerate() {
+		let after = request.at.saturating_duration_since(triggered);
+		assert!(
+			after >= GAP * index as u32,
+			"backfill fetch {index} is paced, arrived {after:?} after the trigger"
+		);
 	}
 }
 
@@ -189,6 +192,7 @@ async fn replies_to_unloaded_messages_fetch_each_original_once_and_paced() {
 	let running = Running::start_with(options("backfill-replies")).await;
 	let channel_id = running.open_text_channel().await;
 	let targets = oldest_fixture_messages(&running, channel_id, 2);
+	let triggered = Instant::now();
 	let replies = [
 		post_reply(&running, channel_id, 1, targets[0]),
 		post_reply(&running, channel_id, 2, targets[0]),
@@ -208,7 +212,7 @@ async fn replies_to_unloaded_messages_fetch_each_original_once_and_paced() {
 	let second = around_requests(&recording, channel_id, targets[1]);
 	assert_eq!(first.len(), 1, "one fetch for the shared original");
 	assert_eq!(second.len(), 1, "one fetch for the other original");
-	assert_paced(&backfill_requests(&recording));
+	assert_paced(&backfill_requests(&recording), triggered);
 	let resident = running
 		.session()
 		.state()
@@ -426,6 +430,7 @@ async fn unknown_mentions_in_a_dm_are_fetched_over_rest_and_paced() {
 		unknown
 	};
 	assert_eq!(users.len(), 2, "two users kyoko has not seen");
+	let triggered = Instant::now();
 	post_mention(&running, channel_id, 1, &users);
 	running
 		.until("both mentioned users to resolve", |state| {
@@ -436,7 +441,7 @@ async fn unknown_mentions_in_a_dm_are_fetched_over_rest_and_paced() {
 	let first = user_requests(&recording, users[0]);
 	let second = user_requests(&recording, users[1]);
 	assert_eq!((first.len(), second.len()), (1, 1), "one fetch per user");
-	assert_paced(&backfill_requests(&recording));
+	assert_paced(&backfill_requests(&recording), triggered);
 	assert!(
 		!requested_members(&recording).iter().any(|id| users.contains(id)),
 		"DM users are not requested over op 8"

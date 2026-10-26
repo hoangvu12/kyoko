@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use gateway::{Gateway, GatewayConfig, GatewayHandle, PropertiesSource};
 use protocol::{Message, Token};
-use rest::{RestClient, RestConfig};
+use rest::{Release, Releases, RestClient, RestConfig};
 use state::{SharedState, State};
 use tokio::runtime::{Builder, Handle, Runtime};
 use tokio::sync::{mpsc, oneshot};
@@ -45,6 +45,7 @@ pub struct Session {
 	alerts: AlertQueue,
 	stats: Arc<Stats>,
 	themes: Arc<ThemeLinks>,
+	releases: Releases,
 	hooks: Hooks,
 	finished: std::sync::mpsc::Receiver<()>,
 	runtime: Option<Runtime>,
@@ -79,6 +80,7 @@ impl Session {
 			..RestConfig::new(config.rest_base, config.identity.clone())
 		});
 		rest.set_token(Token::new(config.token.as_str()));
+		let releases = rest.releases();
 		let token = Arc::new(Token::new(config.token.as_str()));
 		let identity = config.identity.clone();
 		let mut gateway_config = GatewayConfig::new(
@@ -140,6 +142,7 @@ impl Session {
 			alerts,
 			stats,
 			themes,
+			releases,
 			hooks: config.hooks,
 			finished,
 			runtime,
@@ -181,6 +184,10 @@ impl Session {
 
 	pub fn reconnects(&self) -> u64 {
 		self.stats.reconnects.load(Ordering::Relaxed)
+	}
+
+	pub fn releases(&self) -> Vec<Release> {
+		self.releases.snapshot()
 	}
 
 	pub fn shutdown(mut self) {

@@ -11,7 +11,6 @@ use state::State;
 use crate::harness::{Options, Running};
 
 const SEND_GAP: Duration = Duration::from_millis(400);
-const PACED_AT_LEAST: Duration = Duration::from_millis(350);
 
 fn tuning() -> RestTuning {
 	RestTuning {
@@ -336,28 +335,20 @@ async fn a_forum_post_waits_its_turn_behind_a_send() {
 		tags: Vec::new(),
 		files: Vec::new(),
 	});
-	let (sent, posted) = running
+	let both = running
 		.until_wire("both requests", |recording| {
 			let sent = recording
 				.requests_to("POST", &format!("/channels/{channel_id}/messages"))
 				.next()?
-				.at;
+				.clone();
 			let posted = recording
 				.requests_to("POST", &format!("/channels/{forum}/threads"))
 				.next()?
-				.at;
-			Some((sent, posted))
+				.clone();
+			Some(vec![sent, posted])
 		})
 		.await;
-	let gap = if posted > sent {
-		posted - sent
-	} else {
-		sent - posted
-	};
-	assert!(
-		gap >= PACED_AT_LEAST,
-		"the post was paced as a send, {gap:?} apart"
-	);
+	running.assert_released_apart(&both, SEND_GAP, "send or post");
 	running.stop().await;
 }
 

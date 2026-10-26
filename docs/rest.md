@@ -18,7 +18,7 @@ Every REST request goes through one path, `RestClient::execute` in `crates/rest/
 
 ## Pacing
 
-Pacing works on slots reserved in request order. A request sleeps until its slot, then sends. GET and HEAD are never paced.
+Pacing works on slots reserved in request order. A request sleeps until its slot, then sends. GET and HEAD are never paced. The client keeps the last 64 paced requests' method, path and slot (`RestClient::releases()`, `Session::releases()`, `rest::Release`), so tests check the spacing kyoko chose rather than arrival times a busy machine distorts.
 
 | Field | Default | Applies to |
 |---|---|---|

@@ -76,7 +76,7 @@ Wait on the effect you are about to assert. For example, wait for a RESUME frame
 - `closes`: close frames the client sent, with the code.
 - `media`: every request under `/cdn/`, the mock CDN, with `path`, `query`, `headers`, `status` and `at`. Helpers: `header(name)`, `param(name)`, `url()`. `Recording::media_to(prefix)` filters by path prefix.
 
-`Recording::requests_to(method, pattern)` and `frames_with(opcode)` filter. Patterns compare path segments. `*` or `{name}` matches one segment, `**` matches any number, and `"*"` as the method matches any method. Use the `at` timestamps to assert spacing and pacing. Group frames by `connection` to tell an IDENTIFY on a fresh socket from a RESUME after a drop.
+`Recording::requests_to(method, pattern)` and `frames_with(opcode)` filter. Patterns compare path segments. `*` or `{name}` matches one segment, `**` matches any number, and `"*"` as the method matches any method. Use the `at` timestamps to assert spacing (see "Time" for pacing). Group frames by `connection` to tell an IDENTIFY on a fresh socket from a RESUME after a drop.
 
 The mock CDN serves avatars (`/cdn/avatars/<user>/<hash>.<png|jpg|webp|gif>`; `a_` hashes are animated as GIF, or as WebP with `animated=true`, four frames of 100 ms), server icons (`/cdn/icons/<guild>/<hash>.<ext>`, generated like avatars), emoji (`/cdn/emojis/<id>.<ext>`) and signed attachments (`/cdn/attachments/<channel>/<id>/<file>`). Attachments answer 404 when `ex` has passed or `hm` does not match, honour `width`, `height` and `format=webp`, and are re-signed with a fresh expiry whenever a messages list is served. `Server::post_image(channel, filename, Signature::{Fresh, Expired, Revoked})` posts a message with one such attachment. Media tests live in `crates/bridge/tests/bridge/media.rs`.
 
@@ -148,7 +148,8 @@ Two approaches apply, depending on the code under test.
 - **Session tests use real time.** The session runs on its own runtime and talks to mockcord over real loopback sockets. The REST limiter and client measure with `std::time::Instant`. Tokio's paused clock would either not apply or would fire timeouts while sockets are still busy. So session tests:
   - stay event-driven, using `until` and `until_wire`;
   - make the waits they provoke short, for example `Reply::rate_limited(0.25, false)`, `HeartbeatAcks::Delayed(..)`, or a small `heartbeat_interval_ms` (the gateway clamps intervals to at least 100 ms);
-  - assert durations as lower bounds from recorded `at` timestamps, never as upper bounds.
+  - assert durations as lower bounds from recorded `at` timestamps, never as upper bounds;
+  - never assert the gap between two arrivals when the wait starts at the first request's send rather than its response: a request delayed in transit on a busy machine shrinks the next gap. For REST pacing use `running.assert_released_apart(&requests, gap, what)`, which checks the pacer's release slots (`Session::releases()`, see `docs/rest.md`) are at least `gap` apart and that each request arrived no earlier than its slot. For other start-to-start queues (backfill), bound the k-th arrival by the trigger time plus k gaps. Waits that start at a response (a 429's `retry_after`, the server-write queue) may compare arrivals directly.
 
   Waits the session chooses itself, such as gateway reconnect backoff (about 1 s on the first failure by default) and the 1 to 5 s identify delay after op 9 `false`, fit inside `STEP_TIMEOUT`. Shorten the backoff with `Options::gateway` when a test provokes several failures.
 

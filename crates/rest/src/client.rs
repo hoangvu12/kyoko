@@ -20,7 +20,7 @@ use crate::identity::ClientIdentity;
 use crate::limiter::{Probe, RateLimiter, header_global, header_retry_after, header_u32};
 use crate::request::{Body, Request, UploadFile, encode_component};
 use crate::route::{RouteKey, route_key};
-use crate::safety::{self, Admission, Pace, Safety};
+use crate::safety::{self, Admission, Pace, Release, Releases, Safety};
 use protocol::Fingerprint;
 use protocol::fingerprint::{HOME_REFERER, WEB_ORIGIN, sec_ch_ua, sec_ch_ua_platform};
 use reqwest::multipart::{Form, Part};
@@ -380,18 +380,27 @@ impl RestClient {
 		(retry_after, global)
 	}
 
-	async fn clear_to_send(&self, route: &RouteKey, pace: &Pace) -> Result<Probe<'_>> {
+	async fn clear_to_send(
+		&self,
+		route: &RouteKey,
+		pace: &Pace,
+	) -> Result<(Probe<'_>, Option<tokio::time::Instant>)> {
 		let stop = &self.inner.safety.stop;
 		loop {
 			let probe = stop.unless_stopped(self.inner.limiter.acquire(route)).await?;
-			if let Some(at) = self.inner.safety.pacer.reserve(pace) {
+			let slot = self.inner.safety.pacer.reserve(pace);
+			if let Some(at) = slot.filter(|at| *at > tokio::time::Instant::now()) {
 				stop.unless_stopped(tokio::time::sleep_until(at)).await?;
 			}
 			if !self.inner.limiter.globally_paused() {
 				stop.ensure_running()?;
-				return Ok(probe);
+				return Ok((probe, slot));
 			}
 		}
+	}
+
+	pub fn releases(&self) -> Releases {
+		self.inner.safety.releases.clone()
 	}
 
 	async fn execute(&self, request: Request) -> Result<Bytes> {
@@ -405,8 +414,15 @@ impl RestClient {
 		let retryable = request.method != Method::POST || request.idempotent;
 		let mut retried = false;
 		loop {
-			let _probe = self.clear_to_send(&route, &pace).await?;
+			let (_probe, slot) = self.clear_to_send(&route, &pace).await?;
 			let mut admission = Admission::new(&self.inner.safety.breakers, route.as_str())?;
+			if let Some(at) = slot {
+				self.inner.safety.releases.record(Release {
+					method: request.method.to_string(),
+					path: request.path.clone(),
+					at: at.into_std(),
+				});
+			}
 			let started = Instant::now();
 			let response = self.dispatch(&request, &url).await?;
 			let status = response.status();
