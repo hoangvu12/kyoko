@@ -165,7 +165,16 @@ impl State {
 		favorites.generation += 1;
 		Changes {
 			emoji_ranking: true,
+			favorite_emojis: true,
 			..Changes::default()
 		}
+	}
+
+	pub(crate) fn favorite_emojis_changed(&mut self, entries: Vec<String>) -> Changes {
+		self.set_favorites(entries)
+	}
+
+	pub fn is_favorite_emoji(&self, id: Option<Snowflake>, unicode: Option<&str>) -> bool {
+		self.favorite_position(id, unicode).is_some()
 	}
 }

@@ -1,27 +1,31 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Instant;
 
-use bridge::{EmojiPicker, GifSearch, Inbox, StickerPicker};
+use bridge::{EmojiPicker, GifSearch, Inbox, ServerPage, StickerPicker};
 use chrono::Utc;
+use protocol::Snowflake;
+use session::Command;
 use state::{Changes, State};
 use zgx::compose::prelude::*;
 use zgx_script::{ScriptHost, Value};
 
-use super::{Link, field, number, text};
+use super::{Link, Slot, field, number, text};
 use crate::capture;
-use crate::pickers::{ExpressionPicker, Mode, Search, Tab};
+use crate::pickers::{ANCHOR_INSET, ExpressionPicker, Favorite, Mode, Search, Tab};
 use crate::timeline::Pictures;
 
-const TOOLBAR_RIGHT: f32 = 8.;
-const BUTTON: f32 = 32.;
-const BUTTON_GAP: f32 = 2.;
+pub(super) const COMPOSER_SLOT: &str = "composer";
+pub(super) const CAPTURE_EMOJI_QUERY: &str = "sm";
 
 pub(super) struct Expressions {
 	picker: Rc<ExpressionPicker>,
 	gifs: RefCell<GifSearch>,
 	due: Inbox<Instant>,
 	stickers_asked: Cell<bool>,
+	composer: Cell<Option<Slot>>,
+	top_asked: RefCell<HashSet<Snowflake>>,
 }
 
 impl Expressions {
@@ -35,6 +39,8 @@ impl Expressions {
 			gifs: RefCell::default(),
 			due: Inbox::new(),
 			stickers_asked: Cell::new(false),
+			composer: Cell::new(None),
+			top_asked: RefCell::default(),
 		}
 	}
 
@@ -53,16 +59,25 @@ impl Expressions {
 	}
 }
 
-fn button_center(tab: Tab, toolbar: &Value) -> Option<(f32, f32)> {
-	let (x, y) = (number(toolbar, "x")?, number(toolbar, "y")?);
-	let (width, height) = (number(toolbar, "w")?, number(toolbar, "h")?);
-	let from_right = match tab {
-		Tab::Emoji => 0.,
-		Tab::Sticker => 1.,
-		Tab::Gif => 2.,
-	};
-	let center = x + width - TOOLBAR_RIGHT - BUTTON / 2. - from_right * (BUTTON + BUTTON_GAP);
-	Some((center, y + height / 2.))
+fn composer_anchor(composer: Slot) -> (f32, f32) {
+	(composer.x + composer.width - ANCHOR_INSET, composer.y)
+}
+
+fn picker_anchor(composer: Option<Slot>, toolbar: Option<Slot>) -> Option<(f32, f32)> {
+	let right = toolbar
+		.or(composer)
+		.map(|slot| slot.x + slot.width - ANCHOR_INSET)?;
+	let top = composer.or(toolbar).map(|slot| slot.y)?;
+	Some((right, top))
+}
+
+fn toolbar_slot(toolbar: &Value) -> Option<Slot> {
+	Some(Slot {
+		x: number(toolbar, "x")?,
+		y: number(toolbar, "y")?,
+		width: number(toolbar, "w")?,
+		height: number(toolbar, "h")?,
+	})
 }
 
 impl Link {
@@ -73,9 +88,8 @@ impl Link {
 				return;
 			};
 			let tab = field(&argument, "tab").and_then(text).and_then(Tab::named);
-			let at = tab
-				.zip(field(&argument, "toolbar"))
-				.and_then(|(tab, toolbar)| button_center(tab, toolbar));
+			let toolbar = field(&argument, "toolbar").and_then(toolbar_slot);
+			let at = picker_anchor(link.expressions.composer.get(), toolbar);
 			if let (Some(tab), Some(at)) = (tab, at) {
 				link.open_expressions(tab, at);
 			}
@@ -120,6 +134,25 @@ impl Link {
 				link.expression_search(search);
 			}
 		});
+		let actions = Rc::downgrade(link);
+		picker.on_favorite(move |favorite| {
+			if let Some(link) = actions.upgrade() {
+				link.send(match favorite {
+					Favorite::Gif(gif, favorite) => Command::SetGifFavorite { gif, favorite },
+					Favorite::Emoji(entry, favorite) => Command::SetEmojiFavorite { entry, favorite },
+				});
+			}
+		});
+		let actions = Rc::downgrade(link);
+		picker.on_add_emoji(move |()| {
+			if let Some(link) = actions.upgrade() {
+				link.open_server_settings(Some(ServerPage::Emoji));
+			}
+		});
+	}
+
+	pub(super) fn place_composer(&self, slot: Slot) {
+		self.expressions.composer.set(Some(slot));
 	}
 
 	pub(super) fn open_expressions(&self, tab: Tab, at: (f32, f32)) {
@@ -136,8 +169,17 @@ impl Link {
 			expressions.picker.set_emoji(EmojiPicker::of(&state, guild_id));
 			expressions
 				.picker
+				.allow_add_emoji(guild_id.is_some_and(|guild_id| state.may_create_expressions(guild_id)));
+			expressions
+				.picker
 				.set_stickers(StickerPicker::of(&state, guild_id, channel_id));
-			let commands = expressions.gifs.borrow_mut().open(&state);
+			let mut commands = expressions.gifs.borrow_mut().open(&state);
+			if let Some(guild_id) = guild_id
+				&& state.top_emojis(guild_id).is_none()
+				&& expressions.top_asked.borrow_mut().insert(guild_id)
+			{
+				commands.push(Command::LoadTopEmojis { guild_id });
+			}
 			expressions
 				.picker
 				.set_gifs(expressions.gifs.borrow().view(&state));
@@ -161,8 +203,14 @@ impl Link {
 			let commands = match &search {
 				Search::Typed(Tab::Gif, typed) => gifs.typed(&state, typed, now),
 				Search::Submitted(Tab::Gif, typed) => gifs.submit(&state, typed),
+				Search::Category(name) => gifs.browse_category(&state, name),
+				Search::Trending => gifs.show_trending(&state),
 				Search::Favorites => {
 					gifs.show_favorites();
+					Vec::new()
+				}
+				Search::Back => {
+					gifs.back();
 					Vec::new()
 				}
 				Search::Typed(Tab::Sticker, _) if !expressions.stickers_asked.replace(true) => {
@@ -207,7 +255,10 @@ impl Link {
 	pub(super) fn expressions_apply(&self, state: &State, changes: &Changes) {
 		let expressions = &self.expressions;
 		if !expressions.picker.is_open()
-			|| (changes.loaded.is_empty() && !changes.guild_list && !changes.favorite_gifs)
+			|| (changes.loaded.is_empty()
+				&& !changes.guild_list
+				&& !changes.favorite_gifs
+				&& !changes.favorite_emojis)
 		{
 			return;
 		}
@@ -219,7 +270,7 @@ impl Link {
 			Tab::Sticker => expressions
 				.picker
 				.set_stickers(StickerPicker::of(state, guild_id, channel_id)),
-			Tab::Emoji => {}
+			Tab::Emoji => expressions.picker.set_emoji(EmojiPicker::of(state, guild_id)),
 		}
 	}
 
@@ -228,16 +279,67 @@ impl Link {
 	}
 
 	pub(super) fn drive_expressions(&self, tab: Tab) {
-		self.open_expressions(tab, capture::COMPOSER_PICKER);
+		let at = self
+			.expressions
+			.composer
+			.get()
+			.map_or(capture::COMPOSER_PICKER, composer_anchor);
+		self.open_expressions(tab, at);
+	}
+
+	pub(super) fn drive_expression_search(&self, query: &str) {
+		self.expressions.picker.type_query(query);
+	}
+
+	pub(super) fn drive_trending_gifs(&self) {
+		self.expression_search(Search::Trending);
+	}
+
+	pub(super) fn hover_first_expression(&self) {
+		self.expressions.picker.hover_first();
+	}
+
+	pub(super) async fn drive_picker_shot(&self, shot: capture::PickerShot) {
+		let tab = match shot {
+			capture::PickerShot::GifResults => Tab::Gif,
+			capture::PickerShot::EmojiSearch | capture::PickerShot::EmojiNoNitro => Tab::Emoji,
+		};
+		self.drive_expressions(tab);
+		self.until_capture(|link| link.expressions_settled(tab)).await;
+		match shot {
+			capture::PickerShot::GifResults => {
+				self.drive_trending_gifs();
+				self.until_capture(|link| link.expressions_settled(tab)).await;
+			}
+			capture::PickerShot::EmojiSearch => {
+				self.drive_expression_search(CAPTURE_EMOJI_QUERY);
+				self.until_capture(|link| link.expressions_settled(tab)).await;
+			}
+			capture::PickerShot::EmojiNoNitro => {
+				self.expressions.picker.reveal_locked();
+				return;
+			}
+		}
+		self.hover_first_expression();
 	}
 
 	pub(super) fn expressions_settled(&self, tab: Tab) -> bool {
+		let guild_id = self.composer_channel().and_then(|(guild_id, _)| guild_id);
 		let loaded = self.state().is_some_and(|shared| {
 			let state = shared.read();
 			match tab {
-				Tab::Gif => state.gif_trending().is_some(),
+				Tab::Gif => {
+					state.gif_trending().is_some()
+						&& !matches!(
+							self.expressions.gifs.borrow().view(&state),
+							bridge::GifView::Results { gifs: None, .. }
+						)
+				}
 				Tab::Sticker => state.sticker_packs().is_some(),
-				Tab::Emoji => true,
+				Tab::Emoji => {
+					state.favorites_loaded()
+						&& guild_id.is_none_or(|guild_id| state.top_emojis(guild_id).is_some())
+				}
 			}
 		});
 		loaded && self.expressions.picker.settled()

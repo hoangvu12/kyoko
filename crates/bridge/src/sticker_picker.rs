@@ -4,12 +4,14 @@ use state::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StickerSectionKey {
+	Recent,
 	Guild(Snowflake),
 	Pack(Snowflake),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StickerSectionIcon {
+	Recent,
 	Guild {
 		guild_id: Snowflake,
 		icon: Option<String>,
@@ -21,6 +23,28 @@ pub enum StickerSectionIcon {
 pub struct StickerCell {
 	pub sticker: Sticker,
 	pub locked: bool,
+	pub lock: Option<&'static str>,
+}
+
+pub const STICKER_NITRO_LOCK: &str = "You need Nitro to use this sticker here";
+pub const STICKER_UNAVAILABLE_LOCK: &str = "This sticker isn't available right now";
+pub const STICKER_PERMISSION_LOCK: &str = "You can't use stickers from other servers here";
+
+fn sticker_cell(sticker: &Sticker, usable: bool, nitro: bool) -> StickerCell {
+	let lock = if sticker.available == Some(false) {
+		Some(STICKER_UNAVAILABLE_LOCK)
+	} else if usable {
+		None
+	} else if nitro {
+		Some(STICKER_PERMISSION_LOCK)
+	} else {
+		Some(STICKER_NITRO_LOCK)
+	};
+	StickerCell {
+		sticker: sticker.clone(),
+		locked: lock.is_some(),
+		lock,
+	}
 }
 
 impl StickerCell {
@@ -64,6 +88,7 @@ fn guild_sticker_usable(state: &State, owner: Snowflake, channel_id: Snowflake) 
 
 impl StickerPicker {
 	pub fn of(state: &State, guild_id: Option<Snowflake>, channel_id: Snowflake) -> Self {
+		let nitro = state.has_nitro();
 		let mut order: Vec<Snowflake> = guild_id.into_iter().collect();
 		order.extend(
 			state
@@ -89,10 +114,7 @@ impl StickerPicker {
 					},
 					stickers: stickers
 						.iter()
-						.map(|sticker| StickerCell {
-							sticker: sticker.clone(),
-							locked: !usable || sticker.available == Some(false),
-						})
+						.map(|sticker| sticker_cell(sticker, usable, nitro))
 						.collect(),
 				})
 			})
@@ -112,12 +134,31 @@ impl StickerPicker {
 				stickers: pack
 					.stickers
 					.iter()
-					.map(|sticker| StickerCell {
-						sticker: sticker.clone(),
-						locked: sticker.available == Some(false),
-					})
+					.map(|sticker| sticker_cell(sticker, true, nitro))
 					.collect(),
 			});
+		}
+		let recent: Vec<StickerCell> = state
+			.recent_stickers()
+			.iter()
+			.filter_map(|used| {
+				sections
+					.iter()
+					.flat_map(|section| section.stickers.iter())
+					.find(|cell| cell.sticker.id == used.id)
+					.cloned()
+			})
+			.collect();
+		if !recent.is_empty() {
+			sections.insert(
+				0,
+				StickerSection {
+					key: StickerSectionKey::Recent,
+					name: "Frequently Used".to_owned(),
+					icon: StickerSectionIcon::Recent,
+					stickers: recent,
+				},
+			);
 		}
 		Self { sections }
 	}

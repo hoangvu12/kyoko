@@ -85,11 +85,13 @@ impl Core {
 			| Command::ForwardMessage { .. }) => self.on_community_command(command),
 			command @ (Command::SendSticker { .. }
 			| Command::LoadGifTrending
+			| Command::LoadTrendingGifs
 			| Command::SearchGifs { .. }
 			| Command::SuggestGifs { .. }
 			| Command::SelectGif { .. }
 			| Command::SendGif { .. }
 			| Command::LoadStickerPacks
+			| Command::LoadTopEmojis { .. }
 			| Command::LoadGuildStickers { .. }
 			| Command::CreateSticker { .. }
 			| Command::CreateEmoji { .. }
@@ -103,6 +105,7 @@ impl Core {
 			} => self.rank_emoji(guild_id, query, candidates),
 			Command::LoadFavorites => self.want_frecency(),
 			Command::SetGifFavorite { gif, favorite } => self.set_gif_favorite(gif, favorite),
+			Command::SetEmojiFavorite { entry, favorite } => self.set_emoji_favorite(entry, favorite),
 			Command::SuppressEmbeds {
 				channel_id,
 				message_id,

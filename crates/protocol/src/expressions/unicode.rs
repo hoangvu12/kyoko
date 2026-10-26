@@ -102,6 +102,25 @@ pub fn unicode_emoji_list() -> &'static [UnicodeEmoji] {
 	&TABLE
 }
 
+static BY_GLYPH: LazyLock<HashMap<String, &'static UnicodeEmoji>> = LazyLock::new(|| {
+	let mut by_glyph = HashMap::with_capacity(TABLE.len());
+	for entry in &TABLE {
+		by_glyph.entry(bare_glyph(entry.emoji)).or_insert(entry);
+	}
+	by_glyph
+});
+
+fn bare_glyph(glyph: &str) -> String {
+	glyph
+		.chars()
+		.filter(|character| *character != '\u{fe0f}')
+		.collect()
+}
+
+pub fn by_glyph(glyph: &str) -> Option<&'static UnicodeEmoji> {
+	BY_GLYPH.get(&bare_glyph(glyph)).copied()
+}
+
 pub fn by_shortcode(name: &str) -> Option<&'static UnicodeEmoji> {
 	BY_NAME.get(normalize(name).as_ref()).copied()
 }

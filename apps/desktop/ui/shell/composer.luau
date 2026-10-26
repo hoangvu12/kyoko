@@ -591,6 +591,11 @@ return function(scope: Scope?)
 			relative = true,
 			w_full = true,
 			bg = theme.color.input_background,
+			on_resize = function(_, element)
+				if area == MAIN.area then
+					actions.report_slot("composer", element)
+				end
+			end,
 			rounded_bl = theme.number(theme.size.radius_md),
 			rounded_br = theme.number(theme.size.radius_md),
 			rounded_tl = function()

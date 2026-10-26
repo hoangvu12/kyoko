@@ -5,23 +5,23 @@ use session::Command;
 use state::State;
 
 pub const GIF_SEARCH_DELAY: Duration = Duration::from_millis(300);
-pub const GIF_SUGGESTION_CHIPS: usize = 8;
 pub const FAVORITES_TITLE: &str = "Favorites";
-const MIN_SUGGEST: usize = 2;
+pub const TRENDING_TITLE: &str = "Trending GIFs";
 const MIN_TILE: f32 = 64.;
 const MAX_TILE: f32 = 240.;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GifView {
 	Home {
-		suggestions: Vec<String>,
 		favorites: Vec<Gif>,
-		categories: Vec<GifCategory>,
 		trending: Vec<Gif>,
+		categories: Vec<GifCategory>,
 	},
 	Results {
 		query: String,
+		browsing: bool,
 		gifs: Option<Vec<Gif>>,
+		favorites: Vec<String>,
 	},
 }
 
@@ -34,6 +34,8 @@ pub struct GifTile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Active {
 	Query(String),
+	Category(String),
+	Trending,
 	Favorites,
 }
 
@@ -61,7 +63,7 @@ impl GifSearch {
 		commands
 	}
 
-	pub fn typed(&mut self, state: &State, text: &str, now: Instant) -> Vec<Command> {
+	pub fn typed(&mut self, _state: &State, text: &str, now: Instant) -> Vec<Command> {
 		let query = normalized(text);
 		if query == self.typed {
 			return Vec::new();
@@ -69,16 +71,13 @@ impl GifSearch {
 		self.typed.clone_from(&query);
 		if query.is_empty() {
 			self.due = None;
-			self.active = None;
+			if matches!(self.active, Some(Active::Query(_))) {
+				self.active = None;
+			}
 			return Vec::new();
 		}
 		self.due = Some(now + GIF_SEARCH_DELAY);
-		let suggest = query.chars().count() >= MIN_SUGGEST && state.gif_suggestions(&query).is_none();
-		if suggest {
-			vec![Command::SuggestGifs { query }]
-		} else {
-			Vec::new()
-		}
+		Vec::new()
 	}
 
 	pub fn due_at(&self) -> Option<Instant> {
@@ -103,13 +102,30 @@ impl GifSearch {
 			self.active = None;
 			return Vec::new();
 		}
-		let known = state.gif_search(&query).is_some();
 		self.active = Some(Active::Query(query.clone()));
-		if known {
-			Vec::new()
-		} else {
-			vec![Command::SearchGifs { query }]
+		searched(state, query)
+	}
+
+	pub fn browse_category(&mut self, state: &State, name: &str) -> Vec<Command> {
+		let query = normalized(name);
+		self.typed.clear();
+		self.due = None;
+		if query.is_empty() {
+			return Vec::new();
 		}
+		self.active = Some(Active::Category(query.clone()));
+		searched(state, query)
+	}
+
+	pub fn show_trending(&mut self, state: &State) -> Vec<Command> {
+		self.typed.clear();
+		self.due = None;
+		self.active = Some(Active::Trending);
+		let mut commands = Vec::new();
+		if state.gif_trending_gifs().is_none() {
+			commands.push(Command::LoadTrendingGifs);
+		}
+		commands
 	}
 
 	pub fn show_favorites(&mut self) {
@@ -118,44 +134,80 @@ impl GifSearch {
 		self.active = Some(Active::Favorites);
 	}
 
+	pub fn back(&mut self) {
+		*self = GifSearch::default();
+	}
+
+	pub fn browsing(&self) -> bool {
+		matches!(
+			self.active,
+			Some(Active::Category(_) | Active::Trending | Active::Favorites)
+		)
+	}
+
 	pub fn active(&self) -> Option<&str> {
 		match self.active.as_ref()? {
-			Active::Query(query) => Some(query),
-			Active::Favorites => Some(FAVORITES_TITLE),
+			Active::Query(query) | Active::Category(query) => Some(query),
+			Active::Trending | Active::Favorites => None,
 		}
 	}
 
 	pub fn view(&self, state: &State) -> GifView {
+		let favorites = || state.favorite_gifs().iter().map(|gif| gif.url.clone()).collect();
+		let results = |query: &str, browsing: bool, gifs: Option<Vec<Gif>>| GifView::Results {
+			query: query.to_owned(),
+			browsing,
+			gifs,
+			favorites: favorites(),
+		};
 		match &self.active {
-			Some(Active::Query(query)) => {
-				return GifView::Results {
-					query: query.clone(),
-					gifs: state.gif_search(query).map(<[Gif]>::to_vec),
-				};
+			Some(Active::Query(query)) => results(query, false, state.gif_search(query).map(<[Gif]>::to_vec)),
+			Some(Active::Category(query)) => {
+				results(query, true, state.gif_search(query).map(<[Gif]>::to_vec))
 			}
-			Some(Active::Favorites) => {
-				return GifView::Results {
-					query: FAVORITES_TITLE.to_owned(),
-					gifs: Some(favorite_gifs(state)),
-				};
+			Some(Active::Trending) => results(
+				TRENDING_TITLE,
+				true,
+				state.gif_trending_gifs().map(<[Gif]>::to_vec),
+			),
+			Some(Active::Favorites) => results(FAVORITES_TITLE, true, Some(favorite_gifs(state))),
+			None => {
+				let trending = state.gif_trending();
+				GifView::Home {
+					favorites: favorite_gifs(state),
+					trending: trending
+						.map(|trending| trending.gifs.to_vec())
+						.unwrap_or_default(),
+					categories: trending
+						.map(|trending| trending.categories.to_vec())
+						.unwrap_or_default(),
+				}
 			}
-			None => {}
 		}
-		let trending = state.gif_trending();
-		GifView::Home {
-			suggestions: state
-				.gif_suggestions(&self.typed)
-				.filter(|_| !self.typed.is_empty())
-				.map(|terms| terms.iter().take(GIF_SUGGESTION_CHIPS).cloned().collect())
-				.unwrap_or_default(),
-			favorites: favorite_gifs(state),
-			categories: trending
-				.map(|trending| trending.categories.to_vec())
-				.unwrap_or_default(),
-			trending: trending
-				.map(|trending| trending.gifs.to_vec())
-				.unwrap_or_default(),
-		}
+	}
+}
+
+fn searched(state: &State, query: String) -> Vec<Command> {
+	if state.gif_search(&query).is_some() {
+		Vec::new()
+	} else {
+		vec![Command::SearchGifs { query }]
+	}
+}
+
+pub fn favorite_of_gif(gif: &Gif) -> FavoriteGif {
+	let src = if gif.src.is_empty() {
+		gif.gif_src.clone()
+	} else {
+		gif.src.clone()
+	};
+	FavoriteGif {
+		url: gif.url.clone(),
+		video: is_video_url(&src),
+		src,
+		width: gif.width,
+		height: gif.height,
+		order: 0,
 	}
 }
 

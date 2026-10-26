@@ -158,19 +158,24 @@ impl Tween {
 }
 
 pub fn modal(label: impl Into<String>, open: Signal<bool>) -> View {
-	entering(zgx::compose::modal(label, open.clone()), open, DIALOG)
+	entering(zgx::compose::modal(label, open.clone()), open, DIALOG, true)
 }
 
 pub fn popover(label: impl Into<String>, open: Signal<bool>, anchor: View) -> View {
-	entering(zgx::compose::popover(label, open.clone(), anchor), open, POPOVER)
+	entering(
+		zgx::compose::popover(label, open.clone(), anchor),
+		open,
+		POPOVER,
+		false,
+	)
 }
 
-fn entering(view: View, open: Signal<bool>, transition: Transition) -> View {
+fn entering(view: View, open: Signal<bool>, transition: Transition, dims: bool) -> View {
 	component(move |cx| {
 		let mut was = open.with_untracked(|open| *open);
 		let tween = Tween::new(cx, 1.);
 		let opened = tween.clone();
-		let tracked = crate::scrim::track(&open);
+		let tracked = dims.then(|| crate::scrim::track(&open));
 		let effect = cx.runtime().effect(move || {
 			let _ = &tracked;
 			let now = open.get();

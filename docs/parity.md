@@ -114,6 +114,9 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `emoji-picker` | `emoji-picker.html` |
 | `gif-picker` | `gif-picker.html` |
 | `sticker-picker` | `sticker-picker.html` |
+| `gif-picker-results` | `gif-picker-results.html` |
+| `emoji-picker-search` | `emoji-picker-search.html` |
+| `emoji-picker-no-nitro` | `emoji-picker-no-nitro.html` |
 | `threads-list` | `threads-list.html` |
 | `thread-panel` | `threads-split-view.html` |
 | `thread-create` | `threads-create.html` |
@@ -156,7 +159,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `emoji-autocomplete`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -411,6 +414,14 @@ Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no such states. Th
 | `expressions-in-messages-emoji-popout` | 05 | As `expressions-in-messages`, then the popout of the jumbo 😭 (a default emoji). | yes |
 | `expressions-in-messages-sticker-popout` | 05 | As `expressions-in-messages`, then the sticker's popout. | yes |
 | `link-preview-while-typing` | 05 | Default selection, then send `docs are up https://github.com/refact0r/midnight-discord` and hover it at (640, 690): its link embed and the hover bar with Remove all embeds. | yes |
+
+### Midnight 08 Expression picker
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `gif-picker-results` | 08 | As `gif-picker`, then the Trending GIFs tile, once the trending list has loaded; the first GIF hovered shows its favourite star. | yes |
+| `emoji-picker-search` | 08 | As `emoji-picker`, then type "sm" in the search field; the first result hovered. | yes |
+| `emoji-picker-no-nitro` | 08 | As `emoji-picker`, against a mockcord started with `--no-nitro` (the parity tool passes it for this screen): the grid scrolled to the first locked section and its first locked emoji hovered, so the footer says why. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

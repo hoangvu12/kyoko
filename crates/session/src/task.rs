@@ -46,7 +46,7 @@ mod embeds;
 mod emoji_rank;
 mod expressions;
 mod failures;
-mod gif_favorites;
+mod favorite_writes;
 mod guild_writes;
 mod hidden;
 mod interactions;
@@ -153,7 +153,7 @@ pub(crate) enum Internal {
 		outcome: profiles::ProfileOutcome,
 	},
 	EmojiRanked(Option<state::EmojiRanking>),
-	GifFavoritesSaved(bool),
+	FavoritesSaved(favorite_writes::FavoriteKind, bool),
 }
 
 pub(crate) struct CoreParts {
@@ -232,7 +232,7 @@ pub(crate) struct Core {
 	outbox: outbox::Outbox,
 	interactions: interactions::Interactions,
 	ranker: emoji_rank::EmojiRanker,
-	gif_favorites: gif_favorites::GifFavorites,
+	favorite_writes: favorite_writes::FavoriteWrites,
 }
 
 fn page_query(
@@ -313,7 +313,7 @@ impl Core {
 			outbox: outbox::Outbox::default(),
 			interactions: interactions::Interactions::default(),
 			ranker: emoji_rank::EmojiRanker::default(),
-			gif_favorites: gif_favorites::GifFavorites::new(&parts.tuning),
+			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
 		}
 	}
 
@@ -692,7 +692,7 @@ impl Core {
 			}),
 			Internal::Backfilled { job, outcome } => self.on_backfilled(job, outcome),
 			Internal::LayoutSaved(saved) => self.on_layout_saved(saved),
-			Internal::GifFavoritesSaved(saved) => self.on_gif_favorites_saved(saved),
+			Internal::FavoritesSaved(kind, saved) => self.on_favorites_saved(kind, saved),
 			Internal::CollapseSaved(saved) => self.on_collapse_saved(saved),
 			Internal::GuildWritten { guild_id, outcome } => self.on_guild_written(guild_id, outcome),
 			Internal::StatusSaved(failure) => self.on_status_saved(failure),
@@ -1202,7 +1202,7 @@ impl Core {
 			self.status_deadline(),
 			self.searcher.deadline(),
 			self.ranker.deadline(),
-			self.gif_favorites.deadline(),
+			self.favorite_writes.deadline(),
 		]
 		.into_iter()
 		.flatten()
@@ -1234,8 +1234,8 @@ impl Core {
 		if self.ranker.deadline().is_some_and(|due| due <= now) {
 			self.flush_emoji_rank();
 		}
-		if self.gif_favorites.deadline().is_some_and(|due| due <= now) {
-			self.flush_gif_favorites();
+		if self.favorite_writes.deadline().is_some_and(|due| due <= now) {
+			self.flush_favorites();
 		}
 		for request in self.member_requests.due(now) {
 			let lookup = match &request.lookup {

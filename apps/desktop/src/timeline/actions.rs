@@ -645,7 +645,7 @@ impl MessageActions {
 			.pb(tok("space_4"))
 			.children(cells.into_iter().map(|cell| {
 				let (this, entry) = (self.clone(), entry.clone());
-				let visual = self.picker.emoji_visual(&cell, QUICK_EMOJI, "font_size_lg");
+				let visual = self.picker.emoji_visual(&cell, QUICK_EMOJI);
 				menu_item(cell.label.clone())
 					.id(format!("message-menu-react-{}", cell.key))
 					.grow()

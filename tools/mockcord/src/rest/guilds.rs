@@ -4,7 +4,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::channels::{SearchFilter, search_in};
 use crate::error::{ApiError, ApiResult};
@@ -15,6 +15,7 @@ use crate::state::Shared;
 
 const DEFAULT_MEMBER_SEARCH_LIMIT: usize = 1;
 const MAX_MEMBER_SEARCH_LIMIT: usize = 1000;
+const TOP_EMOJIS: usize = 9;
 
 fn find_guild(shared: &Shared, id: u64) -> Result<&GuildFixture, ApiError> {
 	shared.fixtures.guild(id).ok_or_else(ApiError::unknown_guild)
@@ -52,6 +53,20 @@ pub async fn roles(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> Ap
 pub async fn emojis(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
 	find_guild(&shared, id)?;
 	Ok(Json(to_json(&shared.store.lock().emojis[&id])))
+}
+
+pub async fn top_emojis(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
+	find_guild(&shared, id)?;
+	let store = shared.store.lock();
+	let items: Vec<Value> = store.emojis[&id]
+		.iter()
+		.rev()
+		.filter_map(|emoji| emoji.id)
+		.take(TOP_EMOJIS)
+		.enumerate()
+		.map(|(rank, emoji_id)| json!({ "emoji_id": emoji_id.to_string(), "emoji_rank": rank + 1 }))
+		.collect();
+	Ok(Json(json!({ "items": items })))
 }
 
 #[derive(Deserialize)]

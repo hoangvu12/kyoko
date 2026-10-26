@@ -240,11 +240,11 @@ async fn the_picker_lists_sections_and_searches() {
 	let rail = picker.rail();
 	let glyphs = rail
 		.iter()
-		.filter(|entry| matches!(entry.icon, RailIcon::Glyph(_)))
+		.filter(|entry| matches!(entry.icon, RailIcon::Category(_)))
 		.count();
 	assert_eq!(glyphs, 8, "one rail entry per unicode category");
 	let (title, cells) = picker.section(PickerSection::Unicode(0), 0);
-	assert_eq!(title, "Smileys & People");
+	assert_eq!(title, "People");
 	assert!(!cells.is_empty());
 	let found = picker.search("wave", 2);
 	assert!(

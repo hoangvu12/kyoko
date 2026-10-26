@@ -90,6 +90,7 @@ pub enum Loaded {
 		users: Vec<User>,
 	},
 	GifTrending(GifTrending),
+	GifTrendingGifs(Vec<Gif>),
 	GifSearch {
 		query: String,
 		gifs: Vec<Gif>,
@@ -99,6 +100,10 @@ pub enum Loaded {
 		terms: Vec<String>,
 	},
 	StickerPacks(Vec<StickerPack>),
+	TopEmojis {
+		guild_id: Snowflake,
+		ids: Vec<Snowflake>,
+	},
 	GuildStickers {
 		guild_id: Snowflake,
 		stickers: Vec<Sticker>,
@@ -108,6 +113,7 @@ pub enum Loaded {
 	RecentStickers(Vec<Sticker>),
 	Frecency(String),
 	FavoriteGifs(Vec<protocol::FavoriteGif>),
+	FavoriteEmojis(Vec<String>),
 	EmojiRanked(crate::favorites::EmojiRanking),
 	UserSettings(Value),
 	AuthSessions(Value),
@@ -627,6 +633,10 @@ impl State {
 				self.lazy.expressions.gif_trending = Some(trending.clone());
 				changes.loaded.insert(EXPRESSIONS_KEY);
 			}
+			Loaded::GifTrendingGifs(gifs) => {
+				self.lazy.expressions.gif_trending_gifs = Some(gifs.clone());
+				changes.loaded.insert(EXPRESSIONS_KEY);
+			}
 			Loaded::GifSearch { query, gifs } => {
 				self.lazy.expressions.gif_searches.put(query, gifs.clone());
 				changes.loaded.insert(EXPRESSIONS_KEY);
@@ -638,6 +648,10 @@ impl State {
 			Loaded::StickerPacks(packs) => {
 				self.lazy.expressions.sticker_packs = Some(packs.clone());
 				changes.loaded.insert(EXPRESSIONS_KEY);
+			}
+			Loaded::TopEmojis { guild_id, ids } => {
+				self.lazy.expressions.top_emojis.insert(*guild_id, ids.clone());
+				changes.loaded.insert(*guild_id);
 			}
 			Loaded::GuildStickers { guild_id, stickers } => {
 				self.lazy
@@ -660,6 +674,7 @@ impl State {
 			}
 			Loaded::Frecency(encoded) => return self.frecency_loaded(encoded),
 			Loaded::FavoriteGifs(gifs) => return self.favorite_gifs_changed(gifs.clone()),
+			Loaded::FavoriteEmojis(entries) => return self.favorite_emojis_changed(entries.clone()),
 			Loaded::EmojiRanked(ranking) => return self.emoji_ranked(ranking),
 		}
 		changes

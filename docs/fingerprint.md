@@ -52,6 +52,18 @@ Not adopted:
 - `client_app_state` isn't in the docs' web example. Kyoko keeps sending `"focused"` until a real capture says otherwise. Its position, after `launch_signature`, is a guess.
 - `search_engine_current` and `mp_keyword_current` belong to search referrals, which a native client never has.
 
+## GIF provider
+
+Discord moved its GIF picker from Tenor to Klipy in 2026 (Google closed the Tenor API on 2026-06-30). Kyoko keeps the provider in one constant, `rest::api::GIF_PROVIDER` in `crates/rest/src/api/expressions.rs`: `query` is the `provider` value sent to the `/gifs/*` endpoints (`None` sends no parameter) and `name` is the label in the picker's search field ("Search Klipy").
+
+It is set to `query: None`, `name: "Klipy"`. Evidence, read 2026-10-26 with a neutral `kyoko-dev` user agent, no request to Discord:
+
+- discord-userdoccers commit [`17502f2`](https://github.com/discord-userdoccers/discord-userdoccers/commit/17502f2edbb907e4db2a9e8b7539a6912c205f47) "Readd providers to GIF APIs" (2026-01-15) added an optional `provider` to `/gifs/search`, `/gifs/trending`, `/gifs/trending-gifs`, `/gifs/suggest`, `/gifs/trending-search` and the `POST /gifs/select` body, "The GIF provider to use (default `tenor`)", with the values `tenor`, `giphy` and `klipy`.
+- Commit [`7927788`](https://github.com/discord-userdoccers/discord-userdoccers/commit/7927788f83e9dde50bb7827e1c5095e525451306) "Remove deprecated gif APIs" (2026-07-15) removed the `provider` parameter and the provider table from every GIF endpoint, and marked `/gifs/suggest` and `/gifs/trending-search` deprecated. The current [integration page](https://docs.discord.food/resources/integration) lists no provider, and an invalid `media_format` now falls back to `mp4` for every request.
+- Press reports: PiunikaWeb (2026-01-14) on Discord testing Giphy and Klipy after Tenor stopped issuing API keys; PCGamesN (2026-06-30): the picker's box "now says 'Search Klipy'".
+
+So the web client most likely sends no `provider` at all, with Klipy as the only backend; if it still sends one, the value is `klipy`. Kyoko also stopped calling `/gifs/suggest` from the picker. Still to confirm on a capture of the live web client (the orchestrator arranges it; never record the token): whether any `provider=` is sent and with what value, whether `/gifs/trending-gifs` carries a `limit`, and which hosts `src`, `gif_src` and `preview` now point to (the media allowlist already has `static.klipy.com`, `media.tenor.com` and `c.tenor.com`). Changing the answer is a one-line edit of `GIF_PROVIDER`; `session/tests/session/expressions.rs` (`gif_search_asks_discord_the_way_the_web_client_does`) pins the parameters.
+
 ## Sharing and persistence
 
 `rest::ClientIdentity` holds the fingerprint, the cookie jar, the installation id and the clock that ages the heartbeat session. Build one per launch with `session::client_identity(&store)` (`client_identity_with_clock` in tests), then pass it to login (`TokenLogin::validate`, `QrConfig::identity`, `session::login`) and to `SessionConfig::identity`. That way every request shares one jar and one id. The gateway reads IDENTIFY `properties` from the same identity through a `gateway::PropertiesSource` on every connect, so a re-identify carries the current build, heartbeat session id and installation id. The installation id and the jar are stored in the encrypted `kv` table. The session saves the jar whenever it changes and again on shutdown.

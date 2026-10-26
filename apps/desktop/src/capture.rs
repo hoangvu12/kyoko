@@ -75,6 +75,7 @@ pub enum Screen {
 	Search,
 	Lightbox,
 	Picker(Tab),
+	PickerShot(PickerShot),
 	ThreadsList,
 	ThreadPanel,
 	ThreadCreate,
@@ -96,6 +97,13 @@ pub enum Screen {
 	LinkPreview,
 	HiddenChannel,
 	MemberNotes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickerShot {
+	GifResults,
+	EmojiSearch,
+	EmojiNoNitro,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,6 +166,9 @@ impl Screen {
 			"emoji-picker" => Some(Screen::Picker(Tab::Emoji)),
 			"gif-picker" => Some(Screen::Picker(Tab::Gif)),
 			"sticker-picker" => Some(Screen::Picker(Tab::Sticker)),
+			"gif-picker-results" => Some(Screen::PickerShot(PickerShot::GifResults)),
+			"emoji-picker-search" => Some(Screen::PickerShot(PickerShot::EmojiSearch)),
+			"emoji-picker-no-nitro" => Some(Screen::PickerShot(PickerShot::EmojiNoNitro)),
 			"threads-list" => Some(Screen::ThreadsList),
 			"thread-panel" => Some(Screen::ThreadPanel),
 			"thread-create" => Some(Screen::ThreadCreate),
@@ -222,6 +233,7 @@ impl Screen {
 			| Screen::Search
 			| Screen::Lightbox
 			| Screen::Picker(_)
+			| Screen::PickerShot(_)
 			| Screen::ThreadsList
 			| Screen::ThreadPanel
 			| Screen::ThreadCreate

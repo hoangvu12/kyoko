@@ -110,10 +110,12 @@ impl<T> QueryCache<T> {
 #[derive(Debug, Default)]
 pub(crate) struct Expressions {
 	pub(crate) gif_trending: Option<GifTrending>,
+	pub(crate) gif_trending_gifs: Option<Vec<Gif>>,
 	pub(crate) gif_searches: QueryCache<Vec<Gif>>,
 	pub(crate) gif_suggestions: QueryCache<Vec<String>>,
 	pub(crate) sticker_packs: Option<Vec<StickerPack>>,
 	pub(crate) guild_stickers: HashMap<Snowflake, Vec<Sticker>>,
+	pub(crate) top_emojis: HashMap<Snowflake, Vec<Snowflake>>,
 	pub(crate) recent_emoji: Vec<EmojiRef>,
 	pub(crate) recent_gifs: Vec<Gif>,
 	pub(crate) recent_stickers: Vec<Sticker>,
@@ -160,6 +162,10 @@ impl State {
 		self.lazy.expressions.gif_trending.as_ref()
 	}
 
+	pub fn gif_trending_gifs(&self) -> Option<&[Gif]> {
+		self.lazy.expressions.gif_trending_gifs.as_deref()
+	}
+
 	pub fn gif_search(&self, query: &str) -> Option<&[Gif]> {
 		self.lazy.expressions.gif_searches.get(query).map(Vec::as_slice)
 	}
@@ -182,6 +188,10 @@ impl State {
 			.guild_stickers
 			.get(&guild_id)
 			.map(Vec::as_slice)
+	}
+
+	pub fn top_emojis(&self, guild_id: Snowflake) -> Option<&[Snowflake]> {
+		self.lazy.expressions.top_emojis.get(&guild_id).map(Vec::as_slice)
 	}
 
 	pub fn find_sticker(&self, sticker_id: Snowflake) -> Option<&Sticker> {

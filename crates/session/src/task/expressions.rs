@@ -83,6 +83,16 @@ impl Core {
 					Ok(Loaded::GifTrending(trending))
 				});
 			}
+			Command::LoadTrendingGifs => {
+				let locale = self.locale.clone();
+				self.spawn_load("trending gif list", move |rest| async move {
+					let gifs = rest
+						.gifs_trending_gifs(&locale, GIF_MEDIA_FORMAT, None)
+						.await?
+						.into_vec();
+					Ok(Loaded::GifTrendingGifs(gifs))
+				});
+			}
 			Command::SearchGifs { query } => {
 				let locale = self.locale.clone();
 				self.spawn_load("gif search", move |rest| async move {
@@ -186,6 +196,14 @@ impl Core {
 				let packs = rest.sticker_packs().await?;
 				Ok(Loaded::StickerPacks(packs.sticker_packs.into_vec()))
 			}),
+			Command::LoadTopEmojis { guild_id } => {
+				self.spawn_load("top emoji", move |rest| async move {
+					let mut items = rest.top_emojis(guild_id).await?.items.into_vec();
+					items.sort_by_key(|item| item.emoji_rank);
+					let ids = items.into_iter().map(|item| item.emoji_id).collect();
+					Ok(Loaded::TopEmojis { guild_id, ids })
+				});
+			}
 			Command::LoadGuildStickers { guild_id } => {
 				self.spawn_load("server stickers", move |rest| async move {
 					let stickers = rest.guild_stickers(guild_id).await?.into_vec();

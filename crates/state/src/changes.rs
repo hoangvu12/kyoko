@@ -94,6 +94,7 @@ pub struct Changes {
 	pub commands: bool,
 	pub emoji_ranking: bool,
 	pub favorite_gifs: bool,
+	pub favorite_emojis: bool,
 }
 
 impl Changes {
@@ -129,6 +130,7 @@ impl Changes {
 			commands: true,
 			emoji_ranking: true,
 			favorite_gifs: true,
+			favorite_emojis: true,
 		}
 	}
 
@@ -154,7 +156,8 @@ impl Changes {
 			|| self.alerts
 			|| self.commands
 			|| self.emoji_ranking
-			|| self.favorite_gifs)
+			|| self.favorite_gifs
+			|| self.favorite_emojis)
 			&& self.channel_lists.is_empty()
 			&& self.messages.is_empty()
 			&& self.members.is_empty()
@@ -188,6 +191,7 @@ impl Changes {
 		self.commands |= other.commands;
 		self.emoji_ranking |= other.emoji_ranking;
 		self.favorite_gifs |= other.favorite_gifs;
+		self.favorite_emojis |= other.favorite_emojis;
 		self.channel_lists.merge(&other.channel_lists);
 		self.messages.merge(&other.messages);
 		self.members.merge(&other.members);

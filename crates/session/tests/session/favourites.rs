@@ -236,6 +236,77 @@ async fn a_favourited_gif_is_read_then_written_to_the_frecency_proto_and_unfavou
 	running.stop().await;
 }
 
+fn written_emojis(recording: &Recording) -> Vec<Vec<String>> {
+	recording
+		.requests_to("PATCH", FRECENCY)
+		.map(|request| {
+			let body: serde_json::Value = serde_json::from_slice(&request.body).expect("a JSON body");
+			let encoded = body["settings"].as_str().expect("the settings").to_owned();
+			assert_eq!(
+				decode_favorite_gifs(&encoded),
+				None,
+				"only the emoji field is sent"
+			);
+			decode_favorite_emojis(&encoded).expect("the emoji favourites field")
+		})
+		.collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_favourited_emoji_is_read_then_written_to_the_frecency_proto_and_unfavouriting_removes_it() {
+	let running = Running::start_with(Options::new("emoji-favourites").rest(RestTuning {
+		settings_delay: Duration::from_millis(50),
+		mutation_gap: Duration::ZERO,
+		..RestTuning::default()
+	}))
+	.await;
+	running.connected().await;
+	let seeded = running.mock().favorite_emojis();
+	assert!(
+		!seeded.is_empty(),
+		"the mock starts with favourites made elsewhere"
+	);
+	running.session().send(Command::SetEmojiFavorite {
+		entry: "smile".to_owned(),
+		favorite: true,
+	});
+	running
+		.until("the favourite emoji", |state: &State| {
+			state.is_favorite_emoji(None, Some("😄"))
+		})
+		.await;
+	let mut expected = seeded.clone();
+	expected.push("smile".to_owned());
+	running
+		.eventually("the favourite stored by Discord", || {
+			running.mock().favorite_emojis() == expected
+		})
+		.await;
+	assert_eq!(
+		frecency_reads(&running.mock().recording()),
+		1,
+		"the favourites are read before the first write, so the ones made elsewhere survive"
+	);
+	running.session().send(Command::SetEmojiFavorite {
+		entry: seeded[0].clone(),
+		favorite: false,
+	});
+	let after: Vec<String> = expected.iter().skip(1).cloned().collect();
+	running
+		.eventually("the favourite removed at Discord", || {
+			running.mock().favorite_emojis() == after
+		})
+		.await;
+	tokio::time::sleep(QUIET).await;
+	let writes = written_emojis(&running.mock().recording());
+	assert_eq!(writes, vec![expected, after.clone()], "one whole list per change");
+	assert_eq!(
+		running.session().state().read().favorite_emojis(),
+		after.as_slice()
+	);
+	running.stop().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn emoji_ranking_waits_for_a_pause_in_typing_and_a_failing_ranking_keeps_kyokos_order() {
 	let ranker = Arc::new(Ranker::default());

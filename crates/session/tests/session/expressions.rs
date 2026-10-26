@@ -56,21 +56,24 @@ async fn gif_search_asks_discord_the_way_the_web_client_does() {
 		.requests_to("GET", "/gifs/search")
 		.next()
 		.expect("a gif search");
-	assert_eq!(query_keys(search), ["q", "media_format", "provider", "locale"]);
+	assert_eq!(query_keys(search), ["q", "media_format", "locale"]);
 	assert_eq!(param(search, "q"), Some("cat"));
 	assert_eq!(param(search, "media_format"), Some("mp4"));
-	assert_eq!(param(search, "provider"), Some("tenor"));
 	let trending = recording
 		.requests_to("GET", "/gifs/trending")
 		.next()
 		.expect("trending gifs");
 	assert_eq!(param(trending, "media_format"), Some("mp4"));
-	assert_eq!(param(trending, "provider"), Some("tenor"));
+	assert_eq!(
+		param(trending, "provider"),
+		None,
+		"the web client stopped naming a GIF provider when Discord moved to Klipy"
+	);
 	let suggest = recording
 		.requests_to("GET", "/gifs/suggest")
 		.next()
 		.expect("gif suggestions");
-	assert_eq!(query_keys(suggest), ["q", "provider", "limit", "locale"]);
+	assert_eq!(query_keys(suggest), ["q", "limit", "locale"]);
 	assert_eq!(param(suggest, "limit"), Some("5"));
 	assert!(
 		recording
@@ -238,5 +241,46 @@ async fn a_failed_sticker_stays_pending_and_retries_as_a_sticker() {
 			})
 		})
 		.await;
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_servers_top_emoji_are_read_in_rank_order() {
+	let running = Running::start_with(Options::new("expressions-top-emoji").rest(unpaced())).await;
+	running.connected().await;
+	let (guild_id, known) = {
+		let shared = running.session().state().clone();
+		let state = shared.read();
+		let guild = state
+			.guilds()
+			.find(|guild| !guild.emojis.is_empty())
+			.expect("a server with emoji");
+		let known: Vec<_> = guild.emojis.iter().filter_map(|emoji| emoji.id).collect();
+		(guild.id, known)
+	};
+	running.session().send(Command::LoadTopEmojis { guild_id });
+	running
+		.until("the top emoji", |state| state.top_emojis(guild_id).is_some())
+		.await;
+	let top = running
+		.session()
+		.state()
+		.read()
+		.top_emojis(guild_id)
+		.map(<[_]>::to_vec)
+		.unwrap_or_default();
+	assert!(!top.is_empty());
+	assert!(
+		top.iter().all(|id| known.contains(id)),
+		"only the server's own emoji"
+	);
+	assert_eq!(top.first(), known.last(), "rank 1 comes first");
+	let recording = running.mock().recording();
+	let route = format!("/guilds/{guild_id}/top-emojis");
+	let request = recording
+		.requests_to("GET", &route)
+		.next()
+		.expect("the top emoji request");
+	assert!(query_keys(request).is_empty(), "the route takes no query");
 	running.stop().await;
 }

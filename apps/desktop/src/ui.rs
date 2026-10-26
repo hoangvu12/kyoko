@@ -675,6 +675,7 @@ impl Link {
 					TIMELINE_SLOT => link.place_slot(slot),
 					WEB_LOGIN_SLOT => link.place_web(slot),
 					threads::THREAD_SLOT => link.place_thread_slot(slot),
+					expressions::COMPOSER_SLOT => link.place_composer(slot),
 					_ => {}
 				}
 			}
@@ -909,7 +910,11 @@ impl Link {
 				let tab = *tab;
 				self.drive_expressions(tab);
 				self.until_capture(|link| link.expressions_settled(tab)).await;
+				if tab != crate::pickers::Tab::Gif {
+					self.hover_first_expression();
+				}
 			}
+			capture::Screen::PickerShot(shot) => self.drive_picker_shot(*shot).await,
 			capture::Screen::ThreadsList
 			| capture::Screen::ThreadPanel
 			| capture::Screen::ThreadCreate

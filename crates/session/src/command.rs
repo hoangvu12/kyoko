@@ -489,6 +489,7 @@ pub enum Command {
 		sticker_id: Snowflake,
 	},
 	LoadGifTrending,
+	LoadTrendingGifs,
 	SearchGifs {
 		query: String,
 	},
@@ -504,6 +505,9 @@ pub enum Command {
 		gif: Gif,
 	},
 	LoadStickerPacks,
+	LoadTopEmojis {
+		guild_id: Snowflake,
+	},
 	LoadGuildStickers {
 		guild_id: Snowflake,
 	},
@@ -539,6 +543,10 @@ pub enum Command {
 	LoadFavorites,
 	SetGifFavorite {
 		gif: FavoriteGif,
+		favorite: bool,
+	},
+	SetEmojiFavorite {
+		entry: String,
 		favorite: bool,
 	},
 	SuppressEmbeds {

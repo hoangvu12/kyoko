@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
 use bridge::{
-	ChannelKind, Composer, EmojiCell, EmojiPicker, GIF_SEARCH_DELAY, GifSearch, GifView, PickerSection,
-	StickerPicker, StickerSectionKey,
+	ChannelKind, Composer, EmojiCell, EmojiPicker, GIF_SEARCH_DELAY, GifSearch, GifView, NITRO_LOCK,
+	PickerSection, StickerPicker, StickerSectionKey,
 };
 use chrono::Utc;
 use protocol::Snowflake;
@@ -124,10 +124,14 @@ async fn gif_search_waits_for_typing_to_pause() {
 	let start = Instant::now();
 	assert!(
 		search.typed(&shared.read(), "w", start).is_empty(),
-		"one letter asks nothing"
+		"typing asks nothing by itself"
 	);
-	let suggested = search.typed(&shared.read(), "Wa", start + Duration::from_millis(80));
-	assert!(matches!(suggested.as_slice(), [Command::SuggestGifs { query }] if query == "wa"));
+	assert!(
+		search
+			.typed(&shared.read(), "Wa", start + Duration::from_millis(80))
+			.is_empty(),
+		"the web client no longer asks for suggestions while typing"
+	);
 	let typed_at = start + Duration::from_millis(160);
 	search.typed(&shared.read(), "wav", typed_at);
 	assert!(
@@ -147,7 +151,9 @@ async fn gif_search_waits_for_typing_to_pause() {
 		search.view(&shared.read()),
 		GifView::Results {
 			query: "wav".to_owned(),
-			gifs: None
+			browsing: false,
+			gifs: None,
+			favorites: Vec::new(),
 		}
 	);
 	for command in searched {
@@ -233,5 +239,107 @@ async fn the_sticker_picker_lists_server_stickers_from_ready_then_packs() {
 			.commands
 			.is_empty()
 	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn locked_emoji_say_why_and_cannot_be_picked() {
+	let (mut running, mut composer, guild_id, _) = opened("expressions-emoji-locks").await;
+	drop_nitro(&mut running).await;
+	let shared = running.session().state().clone();
+	let picker = EmojiPicker::of(&shared.read(), guild_id);
+	let sections = picker.sections(0);
+	let own = sections
+		.iter()
+		.find(|section| section.section == PickerSection::Guild(guild_id.expect("a server")))
+		.expect("the open server's emoji");
+	assert!(
+		own.cells.iter().any(|cell| !cell.locked),
+		"the open server's still emoji stay usable without Nitro"
+	);
+	let foreign = sections
+		.iter()
+		.find(|section| matches!(section.section, PickerSection::Guild(id) if Some(id) != guild_id))
+		.expect("another server's emoji");
+	assert!(foreign.locked, "the section shows a lock");
+	let locked = foreign.cells.first().expect("a locked emoji").clone();
+	assert!(locked.locked);
+	assert_eq!(locked.lock, Some(NITRO_LOCK));
+	assert_eq!(
+		locked.footer_note().as_deref(),
+		Some(NITRO_LOCK),
+		"the footer says why instead of naming the server"
+	);
+	assert!(
+		!NITRO_LOCK.to_lowercase().contains("get nitro") && !NITRO_LOCK.contains("Subscribe"),
+		"a reason, never an upsell"
+	);
+	assert_eq!(
+		composer.pick_emoji("hi", 2, &locked),
+		None,
+		"a locked emoji is never inserted"
+	);
+	let searched = picker
+		.search(locked.label.trim_matches(':'), 0)
+		.into_iter()
+		.find(|cell| cell.key == locked.key)
+		.expect("search finds it too");
+	assert!(searched.locked, "search results keep the lock");
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_emoji_picker_lists_top_favourites_recent_servers_then_categories() {
+	let (mut running, _, guild_id, _) = opened("expressions-emoji-sections").await;
+	let guild_id = guild_id.expect("a server");
+	running.session().send(Command::LoadTopEmojis { guild_id });
+	running.session().send(Command::LoadFavorites);
+	running
+		.until_state("top emoji and favourites", |state| {
+			state.top_emojis(guild_id).is_some() && state.favorites_loaded()
+		})
+		.await;
+	let shared = running.session().state().clone();
+	let picker = EmojiPicker::of(&shared.read(), Some(guild_id));
+	let sections = picker.sections(0);
+	let kinds: Vec<PickerSection> = sections.iter().map(|section| section.section).collect();
+	assert_eq!(kinds[0], PickerSection::Top);
+	assert_eq!(kinds[1], PickerSection::Favorites);
+	let guild_name = shared.read().guild(guild_id).map(|guild| guild.name.clone());
+	assert_eq!(
+		Some(sections[0].title.clone()),
+		guild_name.map(|name| format!("Top Emoji in {name}"))
+	);
+	let first_guild = kinds
+		.iter()
+		.position(|kind| matches!(kind, PickerSection::Guild(_)))
+		.expect("servers");
+	let first_unicode = kinds
+		.iter()
+		.position(|kind| matches!(kind, PickerSection::Unicode(_)))
+		.expect("categories");
+	assert!(
+		first_guild < first_unicode,
+		"servers come before the Unicode categories"
+	);
+	assert_eq!(
+		kinds[first_guild],
+		PickerSection::Guild(guild_id),
+		"the open server first"
+	);
+	let stored = shared.read().favorite_emojis().to_vec();
+	let favorites = &sections[1].cells;
+	assert_eq!(favorites.len(), stored.len());
+	assert!(favorites.iter().all(|cell| cell.favorite));
+	assert_eq!(
+		favorites
+			.iter()
+			.map(|cell| cell.favorite_entry.clone())
+			.collect::<Vec<_>>(),
+		stored,
+		"unfavouriting sends back the entry exactly as Discord stored it"
+	);
+	let rail = picker.rail();
+	assert_eq!(rail.len(), sections.len(), "one rail entry per section");
 	running.stop().await;
 }

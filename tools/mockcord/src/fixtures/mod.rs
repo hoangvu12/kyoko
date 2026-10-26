@@ -66,7 +66,7 @@ impl Fixtures {
 		let mut rng = StdRng::seed_from_u64(config.seed);
 		let mut ids = EntityIds::default();
 		let pool_size = (config.members_per_guild * 2).max(MIN_POOL_SIZE);
-		let people = people::generate(&mut rng, &mut ids, pool_size);
+		let people = people::generate(&mut rng, &mut ids, pool_size, config.nitro);
 		let mut builder = Builder {
 			rng,
 			ids,

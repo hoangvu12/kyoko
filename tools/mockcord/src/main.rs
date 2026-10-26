@@ -30,6 +30,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--anchor" => config.anchor = Some(next_value(&mut args, &flag)?),
 			"--chaos" => config.chaos = true,
 			"--live-traffic" => config.live_traffic = true,
+			"--no-nitro" => config.nitro = false,
 			other => return Err(format!("unknown flag {other}")),
 		}
 	}

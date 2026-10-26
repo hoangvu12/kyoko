@@ -63,8 +63,9 @@ pub use deep_link::{DeepLink, parse_deep_link};
 pub use display::{Display, person, relative_text, relative_time};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use emoji_picker::{
-	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,
-	category_title, custom_markup, toned,
+	CustomEmoji, EmojiCell, EmojiPicker, EmojiSection, FAVORITES_SECTION, NITRO_LOCK, PERMISSION_LOCK,
+	PickerSection, RECENT_SECTION, RailEntry, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE, TONES,
+	UNAVAILABLE_LOCK, category_title, custom_markup, toned,
 };
 pub use expression_popout::{
 	Area, DEFAULT_EMOJI_NOTE, ExpressionDetails, PopoutServer, PopoutSubject, expression_details,
@@ -72,9 +73,9 @@ pub use expression_popout::{
 };
 pub use friends::{FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, status_label};
 pub use gif_picker::{
-	FAVORITES_TITLE, GIF_SEARCH_DELAY, GIF_SUGGESTION_CHIPS, GifSearch, GifTile, GifView, favorite_gif,
-	favorite_gif_attachment, favorite_gifs, gif_masonry, gif_motion, gif_of_favorite, gif_still,
-	gif_tile_height, is_video_url,
+	FAVORITES_TITLE, GIF_SEARCH_DELAY, GifSearch, GifTile, GifView, TRENDING_TITLE, favorite_gif,
+	favorite_gif_attachment, favorite_gifs, favorite_of_gif, gif_masonry, gif_motion, gif_of_favorite,
+	gif_still, gif_tile_height, is_video_url,
 };
 pub use guild_admin::{
 	AUDIT_FILTERS, AuditChangeLine, AuditRow, BAN_HISTORY_CHOICES, BanRow, DEFAULT_TIMEOUT, GuildAccess,

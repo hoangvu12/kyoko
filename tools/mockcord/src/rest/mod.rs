@@ -97,6 +97,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			get(guilds::emojis).post(admin::create_emoji),
 		)
 		.route("/guilds/{id}/emojis/{eid}", delete(admin::delete_emoji))
+		.route("/guilds/{id}/top-emojis", get(guilds::top_emojis))
 		.route("/guilds/{id}/members/search", get(guilds::search_members))
 		.route("/guilds/{id}/members/@me", patch(admin::modify_current_member))
 		.route(

@@ -17,7 +17,7 @@ pub struct People {
 const FRIEND_COUNT: usize = 8;
 const GROUP_NAME: &str = "weekend crew";
 
-pub fn generate(rng: &mut StdRng, ids: &mut EntityIds, size: usize) -> People {
+pub fn generate(rng: &mut StdRng, ids: &mut EntityIds, size: usize, nitro: bool) -> People {
 	let current = User {
 		id: Snowflake(CURRENT_USER_ID),
 		username: "oxid".to_owned(),
@@ -25,7 +25,11 @@ pub fn generate(rng: &mut StdRng, ids: &mut EntityIds, size: usize) -> People {
 		global_name: Some("Oxid".to_owned()),
 		avatar: Some(corpus::hex_hash(rng)),
 		bot: Some(false),
-		premium_type: Some(PremiumType::Nitro),
+		premium_type: Some(if nitro {
+			PremiumType::Nitro
+		} else {
+			PremiumType::None
+		}),
 		email: Some("oxid@mock.invalid".to_owned()),
 		verified: Some(true),
 		mfa_enabled: Some(false),

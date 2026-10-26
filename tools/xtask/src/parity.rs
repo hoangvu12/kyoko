@@ -421,7 +421,7 @@ fn capture_app(
 	dir: &Path,
 	scale: Scale,
 ) -> Result<Shot> {
-	let mock = Mockcord::start(paths, args, &dir.join(format!("{app}-mockcord.log")))?;
+	let mock = Mockcord::start(paths, args, screen, &dir.join(format!("{app}-mockcord.log")))?;
 	let data_dir = std::env::temp_dir().join(format!("kyoko-parity-{app}-{}", std::process::id()));
 	let _ = fs::remove_dir_all(&data_dir);
 	let ready = dir.join(format!("{app}.ready"));
@@ -514,8 +514,15 @@ fn remove_eventually(dir: &Path) {
 
 struct Mockcord(Child);
 
+fn mockcord_flags(screen: &str) -> &'static [&'static str] {
+	match screen {
+		"emoji-picker-no-nitro" => &["--no-nitro"],
+		_ => &[],
+	}
+}
+
 impl Mockcord {
-	fn start(paths: &Paths, args: &RunArgs, log: &Path) -> Result<Mockcord> {
+	fn start(paths: &Paths, args: &RunArgs, screen: &str, log: &Path) -> Result<Mockcord> {
 		let log = fs::File::create(log).context("create the mockcord log")?;
 		let child = Command::new(&paths.mockcord)
 			.args([
@@ -526,6 +533,7 @@ impl Mockcord {
 				"--anchor",
 				&args.anchor,
 			])
+			.args(mockcord_flags(screen))
 			.stdin(Stdio::null())
 			.stdout(log.try_clone().context("share the mockcord log")?)
 			.stderr(log)

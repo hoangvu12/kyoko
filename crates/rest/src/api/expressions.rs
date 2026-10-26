@@ -1,36 +1,54 @@
-use protocol::{Emoji, Gif, GifTrending, LenientVec, Snowflake, Sticker, StickerPack, StickerPacks};
+use protocol::{
+	Emoji, Gif, GifTrending, LenientVec, Snowflake, Sticker, StickerPack, StickerPacks, TopEmojis,
+};
 use serde_json::{Map, Value, json};
 
 use crate::client::RestClient;
 use crate::error::Result;
 use crate::request::{Request, UploadFile};
 
-const GIF_PROVIDER: &str = "tenor";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GifProvider {
+	pub query: Option<&'static str>,
+	pub name: &'static str,
+}
 
-fn gif_pairs(locale: &str, media_format: &str) -> [(&'static str, String); 3] {
-	[
-		("provider", GIF_PROVIDER.to_owned()),
-		("locale", locale.to_owned()),
-		("media_format", media_format.to_owned()),
-	]
+pub const GIF_PROVIDER: GifProvider = GifProvider {
+	query: None,
+	name: "Klipy",
+};
+
+fn present<'a, const N: usize>(pairs: [(&'static str, Option<&'a str>); N]) -> Vec<(&'static str, &'a str)> {
+	pairs
+		.into_iter()
+		.filter_map(|(key, value)| value.map(|value| (key, value)))
+		.collect()
 }
 
 impl RestClient {
 	pub async fn gifs_trending(&self, locale: &str, media_format: &str) -> Result<GifTrending> {
-		self.send(Request::get("/gifs/trending").query(&gif_pairs(locale, media_format)))
-			.await
+		let query = present([
+			("provider", GIF_PROVIDER.query),
+			("locale", Some(locale)),
+			("media_format", Some(media_format)),
+		]);
+		self.send(Request::get("/gifs/trending").query(&query)).await
 	}
 
 	pub async fn gifs_trending_gifs(
 		&self,
 		locale: &str,
 		media_format: &str,
-		limit: u16,
+		limit: Option<u16>,
 	) -> Result<LenientVec<Gif>> {
-		let request = Request::get("/gifs/trending-gifs")
-			.query(&gif_pairs(locale, media_format))
-			.query(&[("limit", limit.to_string())]);
-		self.send(request).await
+		let limit = limit.map(|limit| limit.to_string());
+		let query = present([
+			("provider", GIF_PROVIDER.query),
+			("locale", Some(locale)),
+			("media_format", Some(media_format)),
+			("limit", limit.as_deref()),
+		]);
+		self.send(Request::get("/gifs/trending-gifs").query(&query)).await
 	}
 
 	pub async fn gifs_search(
@@ -39,30 +57,30 @@ impl RestClient {
 		locale: &str,
 		media_format: &str,
 	) -> Result<LenientVec<Gif>> {
-		let request = Request::get("/gifs/search").query(&[
-			("q", query),
-			("media_format", media_format),
-			("provider", GIF_PROVIDER),
-			("locale", locale),
+		let query = present([
+			("q", Some(query)),
+			("media_format", Some(media_format)),
+			("provider", GIF_PROVIDER.query),
+			("locale", Some(locale)),
 		]);
-		self.send(request).await
+		self.send(Request::get("/gifs/search").query(&query)).await
 	}
 
 	pub async fn gifs_suggest(&self, query: &str, locale: &str, limit: u8) -> Result<Vec<String>> {
 		let limit = limit.to_string();
-		let request = Request::get("/gifs/suggest").query(&[
-			("q", query),
-			("provider", GIF_PROVIDER),
-			("limit", limit.as_str()),
-			("locale", locale),
+		let query = present([
+			("q", Some(query)),
+			("provider", GIF_PROVIDER.query),
+			("limit", Some(limit.as_str())),
+			("locale", Some(locale)),
 		]);
-		self.send(request).await
+		self.send(Request::get("/gifs/suggest").query(&query)).await
 	}
 
 	pub async fn gifs_trending_search(&self, locale: &str) -> Result<Vec<String>> {
-		let request =
-			Request::get("/gifs/trending-search").query(&[("provider", GIF_PROVIDER), ("locale", locale)]);
-		self.send(request).await
+		let query = present([("provider", GIF_PROVIDER.query), ("locale", Some(locale))]);
+		self.send(Request::get("/gifs/trending-search").query(&query))
+			.await
 	}
 
 	pub async fn gif_select(&self, id: &str, search_term: Option<&str>) -> Result<()> {
@@ -125,6 +143,11 @@ impl RestClient {
 
 	pub async fn delete_guild_sticker(&self, guild_id: Snowflake, id: Snowflake) -> Result<()> {
 		self.send_empty(Request::delete(format!("/guilds/{guild_id}/stickers/{id}")))
+			.await
+	}
+
+	pub async fn top_emojis(&self, guild_id: Snowflake) -> Result<TopEmojis> {
+		self.send(Request::get(format!("/guilds/{guild_id}/top-emojis")))
 			.await
 	}
 

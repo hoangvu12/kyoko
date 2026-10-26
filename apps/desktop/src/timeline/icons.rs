@@ -87,6 +87,23 @@ icon_files!(
 	"star",
 	"star_filled",
 	"mark_read",
+	"picker_trophy",
+	"picker_star",
+	"picker_star_outline",
+	"picker_clock",
+	"picker_people",
+	"picker_nature",
+	"picker_food",
+	"picker_activities",
+	"picker_travel",
+	"picker_objects",
+	"picker_symbols",
+	"picker_flags",
+	"picker_trending",
+	"picker_back",
+	"picker_lock",
+	"picker_chevron",
+	"picker_search",
 );
 
 const PLUGIN_ICONS: usize = 64;

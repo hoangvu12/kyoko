@@ -57,12 +57,14 @@ async fn a_gif_favourited_from_a_message_appears_in_the_pickers_favourites() {
 		"the Favorites tile shows it"
 	);
 	search.show_favorites();
-	assert_eq!(search.active(), Some(FAVORITES_TITLE));
+	assert!(search.browsing(), "the Favorites tile opens with a back arrow");
+	assert_eq!(search.active(), None, "favourites are not a search to share");
 	let view = search.view(&state.read());
-	let GifView::Results { query, .. } = &view else {
+	let GifView::Results { query, favorites, .. } = &view else {
 		panic!("the favourites open as a result list");
 	};
 	assert_eq!(query, FAVORITES_TITLE);
+	assert_eq!(favorites, &[PAGE.to_owned()], "the star shows filled");
 	assert_eq!(urls(&view), [PAGE]);
 	running.session().send(Command::SetGifFavorite {
 		gif: favorite_gif(&gif_embed()).expect("the GIF"),

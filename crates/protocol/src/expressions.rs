@@ -87,6 +87,19 @@ pub struct GifTrending {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
+pub struct TopEmoji {
+	pub emoji_id: Snowflake,
+	pub emoji_rank: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TopEmojis {
+	pub items: LenientVec<TopEmoji>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct StickerPack {
 	pub id: Snowflake,
 	pub name: String,
