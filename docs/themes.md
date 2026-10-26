@@ -52,7 +52,33 @@ Vencord and BetterDiscord themes are CSS written for Discord's web page, so most
 - Colours may be hex (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax, `/ alpha`, angle units) and common colour names. `!important` is dropped. `color-mix()` is read (below). Anything else (`calc()`, gradients, images, an unresolved variable, a cycle) is skipped, never fatal.
 - The details come from the first `/** ... */` comment, one `@tag value` per line, the BetterDiscord format: `@name`, `@author`, `@description`, `@version`, `@source`, `@website`. The name defaults to the file name.
 
-Discord's variable names (Vencord, BetterDiscord) land on oxidcord's tokens, which the screens not yet restyled use:
+Discord's variable names (Vencord, BetterDiscord) land on the Midnight tokens the restyled screens read, so a theme that sets only Discord's variables recolours the Midnight shell, and everything built on those tokens follows (`text_0` from `bg_4`, `border_light` from `hover`, `mention` and `accent_new` from `accent_2`, `reply` from `text_3`, `offline` from `text_4`):
+
+| Midnight token | Discord variables, first found wins |
+| --- | --- |
+| `bg_4` (panels) | `--background-primary`, `--background-base-low`, `--background-secondary`, `--background-base-lower`, `--background-secondary-alt` |
+| `bg_3` (the window between the panels) | `--background-tertiary`, `--background-base-lowest` |
+| `bg_2` (dark buttons) | `--button-secondary-background` |
+| `bg_1` (dark buttons pressed) | `--button-secondary-background-hover` |
+| `hover` | `--background-modifier-hover` |
+| `active` | `--background-modifier-selected` |
+| `active_2` | `--background-modifier-active` |
+| `message_hover` | `--background-message-hover` |
+| `border` | `--background-modifier-accent` |
+| `text_0` | `--white-500` |
+| `text_1` | `--interactive-active` |
+| `text_2` | `--header-primary`, `--text-strong` |
+| `text_3` | `--text-normal`, `--text-default`, `--interactive-hover` |
+| `text_4` | `--interactive-normal`, `--channels-default`, `--text-muted`, `--header-secondary`, `--text-subtle` |
+| `text_5` | `--interactive-muted` |
+| `accent_1` (links) | `--text-link` |
+| `accent_2`, `accent_3` | `--brand-experiment`, `--brand-500`, `--brand-experiment-500` |
+| `accent_4` | `--brand-experiment-560`, `--brand-560` |
+| `online`, `idle`, `dnd`, `offline` | `--status-online`, `--status-idle`, `--status-dnd`, `--status-offline` |
+
+A Midnight token's own variable (`--bg-4`) wins over the Discord names on it. Each Discord variable lands on one Midnight token, except Discord's brand colour, which is both Midnight's small accents (`accent_2`) and its accent buttons (`accent_3`). Midnight's panels are all one surface, so a theme's primary and secondary backgrounds both feed `bg_4` (primary first), and its tertiary background becomes the window around them. Discord's danger, warning and positive colours stay on oxidcord's `danger`, `warning` and `success`: Midnight's red, yellow and green scales are base palettes a Discord theme has no names for.
+
+The same Discord variables also keep landing on oxidcord's tokens of the same meaning, which the screens not yet restyled read. Each of these is built on the Midnight token the variable also lands on (`background_secondary` on `bg_4`, `text_muted` on `text_4`), so a theme that sets one variable gives both the same colour, and a theme that sets several keeps them apart on the older screens (a theme's secondary background stays on `background_secondary` while `bg_4` takes its primary one). The test `a_discord_variable_lands_on_one_midnight_token_and_what_is_built_on_it` holds the mapping to this.
 
 | Kyoko token | Discord variables |
 | --- | --- |
@@ -64,7 +90,6 @@ Discord's variable names (Vencord, BetterDiscord) land on oxidcord's tokens, whi
 | `modifier_hover` | `--background-modifier-hover` |
 | `modifier_selected` | `--background-modifier-selected` |
 | `modifier_active` | `--background-modifier-active` |
-| `message_hover` | `--background-message-hover` |
 | `text_normal` | `--text-normal`, `--text-default` |
 | `text_muted` | `--text-muted` |
 | `header_primary` | `--header-primary`, `--text-strong` |
@@ -103,7 +128,7 @@ Midnight's variables map one-to-one: each one lands on the kyoko token of its ow
 
 `color-mix(in <space>, <colour> <n>%, transparent)` and mixes of two colours are read, so Midnight's washes import as well; gradients (`--mention`, `--reply`) are not, and take their colour from the derivation. Sizes are read when they are plain pixels (`12px`) or numbers; `calc()` is skipped and the size derived instead.
 
-The mapping is `CSS_MAPPING` (colours: kyoko token, Discord names, Midnight names) and `CSS_SIZES` in `crates/bridge/src/themes/css.rs`; the derivations are `DERIVED_COLORS` and `DERIVED_SIZES` in `tokens.rs`. The first variable found wins, Discord's names before Midnight's. A CSS file with none of these shows "No colours to import." on its card.
+The mapping is `CSS_MAPPING` (colours: kyoko token, Discord names, Midnight names) and `CSS_SIZES` in `crates/bridge/src/themes/css.rs`; the derivations are `DERIVED_COLORS` and `DERIVED_SIZES` in `tokens.rs`. The first variable found wins: on a Midnight token its own variable, then Discord's names in order; on oxidcord's tokens Discord's names in order. A CSS file with none of these shows "No colours to import." on its card.
 
 ## The theme.json format
 

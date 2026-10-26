@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use bridge::themes::{
-	COLORS, CSS_MAPPING, CSS_SIZES, DEFAULT_THEME, Layer, MOCKUP_ROLES, Palette, Scheme, ThemeSource, Themes,
-	UNTOKENED, color_token, import_css, link_lines, link_urls, parse_color, parse_meta, set_theme_links,
-	size_token, theme_link, toggle_theme,
+	COLORS, CSS_MAPPING, CSS_SIZES, DEFAULT_THEME, DERIVED_COLORS, Layer, MOCKUP_ROLES, Palette, Scheme,
+	ThemeSource, Themes, UNTOKENED, color_token, import_css, link_lines, link_urls, parse_color, parse_meta,
+	set_theme_links, size_token, theme_link, toggle_theme,
 };
 use session::ThemeLinkCopy;
 use store::ThemeSettings;
@@ -311,12 +311,141 @@ fn a_vencord_theme_brings_only_its_colour_variables() {
 	let light = Palette::builtin("light").expect("light").layered([&layer]);
 	assert_eq!(light.color("background_primary"), Some("#f0f8ff"));
 	assert_eq!(light.color("brand"), Some("#007777"));
+	assert_eq!(light.color("user_panel_background"), light.color("bg_4"));
+	assert_ne!(light.color("user_panel_background"), Some("#050f17"));
+}
+
+const DISCORD_THEME: &str = include_str!("fixtures/discord-variables.theme.css");
+
+const ON_TWO_MIDNIGHT_TOKENS: &[&str] = &["--brand-experiment", "--brand-500", "--brand-experiment-500"];
+
+fn hex(css: &str) -> String {
+	parse_color(css).expect("a colour").hex()
+}
+
+#[test]
+fn a_theme_of_discord_variables_recolours_the_midnight_shell() {
+	let layer = import_css(DISCORD_THEME);
+	let midnight = Palette::midnight();
+	let shown = midnight.layered([&layer]);
+	let brand = hex("hsl(190 70% 50%)");
+	for (token, value) in [
+		("bg_4", "#10202b".to_owned()),
+		("bg_3", "#060d12".to_owned()),
+		("text_1", "#ffffff".to_owned()),
+		("text_2", "#f0f7fb".to_owned()),
+		("text_3", "#d6e6ef".to_owned()),
+		("text_4", "#98b1bf".to_owned()),
+		("text_5", "#3c5260".to_owned()),
+		("hover", hex("rgba(120, 170, 200, 0.12)")),
+		("active", hex("rgba(120, 170, 200, 0.22)")),
+		("active_2", hex("rgba(120, 170, 200, 0.3)")),
+		("border", hex("rgba(120, 170, 200, 0.25)")),
+		("accent_1", "#6fd3ef".to_owned()),
+		("accent_2", brand.clone()),
+		("accent_3", brand.clone()),
+		("accent_4", hex("hsl(190 70% 42%)")),
+		("online", "#4ccf8a".to_owned()),
+	] {
+		assert_eq!(shown.color(token), Some(value.as_str()), "{token}");
+	}
+	for (token, from) in [
+		("text_0", "bg_4"),
+		("border_light", "hover"),
+		("border_hover", "active"),
+		("accent_new", "accent_2"),
+		("offline", "text_4"),
+		("background_tertiary", "bg_3"),
+		("interactive_hover", "text_3"),
+		("header_primary", "text_2"),
+	] {
+		assert_eq!(shown.color(token), shown.color(from), "{token}");
+	}
+	let faded = |css: &str| parse_color(css).expect("a colour").faded(0.1).hex();
+	assert_eq!(shown.color("mention"), Some(faded(&brand).as_str()));
+	assert_eq!(shown.color("reply"), Some(faded("#d6e6ef").as_str()));
+	assert_eq!(shown.color("streaming"), midnight.color("streaming"));
+	assert_eq!(shown.color("red_2"), midnight.color("red_2"));
+	assert_eq!(shown.color("background_floating"), Some("#0a151c"));
+
+	assert_eq!(shown.color("background_primary"), Some("#10202b"));
+	assert_eq!(shown.color("background_secondary"), Some("#0d1a23"));
+	assert_eq!(shown.color("user_panel_background"), Some("#0a151c"));
+	assert_eq!(shown.color("text_muted"), Some("#7d95a3"));
+	assert_eq!(shown.color("header_secondary"), Some("#a9bfcc"));
+	assert_eq!(shown.color("interactive_normal"), Some("#98b1bf"));
+	assert_eq!(shown.color("brand"), Some(brand.as_str()));
+	assert_eq!(shown.color("divider"), shown.color("border"));
+	assert_eq!(shown.sizes(), midnight.sizes());
+	assert_eq!(shown.ui_fonts(), midnight.ui_fonts());
+}
+
+#[test]
+fn a_discord_theme_recolours_a_light_base_from_its_light_block_only() {
+	let layer = import_css(DISCORD_THEME);
+	let base = Palette::builtin("light").expect("light");
+	let shown = base.layered([&layer]);
+	for (token, value) in [
+		("bg_4", "#fbfdfe"),
+		("bg_3", "#dde8ee"),
+		("text_2", "#0b1419"),
+		("text_3", "#1d2b33"),
+		("text_4", "#4a5f6b"),
+		("accent_2", "#1c8fae"),
+		("accent_3", "#1c8fae"),
+		("background_primary", "#fbfdfe"),
+		("background_secondary", "#eef4f7"),
+		("text_muted", "#5d7280"),
+		("user_panel_background", "#fbfdfe"),
+		("text_0", "#fbfdfe"),
+	] {
+		assert_eq!(shown.color(token), Some(value), "{token}");
+	}
+	assert_eq!(shown.color("hover"), Some(hex("rgba(16, 32, 43, 0.06)").as_str()));
 	assert_eq!(
-		light.color("user_panel_background"),
-		Palette::builtin("light")
-			.expect("light")
-			.color("user_panel_background")
+		shown.color("active"),
+		Some(hex("rgba(16, 32, 43, 0.12)").as_str())
 	);
+	assert_eq!(shown.color("border"), shown.color("active"));
+	assert!(shown.is_light());
+	for token in ["text_1", "text_5", "active_2", "accent_1", "online"] {
+		assert_eq!(shown.color(token), base.color(token), "{token} took a dark value");
+	}
+}
+
+#[test]
+fn a_discord_variable_lands_on_one_midnight_token_and_what_is_built_on_it() {
+	let is_midnight = |midnight: &[&str]| !midnight.is_empty();
+	for (_, discord, midnight) in CSS_MAPPING {
+		if !is_midnight(midnight) {
+			continue;
+		}
+		for variable in *discord {
+			let targets: Vec<&str> = CSS_MAPPING
+				.iter()
+				.filter(|(_, names, midnight)| is_midnight(midnight) && names.contains(variable))
+				.map(|(token, _, _)| *token)
+				.collect();
+			if ON_TWO_MIDNIGHT_TOKENS.contains(variable) {
+				assert_eq!(targets, ["accent_2", "accent_3"], "{variable}");
+			} else {
+				assert_eq!(targets.len(), 1, "{variable} lands on {targets:?}");
+			}
+			for (other, names, midnight) in CSS_MAPPING {
+				if is_midnight(midnight) || !names.contains(variable) {
+					continue;
+				}
+				assert!(
+					DERIVED_COLORS
+						.iter()
+						.any(|(target, source, alpha)| target == other
+							&& targets.contains(source)
+							&& *alpha == 1.),
+					"{variable} lands on {other}, which is not built on {targets:?}"
+				);
+			}
+		}
+	}
 }
 
 #[test]

@@ -41,6 +41,8 @@ Kyoko's capture mode lives in `apps/desktop/src/capture.rs`. It is only active w
 
 `KYOKO_CAPTURE_PLUGINS=<id>,<id>` in the environment of `cargo xtask parity capture` turns those bundled plugins on in kyoko before any screen's steps (approved in-process, as the Allow button does), and kyoko signals ready only once the display hooks have answered (`Display::pending`). Use it with `--out` to keep a plugin-on run apart: `KYOKO_CAPTURE_PLUGINS=show-me-your-name` with `timeline,member-list,profile-popout` shows ShowMeYourName's usernames (ticket 48). Oxidcord ignores it.
 
+`KYOKO_CAPTURE_THEMES=<file>,<file>` copies those theme files (`.css` or `.json`) into the capture's themes folder and turns them on, in order, before the screen settles. `KYOKO_CAPTURE_THEMES=crates/bridge/tests/bridge/fixtures/discord-variables.theme.css` with `--out` shows a theme that sets only Discord's variables over Midnight (Midnight 25). Oxidcord ignores it.
+
 The mock fixtures are deterministic for a seed and fixture date, but some text is relative to the wall clock, such as "Today" and "Yesterday" in timestamps. Captures of the same day compare cleanly. Both apps show timestamps in the machine's local time zone.
 
 ## Adding kyoko's steps for a screen

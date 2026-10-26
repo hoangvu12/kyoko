@@ -845,6 +845,7 @@ impl Link {
 	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
 		self.drive_capture(capture.screen);
 		self.enable_capture_plugins(&capture.plugins).await;
+		self.enable_capture_themes(&capture.themes);
 		self.until_settled(&capture, false).await;
 		match &capture.screen {
 			capture::Screen::RailFolders => self.rail.open_all(),

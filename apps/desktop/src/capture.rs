@@ -24,6 +24,7 @@ pub const TOP_BAR_THREADS: (f32, f32) = (721., 37.);
 pub const TOP_BAR_PINS: (f32, f32) = (801., 37.);
 pub const TOAST: &str = "You are sending messages too quickly.";
 pub const PLUGINS_VARIABLE: &str = "KYOKO_CAPTURE_PLUGINS";
+pub const THEMES_VARIABLE: &str = "KYOKO_CAPTURE_THEMES";
 pub const KEPT_DELETED: &str = "spoiler alert: the ship sinks at the end";
 pub const KEPT_EDITS: [&str; 3] = ["See you at 6", "See you at 7", "See you at 7:30, sorry!"];
 pub const GIF_LINK: &str = "https://klipy.com/gifs/cat-dance";
@@ -412,6 +413,7 @@ pub struct Capture {
 	pub screen: Screen,
 	pub ready: PathBuf,
 	pub plugins: Vec<String>,
+	pub themes: Vec<PathBuf>,
 }
 
 pub fn plugins_from_env() -> Vec<String> {
@@ -421,6 +423,16 @@ pub fn plugins_from_env() -> Vec<String> {
 		.map(str::trim)
 		.filter(|id| !id.is_empty())
 		.map(str::to_owned)
+		.collect()
+}
+
+pub fn themes_from_env() -> Vec<PathBuf> {
+	std::env::var(THEMES_VARIABLE)
+		.unwrap_or_default()
+		.split(',')
+		.map(str::trim)
+		.filter(|path| !path.is_empty())
+		.map(PathBuf::from)
 		.collect()
 }
 

@@ -221,6 +221,7 @@ fn main() -> Result<ExitCode> {
 				screen,
 				ready: ready.clone(),
 				plugins: capture::plugins_from_env(),
+				themes: capture::themes_from_env(),
 			}),
 			None => {
 				eprintln!("kyoko: no capture steps for {name} yet");

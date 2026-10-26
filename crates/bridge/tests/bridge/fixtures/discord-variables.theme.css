@@ -1,0 +1,49 @@
+/**
+ * @name Harbour
+ * @author kyoko
+ * @description A test theme that sets only Discord's own variables, as most Vencord and BetterDiscord themes do.
+ * @version 1.0.0
+ */
+
+.theme-dark {
+	--harbour-sea: #10202b;
+	--background-primary: var(--harbour-sea);
+	--background-secondary: #0d1a23;
+	--background-secondary-alt: #0a151c;
+	--background-tertiary: #060d12;
+	--background-floating: #0a151c;
+	--background-modifier-hover: rgba(120, 170, 200, 0.12);
+	--background-modifier-selected: rgba(120, 170, 200, 0.22);
+	--background-modifier-active: rgba(120, 170, 200, 0.3);
+	--background-modifier-accent: rgba(120, 170, 200, 0.25);
+	--text-normal: #d6e6ef;
+	--text-muted: #7d95a3;
+	--header-primary: #f0f7fb;
+	--header-secondary: #a9bfcc;
+	--interactive-normal: #98b1bf;
+	--interactive-hover: #d6e6ef;
+	--interactive-active: #ffffff;
+	--interactive-muted: #3c5260;
+	--channels-default: #8ea7b5;
+	--brand-experiment: hsl(190 70% 50%);
+	--brand-experiment-560: hsl(190 70% 42%);
+	--text-link: #6fd3ef;
+	--status-online: #4ccf8a;
+}
+
+.theme-light {
+	--background-primary: #fbfdfe;
+	--background-secondary: #eef4f7;
+	--background-tertiary: #dde8ee;
+	--background-modifier-hover: rgba(16, 32, 43, 0.06);
+	--background-modifier-selected: rgba(16, 32, 43, 0.12);
+	--text-normal: #1d2b33;
+	--text-muted: #5d7280;
+	--header-primary: #0b1419;
+	--interactive-normal: #4a5f6b;
+	--brand-experiment: #1c8fae;
+}
+
+[class*="sidebar"] {
+	--background-secondary: #ff0000;
+}

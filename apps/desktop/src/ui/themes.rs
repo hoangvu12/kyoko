@@ -137,6 +137,32 @@ impl Link {
 			.set(settings.themes.links.join("\n").as_str().into());
 	}
 
+	pub(super) fn enable_capture_themes(&self, files: &[std::path::PathBuf]) {
+		if files.is_empty() {
+			return;
+		}
+		let dir = self.themes.themes.borrow().local_dir().to_path_buf();
+		let mut ids = Vec::new();
+		for file in files {
+			let Some(id) = file.file_name().and_then(|name| name.to_str()) else {
+				continue;
+			};
+			let copied = std::fs::create_dir_all(&dir).and_then(|()| std::fs::copy(file, dir.join(id)));
+			match copied {
+				Ok(_) => ids.push(id.to_owned()),
+				Err(error) => tracing::warn!(%error, theme = id, "could not copy a capture theme"),
+			}
+		}
+		self.themes.themes.borrow_mut().rescan();
+		self.themes.save(|settings| {
+			for id in &ids {
+				toggle_theme(&mut settings.themes, id, true);
+			}
+			true
+		});
+		self.apply_theme_layers();
+	}
+
 	fn apply_theme_layers(&self) {
 		let settings = self.themes.settings();
 		let palettes = self.themes.themes.borrow().palettes(&settings.themes);
