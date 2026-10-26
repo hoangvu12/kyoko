@@ -9,6 +9,7 @@ mod dm_sidebar;
 mod emoji;
 mod fonts;
 mod frame;
+mod friend_dialog;
 mod friends;
 mod integration;
 mod kit;

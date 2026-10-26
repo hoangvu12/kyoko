@@ -1,9 +1,12 @@
+use std::rc::Rc;
+
 use protocol::Snowflake;
 use session::{Command, FriendSource};
 use state::{Changes, State};
 
 use super::Link;
 use crate::capture;
+use crate::friend_dialog::FriendConfirm;
 use crate::profile::Anchor;
 use crate::rail::Icons;
 
@@ -65,8 +68,36 @@ impl Link {
 		self.send(Command::RemoveRelationship { user_id });
 	}
 
-	pub(crate) fn block_user(&self, user_id: Snowflake) {
-		self.send(Command::BlockUser { user_id });
+	pub(super) fn install_friend_dialog(link: &Rc<Link>) {
+		let sender = Rc::downgrade(link);
+		link.friend_dialog.on_command(move |command| {
+			if let Some(link) = sender.upgrade() {
+				link.send(command);
+			}
+		});
+	}
+
+	pub(crate) fn ask_remove_friend(&self, user_id: Snowflake) {
+		let name = self.person_name(user_id);
+		self.friend_dialog.ask(FriendConfirm::Remove { user_id, name });
+	}
+
+	pub(crate) fn ask_block(&self, user_id: Snowflake) {
+		let name = self.person_name(user_id);
+		let friend = self
+			.state()
+			.is_some_and(|shared| shared.read().friends().iter().any(|row| row.user_id == user_id));
+		self.friend_dialog.ask(FriendConfirm::Block {
+			user_id,
+			name,
+			friend,
+		});
+	}
+
+	fn person_name(&self, user_id: Snowflake) -> String {
+		self.state()
+			.map(|shared| shared.read().display_name(None, user_id))
+			.unwrap_or_else(|| user_id.to_string())
 	}
 
 	pub(crate) fn message_friend(&self, user_id: Snowflake) {
@@ -94,6 +125,21 @@ impl Link {
 		self.select_home();
 		self.show_home_page("friends");
 		self.select_friends_tab(tab.key());
+	}
+
+	pub(super) async fn drive_friend_confirm(&self, shot: capture::FriendShot) {
+		let friend = self
+			.state()
+			.and_then(|shared| shared.read().friends().first().map(|row| row.user_id));
+		let Some(user_id) = friend else {
+			tracing::warn!("no friend to confirm about");
+			return;
+		};
+		match shot {
+			capture::FriendShot::Remove => self.ask_remove_friend(user_id),
+			capture::FriendShot::Block => self.ask_block(user_id),
+		}
+		zgx::timer::sleep(capture::SETTLE).await;
 	}
 
 	pub(super) fn friends_settled(&self) -> bool {

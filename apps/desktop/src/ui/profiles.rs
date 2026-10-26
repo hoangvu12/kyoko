@@ -167,6 +167,7 @@ impl Link {
 			Request::Command(command) => self.send(command),
 			Request::Message(user_id) => self.message_user(user_id),
 			Request::FullProfile(user_id) => self.open_full_profile(user_id),
+			Request::Block(user_id) => self.ask_block(user_id),
 			Request::SignOut => self.sign_out(),
 			Request::EditProfile => self.open_settings("profiles"),
 			Request::SwitchAccounts => self.show_accounts(),
@@ -197,7 +198,8 @@ impl Link {
 	}
 
 	pub(super) fn escape_overlay(&self) -> bool {
-		self.timeline_view.close_lightbox()
+		self.friend_dialog.escape()
+			|| self.timeline_view.close_lightbox()
 			|| self.community.escape()
 			|| self.profile.escape()
 			|| self.threads_escape()

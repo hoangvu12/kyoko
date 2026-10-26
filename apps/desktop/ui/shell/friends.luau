@@ -259,10 +259,10 @@ local more_button = ui.component(function(props: { id: string, lifted: () -> boo
 			on_click = ui.toggle(open),
 		},
 		menu_entry(`friend_remove_{id}`, "Remove Friend", "trash", theme.color.danger, function()
-			actions.friends_act("remove", id)
+			actions.friends_act("ask_remove", id)
 		end),
 		menu_entry(`friend_block_{id}`, "Block", "shield", theme.color.danger, function()
-			actions.friends_act("block", id)
+			actions.friends_act("ask_block", id)
 		end),
 		ui.div { h = 1, my = 4, mx = 4, bg = theme.color.modifier_hover },
 		menu_entry(`friend_copy_{id}`, "Copy User ID", "copy", theme.color.text_normal, function()

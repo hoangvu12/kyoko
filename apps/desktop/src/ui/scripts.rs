@@ -1326,10 +1326,15 @@ fn the_friends_page_reaches_every_relationship_action() {
 			last_call(&calls, "friends.open_profile").is_none(),
 			"{button} does not open the profile"
 		);
+		assert!(
+			last_call(&calls, "friends.ask_remove").is_none()
+				&& last_call(&calls, "friends.ask_block").is_none(),
+			"{button} acts in one click without a confirmation"
+		);
 	}
 	for (item, action) in [
-		("friend_remove_42", "friends.remove"),
-		("friend_block_42", "friends.block"),
+		("friend_remove_42", "friends.ask_remove"),
+		("friend_block_42", "friends.ask_block"),
 		("friend_copy_42", "friends.copy_id"),
 	] {
 		app.click("friend_more_42");

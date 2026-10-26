@@ -458,6 +458,15 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The message is sent through the
 | `message-context-menu-own` | 07 | Default selection, then send "can someone ping me" and right-click it at (640, 690), as `message-context-menu` does: the menu of your own message. | yes |
 | `delete-message-dialog` | 07 | As `message-context-menu-own`, but instead of the menu run Delete Message on that message (`TimelineView::run_action`), which opens the confirmation with its preview. | yes |
 
+### 63 Friend action confirmations
+
+Kyoko only (`--apps kyoko`); no Midnight mockup, the dialogs follow `delete-message-dialog`'s style, so check them by eye.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `friend-remove-dialog` | 63 | As `friends-online`, then ask to remove the first friend (`Link::ask_remove_friend`, what the More menu's Remove Friend does): the Remove Friend confirmation. | yes |
+| `friend-block-dialog` | 63 | As `friend-remove-dialog`, but ask to block that friend (`Link::ask_block`, what the More menu's Block and the profile's Block do). | yes |
+
 ### Midnight 06 Reactions and super reactions
 
 Kyoko only (`--apps kyoko`, or `parity mockup`). The messages are the `-# showcase: reactions` section at the end of mockcord's `#showcase` channel: normal, reacted, custom and super reactions (one of them yours), with no `burst_colors`, so super chips take Midnight's purple-to-blue gradient.

@@ -51,6 +51,7 @@ pub enum Request {
 	Command(Command),
 	Message(Snowflake),
 	FullProfile(Snowflake),
+	Block(Snowflake),
 	EditProfile,
 	SwitchAccounts,
 	SwitchTo(Snowflake),

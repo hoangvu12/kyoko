@@ -276,7 +276,8 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 	for (name, act) in [
 		("friends.accept", Link::accept_friend as fn(&Link, Snowflake)),
 		("friends.remove", Link::remove_relationship),
-		("friends.block", Link::block_user),
+		("friends.ask_remove", Link::ask_remove_friend),
+		("friends.ask_block", Link::ask_block),
 		("friends.message", Link::message_friend),
 		("friends.copy_id", Link::copy_user_id),
 	] {

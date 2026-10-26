@@ -123,7 +123,8 @@ pub fn actions(layer: &Rc<ProfileLayer>, card: &Rc<ProfileCard>) -> View {
 		if card.relation != Relation::Blocked {
 			let block = layer.clone();
 			actions = actions.child(parts::small_button("Block", Look::Ghost, move || {
-				block.request(Request::Command(Command::BlockUser { user_id: id }));
+				block.close_profile();
+				block.request(Request::Block(id));
 			}));
 		}
 	}

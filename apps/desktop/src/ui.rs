@@ -55,6 +55,7 @@ use crate::community::CommunityLayer;
 use crate::dm_panel::DmPanelView;
 use crate::dm_sidebar::{self, DmSidebarView};
 use crate::frame::{self, Frame};
+use crate::friend_dialog::FriendDialog;
 use crate::friends::{self as friends_page, FriendsPage};
 use crate::integration::{Desktop, Integration};
 use crate::member_list::{self, MemberListView};
@@ -233,6 +234,7 @@ pub fn run(
 			let switcher = link.finder.view();
 			let community = link.community.view();
 			let toasts = link.toasts.view();
+			let friend_dialog = link.friend_dialog.view();
 			let scrim = link.scrim.view();
 			let composer_layer = link.composer_layer.view();
 			let motion = link.motion.clone();
@@ -265,6 +267,7 @@ pub fn run(
 						moderation,
 						toasts,
 						composer_layer,
+						friend_dialog,
 					],
 				)
 				.on_event(move |event| {
@@ -401,6 +404,7 @@ pub(crate) struct Link {
 	dms: DmSidebarView,
 	dm_avatars: RefCell<Vec<String>>,
 	friends: FriendsPage,
+	friend_dialog: Rc<FriendDialog>,
 	dm_panel: DmPanelView,
 	members: MemberListView,
 	member_avatars: RefCell<Vec<String>>,
@@ -518,6 +522,7 @@ impl Link {
 		let toasts = ToastLayer::new(&window.runtime);
 		let scrim = crate::scrim::Scrim::new(&window.runtime);
 		let composer_layer = crate::composer_layer::ComposerLayer::new(&window.runtime);
+		let friend_dialog = FriendDialog::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let link = Rc::new(Link {
 			window,
@@ -542,6 +547,7 @@ impl Link {
 			dms: DmSidebarView::new(host),
 			dm_avatars: RefCell::new(Vec::new()),
 			friends: FriendsPage::new(host),
+			friend_dialog,
 			dm_panel: DmPanelView::new(host),
 			members,
 			member_avatars: RefCell::new(Vec::new()),
@@ -600,6 +606,7 @@ impl Link {
 		sidebar::install_actions(host, &link);
 		dm_sidebar::install_actions(host, &link);
 		friends_page::install_actions(host, &link);
+		Link::install_friend_dialog(&link);
 		Link::install_composer(host, &link);
 		Link::install_expressions(host, &link);
 		Link::install_message_actions(&link);
@@ -858,6 +865,13 @@ impl Link {
 				self.until_settled(&capture, true).await;
 				self.drive_friends(capture.screen);
 				self.until_capture(|link| link.friends_settled()).await;
+			}
+			capture::Screen::FriendConfirm(shot) => {
+				self.select_home();
+				self.until_settled(&capture, true).await;
+				self.drive_friends(capture::Screen::Friends(bridge::FriendsTab::Online));
+				self.until_capture(|link| link.friends_settled()).await;
+				self.drive_friend_confirm(*shot).await;
 			}
 			capture::Screen::Composer | capture::Screen::ComposerReply => {
 				self.drive_composer(&capture.screen);
