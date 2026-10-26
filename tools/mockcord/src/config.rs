@@ -10,6 +10,23 @@ pub enum AutocompleteReply {
 	Fail,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InteractionTiming {
+	pub followup: Duration,
+	pub window: Duration,
+	pub hold_ping: bool,
+}
+
+impl Default for InteractionTiming {
+	fn default() -> Self {
+		Self {
+			followup: Duration::from_secs(2),
+			window: Duration::from_secs(3),
+			hold_ping: false,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct MockConfig {
 	pub port: Option<u16>,
@@ -29,6 +46,7 @@ pub struct MockConfig {
 	pub autocomplete_emoji: bool,
 	pub frequent_commands: bool,
 	pub autocomplete: AutocompleteReply,
+	pub interactions: InteractionTiming,
 	pub record: bool,
 	pub anchor: Option<DateTime<Utc>>,
 	pub build_number: u64,
@@ -56,6 +74,7 @@ impl Default for MockConfig {
 			autocomplete_emoji: false,
 			frequent_commands: false,
 			autocomplete: AutocompleteReply::Answer,
+			interactions: InteractionTiming::default(),
 			record: false,
 			anchor: None,
 			build_number: 424_242,

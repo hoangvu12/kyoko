@@ -389,12 +389,42 @@ pub struct Message {
 	pub referenced_message: Option<Box<Message>>,
 	pub message_snapshots: LenientVec<MessageSnapshot>,
 	pub interaction_metadata: Value,
+	pub interaction: Value,
 	pub thread: Option<Box<Channel>>,
 	pub components: Vec<Value>,
 	pub sticker_items: LenientVec<StickerItem>,
 	pub position: Option<i64>,
 	pub poll: Option<Poll>,
 	pub call: Option<CallInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InteractionHeader {
+	pub name: String,
+	pub user: User,
+}
+
+impl Message {
+	pub fn interaction_header(&self) -> Option<InteractionHeader> {
+		let named = |value: &Value| value.get("name").and_then(Value::as_str).map(str::to_owned);
+		let user = |value: &Value| {
+			value
+				.get("user")
+				.and_then(|user| serde_json::from_value::<User>(user.clone()).ok())
+		};
+		let (metadata, legacy) = (&self.interaction_metadata, &self.interaction);
+		let name = named(metadata).or_else(|| named(legacy))?;
+		let user = user(metadata).or_else(|| user(legacy))?;
+		Some(InteractionHeader { name, user })
+	}
+
+	pub fn is_ephemeral(&self) -> bool {
+		self.flags.contains(MessageFlags::EPHEMERAL)
+	}
+
+	pub fn is_loading(&self) -> bool {
+		self.flags.contains(MessageFlags::LOADING)
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

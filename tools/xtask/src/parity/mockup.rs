@@ -113,6 +113,7 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 		"command-attachment-option-picked",
 		"command-attachment-option-picked",
 	),
+	("command-response-states", "command-response-states"),
 ];
 
 pub struct Pairing {

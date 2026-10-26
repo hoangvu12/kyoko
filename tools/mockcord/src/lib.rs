@@ -32,7 +32,7 @@ mod web;
 pub use alt::{ALT_USER_ID, ALT_USERNAME};
 pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, Signature};
 pub use community::{COMMUNITY_INVITE, COMMUNITY_NAME, CommunityGuild};
-pub use config::{AutocompleteReply, MockConfig};
+pub use config::{AutocompleteReply, InteractionTiming, MockConfig};
 pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};
 pub use password::{
@@ -45,8 +45,9 @@ pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,
 };
 pub use rest::{
-	BROKEN_UPLOAD, LANGUAGES, MOCKBOT_ID, MODERATED_PHRASE, POLLY_ID, REMIND_COMMAND, REMINDY_ID,
-	RESIZE_COMMAND, ROLL_COMMAND, SHRUG_COMMAND, SNAPPER_ID, STALLED_UPLOAD, TRANSLATE_COMMAND,
+	BROKEN_COMMAND, BROKEN_UPLOAD, IGNORE_COMMAND, LANGUAGES, MOCKBOT_ID, MODERATED_PHRASE, PING_COMMAND,
+	POLLY_ID, REMIND_COMMAND, REMINDY_ID, RESIZE_COMMAND, ROLL_COMMAND, SHRUG_COMMAND, SNAPPER_ID,
+	STALLED_UPLOAD, THINK_COMMAND, THOUGHT, TRANSLATE_COMMAND, WHISPER_COMMAND, WHISPERED,
 };
 pub use scenario::{HeartbeatAcks, Reply};
 pub use server::{Server, login_page_url, remote_auth_url};

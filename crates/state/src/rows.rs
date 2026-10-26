@@ -344,23 +344,29 @@ impl State {
 			MessageRow::Loading
 		});
 		let show_deleted = self.show_deleted;
-		let confirmed = cache
+		let mut confirmed: Vec<(&Arc<Message>, Option<&PendingMessage>)> = cache
 			.ordered
 			.iter()
 			.filter(|message| show_deleted || cache.deleted(message.id).is_none())
-			.map(|message| (message, None));
+			.map(|message| (message, None))
+			.collect();
+		if !cache.is_detached() && !cache.ephemeral().is_empty() {
+			confirmed.extend(cache.ephemeral().iter().map(|message| (message, None)));
+			confirmed.sort_by_key(|(message, _)| message.id);
+		}
 		let pending = cache
 			.pending
 			.iter()
 			.map(|pending| (&pending.message, Some(pending)));
 		let mut previous: Option<(&Message, NaiveDate)> = None;
 		let mut marker_placed = false;
-		for (message, pending) in confirmed.chain(pending) {
+		for (message, pending) in confirmed.into_iter().chain(pending) {
 			let day = local_day(message);
 			if previous.is_none_or(|(_, previous_day)| previous_day != day) {
 				rows.push(MessageRow::DaySeparator(day));
 			}
 			let is_unread = pending.is_none()
+				&& !message.is_ephemeral()
 				&& cache.deleted(message.id).is_none()
 				&& last_read.is_some_and(|read| message.id > read)
 				&& Some(message.author.id) != me;
@@ -426,6 +432,9 @@ impl State {
 			grouped_with_previous,
 			pending: pending.is_some(),
 			failure: pending.and_then(|pending| pending.failure.clone()),
+			command: pending.and_then(|pending| pending.command.clone()),
+			expired: cache.is_expired(message.id),
+			interaction_failed: cache.has_failed_component(message.id),
 			upload: pending.and_then(|pending| pending.upload.clone()),
 			plugin,
 			altered_by,

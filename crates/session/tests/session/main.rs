@@ -5,6 +5,7 @@ mod caches;
 mod capabilities;
 mod collapse;
 mod command_options;
+mod command_replies;
 mod community;
 mod composer;
 mod deletes;

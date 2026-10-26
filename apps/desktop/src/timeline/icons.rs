@@ -58,6 +58,8 @@ icon_files!(
 	"gif",
 	"sticker",
 	"external_link",
+	"eye",
+	"warning_fill",
 	"archive",
 	"unarchive",
 	"members",

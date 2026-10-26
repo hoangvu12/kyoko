@@ -9,7 +9,7 @@ use protocol::{
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
 use serde_json::{Value, json};
-use state::{LocalEvent, MAX_ATTACHMENTS, PendingFile, SendFailure};
+use state::{CommandStage, LocalEvent, MAX_ATTACHMENTS, PendingFile, PendingMessage, SendFailure};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::AbortHandle;
 
@@ -421,13 +421,19 @@ impl Core {
 			files: outgoing.files,
 		});
 	}
+}
 
+fn failed(pending: &PendingMessage) -> bool {
+	pending.failure.is_some() || matches!(pending.command, Some(CommandStage::Failed(_)))
+}
+
+impl Core {
 	pub(super) fn discard_message(&mut self, channel_id: Snowflake, nonce: Nonce) {
 		let failed = self.state.read().messages(channel_id).is_some_and(|cache| {
 			cache
 				.pending
 				.iter()
-				.any(|pending| pending.failure.is_some() && pending.message.nonce.as_ref() == Some(&nonce))
+				.any(|pending| pending.message.nonce.as_ref() == Some(&nonce) && failed(pending))
 		});
 		self.outbox.take(&nonce);
 		let cancelled = self.outbox.cancel(&nonce);

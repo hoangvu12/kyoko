@@ -6,8 +6,8 @@ use chrono::Utc;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 use protocol::{
-	ApplicationCommandIndex, Channel, Message, Presence, ReadState, Relationship, Snowflake, User,
-	UserGuildSettings,
+	ApplicationCommandIndex, Channel, Message, MessageType, Presence, ReadState, Relationship, Snowflake,
+	User, UserGuildSettings,
 };
 use serde_json::Value;
 use smallvec::SmallVec;
@@ -481,6 +481,62 @@ impl State {
 					self.user_overrides.clear();
 					changes.messages.mark_all();
 					changes.members.mark_all();
+				}
+			}
+			LocalEvent::PendingCommand {
+				channel_id,
+				nonce,
+				name,
+				application,
+				user,
+			} => {
+				let message = Message {
+					channel_id: *channel_id,
+					guild_id: self.channel_guild(*channel_id),
+					author: (**application).clone(),
+					kind: MessageType::ChatInputCommand,
+					timestamp: Some(Utc::now()),
+					nonce: Some(nonce.clone()),
+					interaction_metadata: serde_json::json!({ "name": name, "user": user }),
+					..Message::default()
+				};
+				self.warm_up(*channel_id, &mut changes);
+				self.messages
+					.entry(*channel_id)
+					.or_default()
+					.add_pending_command(Arc::new(message), Arc::new(RenderedMessage::plain("", false, 0)));
+				changes.messages.insert(*channel_id);
+			}
+			LocalEvent::CommandAdvanced { nonce, stage } => {
+				for (&channel_id, cache) in &mut self.messages {
+					if cache.advance_command(nonce, stage.clone()) {
+						changes.messages.insert(channel_id);
+					}
+				}
+			}
+			LocalEvent::EphemeralDismissed { channel_id, id } => {
+				if let Some(cache) = self.messages.get_mut(channel_id)
+					&& cache.dismiss_ephemeral(*id)
+				{
+					changes.messages.insert(*channel_id);
+				}
+			}
+			LocalEvent::ComponentInteraction {
+				channel_id,
+				id,
+				failed,
+			} => {
+				if let Some(cache) = self.messages.get_mut(channel_id)
+					&& cache.component_failed(*id, *failed)
+				{
+					changes.messages.insert(*channel_id);
+				}
+			}
+			LocalEvent::InteractionExpired { channel_id, id } => {
+				if let Some(cache) = self.messages.get_mut(channel_id)
+					&& cache.expire(*id)
+				{
+					changes.messages.insert(*channel_id);
 				}
 			}
 			LocalEvent::PendingDiscarded { nonce } => {

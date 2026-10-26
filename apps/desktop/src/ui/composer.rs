@@ -34,6 +34,8 @@ type Handler = fn(&Link, Pane);
 const CAPTURE_DRAFT: &str = "Checking how the composer looks with a draft in it";
 const CAPTURE_EMOJI_QUERY: &str = "wow :sm";
 const CAPTURE_OPTION_TEXT: &str = "hello";
+const CAPTURE_ROLL_SIDES: i64 = 20;
+type ReplyStep = (u64, &'static str, fn(&bridge::MessageEntry) -> bool);
 const CAPTURE_FILE_NAME: &str = "cat.png";
 
 pub(super) use crate::composer_layer::Pane;
@@ -1968,6 +1970,7 @@ impl Link {
 			| capture::ComposerShot::CommandChoicesFailed
 			| capture::ComposerShot::CommandFile
 			| capture::ComposerShot::CommandFilePicked => self.drive_command(shot).await,
+			capture::ComposerShot::CommandReplies => self.drive_command_replies().await,
 			capture::ComposerShot::Drop => self.files_hovering(true),
 			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
 			capture::ComposerShot::PlusMenu => {
@@ -2052,6 +2055,65 @@ impl Link {
 		}
 		self.until_capture(move |link| link.command_shot_ready(shot))
 			.await;
+	}
+
+	async fn drive_command_replies(&self) {
+		let Some(channel_id) = self.composer.composer.borrow().channel() else {
+			return;
+		};
+		self.send(session::Command::LoadApplicationCommands { channel_id });
+		self.until_capture(move |link| {
+			link.state()
+				.is_some_and(|shared| shared.read().command_index(channel_id).is_some())
+		})
+		.await;
+		let steps: [ReplyStep; 5] = [
+			(mockcord::THINK_COMMAND, "think", |entry| {
+				entry.reply_state == Some(bridge::ReplyState::Thinking)
+			}),
+			(mockcord::ROLL_COMMAND, "roll", |entry| {
+				entry.reply_state.is_none() && !entry.content.is_empty()
+			}),
+			(mockcord::WHISPER_COMMAND, "whisper", |entry| entry.ephemeral),
+			(mockcord::PING_COMMAND, "ping", |entry| {
+				entry.reply_state == Some(bridge::ReplyState::Sending)
+			}),
+			(mockcord::BROKEN_COMMAND, "broken", |entry| {
+				entry
+					.reply_state
+					.as_ref()
+					.is_some_and(|state| state.failure().is_some())
+			}),
+		];
+		for (command, name, shown) in steps {
+			let options = if command == mockcord::ROLL_COMMAND {
+				vec![protocol::InteractionOption {
+					kind: protocol::CommandOptionType::Integer,
+					name: "sides".to_owned(),
+					value: Some(serde_json::json!(CAPTURE_ROLL_SIDES)),
+					options: Vec::new(),
+					focused: None,
+				}]
+			} else {
+				Vec::new()
+			};
+			self.send(session::Command::RunApplicationCommand {
+				channel_id,
+				command_id: protocol::Snowflake(command),
+				options,
+				files: Vec::new(),
+			});
+			self.until_capture(move |link| {
+				link.timeline.borrow().messages().any(|entry| {
+					entry
+						.interaction
+						.as_ref()
+						.is_some_and(|line| line.command == name)
+						&& shown(entry)
+				})
+			})
+			.await;
+		}
 	}
 
 	fn command_shot_ready(&self, shot: capture::ComposerShot) -> bool {

@@ -176,6 +176,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `command-choices-failed` | `command-choices-failed.html` |
 | `command-attachment-option` | `command-attachment-option.html` |
 | `command-attachment-option-picked` | `command-attachment-option-picked.html` |
+| `command-response-states` | `command-response-states.html` |
 
 `inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
 
@@ -183,7 +184,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -492,6 +493,14 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). Steps as `command-options`, pic
 | `command-choices-failed` | 11 | As `command-choices-loading`, the autocomplete refused: "Couldn't load options" and Retry. | yes |
 | `command-attachment-option` | 11 | Pick `/resize`: the focused `file` chip and the drop box above the hint bar. | yes |
 | `command-attachment-option-picked` | 11 | As `command-attachment-option`, then a generated `cat.png` picked: the file chip with its thumbnail and name, `width` focused. | yes |
+
+### Midnight 12 Command replies
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The parity tool adds `--slow-followups` (Mockbot's deferred `/think` follows up after ten minutes) and `--hold-ping` (mockcord accepts `/ping` but sends no gateway event, so it stays "Sending command..."). The mockup's "This interaction failed" row needs message components (Midnight 13) and is not staged.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `command-response-states` | 12 | Default selection, then run `/think` (thinking), `/roll sides:20` (answered), `/whisper` (ephemeral, with "Only you can see this · Dismiss message"), `/ping` (sending) and `/broken` (failed: "The application did not respond", ephemeral), each once the previous one shows. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

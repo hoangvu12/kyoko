@@ -168,8 +168,8 @@ pub use threads::{
 	thread_parent, thread_sections, trimmed_name,
 };
 pub use timeline::{
-	Delta, Highlight, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel,
-	detached_entry, first_channel,
+	Delta, Highlight, InteractionLine, MessageEntry, NO_RESPONSE, OpenChannel, ReplyState, Row, RowKey,
+	Timeline, TimelineRow, busiest_channel, detached_entry, first_channel,
 };
 pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};
 pub use web_login::{

@@ -152,6 +152,7 @@ pub enum ComposerShot {
 	CommandChoicesFailed,
 	CommandFile,
 	CommandFilePicked,
+	CommandReplies,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +252,7 @@ impl Screen {
 			"command-choices-failed" => Some(Screen::ComposerShot(ComposerShot::CommandChoicesFailed)),
 			"command-attachment-option" => Some(Screen::ComposerShot(ComposerShot::CommandFile)),
 			"command-attachment-option-picked" => Some(Screen::ComposerShot(ComposerShot::CommandFilePicked)),
+			"command-response-states" => Some(Screen::ComposerShot(ComposerShot::CommandReplies)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),

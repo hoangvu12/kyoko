@@ -125,6 +125,14 @@ pub(crate) enum Internal {
 	},
 	AutocompleteDue(u64),
 	AutocompleteFailed(u64),
+	CommandFailed {
+		nonce: Nonce,
+		reason: String,
+	},
+	InteractionExpired {
+		channel_id: Snowflake,
+		id: Snowflake,
+	},
 	ThemeLinksChanged,
 	Alert(Alert),
 	AlertVetoed(StdInstant),
@@ -545,10 +553,13 @@ impl Core {
 				self.consider_alert(&message);
 				let channel_id = message.channel_id;
 				let message_id = message.id;
-				self.persist.submit(Job::Messages {
-					channel_id,
-					messages: vec![Arc::from(message)],
-				});
+				self.watch_deferred_reply(&message);
+				if !message.is_ephemeral() {
+					self.persist.submit(Job::Messages {
+						channel_id,
+						messages: vec![Arc::from(message)],
+					});
+				}
 				self.persist_read_state(channel_id);
 				self.read_if_viewing(channel_id);
 				self.backfill_channel(channel_id, Some(message_id));
@@ -589,6 +600,7 @@ impl Core {
 				self.backfill_members_answered(&chunk);
 			}
 			DispatchEvent::RateLimited(limited) => self.on_rate_limited(&limited),
+			DispatchEvent::InteractionCreate(value) => self.interaction_created(&value),
 			DispatchEvent::InteractionSuccess(value) => self.interaction_settled(&value, false),
 			DispatchEvent::InteractionFailure(value) => self.interaction_settled(&value, true),
 			DispatchEvent::AutocompleteResponse(response) => self.autocomplete_answered(response),
@@ -648,6 +660,10 @@ impl Core {
 			Internal::CommandIndex { scope, index } => self.command_index_arrived(scope, index),
 			Internal::AutocompleteDue(request) => self.autocomplete_due(request),
 			Internal::AutocompleteFailed(request) => self.autocomplete_failed(request),
+			Internal::CommandFailed { nonce, reason } => self.command_failed(nonce, reason),
+			Internal::InteractionExpired { channel_id, id } => {
+				self.apply_local(LocalEvent::InteractionExpired { channel_id, id });
+			}
 			Internal::Searched {
 				serial,
 				offset,
@@ -801,6 +817,10 @@ impl Core {
 			}),
 			Command::RetryMessage { channel_id, nonce } => self.retry_message(channel_id, nonce),
 			Command::DiscardMessage { channel_id, nonce } => self.discard_message(channel_id, nonce),
+			Command::DismissMessage {
+				channel_id,
+				message_id,
+			} => self.dismiss_message(channel_id, message_id),
 			Command::LoadApplicationCommands { channel_id } => self.load_commands(channel_id),
 			Command::RunApplicationCommand {
 				channel_id,

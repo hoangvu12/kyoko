@@ -108,6 +108,9 @@ impl State {
 		self.presences.clear();
 		self.relationships.clear();
 		self.typing.clear();
+		for cache in self.messages.values_mut() {
+			cache.clear_ephemeral();
+		}
 	}
 
 	pub(crate) fn ingest_guild(&mut self, guild: &Guild) {

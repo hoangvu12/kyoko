@@ -521,6 +521,7 @@ fn mockcord_flags(screen: &str) -> &'static [&'static str] {
 		"command-picker" => &["--frequent-commands"],
 		"command-choices-loading" => &["--slow-autocomplete"],
 		"command-choices-failed" => &["--failing-autocomplete"],
+		"command-response-states" => &["--slow-followups", "--hold-ping"],
 		_ => &[],
 	}
 }

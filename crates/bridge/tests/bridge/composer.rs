@@ -270,7 +270,19 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 		]
 	);
 	assert_eq!(listed[0].1, ["remind", "roll", "shrug"]);
-	assert_eq!(listed[1].1, ["broken", "echo", "ping", "roll", "translate"]);
+	assert_eq!(
+		listed[1].1,
+		[
+			"broken",
+			"echo",
+			"ignore",
+			"ping",
+			"roll",
+			"think",
+			"translate",
+			"whisper"
+		]
+	);
 	let built_in = &listed[5].1;
 	for name in [
 		"gif",

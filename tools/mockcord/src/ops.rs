@@ -32,6 +32,7 @@ pub struct Draft {
 	pub descriptors: Vec<AttachmentDescriptor>,
 	pub files: Vec<UploadedFile>,
 	pub hosted: Option<Signature>,
+	pub interaction: Value,
 }
 
 impl Draft {
@@ -55,6 +56,7 @@ impl Draft {
 			descriptors: create.attachments,
 			files,
 			hosted: None,
+			interaction: Value::Null,
 		}
 	}
 }
@@ -211,7 +213,13 @@ impl Shared {
 			.reference
 			.as_ref()
 			.is_some_and(|reference| reference.kind == Some(MessageReferenceKind::Forward));
-		if draft.content.is_empty() && draft.files.is_empty() && draft.sticker_ids.is_empty() && !forward {
+		let loading = draft.flags.contains(MessageFlags::LOADING);
+		if draft.content.is_empty()
+			&& draft.files.is_empty()
+			&& draft.sticker_ids.is_empty()
+			&& !forward
+			&& !loading
+		{
 			return Err(ApiError::empty_message());
 		}
 		let mut store = self.store.lock();
@@ -247,6 +255,8 @@ impl Shared {
 			attachments: LenientVec::from(attachments),
 			nonce: draft.nonce.map(Nonce),
 			flags: draft.flags,
+			interaction_metadata: draft.interaction.clone(),
+			interaction: draft.interaction,
 			kind: draft.kind.unwrap_or_default(),
 			embeds: LenientVec::from(embeds),
 			sticker_items: LenientVec::from(
@@ -295,6 +305,12 @@ impl Shared {
 			}
 		}
 		let value = to_json(&message);
+		if message.flags.contains(MessageFlags::EPHEMERAL) {
+			let gateway = self.gateway_message(&store, &value);
+			drop(store);
+			self.hub.broadcast("MESSAGE_CREATE", &gateway);
+			return Ok(value);
+		}
 		store
 			.messages
 			.entry(channel_id)
@@ -365,6 +381,20 @@ impl Shared {
 		if edited {
 			message["edited_timestamp"] = Value::String(now_iso());
 		}
+		let value = message.clone();
+		let gateway = self.gateway_message(&store, &value);
+		drop(store);
+		self.hub.broadcast("MESSAGE_UPDATE", &gateway);
+		Ok(value)
+	}
+
+	pub fn complete_deferred(&self, channel_id: u64, id: u64, content: &str) -> Result<Value, ApiError> {
+		let mut store = self.store.lock();
+		let message = store
+			.message_mut(channel_id, id)
+			.ok_or_else(ApiError::unknown_message)?;
+		message["content"] = Value::String(content.to_owned());
+		message["flags"] = json!(0);
 		let value = message.clone();
 		let gateway = self.gateway_message(&store, &value);
 		drop(store);

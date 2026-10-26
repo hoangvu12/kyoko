@@ -3,9 +3,12 @@ use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use markdown::Document;
-use protocol::{Message, MessageType, Snowflake};
+use protocol::{Message, MessageType, Snowflake, User};
 use session::{Command, DeletedLook, Formatting, MessageLook, ShownName};
-use state::{Changes, MessageRow, MessageVersion, MessageView, RenderedMessage, State, UploadProgress};
+use state::{
+	Changes, CommandStage, DEFERRED_REPLY_WINDOW, MessageRow, MessageVersion, MessageView, RenderedMessage,
+	State, UploadProgress,
+};
 
 use crate::display::{Display, person};
 use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
@@ -56,6 +59,70 @@ pub struct MessageEntry {
 	pub system: Option<SystemLine>,
 	pub look: Option<MessageLook>,
 	pub history: Arc<[Document]>,
+	pub interaction: Option<InteractionLine>,
+	pub ephemeral: bool,
+	pub reply_state: Option<ReplyState>,
+	pub interaction_failed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InteractionLine {
+	pub user: User,
+	pub name: String,
+	pub command: String,
+	pub color: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplyState {
+	Sending,
+	Thinking,
+	Failed(String),
+	TimedOut,
+}
+
+impl ReplyState {
+	pub fn failure(&self) -> Option<&str> {
+		match self {
+			ReplyState::Failed(reason) => Some(reason),
+			ReplyState::TimedOut => Some(NO_RESPONSE),
+			ReplyState::Sending | ReplyState::Thinking => None,
+		}
+	}
+}
+
+pub const NO_RESPONSE: &str = "The application did not respond";
+
+fn reply_state(view: &MessageView, now: DateTime<Utc>) -> Option<ReplyState> {
+	match &view.command {
+		Some(CommandStage::Sending) => Some(ReplyState::Sending),
+		Some(CommandStage::Thinking) => Some(ReplyState::Thinking),
+		Some(CommandStage::Failed(reason)) if reason.is_empty() => Some(ReplyState::TimedOut),
+		Some(CommandStage::Failed(reason)) => Some(ReplyState::Failed(reason.clone())),
+		None if view.message.is_loading() => {
+			let deadline = view.message.id.timestamp() + DEFERRED_REPLY_WINDOW;
+			if view.expired || now >= deadline {
+				Some(ReplyState::TimedOut)
+			} else {
+				Some(ReplyState::Thinking)
+			}
+		}
+		None => None,
+	}
+}
+
+fn interaction_line(
+	state: &State,
+	guild_id: Option<Snowflake>,
+	message: &Message,
+) -> Option<InteractionLine> {
+	let header = message.interaction_header()?;
+	Some(InteractionLine {
+		name: person_name(state, guild_id, &header.user),
+		color: guild_id.and_then(|guild_id| state.role_color(guild_id, header.user.id)),
+		user: header.user,
+		command: header.name,
+	})
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -111,6 +178,10 @@ impl PartialEq for MessageEntry {
 			&& self.system == other.system
 			&& self.look == other.look
 			&& (Arc::ptr_eq(&self.history, &other.history) || self.history == other.history)
+			&& self.interaction == other.interaction
+			&& self.ephemeral == other.ephemeral
+			&& self.reply_state == other.reply_state
+			&& self.interaction_failed == other.interaction_failed
 	}
 }
 
@@ -508,10 +579,12 @@ fn entry(
 	body: Arc<Body>,
 	display: &Display,
 ) -> MessageEntry {
+	let reply_state = reply_state(&view, Utc::now());
 	let message = view.message;
 	let shown = author_name(state, guild_id, &message, display);
 	let names = Names::of(state, guild_id, &message, body.documents());
 	let reply = ReplyPreview::of(state, guild_id, &message);
+	let interaction = interaction_line(state, guild_id, &message);
 	let system = (!is_plain(message.kind)).then(|| {
 		let target = message
 			.mentions
@@ -543,6 +616,10 @@ fn entry(
 		bot: message.author.bot == Some(true),
 		mine: state.current_user_id() == Some(message.author.id),
 		highlight: highlight(state, guild_id, &message),
+		ephemeral: message.is_ephemeral() || matches!(reply_state, Some(ReplyState::Failed(_))),
+		interaction,
+		reply_state,
+		interaction_failed: view.interaction_failed,
 		rendered: view.rendered,
 		message,
 	}

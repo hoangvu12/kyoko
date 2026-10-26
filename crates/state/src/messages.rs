@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,6 +8,9 @@ use crate::caps::CacheLimits;
 use crate::event::LoadDirection;
 use crate::kept::{DeletedInfo, DeletedMessage, MessageVersion};
 use crate::views::RenderedMessage;
+
+const KEPT_EPHEMERAL: usize = 50;
+pub const DEFERRED_REPLY_WINDOW: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Viewport {
@@ -49,10 +52,18 @@ impl UploadProgress {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandStage {
+	Sending,
+	Thinking,
+	Failed(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
 	pub message: Arc<Message>,
 	pub failure: Option<SendFailure>,
+	pub command: Option<CommandStage>,
 	pub upload: Option<UploadProgress>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,
@@ -72,6 +83,9 @@ pub struct ChannelMessages {
 	viewport: Option<Viewport>,
 	deleted: HashMap<Snowflake, DeletedMessage>,
 	versions: HashMap<Snowflake, Arc<[MessageVersion]>>,
+	ephemeral: Vec<Arc<Message>>,
+	expired: HashSet<Snowflake>,
+	failed_components: HashSet<Snowflake>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -389,7 +403,7 @@ impl ChannelMessages {
 
 	pub fn modify(&mut self, id: Snowflake, edit: impl FnOnce(&mut Message)) -> bool {
 		let Ok(index) = self.ordered.binary_search_by_key(&id, |message| message.id) else {
-			return false;
+			return self.modify_ephemeral(id, edit);
 		};
 		let mut message = (*self.ordered[index]).clone();
 		edit(&mut message);
@@ -409,11 +423,109 @@ impl ChannelMessages {
 		self.pending.push(PendingMessage {
 			message,
 			failure: None,
+			command: None,
 			upload: (!files.is_empty()).then_some(UploadProgress { files, sent: 0 }),
 			plugin,
 			altered_by: None,
 			rendered: Some(rendered),
 		});
+	}
+
+	pub fn add_pending_command(&mut self, message: Arc<Message>, rendered: Arc<RenderedMessage>) {
+		self.pending.push(PendingMessage {
+			message,
+			failure: None,
+			command: Some(CommandStage::Sending),
+			upload: None,
+			plugin: None,
+			altered_by: None,
+			rendered: Some(rendered),
+		});
+	}
+
+	pub fn advance_command(&mut self, nonce: &Nonce, stage: CommandStage) -> bool {
+		let Some(current) = self
+			.pending_mut(nonce)
+			.and_then(|pending| pending.command.as_mut())
+		else {
+			return false;
+		};
+		let moves = match (&*current, &stage) {
+			(CommandStage::Sending, CommandStage::Thinking) => true,
+			(CommandStage::Failed(_), _) => false,
+			(_, CommandStage::Failed(_)) => true,
+			_ => false,
+		};
+		if moves {
+			*current = stage;
+		}
+		moves
+	}
+
+	pub fn ephemeral(&self) -> &[Arc<Message>] {
+		&self.ephemeral
+	}
+
+	pub fn keep_ephemeral(&mut self, message: Arc<Message>) {
+		match self
+			.ephemeral
+			.binary_search_by_key(&message.id, |existing| existing.id)
+		{
+			Ok(index) => self.ephemeral[index] = message,
+			Err(index) => self.ephemeral.insert(index, message),
+		}
+		if self.ephemeral.len() > KEPT_EPHEMERAL {
+			let excess = self.ephemeral.len() - KEPT_EPHEMERAL;
+			self.ephemeral.drain(..excess);
+		}
+	}
+
+	fn modify_ephemeral(&mut self, id: Snowflake, edit: impl FnOnce(&mut Message)) -> bool {
+		let Ok(index) = self.ephemeral.binary_search_by_key(&id, |message| message.id) else {
+			return false;
+		};
+		let mut message = (*self.ephemeral[index]).clone();
+		edit(&mut message);
+		self.ephemeral[index] = Arc::new(message);
+		true
+	}
+
+	pub fn dismiss_ephemeral(&mut self, id: Snowflake) -> bool {
+		let before = self.ephemeral.len();
+		self.ephemeral.retain(|message| message.id != id);
+		self.expired.remove(&id);
+		self.ephemeral.len() != before
+	}
+
+	pub fn clear_ephemeral(&mut self) -> bool {
+		let had = !self.ephemeral.is_empty();
+		self.ephemeral.clear();
+		had
+	}
+
+	pub fn expire(&mut self, id: Snowflake) -> bool {
+		let loading = self
+			.by_id
+			.get(&id)
+			.or_else(|| self.ephemeral.iter().find(|message| message.id == id))
+			.is_some_and(|message| message.is_loading());
+		loading && self.expired.insert(id)
+	}
+
+	pub fn is_expired(&self, id: Snowflake) -> bool {
+		self.expired.contains(&id)
+	}
+
+	pub fn component_failed(&mut self, id: Snowflake, failed: bool) -> bool {
+		if failed {
+			self.failed_components.insert(id)
+		} else {
+			self.failed_components.remove(&id)
+		}
+	}
+
+	pub fn has_failed_component(&self, id: Snowflake) -> bool {
+		self.failed_components.contains(&id)
 	}
 
 	pub fn take_pending(&mut self, nonce: &Nonce) -> Option<PendingMessage> {

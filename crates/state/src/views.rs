@@ -5,7 +5,7 @@ use protocol::{ChannelType, Message, Snowflake, StatusKind};
 use smallvec::SmallVec;
 
 use crate::kept::{DeletedInfo, MessageVersion};
-use crate::messages::{SendFailure, UploadProgress};
+use crate::messages::{CommandStage, SendFailure, UploadProgress};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuildSummary {
@@ -70,6 +70,9 @@ pub struct MessageView {
 	pub grouped_with_previous: bool,
 	pub pending: bool,
 	pub failure: Option<SendFailure>,
+	pub command: Option<CommandStage>,
+	pub expired: bool,
+	pub interaction_failed: bool,
 	pub upload: Option<UploadProgress>,
 	pub plugin: Option<String>,
 	pub altered_by: Option<String>,

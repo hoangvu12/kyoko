@@ -1,10 +1,12 @@
 use std::process::ExitCode;
 use std::str::FromStr;
+use std::time::Duration;
 
 use mockcord::{MockConfig, Reply, Server};
 use tracing_subscriber::EnvFilter;
 
 const DEFAULT_PORT: u16 = 8485;
+const SLOW_FOLLOWUP: Duration = Duration::from_secs(600);
 
 fn next_value<T: FromStr>(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<T, String> {
 	args.next()
@@ -35,6 +37,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--frequent-commands" => config.frequent_commands = true,
 			"--slow-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Stall,
 			"--failing-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Fail,
+			"--slow-followups" => config.interactions.followup = SLOW_FOLLOWUP,
+			"--hold-ping" => config.interactions.hold_ping = true,
 			other => return Err(format!("unknown flag {other}")),
 		}
 	}

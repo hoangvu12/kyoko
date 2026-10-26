@@ -62,6 +62,10 @@ pub enum Command {
 		channel_id: Snowflake,
 		nonce: Nonce,
 	},
+	DismissMessage {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+	},
 	LoadApplicationCommands {
 		channel_id: Snowflake,
 	},

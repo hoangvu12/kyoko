@@ -134,7 +134,7 @@ pub struct MenuContext {
 }
 
 pub fn has_actions(entry: &MessageEntry) -> bool {
-	entry.is_plain() && !entry.pending
+	entry.is_plain() && !entry.pending && !entry.ephemeral
 }
 
 pub fn can_delete(entry: &MessageEntry, access: &Access) -> bool {

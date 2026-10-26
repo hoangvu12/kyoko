@@ -219,6 +219,16 @@ impl State {
 		let guild_id = message.guild_id.or_else(|| self.channel_guild(channel_id));
 		self.ingest_message_people(guild_id, message);
 		let mut changes = Changes::default();
+		if message.is_ephemeral() {
+			if let Some(cache) = self.messages.get_mut(&channel_id) {
+				if let Some(nonce) = &message.nonce {
+					cache.take_pending(nonce);
+				}
+				cache.keep_ephemeral(Arc::new(message.clone()));
+				changes.messages.insert(channel_id);
+			}
+			return changes;
+		}
 		if let Some(cache) = self.messages.get_mut(&channel_id) {
 			let pending = message.nonce.as_ref().and_then(|nonce| cache.take_pending(nonce));
 			let confirmed = pending.is_some();
@@ -303,6 +313,13 @@ impl State {
 
 	fn messages_delete(&mut self, channel_id: Snowflake, ids: &[Snowflake]) -> Changes {
 		let mut changes = Changes::default();
+		if let Some(cache) = self.messages.get_mut(&channel_id) {
+			for id in ids {
+				if cache.dismiss_ephemeral(*id) {
+					changes.messages.insert(channel_id);
+				}
+			}
+		}
 		self.keep_deleted(channel_id, ids, &mut changes);
 		self.referenced_deleted(ids, &mut changes);
 		changes

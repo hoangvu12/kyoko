@@ -7,13 +7,15 @@ use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
 use chrono::{DateTime, Utc};
-use protocol::{CommandUse, MessageType, Snowflake, User};
+use protocol::{CommandUse, MessageFlags, MessageType, Snowflake, User};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::channels::read_body;
 use crate::config::AutocompleteReply;
 use crate::error::{ApiError, ApiResult};
+use crate::fixtures::CURRENT_USER_ID;
+use crate::json::to_json;
 use crate::ops::{Draft, UploadedFile};
 use crate::state::Shared;
 
@@ -29,6 +31,13 @@ pub const REMIND_COMMAND: u64 = 9_100_000_000_000_000_201;
 pub const ROLL_COMMAND: u64 = 9_100_000_000_000_000_103;
 pub const TRANSLATE_COMMAND: u64 = 9_100_000_000_000_000_105;
 pub const RESIZE_COMMAND: u64 = 9_100_000_000_000_000_402;
+pub const PING_COMMAND: u64 = 9_100_000_000_000_000_101;
+pub const BROKEN_COMMAND: u64 = 9_100_000_000_000_000_104;
+pub const THINK_COMMAND: u64 = 9_100_000_000_000_000_106;
+pub const WHISPER_COMMAND: u64 = 9_100_000_000_000_000_107;
+pub const IGNORE_COMMAND: u64 = 9_100_000_000_000_000_108;
+pub const THOUGHT: &str = "Thought it over: the answer is 42";
+pub const WHISPERED: &str = "Only you can read this one";
 pub const SHRUG_COMMAND: &str = "-1";
 pub const LANGUAGES: [(&str, &str); 6] = [
 	("English", "en"),
@@ -38,12 +47,15 @@ pub const LANGUAGES: [(&str, &str); 6] = [
 	("日本語", "ja"),
 	("Português", "pt"),
 ];
-const COMMAND_IDS: [(u64, u64, &str); 9] = [
-	(9_100_000_000_000_000_101, MOCKBOT_ID, "ping"),
+const COMMAND_IDS: [(u64, u64, &str); 12] = [
+	(PING_COMMAND, MOCKBOT_ID, "ping"),
 	(9_100_000_000_000_000_102, MOCKBOT_ID, "echo"),
 	(ROLL_COMMAND, MOCKBOT_ID, "roll"),
-	(9_100_000_000_000_000_104, MOCKBOT_ID, "broken"),
+	(BROKEN_COMMAND, MOCKBOT_ID, "broken"),
 	(TRANSLATE_COMMAND, MOCKBOT_ID, "translate"),
+	(THINK_COMMAND, MOCKBOT_ID, "think"),
+	(WHISPER_COMMAND, MOCKBOT_ID, "whisper"),
+	(IGNORE_COMMAND, MOCKBOT_ID, "ignore"),
 	(REMIND_COMMAND, REMINDY_ID, "remind"),
 	(9_100_000_000_000_000_301, POLLY_ID, "poll"),
 	(9_100_000_000_000_000_401, SNAPPER_ID, "snap"),
@@ -163,6 +175,9 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 			json!([string_option("question", "What to ask", true)]),
 		),
 		"snap" => ("Save a snapshot of this channel", json!([])),
+		"think" => ("Takes a moment before answering", json!([])),
+		"whisper" => ("Answers so only you can see it", json!([])),
+		"ignore" => ("Never answers, to test timeouts", json!([])),
 		_ => ("Always fails, to test error states", json!([])),
 	};
 	json!({
@@ -386,7 +401,7 @@ fn answer(name: &str, data: &Value) -> Option<String> {
 			.map(str::to_owned),
 		"roll" => {
 			let sides = option_value(data, "sides").and_then(Value::as_i64).unwrap_or(6);
-			Some(format!("You rolled {} of {sides}", sides.min(4)))
+			Some(format!("\u{1f3b2} You rolled a {}", sides.min(17)))
 		}
 		"remind" => {
 			let when = option_value(data, "when").and_then(Value::as_str)?;
@@ -435,9 +450,47 @@ pub async fn create_interaction(
 		files.push(file);
 	}
 	let nonce = body["nonce"].clone();
-	let interaction_id = shared.store.lock().next_snowflake().to_string();
+	let (interaction_id, timing) = {
+		let mut store = shared.store.lock();
+		(store.next_snowflake().to_string(), store.interactions)
+	};
+	if *name == "ping" && timing.hold_ping {
+		return Ok(StatusCode::NO_CONTENT);
+	}
 	let event = json!({ "id": interaction_id, "nonce": nonce });
 	shared.hub.broadcast("INTERACTION_CREATE", &event);
+	let responder = Responder {
+		nonce: nonce.as_str().map(str::to_owned),
+		interaction: metadata(&shared, &interaction_id, name),
+		channel_id,
+	};
+	match *name {
+		"ignore" => {
+			tokio::spawn(async move {
+				tokio::time::sleep(timing.window).await;
+				shared.hub.broadcast("INTERACTION_FAILURE", &event);
+			});
+			return Ok(StatusCode::NO_CONTENT);
+		}
+		"think" => {
+			shared.hub.broadcast("INTERACTION_SUCCESS", &event);
+			let posted = responder.post(&shared, String::new(), MessageFlags::LOADING)?;
+			let id = posted["id"].as_str().and_then(|id| id.parse::<u64>().ok());
+			tokio::spawn(async move {
+				tokio::time::sleep(timing.followup).await;
+				if let Some(id) = id {
+					let _ = shared.complete_deferred(channel_id, id, THOUGHT);
+				}
+			});
+			return Ok(StatusCode::NO_CONTENT);
+		}
+		"whisper" => {
+			shared.hub.broadcast("INTERACTION_SUCCESS", &event);
+			responder.post(&shared, WHISPERED.to_owned(), MessageFlags::EPHEMERAL)?;
+			return Ok(StatusCode::NO_CONTENT);
+		}
+		_ => {}
+	}
 	let content = match files.first() {
 		Some(file) => option_value(data, "width")
 			.and_then(Value::as_i64)
@@ -450,12 +503,49 @@ pub async fn create_interaction(
 	};
 	shared.hub.broadcast("INTERACTION_SUCCESS", &event);
 	let draft = Draft {
-		kind: Some(MessageType::ChatInputCommand),
 		files,
-		..Draft::text(content)
+		..responder.draft(content, MessageFlags::empty())
 	};
 	shared.post_message(channel_id, &mockbot(), draft)?;
 	Ok(StatusCode::NO_CONTENT)
+}
+
+struct Responder {
+	nonce: Option<String>,
+	interaction: Value,
+	channel_id: u64,
+}
+
+impl Responder {
+	fn draft(&self, content: String, flags: MessageFlags) -> Draft {
+		Draft {
+			kind: Some(MessageType::ChatInputCommand),
+			nonce: self.nonce.clone(),
+			flags,
+			interaction: self.interaction.clone(),
+			..Draft::text(content)
+		}
+	}
+
+	fn post(&self, shared: &Shared, content: String, flags: MessageFlags) -> Result<Value, ApiError> {
+		shared.post_message(self.channel_id, &mockbot(), self.draft(content, flags))
+	}
+}
+
+fn metadata(shared: &Shared, interaction_id: &str, name: &str) -> Value {
+	let user = shared
+		.fixtures
+		.users
+		.get(&CURRENT_USER_ID)
+		.map_or(Value::Null, to_json);
+	json!({
+		"id": interaction_id,
+		"type": APPLICATION_COMMAND,
+		"name": name,
+		"command_type": 1,
+		"user": user,
+		"authorizing_integration_owners": { "0": "0" },
+	})
 }
 
 pub fn claim_uploads(shared: &Shared, draft: &mut Draft) -> Result<(), ApiError> {

@@ -5,7 +5,8 @@ use std::rc::Rc;
 use std::f32::consts::FRAC_PI_2;
 
 use bridge::{
-	ATTACHMENT_BOX, EMBED_MEDIA_BOX, Highlight, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon,
+	ATTACHMENT_BOX, EMBED_MEDIA_BOX, Highlight, MessageEntry, ReplyPreview, ReplyState, Row, STICKER_SIDE,
+	SystemIcon,
 };
 use chrono::NaiveDate;
 use media::cdn::Quality;
@@ -61,6 +62,13 @@ const REACTIONS: f32 = 28.;
 const FILE_CARD: f32 = 70.;
 const VOICE_MESSAGE: f32 = 52.;
 const AUDIO_CARD: f32 = 118.;
+const FOOTER_LINE: f32 = 16.;
+const FOOTER_GAP: f32 = 2.;
+const STATUS_ICON: f32 = 16.;
+const FAILED_ICON: f32 = 12.;
+const DOT: f32 = 6.;
+const DOT_SHADES: [f32; 3] = [0.4, 0.7, 1.];
+const SENDING_OPACITY: f32 = 0.5;
 
 const DEFAULT_LINE: f32 = 1.618;
 
@@ -193,10 +201,21 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 			} else {
 				HEADER_GAP + LINE
 			};
-			let reply = if entry.reply.is_some() { REPLY_HEIGHT } else { 0. };
+			let reply = if entry.reply.is_some() || entry.interaction.is_some() {
+				REPLY_HEIGHT
+			} else {
+				0.
+			};
+			let status = if entry.reply_state.is_some() { LINE } else { 0. };
+			let footer = if entry.ephemeral {
+				FOOTER_LINE + FOOTER_GAP
+			} else {
+				0.
+			};
 			let history = entry.history.len() as f32 * LINE;
 			header
-				+ reply + history
+				+ reply + status
+				+ footer + history
 				+ body_lines(&entry.content, width - GUTTER - RIGHT) * LINE
 				+ rich_height(entry)
 				+ uploads::height(entry)
@@ -287,7 +306,11 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 	let actions = env.actions.clone();
 	let id = entry.id;
 	let tinted = kept::tinted(entry);
-	let highlight = highlight_tokens(entry.highlight);
+	let highlight = highlight_tokens(if entry.ephemeral {
+		Highlight::Mention
+	} else {
+		entry.highlight
+	});
 	let (washed, over) = (env.clone(), hovered.clone());
 	let frame = column()
 		.relative()
@@ -324,7 +347,10 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 					.bg(tok(bar)),
 			)
 		})
-		.when(entry.pending && entry.upload.is_none(), |row| row.opacity(0.5));
+		.when(
+			entry.pending && entry.upload.is_none() && entry.reply_state.is_none(),
+			|row| row.opacity(0.5),
+		);
 	if !bridge::has_actions(entry) || entry.deleted {
 		return frame;
 	}
@@ -340,6 +366,7 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 
 fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> Vec<View> {
 	let mut out = kept::history(entry, env, bump, BODY);
+	out.extend(reply_status(entry));
 	if !entry.content.is_empty() && !super::pictures::only_link(entry) {
 		let look = Look {
 			size: BODY,
@@ -372,13 +399,150 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump:
 	out.extend(extras::poll(entry, env, bump));
 	out.extend(super::reactions::chips(entry, env, hovered));
 	out.extend(kept::accessories(entry, env));
+	out.extend(interaction_failed(entry));
+	out.extend(ephemeral_footer(entry, env));
 	out
 }
 
-fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
-	let reply = entry.reply.as_ref()?;
+fn reply_status(entry: &MessageEntry) -> Option<View> {
+	let status = |label: String| {
+		text(label)
+			.text_size(tok("font_size_md"))
+			.line_height(LINE)
+			.text_color(tok("text_4"))
+	};
+	Some(match entry.reply_state.as_ref()? {
+		ReplyState::Sending => status("Sending command...".to_owned()).opacity(SENDING_OPACITY),
+		ReplyState::Thinking => row()
+			.items_center()
+			.gap(8.)
+			.h(LINE)
+			.child(thinking_dots())
+			.child(status(format!("{} is thinking...", entry.author))),
+		failed => row()
+			.items_center()
+			.gap(6.)
+			.h(LINE)
+			.child(icon("warning_fill", STATUS_ICON, "red_2"))
+			.child(
+				text(failed.failure().unwrap_or_default().to_owned())
+					.text_size(tok("font_size_md"))
+					.line_height(LINE)
+					.text_color(tok("red_2")),
+			),
+	})
+}
+
+fn thinking_dots() -> View {
+	row()
+		.shrink_0()
+		.items_center()
+		.gap(2.)
+		.children(DOT_SHADES.iter().map(|shade| {
+			div()
+				.size(DOT, DOT)
+				.rounded(DOT / 2.)
+				.bg(tok("text_4"))
+				.opacity(*shade)
+		}))
+}
+
+fn interaction_failed(entry: &MessageEntry) -> Option<View> {
+	entry.interaction_failed.then(|| {
+		row()
+			.items_center()
+			.gap(4.)
+			.mt(4.)
+			.child(icon("warning_fill", FAILED_ICON, "red_2"))
+			.child(
+				text("This interaction failed")
+					.text_size(tok("font_size_xs"))
+					.line_height(FOOTER_LINE)
+					.font_weight(500)
+					.text_color(tok("red_2")),
+			)
+	})
+}
+
+fn ephemeral_footer(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
+	if !entry.ephemeral {
+		return None;
+	}
+	let channel_id = entry.message.channel_id;
+	let message_id = entry.id;
+	let pending = entry.message.nonce.clone().filter(|_| entry.pending);
+	let key = match &pending {
+		Some(nonce) => nonce.0.clone(),
+		None => message_id.to_string(),
+	};
+	let dismiss = move || match pending.clone() {
+		Some(nonce) => Command::DiscardMessage { channel_id, nonce },
+		None => Command::DismissMessage {
+			channel_id,
+			message_id,
+		},
+	};
+	let small = |label: &str| {
+		text(label.to_owned())
+			.text_size(tok("font_size_xs"))
+			.line_height(FOOTER_LINE)
+			.text_color(tok("text_4"))
+	};
+	let env = env.clone();
+	Some(
+		row()
+			.items_center()
+			.gap(4.)
+			.mt(FOOTER_GAP)
+			.child(icon("eye", STATUS_ICON, "text_4"))
+			.child(small("Only you can see this \u{b7}"))
+			.child(
+				small("Dismiss message")
+					.id(format!("dismiss-message-{key}"))
+					.text_color(tok("link"))
+					.cursor(Cursor::Pointer)
+					.on_click(move || env.send(dismiss())),
+			),
+	)
+}
+
+fn interaction_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
+	let line = entry.interaction.as_ref()?;
+	let (actions, user) = (env.actions.clone(), line.user.id);
+	let words = |label: String, weight: u16, color: Themed<Color>| {
+		text(label)
+			.shrink_0()
+			.text_size(tok("font_size_sm"))
+			.line_height(REPLY_LINE)
+			.font_weight(weight)
+			.text_color(color)
+	};
+	Some(
+		row()
+			.relative()
+			.items_center()
+			.gap(4.)
+			.h(REPLY_LINE)
+			.mb(REPLY_GAP)
+			.child(spine())
+			.child(small_avatar(&line.user, &line.name, env))
+			.child(
+				words(line.name.clone(), 500, color_or(line.color, "text_2"))
+					.cursor(Cursor::Pointer)
+					.on_click(move || actions.profile(user)),
+			)
+			.child(words("used".to_owned(), 400, Themed::Token(tok("text_3"))))
+			.child(words(
+				format!("/{}", line.command),
+				500,
+				Themed::Token(tok("link")),
+			)),
+	)
+}
+
+fn spine() -> View {
 	let avatar_middle = AVATAR_LEFT + AVATAR as f32 / 2.;
-	let curve = div()
+	div()
 		.absolute()
 		.left(avatar_middle - SPINE / 2. - GUTTER)
 		.top(REPLY_LINE / 2.)
@@ -395,7 +559,11 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 			top_right: 0.,
 			bottom_right: 0.,
 			bottom_left: 0.,
-		});
+		})
+}
+
+fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
+	let reply = entry.reply.as_ref()?;
 	let muted = |label: &str| {
 		text(label.to_owned())
 			.text_size(tok("font_size_sm"))
@@ -454,7 +622,7 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 			.gap(4.)
 			.h(REPLY_LINE)
 			.mb(REPLY_GAP)
-			.child(curve)
+			.child(spine())
 			.child(inner),
 	)
 }
@@ -467,7 +635,7 @@ fn first_of_group(
 ) -> View {
 	let time = bridge::message_time(entry.sent_at, bridge::today());
 	let name_color = color_or(entry.author_color, "text_2");
-	let reply = reply_header(entry, env);
+	let reply = interaction_header(entry, env).or_else(|| reply_header(entry, env));
 	let avatar_top = if reply.is_some() {
 		AVATAR_TOP + REPLY_HEIGHT
 	} else {
@@ -621,7 +789,7 @@ fn bot_tag() -> View {
 		.rounded(tok("radius_xs"))
 		.bg(tok("accent_2"))
 		.child(
-			text("BOT")
+			text("APP")
 				.text_size(tok("font_size_tag"))
 				.line_height(15.)
 				.font_weight(600)

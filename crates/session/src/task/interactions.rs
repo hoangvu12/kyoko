@@ -2,13 +2,15 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
 use protocol::{
-	ApplicationCommandIndex, ApplicationCommandType, AutocompleteResponse, InteractionOption, Snowflake,
+	ApplicationCommandIndex, ApplicationCommandType, AutocompleteResponse, CommandOptionType,
+	InteractionOption, Message, Nonce, Snowflake, User,
 };
 use rest::UploadFile;
 use rest::api::CommandScope;
 use serde_json::{Value, json};
-use state::{Autocomplete, AutocompleteStatus, LocalEvent};
+use state::{Autocomplete, AutocompleteStatus, CommandStage, DEFERRED_REPLY_WINDOW, LocalEvent};
 
 use super::{Core, Internal, actions, outbox};
 
@@ -16,6 +18,8 @@ const INDEX_RETRY: Duration = Duration::from_secs(60);
 const KEPT_INTERACTIONS: usize = 32;
 pub(crate) const AUTOCOMPLETE_DEBOUNCE: Duration = Duration::from_millis(300);
 pub(crate) const AUTOCOMPLETE_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const INTERACTION_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
+pub(crate) const NO_RESPONSE: &str = "The application did not respond";
 const APPLICATION_COMMAND: u8 = 2;
 const APPLICATION_COMMAND_AUTOCOMPLETE: u8 = 4;
 
@@ -40,6 +44,10 @@ impl Interactions {
 			self.sent.pop_front();
 		}
 		self.sent.push_back((nonce, name));
+	}
+
+	fn knows(&self, nonce: &str) -> bool {
+		self.sent.iter().any(|(sent, _)| sent == nonce)
 	}
 
 	fn settle(&mut self, nonce: &str) -> Option<String> {
@@ -68,6 +76,36 @@ pub(crate) struct Interaction<'a> {
 	pub(crate) session_id: &'a str,
 	pub(crate) nonce: &'a str,
 	pub(crate) options: &'a [InteractionOption],
+}
+
+fn invoked_name(name: &str, options: &[InteractionOption]) -> String {
+	let mut invoked = name.to_owned();
+	let mut level = options;
+	while let [only] = level
+		&& matches!(
+			only.kind,
+			CommandOptionType::SubCommand | CommandOptionType::SubCommandGroup
+		) {
+		invoked.push(' ');
+		invoked.push_str(&only.name);
+		level = &only.options;
+	}
+	invoked
+}
+
+fn application_user(index: &ApplicationCommandIndex, command_id: Snowflake) -> Option<User> {
+	let command = index.command(command_id)?;
+	let application = index.application(command.application_id);
+	let name = application.map_or_else(|| command.name.clone(), |application| application.name.clone());
+	Some(User {
+		id: application
+			.and_then(|application| application.bot_id)
+			.unwrap_or(command.application_id),
+		username: name.clone(),
+		global_name: Some(name),
+		bot: Some(true),
+		..User::default()
+	})
 }
 
 pub(crate) fn interaction_body(
@@ -209,12 +247,30 @@ impl Core {
 				return;
 			}
 		};
-		let limit = self.state.read().upload_limit(channel_id);
+		let (limit, application, user) = {
+			let state = self.state.read();
+			(
+				state.upload_limit(channel_id),
+				state
+					.command_index(channel_id)
+					.and_then(|index| application_user(index, command_id)),
+				state.current_user().cloned(),
+			)
+		};
 		if let Some(reason) = outbox::too_large(&files, limit) {
 			self.reject(reason);
 			return;
 		}
-		self.interactions.remember(nonce.0, name.clone());
+		if let (Some(application), Some(user)) = (application, user) {
+			self.apply_local(LocalEvent::PendingCommand {
+				channel_id,
+				nonce: nonce.clone(),
+				name: invoked_name(&name, &options),
+				application: Box::new(application),
+				user: Box::new(user),
+			});
+		}
+		self.interactions.remember(nonce.0.clone(), name.clone());
 		let rest = self.rest.clone();
 		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
@@ -223,26 +279,76 @@ impl Core {
 					let attachments = outbox::uploaded(&rest, &files, channel_id, None).await?;
 					body["data"]["attachments"] = json!(attachments);
 				}
-				rest.create_interaction(&body).await
+				match tokio::time::timeout(INTERACTION_REQUEST_TIMEOUT, rest.create_interaction(&body)).await
+				{
+					Ok(sent) => sent.map(|()| true),
+					Err(_) => Ok(false),
+				}
 			};
-			if let Err(error) = sent.await {
-				tracing::warn!(%error, "application command was not sent");
-				let what = format!("/{name}");
-				let _ = internal.send(Internal::Rejected(actions::failure_reason(&what, &error)));
-			}
+			let reason = match sent.await {
+				Ok(true) => return,
+				Ok(false) => NO_RESPONSE.to_owned(),
+				Err(error) => {
+					tracing::warn!(%error, "application command was not sent");
+					actions::failure_reason(&format!("/{name}"), &error)
+				}
+			};
+			let _ = internal.send(Internal::CommandFailed { nonce, reason });
 		});
+	}
+
+	pub(super) fn command_failed(&mut self, nonce: Nonce, reason: String) {
+		if self.interactions.settle(&nonce.0).is_some() {
+			self.apply_local(LocalEvent::CommandAdvanced {
+				nonce,
+				stage: CommandStage::Failed(reason),
+			});
+		}
+	}
+
+	pub(super) fn interaction_created(&mut self, value: &Value) {
+		let Some(nonce) = value.get("nonce").and_then(Value::as_str) else {
+			return;
+		};
+		if self.interactions.knows(nonce) {
+			self.apply_local(LocalEvent::CommandAdvanced {
+				nonce: Nonce(nonce.to_owned()),
+				stage: CommandStage::Thinking,
+			});
+		}
 	}
 
 	pub(super) fn interaction_settled(&mut self, value: &Value, failed: bool) {
 		let Some(nonce) = value.get("nonce").and_then(Value::as_str) else {
 			return;
 		};
-		let Some(name) = self.interactions.settle(nonce) else {
-			return;
-		};
-		if failed {
-			self.reject(format!("/{name} failed: the application did not respond"));
+		if self.interactions.settle(nonce).is_some() && failed {
+			self.apply_local(LocalEvent::CommandAdvanced {
+				nonce: Nonce(nonce.to_owned()),
+				stage: CommandStage::Failed(NO_RESPONSE.to_owned()),
+			});
 		}
+	}
+
+	pub(super) fn watch_deferred_reply(&mut self, message: &Message) {
+		if !message.is_loading() {
+			return;
+		}
+		let (channel_id, id) = (message.channel_id, message.id);
+		let deadline = id.timestamp() + DEFERRED_REPLY_WINDOW;
+		let left = (deadline - Utc::now()).to_std().unwrap_or_default();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			tokio::time::sleep(left).await;
+			let _ = internal.send(Internal::InteractionExpired { channel_id, id });
+		});
+	}
+
+	pub(super) fn dismiss_message(&mut self, channel_id: Snowflake, message_id: Snowflake) {
+		self.apply_local(LocalEvent::EphemeralDismissed {
+			channel_id,
+			id: message_id,
+		});
 	}
 
 	fn autocomplete_status(&mut self, request: u64, status: AutocompleteStatus) {

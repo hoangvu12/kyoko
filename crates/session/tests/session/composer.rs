@@ -11,7 +11,6 @@ use crate::harness::{Options, Running};
 
 const MESSAGES: &str = "/channels/*/messages";
 const ECHO_ID: Snowflake = Snowflake(9_100_000_000_000_000_102);
-const BROKEN_ID: Snowflake = Snowflake(9_100_000_000_000_000_104);
 type Case = (&'static str, Reply, fn(&SendFailure) -> bool);
 
 const QUIET: Duration = Duration::from_millis(600);
@@ -392,50 +391,6 @@ async fn a_slash_command_runs_through_the_interactions_endpoint() {
 		json!(ECHO_ID.to_string())
 	);
 	assert!(payload["guild_id"].is_string());
-	running.stop().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_command_the_application_fails_is_reported_once() {
-	let (running, channel_id) = start("composer-slash-failure").await;
-	running
-		.session()
-		.send(Command::LoadApplicationCommands { channel_id });
-	running
-		.until("the command index to load", |state| {
-			state.command_index(channel_id).is_some()
-		})
-		.await;
-	let before = rejections(&running);
-	running.session().send(Command::RunApplicationCommand {
-		channel_id,
-		command_id: BROKEN_ID,
-		options: Vec::new(),
-		files: Vec::new(),
-	});
-	let reason = rejected_with(&running, before).await;
-	assert_eq!(reason, "/broken failed: the application did not respond");
-	running
-		.mock()
-		.respond_once("POST", "/interactions", Reply::captcha_required());
-	let before = rejections(&running);
-	running.session().send(Command::RunApplicationCommand {
-		channel_id,
-		command_id: BROKEN_ID,
-		options: Vec::new(),
-		files: Vec::new(),
-	});
-	let reason = rejected_with(&running, before).await;
-	assert_eq!(reason, "/broken: complete this in the official Discord client");
-	tokio::time::sleep(QUIET).await;
-	assert_eq!(
-		running
-			.mock()
-			.recording()
-			.requests_to("POST", "/interactions")
-			.count(),
-		2
-	);
 	running.stop().await;
 }
 

@@ -220,6 +220,10 @@ impl Control {
 		self.shared.store.lock().autocomplete = reply;
 	}
 
+	pub fn set_interaction_timing(&self, timing: crate::config::InteractionTiming) {
+		self.shared.store.lock().interactions = timing;
+	}
+
 	pub fn command_uses(&self) -> Vec<protocol::CommandUse> {
 		self.shared.store.lock().command_uses.clone()
 	}

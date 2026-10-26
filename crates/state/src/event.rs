@@ -11,7 +11,7 @@ use crate::deletions::{DeleteBatch, DeleteStatus};
 use crate::kept::MessageVersion;
 use crate::loaded::Loaded;
 use crate::locks::{RiskyReason, RiskyTarget};
-use crate::messages::{PendingFile, SendFailure, Viewport};
+use crate::messages::{CommandStage, PendingFile, SendFailure, Viewport};
 use crate::state::{ConnectionStatus, SecretStorage};
 use crate::views::{RenderedMessage, UserOverride};
 use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
@@ -64,6 +64,30 @@ pub enum LocalEvent {
 	UserOverridesCleared,
 	PendingDiscarded {
 		nonce: Nonce,
+	},
+	PendingCommand {
+		channel_id: Snowflake,
+		nonce: Nonce,
+		name: String,
+		application: Box<User>,
+		user: Box<User>,
+	},
+	CommandAdvanced {
+		nonce: Nonce,
+		stage: CommandStage,
+	},
+	EphemeralDismissed {
+		channel_id: Snowflake,
+		id: Snowflake,
+	},
+	InteractionExpired {
+		channel_id: Snowflake,
+		id: Snowflake,
+	},
+	ComponentInteraction {
+		channel_id: Snowflake,
+		id: Snowflake,
+		failed: bool,
 	},
 	DraftChanged {
 		channel_id: Snowflake,
