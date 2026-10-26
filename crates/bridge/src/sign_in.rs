@@ -90,6 +90,10 @@ impl Gate {
 		&self.store
 	}
 
+	pub fn identity(&self) -> &ClientIdentity {
+		&self.identity
+	}
+
 	pub fn qr_config(&self, gateway_url: Url) -> login::QrConfig {
 		login::QrConfig {
 			gateway_url,

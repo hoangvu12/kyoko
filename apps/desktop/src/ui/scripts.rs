@@ -74,6 +74,39 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"a captcha on the QR login",
+		"Continue on discord.com",
+		&[(
+			"login.qr",
+			json!({ "stage": "ended", "image": "", "message": "Discord wants a captcha.", "error": true, "web": true }),
+		)],
+	);
+	shows(
+		&mut app,
+		"the web login window",
+		"Browsing data from this window is cleared after you sign in.",
+		&[(
+			"login.web",
+			json!({
+				"open": true, "signing_in": false, "loaded": false, "host": "discord.com", "path": "/login",
+				"secure": true, "message": "", "error": false,
+			}),
+		)],
+	);
+	shows(
+		&mut app,
+		"a web login that could not open",
+		"Signing in on discord.com needs the WebView2 Runtime.",
+		&[(
+			"login.web",
+			json!({
+				"open": false, "signing_in": false, "loaded": false, "host": "", "path": "",
+				"secure": false, "message": "Signing in on discord.com needs the WebView2 Runtime.", "error": true,
+			}),
+		)],
+	);
+	shows(
+		&mut app,
 		"the direct messages",
 		"Direct Messages",
 		&[

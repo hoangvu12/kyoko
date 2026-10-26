@@ -275,6 +275,32 @@ local function problem()
 	)
 end
 
+local function continue_on_web()
+	return ui.show(
+		function()
+			local qr = state.login.qr:get()
+			return stage() == "ended" and qr ~= nil and qr.web == true
+		end,
+		ui.button {
+			id = "login_qr_web",
+			mt = theme.size.space_8,
+			p = 0,
+			bg = "#00000000",
+			border = 0,
+			focus = { border = 0 },
+			cursor = "pointer",
+			on_click = actions.login_web_open,
+			line(
+				"Continue on discord.com",
+				theme.size.font_size_sm,
+				theme.size.line_height_sm,
+				theme.weight.medium,
+				theme.color.accent_1
+			),
+		}
+	)
+end
+
 local function box()
 	return ui.switch(stage, {
 		locked = placeholder("lock", "Accept the notice below to continue"),
@@ -312,6 +338,7 @@ return function()
 					w_full = true,
 				}),
 				problem(),
+				continue_on_web(),
 			}
 		),
 	}

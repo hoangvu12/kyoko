@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local title_bar = require("./title_bar")
 local qr_column = require("./login_qr")
+local web_window = require("./login_web")
 
 local NOTICE =
 	"Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk."
@@ -199,8 +200,12 @@ local button = ui.component(function(props: { text: any, primary: boolean, disab
 	}
 end)
 
+local function web_message(): string
+	local web = state.login.web:get()
+	return if web then web.message else ""
+end
+
 local function token_column(token: any)
-	local web_message = ui.state("login_web_message", false)
 	return ui.column {
 		grow = 1,
 		min_w = 0,
@@ -249,14 +254,22 @@ local function token_column(token: any)
 		ui.column {
 			gap = theme.size.space_8,
 			button {
-				text = "Web login",
+				text = "Sign in on discord.com",
 				primary = false,
-				disabled = locked,
-				on_click = function()
-					web_message:set(true)
+				disabled = function()
+					return locked() or state.login.checking:get()
 				end,
+				on_click = actions.login_web_open,
 			},
-			ui.show(web_message, label("Web login is coming soon.", theme.size.font_sm, theme.color.text_muted)),
+			ui.show(
+				function()
+					return web_message() ~= ""
+				end,
+				label(web_message, theme.size.font_sm, function()
+					local web = state.login.web:get()
+					return if web and web.error then theme.color.red_1 else theme.color.text_4
+				end, { literal = true, wrap = true })
+			),
 		},
 	}
 end
@@ -340,6 +353,7 @@ return function()
 		end
 	end)
 	return ui.column {
+		relative = true,
 		w_full = true,
 		h_full = true,
 		bg = theme.color.background_tertiary,
@@ -364,5 +378,6 @@ return function()
 			},
 			notice(),
 		},
+		web_window(),
 	}
 end

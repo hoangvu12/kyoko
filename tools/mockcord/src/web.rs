@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, Request, State};
+use axum::Json;
+use axum::extract::{Path, Query, Request, State};
 use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::{HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use serde::Deserialize;
+use serde_json::json;
 
+use crate::error::ApiError;
 use crate::state::Shared;
 
 pub const DEVICE_COOKIE: &str = "__dcfduid";
+pub const SIGNED_DEVICE_COOKIE: &str = "__sdcfduid";
+pub const VISITOR_COOKIE: &str = "_cfuvid";
+pub const LOGIN_PAGE: &str = "/login";
 const APP_SCRIPT: &str = "/assets/web.mock.js";
 const SENTRY_SCRIPT: &str = "/assets/sentry.mock.js";
 const COOKIE_MAX_AGE_SECS: u64 = 31_536_000;
@@ -59,4 +66,93 @@ pub async fn device_cookie(State(shared): State<Arc<Shared>>, request: Request, 
 		}
 	}
 	response
+}
+
+pub fn login_cookies(seed: u64) -> Vec<String> {
+	let device = device_cookie_value(seed);
+	let signed = format!("{device}{:016x}", seed.rotate_right(17) ^ 0x2545_f491);
+	let visitor = format!("{:016x}.{seed}", seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+	vec![
+		format!("{DEVICE_COOKIE}={device}; Max-Age={COOKIE_MAX_AGE_SECS}; Path=/; HttpOnly; SameSite=Lax"),
+		format!(
+			"{SIGNED_DEVICE_COOKIE}={signed}; Max-Age={COOKIE_MAX_AGE_SECS}; Path=/; HttpOnly; SameSite=Lax"
+		),
+		format!("{VISITOR_COOKIE}={visitor}; Path=/; HttpOnly; SameSite=None"),
+	]
+}
+
+#[derive(Deserialize)]
+pub struct LoginQuery {
+	auto: Option<String>,
+}
+
+const LOGIN_HTML: &str = r#"<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Discord</title>
+<style>
+body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#313338;color:#dbdee1;font:14px sans-serif}
+form{width:320px;display:flex;flex-direction:column;gap:12px}
+h1{margin:0;font-size:22px;text-align:center;color:#f2f3f5}
+label{font-size:12px;font-weight:700;text-transform:uppercase;color:#b5bac1}
+input{height:40px;border:0;border-radius:4px;padding:0 10px;background:#1e1f22;color:#dbdee1}
+button{height:44px;border:0;border-radius:4px;background:#5865f2;color:#fff;font-size:16px}
+p{margin:0;min-height:18px;color:#fa777c}
+</style></head>
+<body><form id="login"><h1>Welcome back!</h1>
+<label for="email">Email or phone number</label><input id="email" autocomplete="username">
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password">
+<button type="submit">Log In</button><p id="error"></p></form>
+<script>
+const form = document.getElementById('login');
+const signIn = async (login, password) => {
+	const response = await fetch('/api/v9/auth/login', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ login, password }),
+	});
+	const body = await response.json();
+	if (!response.ok || !body.token) {
+		document.getElementById('error').textContent = body.message || 'Login failed';
+		return;
+	}
+	window.localStorage.setItem('token', JSON.stringify(body.token));
+	window.location.replace('/app');
+};
+form.addEventListener('submit', (event) => {
+	event.preventDefault();
+	signIn(document.getElementById('email').value, document.getElementById('password').value);
+});
+if (AUTO) {
+	signIn('mock@kyoko.invalid', 'mock-password');
+}
+</script></body></html>"#;
+
+pub async fn login_page(State(shared): State<Arc<Shared>>, Query(query): Query<LoginQuery>) -> Response {
+	let auto = query.auto.is_some_and(|auto| auto == "1");
+	let html = LOGIN_HTML.replace("AUTO", if auto { "true" } else { "false" });
+	let mut response = ([(CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response();
+	for cookie in login_cookies(shared.config.seed) {
+		if let Ok(value) = HeaderValue::from_str(&cookie) {
+			response.headers_mut().append(SET_COOKIE, value);
+		}
+	}
+	response
+}
+
+#[derive(Deserialize)]
+pub struct Login {
+	login: Option<String>,
+	password: Option<String>,
+}
+
+pub async fn auth_login(State(shared): State<Arc<Shared>>, Json(body): Json<Login>) -> Response {
+	let filled = |field: &Option<String>| field.as_deref().is_some_and(|text| !text.trim().is_empty());
+	if !filled(&body.login) || !filled(&body.password) {
+		return ApiError::invalid_body("Invalid Form Body").into_response();
+	}
+	Json(json!({
+		"user_id": shared.fixtures.current_user.id.to_string(),
+		"token": shared.current_token(),
+		"user_settings": { "locale": "en-US", "theme": "dark" },
+	}))
+	.into_response()
 }

@@ -67,6 +67,7 @@ const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
 const FRAME_POLL: Duration = Duration::from_millis(50);
 const FRAME_TRIES: usize = 100;
 const TIMELINE_SLOT: &str = "timeline";
+const WEB_LOGIN_SLOT: &str = "web_login";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const AVATAR_POINTS: f64 = 32.;
 const WIDTH: f64 = 1100.;
@@ -505,7 +506,13 @@ impl Link {
 			window,
 			host: host.clone(),
 			flow: RefCell::new(sign_in.flow),
-			account: sign_in::Account::install(host, sign_in.runtime, sign_in.storage_warnings, sign_in.qr),
+			account: sign_in::Account::install(
+				host,
+				sign_in.runtime,
+				sign_in.storage_warnings,
+				sign_in.qr,
+				sign_in.web,
+			),
 			inbox,
 			images,
 			image_wakes,
@@ -654,6 +661,7 @@ impl Link {
 			if let (Some(link), Some((name, slot))) = (actions.upgrade(), slot(&argument)) {
 				match name {
 					TIMELINE_SLOT => link.place_slot(slot),
+					WEB_LOGIN_SLOT => link.place_web(slot),
 					threads::THREAD_SLOT => link.place_thread_slot(slot),
 					_ => {}
 				}
@@ -911,7 +919,8 @@ impl Link {
 			| capture::Screen::LoginTos
 			| capture::Screen::LoginToken
 			| capture::Screen::LoginQrScanned
-			| capture::Screen::LoginQrExpired => {}
+			| capture::Screen::LoginQrExpired
+			| capture::Screen::LoginWeb => {}
 		}
 		self.until_capture(|link| link.display.pending() == 0).await;
 		zgx::timer::sleep(capture::SETTLE).await;
@@ -1280,6 +1289,7 @@ impl Link {
 
 	fn shutdown(&self) {
 		tracing::debug!("window closed, stopping the session");
+		self.close_web();
 		self.inbox.close();
 		self.connection_wakes.close();
 		let session = self.flow.borrow_mut().shutdown();

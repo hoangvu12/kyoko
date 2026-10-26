@@ -24,6 +24,10 @@ impl Frame {
 	pub fn is_maximized(self) -> bool {
 		native::is_maximized(self.window)
 	}
+
+	pub fn handle(self) -> usize {
+		self.window
+	}
 }
 
 pub fn wake_until_loop_ends() {

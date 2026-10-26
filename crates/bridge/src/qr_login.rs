@@ -42,7 +42,7 @@ impl QrEnd {
 			QrEnd::Expired => None,
 			QrEnd::Cancelled => Some("The login was cancelled on your phone."),
 			QrEnd::Captcha => Some(
-				"Discord wants a captcha. Kyoko can't show Discord's captcha and won't retry by itself. Finish any check in the official client, then refresh.",
+				"Discord wants a captcha. Kyoko won't solve or retry it by itself: continue on discord.com to finish it on Discord's own page, or refresh to try again.",
 			),
 			QrEnd::Refused => Some(Failure::Refused.message()),
 			QrEnd::Rejected => Some("Discord rejected this sign-in. Refresh to try again."),
@@ -53,6 +53,10 @@ impl QrEnd {
 
 	pub fn is_error(self) -> bool {
 		!matches!(self, QrEnd::Expired | QrEnd::Cancelled)
+	}
+
+	pub fn offers_web_login(self) -> bool {
+		self == QrEnd::Captcha
 	}
 }
 

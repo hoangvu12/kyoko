@@ -28,6 +28,17 @@ export type LoginQr = {
 	avatar: string?,
 	message: string?,
 	error: boolean?,
+	web: boolean?,
+}
+export type LoginWeb = {
+	open: boolean,
+	signing_in: boolean,
+	loaded: boolean,
+	host: string,
+	path: string,
+	secure: boolean,
+	message: string,
+	error: boolean,
 }
 export type VoiceMember = {
 	key: string,
@@ -273,6 +284,7 @@ M.login = {
 	unsaved = ui.shared("login.unsaved", false),
 	adding = ui.shared("login.adding", false),
 	qr = ui.shared("login.qr", nil :: LoginQr?),
+	web = ui.shared("login.web", nil :: LoginWeb?),
 }
 
 M.rail = {

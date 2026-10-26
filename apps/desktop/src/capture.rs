@@ -44,6 +44,7 @@ pub enum Screen {
 	LoginToken,
 	LoginQrScanned,
 	LoginQrExpired,
+	LoginWeb,
 	SidebarCollapsed,
 	NewestImage,
 	Showcase(&'static str),
@@ -103,6 +104,7 @@ impl Screen {
 			"login-token" => Some(Screen::LoginToken),
 			"login-qr-scanned" => Some(Screen::LoginQrScanned),
 			"login-qr-expired" => Some(Screen::LoginQrExpired),
+			"login-web" => Some(Screen::LoginWeb),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
 			"timeline-media" => Some(Screen::NewestImage),
 			"dm-sidebar" => Some(Screen::DmSidebar),
@@ -197,14 +199,22 @@ impl Screen {
 			| Screen::CloneDialog
 			| Screen::KeptDeleted
 			| Screen::KeptEdits => Some(Opening::First),
-			Screen::LoginTos | Screen::LoginToken | Screen::LoginQrScanned | Screen::LoginQrExpired => None,
+			Screen::LoginTos
+			| Screen::LoginToken
+			| Screen::LoginQrScanned
+			| Screen::LoginQrExpired
+			| Screen::LoginWeb => None,
 		}
 	}
 
 	pub fn is_login(self) -> bool {
 		matches!(
 			self,
-			Screen::LoginTos | Screen::LoginToken | Screen::LoginQrScanned | Screen::LoginQrExpired
+			Screen::LoginTos
+				| Screen::LoginToken
+				| Screen::LoginQrScanned
+				| Screen::LoginQrExpired
+				| Screen::LoginWeb
 		)
 	}
 

@@ -36,7 +36,7 @@ Without `--data-dir`, a run against Discord now uses the real data directory (`P
 
 The screen is oxidcord's: a card with the token column and the QR column, and the Terms of Service notice under it. The notice reads "Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk." Until "I understand" is ticked, the token field and both buttons are disabled and the QR column asks for the notice. Ticking it sets `settings.first_run_acknowledged`, so the notice stays acknowledged across launches and sign-outs.
 
-"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Web login" says "coming soon" until ticket 43.
+"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Sign in on discord.com" opens web login (below).
 
 `Flow::submit` validates with `login::TokenLogin::validate` (`GET /users/@me` with the web client's headers). Validation never retries: a 429 comes back at once (`max_retry_wait` of zero). Errors:
 
@@ -71,7 +71,7 @@ Nothing of the exchange is logged: not the token, the ticket, the keys or any pa
 |---|---|
 | Timeout (`timeout_ms`, or close 4003) | The dimmed code, "This code has expired" and Refresh. |
 | Cancelled on the phone (`cancel`, or close 1000) | As expired, plus "The login was cancelled on your phone." |
-| Captcha on the ticket exchange | As expired, plus "Discord wants a captcha. Kyoko can't show Discord's captcha and won't retry by itself. Finish any check in the official client, then refresh." Kyoko never solves or skips a captcha. |
+| Captcha on the ticket exchange | As expired, plus "Discord wants a captcha. Kyoko won't solve or retry it by itself: continue on discord.com to finish it on Discord's own page, or refresh to try again." and a "Continue on discord.com" link that opens web login (`QrEnd::offers_web_login`). Kyoko never solves or skips a captcha. |
 | Rate limit or suspended route | As expired, plus the token form's "Discord refused the sign-in for now..." |
 | Network | As expired, plus "Could not reach Discord." |
 | A bad nonce proof, fingerprint or payload (close 4001 or 4002) | As expired, plus "The QR login stopped unexpectedly. Refresh to try again." |
@@ -79,6 +79,29 @@ Nothing of the exchange is logged: not the token, the ticket, the keys or any pa
 The code is drawn in Rust at the window's scale, `qr_size` less its `space_8` padding, error correction Q (so kyoko's mark can sit in the middle), dark modules in `text_0` on the box's `text_1`. The colours are read when a code arrives, so after a theme switch the next code takes the new colours. The scanning user's avatar goes through the gallery like any other avatar.
 
 Under `--mock` the gateway is mockcord's `/remote-auth` (`Server::remote_auth_url`), which plays the phone (`docs/testing.md`). The signed-in user is mockcord's current user.
+
+## Web login
+
+"Sign in on discord.com" opens Discord's own login page in a WebView2 page inside kyoko's window, so the user finishes any captcha, TOTP, SMS code or security key on Discord's page. Kyoko never fills, solves or automates anything on it. Code: `crates/bridge/src/web_login.rs` (`WebSignIn`, UI-free, tested at the session seam in `crates/bridge/tests/bridge/web_login.rs`), `crates/login/src/web_login.rs` (the token script and Discord's facts), `apps/desktop/src/web_page.rs` (the page, on wry 0.57) and `apps/desktop/ui/shell/login_web.luau` (the window, after the Midnight mockup `login-web.html`).
+
+1. `WebSignIn::open(&Flow)`, only on an idle login screen with the notice accepted, makes a fresh profile folder (`%TEMP%\kyoko-web-login-<pid>-<stamp>-<n>`) and returns a `WebPage`: the login URL, the allowed origin, the folder, the launch identity's user agent (the reduced Chrome one of `docs/fingerprint.md`) and the token script.
+2. The window draws the overlay in Luau: scrim, title bar with a close dot, an address bar with the page's host and path, the page area, "Browsing data from this window is cleared after you sign in." and Cancel. The page area reports its rectangle as the `web_login` slot, and the window places a WebView2 child window there: InPrivate, on the fresh folder as its user-data folder, devtools off, downloads refused. Top-level navigation stays within the allowed origin; any other link, and any new-window request, opens in the system browser when it is https, never in the page.
+3. A document-start script, in the top frame only and only when `location.origin` is the allowed origin, keeps a reference to `localStorage` and polls `token` every 500 ms. Discord's web client keeps the signed-in token there as a JSON string (a protocol fact kyoko has not yet checked against the live page itself). The script posts it with `chrome.webview.postMessage`.
+4. `WebSignIn::message(source, body)` takes it only while the page is open and only when the message's source URL has the allowed origin; anything else is ignored. The token is never logged and never written anywhere but Credential Manager through `Gate`.
+5. Before the page closes, its cookies for the origin are read through WebView2's cookie manager (HttpOnly ones included), and `__dcfduid`, `__sdcfduid` and `_cfuvid` are carried into the launch's cookie jar (`WebSignIn::carry_cookies`, `rest::CookieJar::adopt`) as host-only cookies of the origin with their lifetimes, so REST continues as the browser that signed in. The session saves the jar as usual.
+6. The page's browsing data is cleared, the page closed and its profile folder removed (`Profile::remove` retries for up to 15 seconds while WebView2's browser process lets go; each launch sweeps any `kyoko-web-login-*` left behind). Then the token goes to `Flow::redeem` and `Flow::redeemed`, as the QR column's does, so `login.adding` and "Back to your account" behave the same.
+
+Cancel, the close dot, leaving the login screen (another sign-in finished) and closing the app close the page and remove its folder the same way.
+
+| End | Shown under the button |
+|---|---|
+| WebView2 Runtime missing, or the page could not be made | "Signing in on discord.com needs the Microsoft Edge WebView2 Runtime, which isn't available. Use a token or the QR code instead." |
+| Token rejected | "Discord rejected this sign-in. Try again." |
+| Network, refused | As the token form. |
+
+The allowed origin is the origin of `WebLoginConfig::login_url`: `https://discord.com/login` against Discord, mockcord's `/login` under `--mock` and `--mock-server`. No automated test, capture or headless run loads discord.com.
+
+Not done: WebView2 sends its own `Sec-CH-UA` brands (Microsoft Edge WebView2). Only the user agent string can be set, so the login page sees kyoko's Chrome user agent with Edge's client hints.
 
 ## Leaving the main view
 
@@ -90,7 +113,7 @@ Whenever the window leaves the main view it collapses the timeline slot, so a Ru
 
 ## Several accounts
 
-Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with "Paste token" or the QR code (and later web login) is saved there, with its token in Credential Manager under `account-<user id>`.
+Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with "Paste token", the QR code or web login is saved there, with its token in Credential Manager under `account-<user id>`.
 
 - Switching: `Flow::switch(user_id)` takes the running session and returns a `Handover`; the screen is `Switching`, and the window closes overlays, settings and the quick switcher's recent list, drops the gallery budget and empties every view at once, so nothing of the old account stays on screen. `Handover::finish` runs on the blocking pool: `Session::shutdown` closes the gateway normally (close 1000) and flushes the persist queue, while unsent paced writes (folder order, collapse, status) are dropped as on quit. It then reads the other account's token and makes that account current. `Flow::arrived` starts the new session with the launch's `ClientIdentity` on that account's own database. Only one session runs at a time. A new session re-reads the safety-lock setting and starts without risky-action confirmations.
 - Add an Account: `Flow::add_account` stops the session the same way and shows the login screen with "Back to your account" (`login.cancel_add`), which starts the current account again. A token that validates is saved and becomes current, so the new account starts.

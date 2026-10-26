@@ -20,8 +20,6 @@ pub enum LoginError {
 	Cancelled,
 	#[error("login session expired")]
 	Expired,
-	#[error("login helper failed: {0}")]
-	Helper(String),
 	#[error("storage error: {0}")]
 	Storage(String),
 	#[error("io error: {0}")]

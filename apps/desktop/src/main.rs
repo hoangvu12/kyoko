@@ -25,6 +25,7 @@ mod timeline;
 mod toasts;
 mod tray;
 mod ui;
+mod web_page;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -32,7 +33,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
-use bridge::{Flow, Gate, Inbox, QrSignIn, Remember, Start, StartSession, changes_notifier};
+use bridge::{
+	Flow, Gate, Inbox, QrSignIn, Remember, Start, StartSession, WebLoginConfig, WebSignIn, changes_notifier,
+};
 use capture::{Capture, Opening, Screen};
 use clap::Parser;
 use integration::{APP_ID, Desktop, MOCK_APP_ID};
@@ -155,6 +158,7 @@ struct Backend {
 	rest_base: Url,
 	gateway_url: String,
 	remote_auth_url: String,
+	login_page: Url,
 	token: Option<Token>,
 	build_source: Option<Url>,
 	cdn: String,
@@ -298,6 +302,9 @@ fn main() -> Result<ExitCode> {
 	let plugin_host = plugin_host(&cli, store.paths.data_dir());
 	let gate = Gate::new(store.clone(), identity.clone(), backend.rest_base.clone());
 	let qr = QrSignIn::new(gate.qr_config(remote_auth_url(&backend, capture.as_ref())?));
+	let web = WebSignIn::new(WebLoginConfig::at(backend.login_page.clone()));
+	let profiles = web.config().profiles.clone();
+	runtime.spawn_blocking(move || bridge::sweep_profiles(&profiles));
 	let mut flow = Flow::new(
 		gate,
 		session_starter(&backend, identity, &store, &inbox, runtime.handle(), &plugin_host),
@@ -322,6 +329,7 @@ fn main() -> Result<ExitCode> {
 			runtime: runtime.handle().clone(),
 			storage_warnings: !mocked,
 			qr,
+			web,
 		},
 		inbox,
 		ui::Images {
@@ -433,6 +441,7 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		rest_base: Url::parse(server.rest_base_url()).context("mock rest url")?,
 		gateway_url: server.gateway_url().to_owned(),
 		remote_auth_url: server.remote_auth_url(),
+		login_page: Url::parse(&server.login_page_url()).context("mock login page url")?,
 		token: Some(Token::new(server.token())),
 		build_source: None,
 		cdn: server.cdn_url(),
@@ -451,6 +460,7 @@ fn external_mock_backend(origin: &Url) -> Result<Backend> {
 		rest_base: Url::parse(&format!("{base}/api/v9")).context("mock rest url")?,
 		gateway_url: format!("ws://{host}:{port}/gateway"),
 		remote_auth_url: mockcord::remote_auth_url(&base),
+		login_page: Url::parse(&mockcord::login_page_url(&base)).context("mock login page url")?,
 		token: Some(Token::new(MockConfig::default().token)),
 		build_source: None,
 		cdn: format!("{base}/cdn"),
@@ -468,6 +478,7 @@ fn discord_backend() -> Result<Backend> {
 		rest_base: rest::RestConfig::default_base_url(),
 		gateway_url: gateway::GatewayConfig::DEFAULT_GATEWAY_URL.to_owned(),
 		remote_auth_url: bridge::REMOTE_AUTH_URL.to_owned(),
+		login_page: WebLoginConfig::discord().login_url,
 		token: token.map(Token::new),
 		build_source: Some(session::discord_build_source()),
 		cdn: media::cdn::CDN.to_owned(),

@@ -203,6 +203,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.merge(expressions::routes())
 		.route_layer(middleware::from_fn_with_state(shared.clone(), guard))
 		.route("/users/@me/remote-auth/login", post(remote_auth::exchange))
+		.route("/auth/login", post(web::auth_login))
 		.layer(middleware::from_fn_with_state(shared.clone(), web::device_cookie));
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))
@@ -218,6 +219,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		)
 		.route("/upload/{*key}", put(interactions::upload))
 		.route("/app", get(web::app))
+		.route(web::LOGIN_PAGE, get(web::login_page))
 		.route("/assets/{name}", get(web::asset))
 		.nest("/api/v9", api.clone())
 		.nest("/api/v10", api)

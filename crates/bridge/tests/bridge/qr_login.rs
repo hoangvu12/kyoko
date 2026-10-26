@@ -197,6 +197,12 @@ async fn a_captcha_on_the_ticket_exchange_is_reported_once_and_nothing_is_saved(
 	assert_eq!(end, QrEnd::Captcha);
 	assert!(end.is_error());
 	assert!(end.message().is_some_and(|message| message.contains("captcha")));
+	assert!(
+		end.message()
+			.is_some_and(|message| message.contains("discord.com"))
+	);
+	assert!(end.offers_web_login());
+	assert!(!QrEnd::Expired.offers_web_login());
 	let exchange = exchanges(&desk);
 	assert_eq!(exchange.len(), 1, "a captcha is never retried");
 	assert!(exchange[0].injected);

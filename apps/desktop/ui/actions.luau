@@ -116,6 +116,14 @@ function M.login_qr_refresh()
 	ui.invoke("login.qr_refresh")
 end
 
+function M.login_web_open()
+	ui.invoke("login.web_open")
+end
+
+function M.login_web_cancel()
+	ui.invoke("login.web_cancel")
+end
+
 function M.sign_out()
 	return ui.action("login.sign_out")
 end

@@ -38,5 +38,8 @@ pub use record::{
 };
 pub use rest::{MOCKBOT_ID, MODERATED_PHRASE};
 pub use scenario::{HeartbeatAcks, Reply};
-pub use server::{Server, remote_auth_url};
-pub use web::{DEVICE_COOKIE, device_cookie_value, installation_id};
+pub use server::{Server, login_page_url, remote_auth_url};
+pub use web::{
+	DEVICE_COOKIE, LOGIN_PAGE, SIGNED_DEVICE_COOKIE, VISITOR_COOKIE, device_cookie_value, installation_id,
+	login_cookies,
+};

@@ -48,6 +48,14 @@ impl CookieJar {
 		saved
 	}
 
+	pub fn adopt<'a>(&self, set_cookies: impl IntoIterator<Item = &'a str>, url: &Url) {
+		let values: Vec<HeaderValue> = set_cookies
+			.into_iter()
+			.filter_map(|value| HeaderValue::from_str(value).ok())
+			.collect();
+		reqwest::cookie::CookieStore::set_cookies(self, &mut values.iter(), url);
+	}
+
 	pub async fn changed(&self) {
 		self.changed.notified().await;
 	}

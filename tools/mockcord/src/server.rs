@@ -36,6 +36,10 @@ pub fn remote_auth_url(origin: &str) -> String {
 	format!("{socket_origin}{}?v=2", crate::remote_auth::PATH)
 }
 
+pub fn login_page_url(origin: &str) -> String {
+	format!("{origin}{}", crate::web::LOGIN_PAGE)
+}
+
 fn fixture_anchor() -> DateTime<Utc> {
 	let now_ms = Utc::now().timestamp_millis();
 	DateTime::from_timestamp_millis(now_ms - now_ms % ANCHOR_GRANULARITY_MS).unwrap_or_default()
@@ -96,6 +100,10 @@ impl Server {
 
 	pub fn remote_auth_url(&self) -> String {
 		remote_auth_url(&self.shared.urls.origin)
+	}
+
+	pub fn login_page_url(&self) -> String {
+		login_page_url(&self.shared.urls.origin)
 	}
 
 	pub fn address(&self) -> SocketAddr {

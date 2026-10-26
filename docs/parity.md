@@ -85,6 +85,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `login-token` | `login-token.html` |
 | `login-qr-scanned` | `login-qr-scanned.html` |
 | `login-qr-expired` | `login-qr-expired.html` |
+| `login-web` | `login-web.html` |
 | `server-rail` | `midnight-discord.html` |
 | `server-rail-folder` | `midnight-discord.html` |
 | `channel-sidebar` | `midnight-discord.html` |
@@ -145,7 +146,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `expressions-in-messages`, `expressions-in-messages-emoji-popout`, `expressions-in-messages-sticker-popout`, `gif-picker-results`, `inbox`, `link-preview-while-typing`, `login-2fa`, `login-captcha`, `login-email`, `login-unsaved`, `login-web`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `expressions-in-messages`, `expressions-in-messages-emoji-popout`, `expressions-in-messages-sticker-popout`, `gif-picker-results`, `inbox`, `link-preview-while-typing`, `login-2fa`, `login-captcha`, `login-email`, `login-unsaved`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -174,6 +175,14 @@ Mockup only: oxidcord has no mock remote-auth gateway, so `parity capture` skips
 |---|---|---|---|
 | `login-qr-scanned` | 42 | As `login-token`; the phone scans the code at once (`phone=scan`), so the column shows the scanning user's avatar and name and asks to confirm on the phone. Settles once the avatar has loaded. | yes |
 | `login-qr-expired` | 42 | As `login-token`; the phone lets the code expire at once (`phone=expire`, close 4003), so the column shows the dimmed code and Refresh. | yes |
+
+### 43 Web login
+
+Mockup only, like the QR screens: oxidcord's web login opens Discord itself, which a capture never loads.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `login-web` | 43 | As `login-token`, then "Sign in on discord.com": the web login window over the login screen, its page being mockcord's `/login` (the allowed origin under mock). Settles once the page has loaded and the QR code is drawn. | yes |
 
 ### 22 Server rail and folders
 

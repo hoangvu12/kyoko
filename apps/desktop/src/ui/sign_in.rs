@@ -5,7 +5,7 @@ use std::sync::Arc;
 use bridge::themes::parse_color;
 use bridge::{
 	Arrival, Checked, Failure, Flow, Handover, Inbox, QrEvent, QrEvents, QrSignIn, QrStage, Scanner, Screen,
-	Status,
+	Status, WebPage, WebSignIn, WebStage,
 };
 use media::ImageName;
 use protocol::Snowflake;
@@ -15,6 +15,7 @@ use tokio::runtime::Handle;
 use zgx_script::{ScriptHost, Shared, Value};
 
 use super::{Link, Slot, qr_code, text};
+use crate::web_page::{Bounds, PageEvent, PageHost};
 use crate::{capture, theme};
 
 const QR_IMAGE: &str = "login-qr";
@@ -24,6 +25,7 @@ pub struct SignIn {
 	pub runtime: Handle,
 	pub storage_warnings: bool,
 	pub qr: QrSignIn,
+	pub web: WebSignIn,
 }
 
 enum Event {
@@ -33,6 +35,9 @@ enum Event {
 	AccountsChanged,
 	Qr(u64, Box<QrEvent>),
 	QrChecked(Box<Checked>),
+	Web(PageEvent),
+	WebPlaced,
+	WebChecked(Box<Checked>),
 }
 
 pub(super) struct Account {
@@ -54,6 +59,11 @@ pub(super) struct Account {
 	qr_codes: Cell<u64>,
 	scanner_avatar: RefCell<Option<ImageName>>,
 	scanner_ready: Cell<bool>,
+	web: RefCell<WebSignIn>,
+	web_view: Shared,
+	web_slot: Cell<Option<Slot>>,
+	web_page: RefCell<Option<WebPage>>,
+	web_host: RefCell<Option<PageHost>>,
 }
 
 impl Account {
@@ -62,6 +72,7 @@ impl Account {
 		runtime: Handle,
 		storage_warnings: bool,
 		qr: QrSignIn,
+		web: WebSignIn,
 	) -> Account {
 		Account {
 			runtime,
@@ -82,6 +93,11 @@ impl Account {
 			qr_codes: Cell::new(0),
 			scanner_avatar: RefCell::new(None),
 			scanner_ready: Cell::new(false),
+			web: RefCell::new(web),
+			web_view: host.shared("login.web", Value::Nil),
+			web_slot: Cell::new(None),
+			web_page: RefCell::new(None),
+			web_host: RefCell::new(None),
 		}
 	}
 }
@@ -120,6 +136,19 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
+		host.action("login.web_open", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.open_web();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.web_cancel", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.account.web.borrow_mut().cancel();
+				link.sync_web();
+			}
+		});
+		let actions = Rc::downgrade(link);
 		host.action("login.cancel_add", move |_| {
 			if let Some(link) = actions.upgrade() {
 				link.flow.borrow_mut().cancel_add();
@@ -144,6 +173,12 @@ impl Link {
 					Event::QrChecked(checked) => {
 						let failure = self.flow.borrow_mut().redeemed(*checked);
 						self.account.qr.borrow_mut().signed_in(failure);
+					}
+					Event::Web(event) => self.on_page(event),
+					Event::WebPlaced => self.show_page(),
+					Event::WebChecked(checked) => {
+						let failure = self.flow.borrow_mut().redeemed(*checked);
+						self.account.web.borrow_mut().signed_in(failure);
 					}
 				}
 				self.after_flow_change();
@@ -170,6 +205,9 @@ impl Link {
 	pub(super) fn drive_capture(&self, screen: capture::Screen) {
 		if screen != capture::Screen::LoginTos {
 			self.acknowledge();
+		}
+		if screen == capture::Screen::LoginWeb {
+			self.open_web();
 		}
 	}
 
@@ -308,6 +346,7 @@ impl Link {
 			self.session_started();
 		}
 		self.follow_qr();
+		self.sync_web();
 		self.publish_sign_in();
 	}
 
@@ -445,6 +484,11 @@ impl Link {
 			(capture::Screen::LoginQrScanned, QrStage::Scanned(_)) => self.account.scanner_ready.get(),
 			(capture::Screen::LoginQrExpired, QrStage::Ended(_)) => true,
 			(capture::Screen::LoginToken, QrStage::Code { .. }) => self.account.qr_image.borrow().is_some(),
+			(capture::Screen::LoginWeb, QrStage::Code { .. }) => {
+				self.account.qr_image.borrow().is_some()
+					&& self.account.web.borrow().loaded()
+					&& self.account.web_host.borrow().is_some()
+			}
 			(capture::Screen::LoginTos, _) => true,
 			_ => false,
 		}
@@ -479,6 +523,7 @@ impl Link {
 				"image": image,
 				"message": end.message().unwrap_or_default(),
 				"error": end.is_error(),
+				"web": end.offers_web_login(),
 			}),
 		};
 		if let Some(value) = Value::from_json(&view.to_string()) {
@@ -563,6 +608,173 @@ impl Link {
 		});
 		drop(flow);
 		self.publish_qr();
+	}
+}
+
+impl Link {
+	fn open_web(&self) {
+		let page = self.account.web.borrow_mut().open(&self.flow.borrow());
+		if let Some(page) = page {
+			*self.account.web_page.borrow_mut() = Some(page);
+			self.show_page();
+		}
+		self.sync_web();
+	}
+
+	pub(super) fn place_web(&self, slot: Slot) {
+		self.account.web_slot.set(Some(slot));
+		self.account.events.push(Event::WebPlaced);
+	}
+
+	pub(super) fn close_web(&self) {
+		if let Some(host) = self.account.web_host.borrow_mut().take() {
+			host.close();
+		}
+		let profile = {
+			let mut web = self.account.web.borrow_mut();
+			web.cancel();
+			web.release()
+		};
+		if let Some(profile) = profile {
+			std::thread::spawn(move || profile.remove());
+		}
+	}
+
+	fn page_bounds(&self) -> Option<Bounds> {
+		let slot = self.account.web_slot.get()?;
+		let scale = self.scale_factor();
+		let pixels = |points: f32| (f64::from(points) * scale).round();
+		(slot.width > 0. && slot.height > 0.).then(|| Bounds {
+			x: pixels(slot.x) as i32,
+			y: pixels(slot.y) as i32,
+			width: pixels(slot.width) as u32,
+			height: pixels(slot.height) as u32,
+		})
+	}
+
+	fn show_page(&self) {
+		let Some(bounds) = self.page_bounds() else {
+			return;
+		};
+		if let Some(host) = self.account.web_host.borrow().as_ref() {
+			host.place(bounds);
+			return;
+		}
+		let Some(page) = self.account.web_page.borrow_mut().take() else {
+			return;
+		};
+		let Some(frame) = self.window.frame.get() else {
+			self.page_unavailable("the native window was not found");
+			return;
+		};
+		let events = self.account.events.clone();
+		let opened = PageHost::open(frame.handle(), &page, bounds, move |event| {
+			events.push(Event::Web(event))
+		});
+		match opened {
+			Ok(host) => *self.account.web_host.borrow_mut() = Some(host),
+			Err(error) => self.page_unavailable(&error),
+		}
+	}
+
+	fn page_unavailable(&self, error: &str) {
+		tracing::warn!(%error, "the web login page could not be made");
+		self.account.web.borrow_mut().unavailable();
+		self.sync_web();
+	}
+
+	fn on_page(&self, event: PageEvent) {
+		match event {
+			PageEvent::Navigated(url) => self.account.web.borrow_mut().navigated(&url),
+			PageEvent::Loaded(url) => {
+				let mut web = self.account.web.borrow_mut();
+				web.navigated(&url);
+				web.page_loaded();
+			}
+			PageEvent::Message { source, body } => {
+				let token = self.account.web.borrow_mut().message(&source, &body);
+				if let Some(token) = token {
+					self.hand_off(token);
+				}
+			}
+		}
+		self.publish_web();
+	}
+
+	fn hand_off(&self, token: protocol::Token) {
+		let origin = self.account.web.borrow().config().origin();
+		let cookies = self
+			.account
+			.web_host
+			.borrow()
+			.as_ref()
+			.map(|host| host.cookies(&origin))
+			.unwrap_or_default();
+		self.account
+			.web
+			.borrow()
+			.carry_cookies(&self.flow.borrow(), &cookies);
+		self.sync_web();
+		tracing::info!("signing in with the web login page's token");
+		let check = self.flow.borrow_mut().redeem(token);
+		match check {
+			Some(check) => {
+				let events = self.account.events.clone();
+				self.account
+					.runtime
+					.spawn(async move { events.push(Event::WebChecked(Box::new(check.await))) });
+			}
+			None => self.account.web.borrow_mut().signed_in(Some(Failure::Rejected)),
+		}
+	}
+
+	fn sync_web(&self) {
+		let profile = {
+			let mut web = self.account.web.borrow_mut();
+			web.follow(&self.flow.borrow());
+			web.release()
+		};
+		if !self.account.web.borrow().wants_page() {
+			self.account.web_page.borrow_mut().take();
+			self.account.web_slot.set(None);
+			if let Some(host) = self.account.web_host.borrow_mut().take() {
+				host.close();
+			}
+		}
+		if let Some(profile) = profile {
+			self.account.runtime.spawn_blocking(move || profile.remove());
+		}
+		self.publish_web();
+	}
+
+	fn publish_web(&self) {
+		let web = self.account.web.borrow();
+		let stage = web.stage();
+		let address = web.address();
+		let host = address
+			.and_then(|url| {
+				url.host_str().map(|host| match url.port() {
+					Some(port) => format!("{host}:{port}"),
+					None => host.to_owned(),
+				})
+			})
+			.unwrap_or_default();
+		let view = serde_json::json!({
+			"open": matches!(stage, WebStage::Open | WebStage::SigningIn),
+			"signing_in": stage == WebStage::SigningIn,
+			"loaded": web.loaded(),
+			"host": host,
+			"path": address.map(url::Url::path).unwrap_or_default(),
+			"secure": address.is_some_and(|url| url.scheme() == "https"),
+			"message": match stage {
+				WebStage::Ended(end) => end.message(),
+				_ => "",
+			},
+			"error": matches!(stage, WebStage::Ended(_)),
+		});
+		if let Some(value) = Value::from_json(&view.to_string()) {
+			self.account.web_view.set(value);
+		}
 	}
 }
 
