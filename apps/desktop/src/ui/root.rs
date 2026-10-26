@@ -155,7 +155,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		"timeline slot" => timeline_slot(
 			runtime.signal(Slot::default()),
 			timeline().view(),
-			runtime.signal(false),
+			[runtime.signal(false), runtime.signal(false)],
 		),
 		"thread slot" => threads::thread_slot(
 			runtime.signal(Slot::default()),

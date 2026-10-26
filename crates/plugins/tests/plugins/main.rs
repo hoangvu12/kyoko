@@ -9,6 +9,7 @@ mod events;
 mod expression_cloner;
 mod favorite_emoji_first;
 mod gestures;
+mod hidden_views;
 mod message_logger;
 mod one_ping_per_dm;
 mod permissions;

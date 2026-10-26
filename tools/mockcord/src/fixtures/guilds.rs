@@ -4,9 +4,9 @@ use chrono::{DateTime, Duration, Utc};
 use protocol::{
 	Activity, ActivityAssets, ActivityKind, ActivityTimestamps, Channel, ChannelType, ClientStatus,
 	DefaultMessageNotifications, DefaultReaction, Emoji, ExplicitContentFilter, ForumLayout, ForumSortOrder,
-	ForumTag, GuildProperties, LenientVec, Member, NsfwLevel, PartialEmoji, PermissionOverwrite,
-	PermissionOverwriteKind, Permissions, PremiumTier, Presence, Role, RoleColors, Snowflake, StatusKind,
-	ThreadMetadata, User, VerificationLevel, VoiceState,
+	ForumTag, GuildProperties, LenientVec, MEMBER_QUARANTINED_USERNAME, Member, NsfwLevel, PartialEmoji,
+	PermissionOverwrite, PermissionOverwriteKind, Permissions, PremiumTier, Presence, Role, RoleColors,
+	Snowflake, StatusKind, ThreadMetadata, User, VerificationLevel, VoiceState,
 };
 use rand::Rng;
 use rand::rngs::StdRng;
@@ -21,6 +21,7 @@ const MUTED_COLOR: i64 = 0x607D8B;
 const THREAD_MESSAGE_CAP: usize = 40;
 const FORUM_POST_MESSAGE_CAP: usize = 15;
 const FIXED_NON_TEXT_CHANNELS: usize = 5;
+const TIMEOUT_DAYS: i64 = 400;
 
 pub struct GuildFixture {
 	pub id: u64,
@@ -507,15 +508,15 @@ fn build_members(builder: &mut Builder, index: usize, guild_id: u64, roles: &Rol
 		}
 		let nick =
 			(offset % 4 == 1).then(|| format!("{} [{offset}]", user.global_name.as_deref().unwrap_or("")));
+		let timed_out = timed_out_index == Some(offset);
 		members.push(Member {
 			nick,
 			roles: member_roles.into_iter().map(Snowflake).collect(),
 			joined_at: Some(anchor - Duration::days(builder.rng.random_range(30..800))),
 			premium_since: (offset % 11 == 0).then(|| anchor - Duration::days(60)),
-			flags: Some(0),
+			flags: Some(if timed_out { MEMBER_QUARANTINED_USERNAME } else { 0 }),
 			pending: Some(false),
-			communication_disabled_until: (timed_out_index == Some(offset))
-				.then(|| anchor + Duration::days(3)),
+			communication_disabled_until: timed_out.then(|| anchor + Duration::days(TIMEOUT_DAYS)),
 			guild_id: Some(Snowflake(guild_id)),
 			user: Some(user),
 			..Member::default()

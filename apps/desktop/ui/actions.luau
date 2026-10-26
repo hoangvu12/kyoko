@@ -32,6 +32,10 @@ function M.select_channel(id: string)
 	return ui.action("sidebar.select_channel", id)
 end
 
+function M.open_hidden_channel(id: string)
+	return ui.action("sidebar.open_hidden", id)
+end
+
 function M.toggle_category(id: string)
 	return ui.action("sidebar.toggle_category", id)
 end

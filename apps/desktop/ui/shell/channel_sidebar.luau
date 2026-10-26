@@ -487,6 +487,10 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 	local row = props.row
 	local hovered = ui.use_state(false)
 	local function selected(): boolean
+		if row.hidden == true then
+			local hidden = state.hidden.view:get()
+			return hidden.open and hidden.id == row.id
+		end
 		return state.timeline.channel_id:get() == row.id
 	end
 	local function rest(): string
@@ -498,6 +502,10 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 		return if hovered:get() then hover else value
 	end
 	local selectable = row.selectable == true
+	local on_click = if selectable
+		then actions.select_channel(row.id)
+		elseif row.hidden == true then actions.open_hidden_channel(row.id)
+		else nil
 	local members = {}
 	for _, member in row.voice or {} do
 		table.insert(members, voice_member(member))
@@ -527,7 +535,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 				items = "center",
 				text_size = theme.size.font_size_md,
 				color = rest,
-				cursor = if selectable then "pointer" else "not-allowed",
+				cursor = if on_click ~= nil then "pointer" else "not-allowed",
 				bg = function()
 					if selected() then
 						return theme.color.active
@@ -537,7 +545,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 				on_hover = function(inside: boolean)
 					hovered:set(inside)
 				end,
-				on_click = if selectable then actions.select_channel(row.id) else nil,
+				on_click = on_click,
 				context_menu_below = true,
 				context_menu_style = menu_style,
 				context_menu = function()

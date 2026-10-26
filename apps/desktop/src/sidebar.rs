@@ -1,9 +1,10 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use bridge::{
-	CategoryEntry, ChannelEntry, GuildHeader, Refresh, Sidebar, SidebarRow, VoiceMember, VoiceVideo,
+	CategoryEntry, ChannelEntry, GuildHeader, HiddenChannel, Refresh, Sidebar, SidebarRow, VoiceMember,
+	VoiceVideo,
 };
 use media::ImageName;
 use protocol::Snowflake;
@@ -22,6 +23,7 @@ pub(crate) struct SidebarView {
 	guild_id: Shared,
 	guild_name: Shared,
 	header: Shared,
+	show_hidden: Cell<bool>,
 }
 
 impl SidebarView {
@@ -33,11 +35,12 @@ impl SidebarView {
 			guild_id: host.shared("sidebar.guild_id", ""),
 			guild_name: host.shared("sidebar.guild_name", ""),
 			header: host.shared("sidebar.header", header_value(&GuildHeader::default())),
+			show_hidden: Cell::new(false),
 		}
 	}
 
 	pub(crate) fn reset(&self) {
-		*self.sidebar.borrow_mut() = Sidebar::default();
+		*self.sidebar.borrow_mut() = Sidebar::showing_hidden(self.show_hidden.get());
 		self.avatars.borrow_mut().clear();
 		self.rows.set(Value::List(Rc::new([])));
 		self.guild_id.set("".into());
@@ -63,6 +66,19 @@ impl SidebarView {
 
 	pub(crate) fn set_open(&self, channel_id: Option<Snowflake>) -> bool {
 		self.sidebar.borrow_mut().set_open(channel_id)
+	}
+
+	pub(crate) fn set_show_hidden(&self, state: Option<&State>, show: bool) -> bool {
+		self.show_hidden.set(show);
+		state.is_some_and(|state| self.sidebar.borrow_mut().set_show_hidden(state, show))
+	}
+
+	pub(crate) fn open_hidden(&self, state: &State, channel_id: Snowflake) -> Option<HiddenChannel> {
+		self.sidebar.borrow_mut().open_hidden(state, channel_id)
+	}
+
+	pub(crate) fn close_hidden(&self) -> bool {
+		self.sidebar.borrow_mut().close_hidden()
 	}
 
 	pub(crate) fn publish(&self, state: &State, icons: &Icons<'_>) -> Vec<String> {
@@ -116,6 +132,12 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 	host.action("sidebar.select_channel", move |argument| {
 		if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake(&argument)) {
 			link.select_channel(channel_id);
+		}
+	});
+	let actions = Rc::downgrade(link);
+	host.action("sidebar.open_hidden", move |argument| {
+		if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake(&argument)) {
+			link.open_hidden_channel(channel_id);
 		}
 	});
 	let actions = Rc::downgrade(link);
@@ -200,6 +222,7 @@ fn channel_value(channel: &ChannelEntry, voice: Value) -> Value {
 		("locked", channel.locked.into()),
 		("joined", channel.joined.into()),
 		("selectable", channel.selectable().into()),
+		("hidden", channel.opens_info().into()),
 		("thread", channel.thread.into()),
 		("last_thread", channel.last_thread.into()),
 		("voice", voice),

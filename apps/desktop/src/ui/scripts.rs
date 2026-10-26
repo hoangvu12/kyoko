@@ -10,6 +10,7 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
+mod hidden;
 mod plugins;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
@@ -312,6 +313,18 @@ fn the_interface_loads_and_builds_every_screen() {
 			"forum.view",
 			json!({ "open": false, "id": "", "sort": "Recently Active", "gallery": false }),
 		)],
+	);
+	shows(
+		&mut app,
+		"a hidden channel's details",
+		"talk about staff-only here",
+		&[("hidden.view", hidden::hidden_view())],
+	);
+	shows(
+		&mut app,
+		"the channel after the hidden channel's details close",
+		"Playing Chess",
+		&[("hidden.view", hidden::closed_view())],
 	);
 	shows(
 		&mut app,

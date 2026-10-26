@@ -1,11 +1,14 @@
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
+
 use protocol::{MemberListGroup, Snowflake};
 use session::{Command, Formatting};
 use state::{Changes, MemberList, MemberListRow, MemberSlot, State};
 
 use crate::display::{Display, person};
 use crate::dm_list::DmStatus;
+use crate::hidden::{ModeratorNotes, moderator_notes};
 
 pub const MEMBER_PUBLISH_GAP: Duration = Duration::from_millis(150);
 const OVERSCAN: usize = 12;
@@ -66,6 +69,7 @@ pub struct MemberEntry {
 	pub activity: Option<String>,
 	pub bot: bool,
 	pub badge: Option<String>,
+	pub notes: ModeratorNotes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +106,7 @@ pub struct MemberPanel {
 	dirty_since: Option<Instant>,
 	published_at: Option<Instant>,
 	display: Display,
+	moderator_notes: bool,
 }
 
 impl Default for MemberPanel {
@@ -126,6 +131,7 @@ impl MemberPanel {
 			dirty_since: None,
 			published_at: None,
 			display: Display::default(),
+			moderator_notes: false,
 		}
 	}
 
@@ -135,8 +141,22 @@ impl MemberPanel {
 
 	pub fn reset(&mut self) {
 		let display = std::mem::take(&mut self.display);
+		let moderator_notes = self.moderator_notes;
 		*self = Self::default();
 		self.display = display;
+		self.moderator_notes = moderator_notes;
+	}
+
+	pub fn shows_moderator_notes(&self) -> bool {
+		self.moderator_notes
+	}
+
+	pub fn set_moderator_notes(&mut self, shown: bool, now: Instant) -> bool {
+		if self.moderator_notes == shown {
+			return false;
+		}
+		self.moderator_notes = shown;
+		self.redraw(now)
 	}
 
 	pub fn redraw(&mut self, now: Instant) -> bool {
@@ -297,14 +317,19 @@ impl MemberPanel {
 		guild_id: Snowflake,
 		mut entries: Vec<MemberListEntry>,
 	) -> Vec<MemberListEntry> {
-		if !self.display.formats(Formatting::Names) {
+		let names = self.display.formats(Formatting::Names);
+		if !names && !self.moderator_notes {
 			return entries;
 		}
+		let now = Utc::now();
 		for entry in &mut entries {
 			let MemberListEntry::Member(member) = entry else {
 				continue;
 			};
-			let Some(user) = state.user(member.user_id) else {
+			if self.moderator_notes {
+				member.notes = moderator_notes(state, guild_id, member.user_id, now);
+			}
+			let Some(user) = state.user(member.user_id).filter(|_| names) else {
 				continue;
 			};
 			if let Some(shown) = self.display.name(&person(state, Some(guild_id), user)) {
@@ -436,6 +461,7 @@ fn entry_of(state: &State, row: MemberListRow) -> MemberListEntry {
 			activity: member.activity,
 			bot: is_bot(state, member.user_id),
 			badge: member.badge,
+			notes: ModeratorNotes::default(),
 		}),
 	}
 }

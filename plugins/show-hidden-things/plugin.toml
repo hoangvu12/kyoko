@@ -1,0 +1,7 @@
+id = "show-hidden-things"
+name = "ShowHiddenThings"
+version = "1.0.0"
+api = 1
+description = "Shows moderator details Kyoko already has in the member list: timeouts, pending membership screening and AutoMod quarantine. Nothing is fetched."
+authors = ["Kyoko"]
+permissions = ["ui:members.moderator_notes"]

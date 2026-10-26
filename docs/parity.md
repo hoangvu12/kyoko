@@ -395,6 +395,13 @@ Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no such states. Th
 | `expressions-in-messages-sticker-popout` | 05 | As `expressions-in-messages`, then the sticker's popout. | yes |
 | `link-preview-while-typing` | 05 | Default selection, then send `docs are up https://github.com/refact0r/midnight-discord` and hover it at (640, 690): its link embed and the hover bar with Remove all embeds. | yes |
 
+### 55 ShowHiddenChannels and ShowHiddenThings
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `hidden-channel` | 55 | With `KYOKO_CAPTURE_PLUGINS=show-hidden-channels`. Default selection, then the first server with a channel the user cannot view (mockcord's `staff-only`, hidden from everyone but Admin), whose row shows locked and dimmed; kyoko opens its details through `Link::open_hidden_channel`, what a click on the row does: name, kind, topic, last activity, and who is let in or kept out. Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
+| `member-notes` | 55 | With `KYOKO_CAPTURE_PLUGINS=show-hidden-things`. As `member-list`; the fixture's timed-out member (also flagged by AutoMod) shows a red timer and a yellow shield after its name. Kyoko only, `--apps kyoko`. | yes |
+
 ### 38 Toasts, transitions and connection status
 
 | Screen | Ticket | Steps | Kyoko |

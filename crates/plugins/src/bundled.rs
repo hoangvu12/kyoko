@@ -116,7 +116,29 @@ const MESSAGE_LOGGER: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 9] = [
+const SHOW_HIDDEN_CHANNELS: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/show-hidden-channels/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/show-hidden-channels/logic.luau"),
+	),
+];
+
+const SHOW_HIDDEN_THINGS: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/show-hidden-things/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/show-hidden-things/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 11] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -126,6 +148,8 @@ const PACKAGES: [Embedded; 9] = [
 	FAVORITE_EMOJI_FIRST,
 	EXPRESSION_CLONER,
 	MESSAGE_LOGGER,
+	SHOW_HIDDEN_CHANNELS,
+	SHOW_HIDDEN_THINGS,
 ];
 
 pub fn packages() -> Vec<Package> {

@@ -9,6 +9,7 @@ use crate::user::{AvatarDecorationData, User};
 pub const MEMBER_COMPLETED_ONBOARDING: u64 = 1 << 1;
 pub const MEMBER_BYPASSES_VERIFICATION: u64 = 1 << 2;
 pub const MEMBER_STARTED_ONBOARDING: u64 = 1 << 3;
+pub const MEMBER_QUARANTINED_USERNAME: u64 = 1 << 7;
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]

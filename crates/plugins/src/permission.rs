@@ -38,6 +38,8 @@ pub enum Slot {
 	MemberDecoration,
 	MessageAccessory,
 	MessageMenu,
+	HiddenChannels,
+	ModeratorNotes,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -76,7 +78,7 @@ const ACTIONS: [(Action, &str); 3] = [
 	(Action::Activity, "activity"),
 ];
 
-const SLOTS: [(Slot, &str); 8] = [
+const SLOTS: [(Slot, &str); 10] = [
 	(Slot::Settings, "settings"),
 	(Slot::ComposerButtons, "composer.buttons"),
 	(Slot::PanelButtons, "panel.buttons"),
@@ -85,6 +87,8 @@ const SLOTS: [(Slot, &str); 8] = [
 	(Slot::MemberDecoration, "member.decoration"),
 	(Slot::MessageAccessory, "message.accessory"),
 	(Slot::MessageMenu, "message.menu"),
+	(Slot::HiddenChannels, "sidebar.hidden_channels"),
+	(Slot::ModeratorNotes, "members.moderator_notes"),
 ];
 
 const HOST_LIMIT: usize = 253;
@@ -155,6 +159,8 @@ impl Slot {
 				| Slot::RailButtons
 				| Slot::MessageMenu
 				| Slot::MessageAccessory
+				| Slot::HiddenChannels
+				| Slot::ModeratorNotes
 		)
 	}
 
@@ -203,6 +209,13 @@ impl Permission {
 				"Add items to the menu of messages, emoji and stickers.".to_owned()
 			}
 			Permission::Ui(Slot::MessageAccessory) => "Add a line of text under messages.".to_owned(),
+			Permission::Ui(Slot::HiddenChannels) => {
+				"Show channels you cannot open in the channel list, with what Kyoko already knows about them. Nothing about them is fetched."
+					.to_owned()
+			}
+			Permission::Ui(Slot::ModeratorNotes) => {
+				"Show moderator details Kyoko already has, such as timeouts, in the member list.".to_owned()
+			}
 			Permission::Ui(slot) => format!("Add to the interface at {}.", slot.name()),
 			Permission::Read(Scope::Messages) => "Read messages in your servers, as they arrive.".to_owned(),
 			Permission::Read(Scope::DirectMessages) => {

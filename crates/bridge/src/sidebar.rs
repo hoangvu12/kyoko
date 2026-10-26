@@ -2,6 +2,8 @@ use protocol::{ChannelType, Permissions, Snowflake, VoiceState};
 use session::Command;
 use state::{Changes, ChannelRow, ChannelTreeNode, State};
 
+use crate::hidden::{HiddenChannel, hidden_channel};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelKind {
 	Category,
@@ -111,6 +113,10 @@ impl ChannelEntry {
 	pub fn selectable(&self) -> bool {
 		!self.locked && self.kind != ChannelKind::Category
 	}
+
+	pub fn opens_info(&self) -> bool {
+		self.locked && self.kind != ChannelKind::Category
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,9 +189,18 @@ pub struct Sidebar {
 	header: GuildHeader,
 	sections: Vec<SidebarSection>,
 	rows: Vec<SidebarRow>,
+	show_hidden: bool,
+	hidden_open: Option<Snowflake>,
 }
 
 impl Sidebar {
+	pub fn showing_hidden(show_hidden: bool) -> Self {
+		Self {
+			show_hidden,
+			..Self::default()
+		}
+	}
+
 	pub fn guilds(&self) -> &[GuildEntry] {
 		&self.guilds
 	}
@@ -253,6 +268,7 @@ impl Sidebar {
 		self.home = false;
 		self.selected = Some(guild_id);
 		self.open = None;
+		self.hidden_open = None;
 		self.refresh_channels(state);
 		Some(Command::SubscribeGuild { guild_id })
 	}
@@ -264,6 +280,7 @@ impl Sidebar {
 		self.home = true;
 		self.selected = None;
 		self.open = None;
+		self.hidden_open = None;
 		self.refresh_channels(state);
 		true
 	}
@@ -288,11 +305,57 @@ impl Sidebar {
 			})
 	}
 
+	pub fn shows_hidden(&self) -> bool {
+		self.show_hidden
+	}
+
+	pub fn set_show_hidden(&mut self, state: &State, show: bool) -> bool {
+		if self.show_hidden == show {
+			return false;
+		}
+		self.show_hidden = show;
+		self.refresh_channels(state);
+		true
+	}
+
+	pub fn hidden_open(&self) -> Option<Snowflake> {
+		self.hidden_open
+	}
+
+	pub fn open_hidden(&mut self, state: &State, channel_id: Snowflake) -> Option<HiddenChannel> {
+		let listed = self
+			.channel(channel_id)
+			.is_some_and(|channel| self.show_hidden && channel.opens_info());
+		if !listed {
+			return None;
+		}
+		let info = hidden_channel(state, channel_id)?;
+		self.hidden_open = Some(channel_id);
+		Some(info)
+	}
+
+	pub fn hidden_view(&self, state: &State) -> Option<HiddenChannel> {
+		hidden_channel(state, self.hidden_open?)
+	}
+
+	pub fn close_hidden(&mut self) -> bool {
+		self.hidden_open.take().is_some()
+	}
+
 	fn refresh_channels(&mut self, state: &State) -> bool {
 		let (header, sections) = match self.selected {
-			Some(id) => (guild_header(state, id), sections(state, id)),
+			Some(id) => (guild_header(state, id), sections(state, id, self.show_hidden)),
 			None => (GuildHeader::default(), Vec::new()),
 		};
+		let still_hidden = self.hidden_open.is_some_and(|id| {
+			sections
+				.iter()
+				.flat_map(|section| section.channels.iter())
+				.any(|channel| channel.id == id && channel.opens_info())
+		});
+		if !still_hidden {
+			self.hidden_open = None;
+		}
 		let header_changed = replace(&mut self.header, header);
 		let sections_changed = replace(&mut self.sections, sections);
 		let rows_changed = replace(&mut self.rows, visible_rows(&self.sections, self.open));
@@ -341,20 +404,30 @@ fn guild_header(state: &State, guild_id: Snowflake) -> GuildHeader {
 	}
 }
 
-fn sections(state: &State, guild_id: Snowflake) -> Vec<SidebarSection> {
+fn sections(state: &State, guild_id: Snowflake, show_hidden: bool) -> Vec<SidebarSection> {
 	state
 		.guild_channel_tree(guild_id)
 		.iter()
-		.map(|node| section(state, guild_id, node))
+		.filter_map(|node| section(state, guild_id, node, show_hidden))
 		.collect()
 }
 
-fn section(state: &State, guild_id: Snowflake, node: &ChannelTreeNode) -> SidebarSection {
+fn section(
+	state: &State,
+	guild_id: Snowflake,
+	node: &ChannelTreeNode,
+	show_hidden: bool,
+) -> Option<SidebarSection> {
 	let mut channels: Vec<ChannelEntry> = node
 		.children
 		.iter()
+		.filter(|row| show_hidden || !row.locked)
 		.map(|row| channel_entry(state, guild_id, row))
 		.collect();
+	let category_hidden = node.category.as_ref().is_some_and(|category| category.locked);
+	if !show_hidden && category_hidden && channels.is_empty() {
+		return None;
+	}
 	let ends: Vec<bool> = channels
 		.iter()
 		.enumerate()
@@ -363,7 +436,7 @@ fn section(state: &State, guild_id: Snowflake, node: &ChannelTreeNode) -> Sideba
 	for (channel, last) in channels.iter_mut().zip(ends) {
 		channel.last_thread = last;
 	}
-	SidebarSection {
+	Some(SidebarSection {
 		category: node.category.as_ref().map(|category| CategoryEntry {
 			id: category.id,
 			name: category.name.clone(),
@@ -371,7 +444,7 @@ fn section(state: &State, guild_id: Snowflake, node: &ChannelTreeNode) -> Sideba
 			muted: category.muted,
 		}),
 		channels,
-	}
+	})
 }
 
 fn channel_entry(state: &State, guild_id: Snowflake, row: &ChannelRow) -> ChannelEntry {

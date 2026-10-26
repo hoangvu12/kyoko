@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use bridge::{Inbox, MemberChange, MemberEntry, MemberHeights, MemberListEntry, MemberPanel, OpenMembers};
+use chrono::Utc;
 use media::ImageName;
 use protocol::Snowflake;
 use session::Command;
@@ -60,6 +61,12 @@ impl MemberListView {
 
 	pub(crate) fn show(&self, open: Option<OpenMembers>) {
 		if self.panel.borrow_mut().show(open, Instant::now()) {
+			self.wakes.push(());
+		}
+	}
+
+	pub(crate) fn set_moderator_notes(&self, shown: bool) {
+		if self.panel.borrow_mut().set_moderator_notes(shown, Instant::now()) {
 			self.wakes.push(());
 		}
 	}
@@ -199,6 +206,8 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 
 fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
 	let avatar = avatar.map(|name| format!("host:{name}")).unwrap_or_default();
+	let timeout = member.notes.timeout_text(Utc::now()).unwrap_or_default();
+	let notes = member.notes.flag_text().unwrap_or_default();
 	let color = member
 		.color
 		.map(|color| format!("#{:06x}", color & 0xff_ffff))
@@ -215,6 +224,8 @@ fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
 		("bot", member.bot.into()),
 		("badge", member.badge.as_deref().unwrap_or_default().into()),
 		("avatar", avatar.as_str().into()),
+		("timeout", timeout.as_str().into()),
+		("notes", notes.as_str().into()),
 	])
 }
 

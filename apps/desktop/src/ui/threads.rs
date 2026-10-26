@@ -559,7 +559,7 @@ impl Link {
 		});
 	}
 
-	fn leave_forum(&self) {
+	pub(super) fn leave_forum(&self) {
 		if self.threads.forum.take().is_none() {
 			return;
 		}

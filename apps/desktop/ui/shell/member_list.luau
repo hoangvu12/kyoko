@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local avatar = require("@components/avatar")
 local motion = require("@components/motion")
+local icon = require("@components/icon")
 
 local PLACEHOLDER_NAME = 12
 local PLACEHOLDER_WIDTHS = { 96, 72, 120, 84, 108, 64, 100, 80 }
@@ -14,6 +15,7 @@ local member_height = theme.number(theme.size.member_row_pitch)
 local group_height = theme.number(theme.size.group_header_height)
 local space_16 = theme.number(theme.size.space_16)
 local avatar_sm = theme.number(theme.size.avatar_size_sm)
+local icon_xs = theme.number(theme.size.icon_size_xs)
 
 local function heights(): { number }
 	local list = table.clone(state.members.heights:get())
@@ -67,6 +69,18 @@ local function tag(label: string, bg: string, color: string, size: any, line: an
 			weight = weight,
 			color = color,
 		},
+	}
+end
+
+local function note(kind: string, id: string, text: string?, glyph: string, color: string)
+	if text == nil or text == "" then
+		return nil
+	end
+	return ui.div {
+		id = `member_{kind}_{id}`,
+		shrink = 0,
+		tooltip = text,
+		icon { name = glyph, size = icon_xs(), color = color },
 	}
 end
 
@@ -126,6 +140,8 @@ local function name_line(row: any)
 				nil
 			)
 			else nil,
+		note("timeout", row.id, row.timeout, "timer", theme.color.red_3),
+		note("flags", row.id, row.notes, "shield", theme.color.yellow_3),
 	}
 end
 

@@ -64,6 +64,7 @@ export type SidebarRow = {
 	locked: boolean?,
 	joined: boolean?,
 	selectable: boolean?,
+	hidden: boolean?,
 	thread: boolean?,
 	last_thread: boolean?,
 	voice: { VoiceMember }?,
@@ -474,6 +475,39 @@ M.server = {
 		upload: ServerUpload?,
 	}?),
 	invites = ui.shared("server.invites", nil :: { rows: { ServerInviteRow } }?),
+}
+
+export type HiddenOverwrite = { key: string, name: string, member: boolean, color: string }
+export type HiddenView = {
+	open: boolean,
+	id: string,
+	name: string,
+	kind: string,
+	icon: string,
+	topic: string,
+	activity: string,
+	created: string,
+	nsfw: boolean,
+	slowmode: string,
+	allowed: { HiddenOverwrite },
+	denied: { HiddenOverwrite },
+}
+
+M.hidden = {
+	view = ui.shared("hidden.view", {
+		open = false,
+		id = "",
+		name = "",
+		kind = "",
+		icon = "hash",
+		topic = "",
+		activity = "",
+		created = "",
+		nsfw = false,
+		slowmode = "",
+		allowed = {},
+		denied = {},
+	} :: HiddenView),
 }
 
 return M

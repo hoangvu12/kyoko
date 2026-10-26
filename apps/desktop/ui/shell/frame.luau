@@ -18,6 +18,7 @@ local settings = require("./settings")
 local server_settings = require("./server_settings")
 local search_panel = require("./search_panel")
 local forum = require("./forum")
+local hidden_channel = require("./hidden_channel")
 local thread_panel = require("./thread_panel")
 local connection_banner = require("./connection_banner")
 
@@ -41,16 +42,22 @@ local function chat()
 		shrink = 1,
 		min_w = 0,
 		h_full = true,
-		ui.show(function()
-			return state.forum.view:get().open
-		end, forum(), ui.column {
-			w_full = true,
-			grow = 1,
-			min_h = 0,
-			connection_banner(),
-			timeline(),
-			composer(),
-		}),
+		ui.show(
+			function()
+				return state.forum.view:get().open
+			end,
+			forum(),
+			ui.show(function()
+				return state.hidden.view:get().open
+			end, hidden_channel(), ui.column {
+				w_full = true,
+				grow = 1,
+				min_h = 0,
+				connection_banner(),
+				timeline(),
+				composer(),
+			})
+		),
 	}
 end
 
@@ -91,6 +98,7 @@ local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
 					and state.shell.members_visible:get()
 					and state.sidebar.guild_id:get() ~= ""
 					and not state.threads.panel:get().open
+					and not state.hidden.view:get().open
 			end, panel { w = theme.size.member_list_panel_width, h_full = true, member_list() })),
 		},
 		home_cover(),

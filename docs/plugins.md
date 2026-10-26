@@ -120,6 +120,8 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `ui:composer.buttons`, `ui:panel.buttons`, `ui:rail.buttons` | show its UI half in that slot | yes |
 | `ui:message.menu` | add its `[[menu]]` items to the message menu and the expression menus | yes |
 | `ui:message.accessory` | add the `accessory` line its `render_message` returns under a message | yes |
+| `ui:sidebar.hidden_channels` | while it runs, kyoko lists the channels the user cannot view and opens their details on a click (ShowHiddenChannels) | yes |
+| `ui:members.moderator_notes` | while it runs, kyoko marks timeouts and moderator flags it already has in the member list (ShowHiddenThings) | yes |
 | `ui:settings`, `ui:user.decoration`, `ui:member.decoration` | contribute to that UI slot | reserved (see UI slots) |
 | `network:<host>` | contact that host | reserved; v1 has no network API at all |
 
@@ -296,6 +298,8 @@ A Discord action runs only inside a user gesture:
 | `user.decoration`, `member.decoration` | beside names in the timeline, member list and profiles | reserved for 49 |
 | `message.menu` | items appended to the message context menu (`bridge::append_plugin_entries` after `bridge::message_menu`, drawn by `MessageActions` for the timeline, the thread pane, the hover bar's More menu and search results), and the menu of a custom emoji or sticker cell in the expression pickers | placed (53), from the manifest's `[[menu]]` |
 | `message.accessory` | lines of small muted text under a message in the timeline and the thread pane, after its reactions, from `render_message`'s `accessory` | placed (52), drawn by Rust |
+| `sidebar.hidden_channels` | the channel sidebar's hidden channels and their details in the chat panel; the plugin contributes nothing but the grant | placed (55), drawn by kyoko |
+| `members.moderator_notes` | the timeout and flag icons after a member's name in the member list; the plugin contributes nothing but the grant | placed (55), drawn by kyoko |
 
 ### Menu items
 
@@ -436,6 +440,37 @@ Vencord's ExpressionCloner (GPL) is the behaviour reference only; no code is sha
 
 The settings page says how much kyoko keeps; the plugin cannot keep more. Vencord's MessageLogger is the behaviour reference; no code is shared. Its ignore lists for users, channels and servers are left out.
 
+## Hidden channels
+
+Discord sends the user's servers with every channel, including the ones the user cannot view (no View Channel once the channel's permission overwrites are applied; `State::is_hidden`). Kyoko leaves those out of the channel list, as Discord's client does, and never reads them:
+
+- The session refuses every command that would read, subscribe to, acknowledge or type in a hidden channel (`Command::reads_channel`: selecting it, loading history, pins, threads, forum posts or application commands, viewports, sending, reacting, typing, acks, marking read or unread, member list viewports and channel search). It drops the command and logs the channel id at debug level, before the risky-action locks or any REST call.
+- The member list subscription (op 37) never names a hidden channel: when no channel of the server is open, the session picks a text channel the user can view.
+- Marking a server or everything read already skips channels without View Channel.
+
+`PluginHost::shows(slot)` is true while some running plugin is granted the slot. The desktop asks it on every host change (`Link::apply_plugin_views`) and turns the two views below on or off at once.
+
+## ShowHiddenChannels
+
+`plugins/show-hidden-channels/` (`ui:sidebar.hidden_channels`, ships disabled, no logic). While it runs, the channels the user cannot view appear in their category in the channel sidebar, with the lock badge and dimmed (`text_5`), and a category the user cannot view shows as well. Clicking one opens its details in the chat panel instead of the timeline (`docs/ui.md`, "Channel sidebar"). Everything shown is already in state, from READY and later channel updates:
+
+- the name, its kind (Text Channel, Announcement Channel, Voice Channel, Forum Channel, ...), and the age-restricted and slowmode tags;
+- the topic;
+- the last activity, "Last message 3 days ago, October 23, 2026 9:41 AM", from the time inside `last_message_id` (no message is fetched), or "No messages yet";
+- the creation date, from the channel id;
+- who is allowed to view and who is not: every role and member overwrite that allows or denies View Channel on the channel (for a thread, on its parent), roles by position with their colour, then members by name.
+
+Nothing about a hidden channel is ever fetched, subscribed to, acknowledged or typed in, before, while or after its details are open, and after a restart. Turning the plugin off hides the channels and closes the details. Vencord's ShowHiddenChannels is the behaviour reference; no code is shared. Its "allowed users and roles" popout, its hidden channel voice preview and its settings for the lock icon are left out.
+
+## ShowHiddenThings
+
+`plugins/show-hidden-things/` (`ui:members.moderator_notes`, ships disabled, no logic). While it runs, the member list marks what Discord's client shows only to moderators, from the member data kyoko already has (`bridge::moderator_notes`):
+
+- a red timer after the name of a member whose timeout (`communication_disabled_until`) has not ended, with "Timed out until <date and time>" as its tooltip;
+- a yellow shield after the name of a member who has not passed membership screening (`pending`) or whose username AutoMod quarantined (member flag `1 << 7`), with "Pending membership screening", "Quarantined by AutoMod" or both as its tooltip.
+
+That is the whole list: nothing is fetched and nothing else is shown. A timeout that ends while the list is open goes away at the next redraw of that row. Vencord's ShowHiddenThings is the behaviour reference; no code is shared. Its discovery, invite and mod view options need data kyoko does not have, so they are left out.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -456,5 +491,7 @@ ExpressionCloner: `crates/plugins/tests/plugins/expression_cloner.rs` (it ships 
 MessageLogger: `crates/plugins/tests/plugins/message_logger.rs` (the hook only with its permission and an accessory only with `ui:message.accessory`; every setting's look; Remove from log hiding a message and surviving a restart; `ShowDeletedMessages` sent on enabling, a settings change, disabling, enabling again and a new start; a failing and an endless renderer falling back to kyoko's look, being suspended and turning deleted messages off); `crates/bridge/tests/bridge/message_logger.rs` with the real host against mockcord (`Control::edit_message` and `delete_message`: the timeline hides the deleted message on its own, then shows it in red with the accessory and the edit's earlier version once the plugin runs, one call per kept message and none on redraw, the tint setting, Remove from log, kyoko's look again once off; edit history only keeps deleted messages hidden). `headless-run` deletes another author's message and checks it and the edited typo through `bridge::Display` (`kept_calls`), and the `message-logger-deleted` and `message-logger-edits` captures show both in the window.
 
 Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
+
+Hidden channels: `crates/session/tests/session/hidden.rs` sends every reading command for mockcord's `staff-only` channel (hidden from everyone but Admin) and asserts that no request, query, body or gateway frame names it, before and after a restart. `crates/bridge/tests/bridge/hidden.rs` does the same through the real bundled plugins and `bridge::Sidebar`: the channel is not listed while ShowHiddenChannels is off, is listed locked and opens its details (topic, last activity from `last_message_id`, Admin allowed, @everyone denied) while it runs, nothing reaches mockcord, again after a restart, and turning the plugin off closes the details; ShowHiddenThings shows a timeout and pending screening that arrived in a member update without one more request or frame. `crates/plugins/tests/plugins/hidden_views.rs` checks that both ship disabled and that only a running plugin granted the slot turns its view on. The load check builds the details and a member row with notes, and `ui::scripts::hidden` clicks a hidden row (`sidebar.open_hidden`, never `sidebar.select_channel`). `headless-run` runs both plugins and reports `hidden_quiet` after opening the details and sending a select, typing and a subscription for the hidden channel.
 
 UI halves are covered headless in `apps/desktop/src/ui/scripts/plugins.rs`, part of the load check: `the_interface_loads_and_builds_every_screen` mounts a probe plugin in every placed slot; `a_plugin_shows_only_in_the_slots_it_was_granted` (its settings value, its action naming only a granted slot); `a_broken_or_overreaching_plugin_interface_leaves_the_shell_building` (a syntax error, an error while loading, an error while building, and reaching for an app value, another plugin's value, the network and an app action, beside a working plugin); `the_silent_typing_button_switches_its_setting_and_unmounts_with_the_plugin` (the real `PluginsView` and host: a click without a gesture does nothing, a click with one switches `silent`, the button follows `button`, disabling unmounts it and enabling mounts it again). The `composer-silent-typing` capture clicks the real button in a window.

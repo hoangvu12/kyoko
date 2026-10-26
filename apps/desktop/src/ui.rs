@@ -6,6 +6,7 @@ mod display;
 mod expression_shots;
 mod expressions;
 mod friends;
+mod hidden;
 mod home;
 mod kept;
 mod members;
@@ -219,6 +220,7 @@ pub fn run(
 			let slot = link.window.slot.clone();
 			let transcript = link.timeline_view.view();
 			let forum_shown = link.threads.forum_shown();
+			let hidden_shown = link.hidden.shown();
 			let thread_view = threads::thread_slot(slot.clone(), link.threads.slot(), link.threads.view());
 			let thread_layer = link.threads.layer_view();
 			let profiles = link.profile.view();
@@ -247,7 +249,7 @@ pub fn run(
 				layered(
 					host.view(),
 					[
-						timeline_slot(slot, transcript, forum_shown),
+						timeline_slot(slot, transcript, [forum_shown, hidden_shown]),
 						thread_view,
 						profiles,
 						switcher,
@@ -324,9 +326,10 @@ fn layered(luau: View, layers: impl IntoIterator<Item = View>) -> View {
 		})
 }
 
-fn timeline_slot(slot: Signal<Slot>, transcript: View, hidden: Signal<bool>) -> View {
+fn timeline_slot(slot: Signal<Slot>, transcript: View, covers: [Signal<bool>; 2]) -> View {
 	div().child(transcript).reactive_style(move || {
-		let slot = if hidden.get() { Slot::default() } else { slot.get() };
+		let covered = covers.iter().any(Signal::get);
+		let slot = if covered { Slot::default() } else { slot.get() };
 		Styles::new()
 			.absolute()
 			.left(slot.x)
@@ -424,6 +427,7 @@ pub(crate) struct Link {
 	display_wakes: Inbox<Formatting>,
 	moderation: Rc<ModerationLayer>,
 	moderation_effect: RefCell<Option<Effect>>,
+	hidden: hidden::HiddenPane,
 	server: server_settings::ServerSettingsView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
@@ -497,6 +501,7 @@ impl Link {
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
 		let moderation = ModerationLayer::new(&window.runtime);
+		let hidden = hidden::HiddenPane::new(host, &window.runtime);
 		let mut timeline = Timeline::default();
 		timeline.set_display(display.clone());
 		let members = MemberListView::new(host);
@@ -558,6 +563,7 @@ impl Link {
 			display_wakes,
 			moderation,
 			moderation_effect: RefCell::new(None),
+			hidden,
 			server: server_settings::ServerSettingsView::new(host),
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
@@ -824,9 +830,10 @@ impl Link {
 					.await
 			}
 			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
-			capture::Screen::MemberList | capture::Screen::MemberListScrolled => {
-				self.until_members(&capture).await
-			}
+			capture::Screen::HiddenChannel => self.drive_hidden_channel().await,
+			capture::Screen::MemberList
+			| capture::Screen::MemberListScrolled
+			| capture::Screen::MemberNotes => self.until_members(&capture).await,
 			capture::Screen::DmSidebar | capture::Screen::DmGroup => {
 				self.drive_home(capture.screen);
 				self.until_settled(&capture, true).await;
@@ -1224,12 +1231,14 @@ impl Link {
 			*self.sidebar_avatars.borrow_mut() = names;
 			self.refresh_visible();
 		}
+		self.sync_hidden(state, false);
 	}
 
 	fn publish_timeline(&self, state: &State) {
 		let timeline = self.timeline.borrow();
 		self.sync_threads(timeline.open());
 		let open = self.top_channel(timeline.open());
+		self.sync_hidden(state, open.is_some() || self.forum_open().is_some());
 		self.publish_channel_icon(state, open);
 		self.remember_open(open);
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();

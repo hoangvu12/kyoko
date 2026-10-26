@@ -11,6 +11,7 @@ mod friends;
 mod gif_favourites;
 mod guild_admin;
 mod harness;
+mod hidden;
 mod media;
 mod members;
 mod message;

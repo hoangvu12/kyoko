@@ -88,6 +88,8 @@ pub enum Screen {
 	KeptEdits,
 	Expressions(ExpressionShot),
 	LinkPreview,
+	HiddenChannel,
+	MemberNotes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,6 +165,8 @@ impl Screen {
 			"expressions-in-messages-emoji-popout" => Some(Screen::Expressions(ExpressionShot::UnicodeEmoji)),
 			"expressions-in-messages-sticker-popout" => Some(Screen::Expressions(ExpressionShot::Sticker)),
 			"link-preview-while-typing" => Some(Screen::LinkPreview),
+			"hidden-channel" => Some(Screen::HiddenChannel),
+			"member-notes" => Some(Screen::MemberNotes),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -217,7 +221,9 @@ impl Screen {
 			| Screen::KeptDeleted
 			| Screen::KeptEdits
 			| Screen::Expressions(_)
-			| Screen::LinkPreview => Some(Opening::First),
+			| Screen::LinkPreview
+			| Screen::HiddenChannel
+			| Screen::MemberNotes => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

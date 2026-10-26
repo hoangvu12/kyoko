@@ -55,6 +55,8 @@ const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
 const DONT_ROUND: &str = "dont-round-my-timestamps";
 const EXPRESSION_CLONER: &str = "expression-cloner";
 const MESSAGE_LOGGER: &str = "message-logger";
+const SHOW_HIDDEN_CHANNELS: &str = "show-hidden-channels";
+const SHOW_HIDDEN_THINGS: &str = "show-hidden-things";
 const CLONE_KEY: &str = "clone_emoji";
 const CLONE_NAME: &str = "headless_clone";
 const REDRAWS: usize = 100;
@@ -198,6 +200,8 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		FAVORITE_EMOJI_FIRST,
 		EXPRESSION_CLONER,
 		MESSAGE_LOGGER,
+		SHOW_HIDDEN_CHANNELS,
+		SHOW_HIDDEN_THINGS,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -584,6 +588,60 @@ impl Harness {
 		Ok(true)
 	}
 
+	async fn leaves_hidden_channels_alone(&self, plugins: &PluginHost, server: &Server) -> Result<bool> {
+		ensure!(
+			plugins.shows(plugins::Slot::HiddenChannels) && plugins.shows(plugins::Slot::ModeratorNotes),
+			"ShowHiddenChannels and ShowHiddenThings did not turn their views on"
+		);
+		let (guild_id, hidden) = {
+			let state = self.state.read();
+			state
+				.guilds()
+				.find_map(|guild| {
+					guild
+						.channels
+						.values()
+						.find(|channel| channel.kind == ChannelType::GuildText && state.is_hidden(channel.id))
+						.map(|channel| (guild.id, channel.id))
+				})
+				.context("no hidden channel in the fixtures")?
+		};
+		let info = {
+			let state = self.state.read();
+			let mut sidebar = bridge::Sidebar::showing_hidden(true);
+			sidebar.select(&state, guild_id);
+			sidebar.open_hidden(&state, hidden)
+		};
+		let info = info.context("the hidden channel's details did not open")?;
+		ensure!(
+			!info.denied.is_empty(),
+			"the hidden channel lists nobody kept out"
+		);
+		self.session.send(Command::SelectChannel {
+			guild_id: Some(guild_id),
+			channel_id: hidden,
+		});
+		self.session.send(Command::Typing { channel_id: hidden });
+		self.session.send(Command::SubscribeGuild { guild_id });
+		tokio::time::sleep(TYPING_QUIET).await;
+		let id = hidden.to_string();
+		let named = server.control().inspect(|recording| {
+			recording
+				.requests
+				.iter()
+				.filter(|request| {
+					request.path.contains(&id) || String::from_utf8_lossy(&request.body).contains(&id)
+				})
+				.count() + recording
+				.frames
+				.iter()
+				.filter(|frame| frame.raw.contains(&id))
+				.count()
+		});
+		ensure!(named == 0, "{named} requests or frames named a hidden channel");
+		Ok(true)
+	}
+
 	async fn stop(self) -> Result<()> {
 		tokio::task::spawn_blocking(move || self.session.shutdown())
 			.await
@@ -937,6 +995,7 @@ async fn scenario(
 		.text_features(server.fixtures(), guild_id, channel_id, sent_id)
 		.await?;
 	let clone_ok = harness.clones(&plugins, server, root).await?;
+	let hidden_quiet = harness.leaves_hidden_channels_alone(&plugins, server).await?;
 
 	sleep_until(started + Duration::from_secs(args.duration)).await;
 	harness
@@ -960,6 +1019,7 @@ async fn scenario(
 			"expressions_ok": text.expressions_ok,
 			"community_ok": text.community_ok,
 			"clone_ok": clone_ok,
+			"hidden_quiet": hidden_quiet,
 			"display_calls": display_calls,
 			"kept_calls": kept_calls,
 			"plugins": plugins

@@ -1,0 +1,7 @@
+id = "show-hidden-channels"
+name = "ShowHiddenChannels"
+version = "1.0.0"
+api = 1
+description = "Shows the channels you cannot open in the channel list, locked and dimmed. Clicking one shows its topic, last activity and who may view it, from what Kyoko already has. Nothing about them is fetched."
+authors = ["Kyoko"]
+permissions = ["ui:sidebar.hidden_channels"]

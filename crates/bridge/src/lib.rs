@@ -13,6 +13,7 @@ mod expression_popout;
 mod friends;
 mod gif_picker;
 mod guild_admin;
+mod hidden;
 mod images;
 mod inbox;
 mod lightbox;
@@ -80,6 +81,9 @@ pub use guild_admin::{
 	RIGHT_GROUPS, Right, RightGroup, RoleChoice, RoleRow, SERVER_GROUPS, ServerPage, TIMEOUT_CHOICES,
 	VoiceChoice, audit_filter, audit_rows, audit_sentence, ban_rows, member_rows, moderation_items,
 	role_color, role_rows, role_swap, sorted_roles, trimmed,
+};
+pub use hidden::{
+	HiddenChannel, ModeratorNotes, Overwriter, channel_kind_label, hidden_channel, moderator_notes,
 };
 pub use images::{
 	attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request, embed_request,

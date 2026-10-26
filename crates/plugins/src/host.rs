@@ -293,6 +293,14 @@ impl PluginHost {
 		self.inner.requests.lock().push(Arc::new(listener));
 	}
 
+	pub fn shows(&self, slot: Slot) -> bool {
+		let registry = self.inner.registry.lock();
+		registry
+			.entries
+			.values()
+			.any(|entry| entry.status() == Status::Running && entry.grants().contains(&Permission::Ui(slot)))
+	}
+
 	pub fn menu_items(&self, slot: Slot) -> Vec<MenuItem> {
 		let registry = self.inner.registry.lock();
 		registry

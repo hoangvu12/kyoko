@@ -217,11 +217,13 @@ impl Link {
 	}
 
 	pub(super) async fn follow_plugins(self: Rc<Self>) {
+		self.apply_plugin_views();
 		while self.plugins.wakes.next().await.is_some() {
 			if self.plugins.publish() {
 				self.plugins.remount();
 			}
 			self.refresh_plugin_menu();
+			self.apply_plugin_views();
 		}
 	}
 
