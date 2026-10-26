@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Both tests (and any other test asserting gaps from mockcord arrival times) pass 20 runs in a row while two other lanes build
 - [ ] A deliberately broken pacer (gap halved) still fails them
