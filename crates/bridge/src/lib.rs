@@ -130,8 +130,8 @@ pub use reactions::{
 	reaction_chips, reaction_tip, tip_names,
 };
 pub use search::{
-	HIT_SNIPPET, ParsedSearch, SearchChip, SearchFilter, SearchHit, SearchPanel, parse_search, result_count,
-	search_notice,
+	HIT_SNIPPET, ParsedSearch, RESULTS_PAGE, SearchChip, SearchFilter, SearchHit, SearchPanel, marked_runs,
+	parse_search, result_count, result_pages, search_notice, search_terms,
 };
 pub use settings::{
 	AccountCard, Applies, SettingKey, account_card, change_setting, mask_email, mask_phone, media_playback,
@@ -154,9 +154,10 @@ pub use switcher::{
 };
 pub use threads::{
 	ARCHIVE_CHOICES, DEFAULT_ARCHIVE_CHOICE, FORUM_EXCERPT, ForumCard, ForumSort, NewPostForm, PIN_SNIPPET,
-	PinEntry, THREAD_NAME_LIMIT, TagChip, ThreadEntry, ThreadHeader, ThreadTab, can_create_threads,
-	default_sort, forum_cards, forum_tags, is_forum, is_thread, messages_label, new_post_form, pin_entries,
-	replies_label, starter_preview, thread_header, thread_list, thread_parent, trimmed_name,
+	PinEntry, THREAD_NAME_LIMIT, TagChip, ThreadEntry, ThreadHeader, ThreadSection,
+	can_create_private_threads, can_create_threads, default_sort, forum_cards, forum_tags, is_forum,
+	is_thread, messages_label, new_post_form, pin_entries, replies_label, starter_preview, thread_header,
+	thread_parent, thread_sections, trimmed_name,
 };
 pub use timeline::{
 	Delta, Highlight, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel,

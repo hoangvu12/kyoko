@@ -912,6 +912,7 @@ impl Link {
 			capture::Screen::UserPanel => {}
 			capture::Screen::QuickSwitcher => {
 				self.open_switcher();
+				self.type_switcher(capture::SWITCHER_QUERY);
 				self.until_capture(|link| link.switcher_settled()).await;
 			}
 			capture::Screen::Community(screen) => {

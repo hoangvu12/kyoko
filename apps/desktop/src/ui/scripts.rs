@@ -257,7 +257,10 @@ fn the_interface_loads_and_builds_every_screen() {
 		&[
 			(
 				"search.panel",
-				json!({ "open": true, "title": "2 Results", "notice": "", "busy": false, "more": true }),
+				json!({
+					"open": true, "title": "2 Results", "notice": "", "busy": false, "more": true,
+					"tab": "messages", "oldest": false, "page": 1, "pages": 2,
+				}),
 			),
 			("search.chips", json!(["from: ada", "has: link"])),
 			("search.hits", search_hits()),
@@ -269,7 +272,10 @@ fn the_interface_loads_and_builds_every_screen() {
 		"Playing Chess",
 		&[(
 			"search.panel",
-			json!({ "open": false, "title": "", "notice": "", "busy": false, "more": false }),
+			json!({
+				"open": false, "title": "", "notice": "", "busy": false, "more": false,
+				"tab": "messages", "oldest": false, "page": 1, "pages": 1,
+			}),
 		)],
 	);
 	shows(
@@ -284,36 +290,45 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 	shows(
 		&mut app,
+		"a new thread",
+		"STARTER MESSAGE",
+		&[("threads.panel", thread_draft())],
+	);
+	shows(
+		&mut app,
 		"a forum with its posts",
 		"crash on startup",
 		&[
 			("threads.panel", thread_panel(false)),
 			("timeline.channel_icon", json!("forum")),
-			(
-				"forum.view",
-				json!({ "open": true, "id": "30", "sort": "Recently Active", "gallery": false }),
-			),
+			("forum.view", forum_view(true, "Recently Active", false, false)),
 			("forum.tags", forum_tags()),
 			("forum.cards", forum_cards()),
 		],
 	);
 	shows(
 		&mut app,
+		"a new forum post",
+		"Add Tags",
+		&[
+			("forum.view", forum_view(true, "Recently Active", false, true)),
+			(
+				"forum.files",
+				json!([{ "key": "0-log.txt", "name": "log.txt", "size": "5 B" }]),
+			),
+		],
+	);
+	shows(
+		&mut app,
 		"a forum in gallery view",
 		"how do i theme the sidebar",
-		&[(
-			"forum.view",
-			json!({ "open": true, "id": "30", "sort": "Date Posted", "gallery": true }),
-		)],
+		&[("forum.view", forum_view(true, "Date Posted", true, false))],
 	);
 	shows(
 		&mut app,
 		"the channel after the forum closes",
 		"Playing Chess",
-		&[(
-			"forum.view",
-			json!({ "open": false, "id": "", "sort": "Recently Active", "gallery": false }),
-		)],
+		&[("forum.view", forum_view(false, "Recently Active", false, false))],
 	);
 	shows(
 		&mut app,
@@ -1144,7 +1159,25 @@ fn setting_values(typing_animation: bool) -> serde_json::Value {
 fn thread_panel(open: bool) -> serde_json::Value {
 	json!({
 		"open": open, "id": "40", "name": "bug triage", "members": 3, "archived": false,
-		"joined": false, "can_manage": true,
+		"joined": false, "can_manage": true, "creating": false, "serial": 0, "draft_name": "",
+		"starter_author": "", "starter_time": "", "starter_text": "", "starter_avatar": "",
+		"can_private": false, "post": false, "tags": [],
+	})
+}
+
+fn thread_draft() -> serde_json::Value {
+	json!({
+		"open": true, "id": "", "name": "", "members": 0, "archived": false,
+		"joined": true, "can_manage": false, "creating": true, "serial": 1, "draft_name": "for theme reasons",
+		"starter_author": "ada", "starter_time": "Today at 9:41 AM", "starter_text": "for theme reasons",
+		"starter_avatar": "", "can_private": true, "post": false, "tags": [],
+	})
+}
+
+fn forum_view(open: bool, sort: &str, gallery: bool, composing: bool) -> serde_json::Value {
+	json!({
+		"open": open, "id": if open { "30" } else { "" }, "sort": sort, "gallery": gallery,
+		"composing": composing, "serial": 1, "draft_title": "", "require_tag": false,
 	})
 }
 
@@ -1160,13 +1193,13 @@ fn forum_cards() -> serde_json::Value {
 		{
 			"key": "41", "id": "41", "title": "crash on startup", "excerpt": "that screenshot is hilarious",
 			"tags": [{ "key": "1", "label": "\u{1f41b} bug", "moderated": false }], "author": "ada",
-			"avatar": "", "replies": "14 replies", "activity": "Today at 9:41 AM", "pinned": true,
+			"avatar": "", "replies": "14 replies", "count": "14", "activity": "Today at 9:41 AM", "pinned": true,
 			"archived": false,
 		},
 		{
 			"key": "42", "id": "42", "title": "how do i theme the sidebar", "excerpt": "",
 			"tags": [{ "key": "2", "label": "\u{2705} solved", "moderated": true }], "author": "grace",
-			"avatar": "", "replies": "1 reply", "activity": "Yesterday at 6:02 PM", "pinned": false,
+			"avatar": "", "replies": "1 reply", "count": "1", "activity": "Yesterday at 6:02 PM", "pinned": false,
 			"archived": true,
 		},
 	])
@@ -1176,11 +1209,13 @@ fn search_hits() -> serde_json::Value {
 	json!([
 		{
 			"key": "s50", "id": "50", "author": "ada", "avatar": "", "time": "Today at 9:41 AM",
-			"place": "#general", "text": "i spent the weekend on the parser",
+			"place": "#general", "text": "i spent the weekend on the parser", "group": "general",
+			"group_icon": "hash",
 		},
 		{
 			"key": "s51", "id": "51", "author": "grace", "avatar": "", "time": "Yesterday at 6:02 PM",
-			"place": "", "text": "the docs are missing a section",
+			"place": "", "text": "the docs are missing a section", "group": "",
+			"group_icon": "hash",
 		},
 	])
 }

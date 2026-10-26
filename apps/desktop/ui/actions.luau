@@ -333,8 +333,8 @@ function M.archive_thread(id: string, archived: boolean)
 	ui.invoke("threads.archive", { id = id, archived = archived })
 end
 
-function M.forum_new_post()
-	ui.invoke("forum.new_post")
+function M.forum_new_post(title: string?)
+	ui.invoke("forum.new_post", title or "")
 end
 
 function M.forum_open_post(id: string)
@@ -355,6 +355,38 @@ end
 
 function M.forum_more()
 	ui.invoke("forum.more")
+end
+
+function M.create_thread(name: string, message: string, private: boolean)
+	ui.invoke("threads.create", { name = name, message = message, private = private })
+end
+
+function M.forum_post(title: string, body: string, tags: { string })
+	ui.invoke("forum.post", { title = title, body = body, tags = tags })
+end
+
+function M.forum_cancel_post()
+	ui.invoke("forum.cancel_post")
+end
+
+function M.forum_attach()
+	ui.invoke("forum.attach")
+end
+
+function M.forum_remove_file(index: number)
+	ui.invoke("forum.remove_file", index)
+end
+
+function M.search_tab(tab: string)
+	ui.invoke("search.tab", tab)
+end
+
+function M.search_page(page: number)
+	ui.invoke("search.page", page)
+end
+
+function M.search_sort(oldest: boolean)
+	ui.invoke("search.sort", oldest)
 end
 
 function M.member_menu(id: string, x: number, y: number)

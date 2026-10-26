@@ -17,7 +17,8 @@ use super::{Link, field, number, record, snowflake, text};
 use crate::switcher::SwitcherView;
 use crate::timeline::Pictures;
 
-const AVATAR_POINTS: f64 = 24.;
+const AVATAR_POINTS: f64 = 40.;
+const TABS: [&str; 5] = ["messages", "media", "links", "files", "pins"];
 
 pub(super) struct Finder {
 	panel: Shared,
@@ -30,6 +31,11 @@ pub(super) struct Finder {
 	shown: RefCell<Option<SearchPanel>>,
 	chips: RefCell<Vec<String>>,
 	avatars: RefCell<Vec<String>>,
+	text: RefCell<String>,
+	terms: RefCell<Vec<String>>,
+	tab: Cell<&'static str>,
+	oldest: Cell<bool>,
+	page: Cell<usize>,
 }
 
 impl Finder {
@@ -45,6 +51,11 @@ impl Finder {
 			shown: RefCell::new(None),
 			chips: RefCell::default(),
 			avatars: RefCell::default(),
+			text: RefCell::default(),
+			terms: RefCell::default(),
+			tab: Cell::new(TABS[0]),
+			oldest: Cell::new(false),
+			page: Cell::new(1),
 		}
 	}
 
@@ -77,6 +88,10 @@ fn closed_panel() -> Value {
 		("notice", "".into()),
 		("busy", false.into()),
 		("more", false.into()),
+		("tab", TABS[0].into()),
+		("oldest", false.into()),
+		("page", 1.0.into()),
+		("pages", 1.0.into()),
 	])
 }
 
@@ -98,6 +113,29 @@ impl Link {
 		host.action("search.more", move |_| {
 			if let Some(link) = actions.upgrade() {
 				link.send(Command::SearchMore);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("search.tab", move |argument| {
+			let (Some(link), Some(tab)) = (actions.upgrade(), text(&argument)) else {
+				return;
+			};
+			if let Some(tab) = TABS.iter().find(|known| **known == tab) {
+				link.finder.tab.set(tab);
+				link.send_search();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("search.sort", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				link.finder.oldest.set(matches!(argument, Value::Bool(true)));
+				link.send_search();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("search.page", move |argument| {
+			if let (Some(link), Value::Num(page)) = (actions.upgrade(), argument) {
+				link.show_results_page(page.max(1.) as usize);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -155,6 +193,10 @@ impl Link {
 		self.finder.switcher.open(model);
 	}
 
+	pub(super) fn type_switcher(&self, query: &str) {
+		self.finder.switcher.type_query(query);
+	}
+
 	fn switch_to(&self, target: SwitcherTarget) {
 		match target {
 			SwitcherTarget::Channel {
@@ -201,23 +243,55 @@ impl Link {
 
 	fn run_search(&self, text: &str) {
 		let text = text.trim();
+		if text.is_empty() || self.timeline.borrow().open().is_none() {
+			return;
+		}
+		*self.finder.text.borrow_mut() = text.to_owned();
+		self.finder.tab.set(TABS[0]);
+		self.finder.oldest.set(false);
+		self.send_search();
+	}
+
+	fn send_search(&self) {
 		let Some(shared) = self.state() else {
 			return;
 		};
 		let Some(open) = self.timeline.borrow().open() else {
 			return;
 		};
+		let text = self.finder.text.borrow().clone();
 		if text.is_empty() {
 			return;
 		}
 		let channel_id = open.guild_id.is_none().then_some(open.channel_id);
-		let parsed = parse_search(text, &shared.read(), open.guild_id, channel_id);
+		let parsed = parse_search(&text, &shared.read(), open.guild_id, channel_id);
 		*self.finder.chips.borrow_mut() = parsed.chips.iter().map(|chip| chip.label()).collect();
+		*self.finder.terms.borrow_mut() = bridge::search_terms(parsed.query.content.as_deref());
+		let mut query = parsed.query;
+		match self.finder.tab.get() {
+			"media" => query.has.push("image".to_owned()),
+			"links" => query.has.push("link".to_owned()),
+			"files" => query.has.push("file".to_owned()),
+			"pins" => query.pinned = Some(true),
+			_ => {}
+		}
+		query.oldest_first = self.finder.oldest.get();
+		self.finder.page.set(1);
 		self.send(Command::Search {
 			guild_id: open.guild_id,
 			channel_id,
-			query: parsed.query,
+			query,
 		});
+	}
+
+	fn show_results_page(&self, page: usize) {
+		let Some(total) = self.finder.shown.borrow().as_ref().map(|panel| panel.total) else {
+			return;
+		};
+		self.finder.page.set(page.min(bridge::result_pages(total)));
+		if let Some(shared) = self.state() {
+			self.publish_search(&shared.read());
+		}
 	}
 
 	fn close_search(&self) {
@@ -249,6 +323,10 @@ impl Link {
 		if !changes.search {
 			return;
 		}
+		self.publish_search(state);
+	}
+
+	fn publish_search(&self, state: &State) {
 		let results = self
 			.flow
 			.borrow()
@@ -259,17 +337,33 @@ impl Link {
 			return;
 		};
 		let panel = SearchPanel::of(&results, state, today());
+		let pages = bridge::result_pages(panel.total);
+		let page = self.finder.page.get().min(pages);
+		let wanted = page * bridge::RESULTS_PAGE;
+		if panel.hits.len() < wanted && panel.more && !panel.busy {
+			self.send(Command::SearchMore);
+		}
 		let pictures = self.timeline_view.pictures();
+		let terms = self.finder.terms.borrow().clone();
 		let mut avatars = Vec::new();
+		let mut previous = None;
 		let hits: Rc<[Value]> = panel
 			.hits
 			.iter()
+			.skip((page - 1) * bridge::RESULTS_PAGE)
+			.take(bridge::RESULTS_PAGE)
 			.map(|hit| {
 				let avatar = pictures
 					.avatar(&hit.entry.message.author, AVATAR_POINTS)
 					.map(|name| name.to_string());
 				avatars.extend(avatar.clone());
-				hit_value(hit, avatar.as_deref())
+				let group = if previous == Some(hit.channel_id) {
+					String::new()
+				} else {
+					previous = Some(hit.channel_id);
+					group_name(state, hit)
+				};
+				hit_value(hit, avatar.as_deref(), &group, &terms, state)
 			})
 			.collect();
 		let chips: Rc<[Value]> = self
@@ -285,6 +379,10 @@ impl Link {
 			("notice", panel.notice.as_deref().unwrap_or_default().into()),
 			("busy", panel.busy.into()),
 			("more", panel.more.into()),
+			("tab", self.finder.tab.get().into()),
+			("oldest", self.finder.oldest.get().into()),
+			("page", (page as f64).into()),
+			("pages", (pages as f64).into()),
 		]));
 		self.finder.hits.set(Value::List(hits));
 		self.finder.chips_value.set(Value::List(chips));
@@ -365,8 +463,26 @@ impl Link {
 	}
 }
 
-fn hit_value(hit: &SearchHit, avatar: Option<&str>) -> Value {
+fn group_name(state: &State, hit: &SearchHit) -> String {
+	match hit.place.strip_prefix('#') {
+		Some(name) => name.to_owned(),
+		None => state
+			.channel(hit.channel_id)
+			.and_then(|channel| channel.name.clone())
+			.unwrap_or_else(|| "Direct Message".to_owned()),
+	}
+}
+
+fn hit_value(hit: &SearchHit, avatar: Option<&str>, group: &str, terms: &[String], state: &State) -> Value {
 	let avatar = avatar.map(|name| format!("host:{name}")).unwrap_or_default();
+	let group_icon = state
+		.channel(hit.channel_id)
+		.filter(|_| hit.guild_id.is_some())
+		.map_or("at_sign", |channel| bridge::channel_icon(channel.kind));
+	let runs: Vec<Value> = bridge::marked_runs(&hit.text, terms)
+		.into_iter()
+		.map(|(text, mark)| record([("text", text.as_str().into()), ("mark", mark.into())]))
+		.collect();
 	record([
 		("key", format!("s{}", hit.entry.id).as_str().into()),
 		("id", hit.entry.id.to_string().as_str().into()),
@@ -375,5 +491,8 @@ fn hit_value(hit: &SearchHit, avatar: Option<&str>) -> Value {
 		("time", hit.time.as_str().into()),
 		("place", hit.place.as_str().into()),
 		("text", hit.text.as_str().into()),
+		("runs", Value::List(runs.into())),
+		("group", group.into()),
+		("group_icon", group_icon.into()),
 	])
 }

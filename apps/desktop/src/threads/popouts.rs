@@ -1,75 +1,39 @@
 use std::rc::Rc;
 
-use bridge::{PinEntry, ThreadEntry, ThreadTab};
+use bridge::{PinEntry, ThreadEntry, ThreadSection};
 use media::ImageName;
 use protocol::Snowflake;
-use session::Command;
 use zgx::compose::prelude::*;
-use zgx::reactive::Signal;
-use zgx::scene::Color;
-use zgx::style::ObjectFit;
+use zgx::input::InputEvent;
+use zgx::scene::{Color, Insets};
 use zgx::theme::Themed;
 
 use super::{PinsShown, Request, ThreadsLayer, ThreadsShown};
-use crate::timeline::{TypeSize, icon, tok};
+use crate::kit::{self, Variant};
+use crate::profile::parts;
+use crate::timeline::{icon, tok};
 
-const HEADER: f32 = 48.;
-const GLYPH: f32 = 24.;
-const PORTRAIT: f32 = 32.;
+const GLYPH: f32 = 20.;
+const ROW_AVATAR: f32 = 16.;
+const CARD_AVATAR: f32 = 40.;
 const EMPTY_GLYPH: f32 = 48.;
-const SMALL_BUTTON: f32 = 24.;
-const PILL: f32 = 32.;
-const CLOSE_HIT: f32 = 28.;
-const CLOSE_GLYPH: f32 = 20.;
+const SEARCH_GLYPH: f32 = 16.;
+const COUNT_GLYPH: f32 = 16.;
+const CARD_BUTTON: f32 = 24.;
 const PIN_LINES: u32 = 5;
 const NO_THREADS: &str = "No threads yet. Start one from any message.";
+const NO_MATCH: &str = "No threads match your search.";
 const NO_PINS: &str = "This channel has no pinned messages yet.";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Fill {
-	Primary,
-	Outline,
-}
+const SEARCH_PLACEHOLDER: &str = "Search For Thread";
 
 pub fn clear() -> Themed<Color> {
 	Themed::Value(Color(0, 0, 0, 0))
 }
 
-fn button_with(label: &str, fill: Fill, height: f32, padding: f32) -> View {
-	let base = button()
-		.h(height)
-		.px(padding)
-		.py(0.)
-		.shrink_0()
-		.items_center()
-		.justify_center()
-		.rounded(tok("radius_sm"))
-		.cursor(Cursor::Pointer)
-		.text_size(tok("font_sm"))
-		.font_weight(500)
-		.child(text(label.to_owned()));
-	match fill {
-		Fill::Primary => base
-			.border(0.)
-			.bg(tok("brand"))
-			.text_color(tok("text_on_brand"))
-			.hover(|style| style.bg(tok("brand_hover"))),
-		Fill::Outline => base
-			.border(1.)
-			.border_color(tok("divider"))
-			.bg(clear())
-			.text_color(tok("text_normal"))
-			.hover(|style| style.bg(tok("modifier_hover"))),
-	}
-}
-
-pub fn small_button(label: &str, fill: Fill) -> View {
-	button_with(label, fill, SMALL_BUTTON, 8.)
-}
-
 pub fn close_button(on_click: impl FnMut() + 'static) -> View {
 	button()
-		.size(CLOSE_HIT, CLOSE_HIT)
+		.w(tok("button_size"))
+		.h(tok("button_size"))
 		.shrink_0()
 		.p(0.)
 		.border(0.)
@@ -78,33 +42,39 @@ pub fn close_button(on_click: impl FnMut() + 'static) -> View {
 		.rounded(tok("radius_sm"))
 		.bg(clear())
 		.cursor(Cursor::Pointer)
-		.child(icon("close", CLOSE_GLYPH, "interactive_normal"))
+		.text_color(tok("text_4"))
+		.hover(|style| style.text_color(tok("text_3")))
+		.child(crate::timeline::icons::glyph("close", GLYPH))
 		.on_click(on_click)
 		.tooltip("Close")
+}
+
+fn words(value: impl Into<String>, scale: &str) -> View {
+	parts::words(value, scale)
 }
 
 fn header(glyph: &'static str, title: &str) -> View {
 	row()
 		.w_full()
-		.h(HEADER)
+		.h(tok("button_height_lg"))
 		.shrink_0()
 		.items_center()
-		.gap(8.)
-		.px(16.)
-		.border_edges(zgx::scene::Insets {
+		.gap(tok("space_8"))
+		.pl(tok("space_16"))
+		.pr(tok("space_12"))
+		.border_edges(Insets {
 			bottom: 1.,
 			..Default::default()
 		})
-		.border_color(tok("divider"))
-		.child(icon(glyph, GLYPH, "text_muted"))
+		.border_color(tok("border"))
+		.child(icon(glyph, GLYPH, "text_4"))
 		.child(
-			text(title.to_owned())
+			words(title.to_owned(), "md")
 				.grow()
 				.min_w(0.)
 				.truncate()
-				.type_size("font_md")
 				.font_weight(600)
-				.text_color(tok("header_primary")),
+				.text_color(tok("text_2")),
 		)
 }
 
@@ -112,158 +82,207 @@ fn empty(glyph: &'static str, message: &str) -> View {
 	column()
 		.w_full()
 		.items_center()
-		.gap(8.)
-		.p(32.)
-		.child(icon(glyph, EMPTY_GLYPH, "interactive_muted"))
+		.gap(tok("space_8"))
+		.p(tok("space_32"))
+		.child(icon(glyph, EMPTY_GLYPH, "text_5"))
 		.child(
-			text(message.to_owned())
+			words(message.to_owned(), "sm")
 				.text_wrap(true)
-				.type_size("font_sm")
-				.text_color(tok("text_muted")),
+				.text_color(tok("text_4")),
 		)
 }
 
-fn frame(background: &str) -> View {
+fn frame() -> View {
 	column()
-		.rounded(tok("radius_md"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.bg(tok(background))
-		.text_color(tok("text_normal"))
+		.rounded(tok("radius_lg"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_3"))
+		.text_color(tok("text_3"))
 		.overflow_hidden()
+}
+
+fn search_field(layer: &Rc<ThreadsLayer>) -> View {
+	row()
+		.w(tok("thread_search_width"))
+		.h(tok("button_height_sm"))
+		.shrink_0()
+		.items_center()
+		.gap(tok("space_8"))
+		.px(tok("space_8"))
+		.rounded(tok("radius_sm"))
+		.bg(tok("bg_4"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border_light"))
+		.child(
+			text_input(SEARCH_PLACEHOLDER, layer.search.clone())
+				.placeholder(SEARCH_PLACEHOLDER)
+				.grow()
+				.min_w(0.)
+				.h_full()
+				.p(0.)
+				.border(0.)
+				.bg(clear())
+				.text_color(tok("text_3"))
+				.text_size(tok("font_size_sm"))
+				.focus(|style| style.outline_width(0.)),
+		)
+		.child(icon("search", SEARCH_GLYPH, "text_4"))
+}
+
+fn create_button(on_click: impl FnMut() + 'static) -> View {
+	kit::action("Create", Variant::Primary, on_click).h(tok("button_height_sm"))
 }
 
 pub fn threads(layer: &Rc<ThreadsLayer>, channel_id: Snowflake) -> View {
 	let shown = layer.threads.clone();
-	let tab = layer.tab.clone();
+	let query = layer.search.clone();
 	let (create, close) = (layer.clone(), layer.clone());
 	let creatable = shown.clone();
 	let list_layer = layer.clone();
-	frame("background_floating")
+	frame()
+		.max_h(parts::size(&layer.runtime, "thread_popout_height"))
 		.child(
 			header("thread", "Threads")
+				.child(search_field(layer))
 				.child(div().child_when(
 					move || creatable.with(|shown| shown.can_create).then_some(()),
 					move |(), _| {
 						let create = create.clone();
-						small_button("Create", Fill::Primary)
-							.on_click(move || create.request(Request::NewThread(channel_id)))
+						create_button(move || create.request(Request::NewThread(channel_id)))
 					},
 				))
 				.child(close_button(move || close.close_popout())),
 		)
 		.child(
-			row()
+			scroll(layer.runtime.signal(0.))
+				.grow()
+				.min_h(0.)
 				.w_full()
-				.shrink_0()
-				.gap(8.)
-				.px(16.)
-				.py(8.)
-				.child(pill(layer, &tab, ThreadTab::Active, "Active", channel_id))
-				.child(pill(layer, &tab, ThreadTab::Archived, "Archived", channel_id)),
+				.child(switch(
+					move || (shown.get(), query.get().trim().to_lowercase()),
+					move |(shown, query): (Rc<ThreadsShown>, String), _| {
+						thread_sections(&list_layer, &shown, &query)
+					},
+				)),
 		)
-		.child(div().grow().min_h(0.).w_full().overflow_hidden().child(switch(
-			move || shown.get(),
-			move |shown: Rc<ThreadsShown>, _| thread_rows(&list_layer, &shown),
-		)))
 }
 
-fn pill(
-	layer: &Rc<ThreadsLayer>,
-	tab: &Signal<ThreadTab>,
-	choice: ThreadTab,
-	label: &str,
-	channel_id: Snowflake,
-) -> View {
-	let (current, pick, layer) = (tab.clone(), tab.clone(), layer.clone());
-	button()
-		.h(PILL)
-		.px(12.)
-		.py(0.)
-		.items_center()
-		.rounded(tok("radius_sm"))
-		.border(1.)
-		.cursor(Cursor::Pointer)
-		.text_size(tok("font_sm"))
-		.font_weight(500)
-		.reactive_style(move || {
-			if current.get() == choice {
-				Styles::new()
-					.border_color(tok("brand"))
-					.bg(tok("brand_tint"))
-					.text_color(tok("interactive_active"))
-			} else {
-				Styles::new()
-					.border_color(tok("divider"))
-					.bg(tok("background_secondary"))
-					.text_color(tok("interactive_normal"))
-			}
+fn thread_sections(layer: &Rc<ThreadsLayer>, shown: &ThreadsShown, query: &str) -> View {
+	let sections: Vec<ThreadSection> = shown
+		.sections
+		.iter()
+		.map(|section| ThreadSection {
+			title: section.title.clone(),
+			entries: section
+				.entries
+				.iter()
+				.filter(|entry| query.is_empty() || entry.name.to_lowercase().contains(query))
+				.cloned()
+				.collect(),
 		})
-		.on_click(move || {
-			pick.set(choice);
-			if choice == ThreadTab::Archived {
-				layer.request(Request::Archived(channel_id));
-			}
-		})
-		.child(text(label.to_owned()))
-}
-
-fn thread_rows(layer: &Rc<ThreadsLayer>, shown: &ThreadsShown) -> View {
-	if shown.entries.is_empty() {
-		return empty("thread", NO_THREADS);
+		.filter(|section| !section.entries.is_empty())
+		.collect();
+	if sections.is_empty() {
+		return empty("thread", if query.is_empty() { NO_THREADS } else { NO_MATCH });
 	}
 	column()
 		.w_full()
-		.children(shown.entries.iter().map(|entry| thread_row(layer, entry)))
+		.px(tok("space_12"))
+		.pb(tok("space_12"))
+		.gap(tok("space_8"))
+		.children(sections.iter().flat_map(|section| {
+			std::iter::once(section_title(&section.title))
+				.chain(
+					section
+						.entries
+						.iter()
+						.map(|entry| thread_row(layer, shown, entry)),
+				)
+				.collect::<Vec<_>>()
+		}))
 }
 
-fn thread_row(layer: &Rc<ThreadsLayer>, entry: &ThreadEntry) -> View {
-	let (open, member) = (layer.clone(), layer.clone());
-	let (id, joined) = (entry.id, entry.joined);
-	row()
-		.mx(8.)
-		.px(12.)
-		.py(8.)
-		.gap(12.)
+fn section_title(title: &str) -> View {
+	words(title.to_uppercase(), "xs")
+		.pt(tok("space_12"))
+		.px(tok("space_4"))
+		.pb(tok("space_4"))
+		.font_weight(700)
+		.text_color(tok("text_4"))
+}
+
+fn thread_row(layer: &Rc<ThreadsLayer>, shown: &ThreadsShown, entry: &ThreadEntry) -> View {
+	let open = layer.clone();
+	let id = entry.id;
+	let avatar = entry.author_id.and_then(|user_id| {
+		shown
+			.avatars
+			.iter()
+			.find(|(owner, _)| *owner == user_id)
+			.map(|(_, name)| name.clone())
+	});
+	let meta = row()
+		.w_full()
+		.mt(tok("space_4"))
 		.items_center()
-		.rounded(tok("radius_md"))
+		.gap(tok("space_6"))
+		.child(portrait(layer, avatar.as_ref(), ROW_AVATAR))
+		.child(
+			words(entry.author.clone(), "sm")
+				.shrink_0()
+				.font_weight(500)
+				.text_color(tok("text_2")),
+		)
+		.when(!entry.snippet.is_empty(), |meta| {
+			meta.child(
+				words(entry.snippet.clone(), "sm")
+					.min_w(0.)
+					.truncate()
+					.text_color(tok("text_4")),
+			)
+		})
+		.child(
+			words(format!("\u{2022} {}", entry.activity), "sm")
+				.shrink_0()
+				.text_color(tok("text_4")),
+		);
+	row()
+		.w_full()
+		.px(tok("space_16"))
+		.py(tok("space_12"))
+		.gap(tok("space_12"))
+		.items_center()
+		.rounded(tok("radius_sm"))
+		.bg(tok("bg_4"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
 		.cursor(Cursor::Pointer)
-		.hover(|style| style.bg(tok("modifier_hover")))
+		.hover(|style| style.bg(tok("hover")))
 		.on_click(move || open.request(Request::OpenThread(id)))
-		.child(icon(
-			if entry.archived { "archive" } else { "thread" },
-			GLYPH,
-			"interactive_normal",
-		))
 		.child(
 			column()
 				.grow()
 				.min_w(0.)
 				.child(
-					text(entry.name.clone())
+					words(entry.name.clone(), "md")
 						.truncate()
-						.type_size("font_md")
 						.font_weight(600)
-						.text_color(tok("header_primary")),
+						.text_color(tok(if entry.archived { "text_4" } else { "text_2" })),
 				)
-				.child(
-					text(entry.detail.clone())
-						.truncate()
-						.type_size("font_sm")
-						.text_color(tok("text_muted")),
-				),
+				.child(meta),
 		)
 		.child(
-			small_button(if joined { "Leave Thread" } else { "Join Thread" }, Fill::Outline).on_click(
-				move || {
-					let command = if joined {
-						Command::LeaveThread { thread_id: id }
-					} else {
-						Command::JoinThread { thread_id: id }
-					};
-					member.request(Request::Command(command));
-				},
-			),
+			row()
+				.shrink_0()
+				.items_center()
+				.gap(tok("space_4"))
+				.child(icon("chat", COUNT_GLYPH, "text_4"))
+				.child(
+					words(entry.count.clone(), "sm")
+						.font_weight(600)
+						.text_color(tok("text_4")),
+				),
 		)
 }
 
@@ -271,15 +290,14 @@ pub fn pins(layer: &Rc<ThreadsLayer>, channel_id: Snowflake) -> View {
 	let shown = layer.pins.clone();
 	let close = layer.clone();
 	let list_layer = layer.clone();
-	frame("background_secondary")
+	frame()
+		.h(tok("pins_popout_height"))
 		.child(header("pin", "Pinned Messages").child(close_button(move || close.close_popout())))
 		.child(
-			div()
+			scroll(layer.runtime.signal(0.))
 				.grow()
 				.min_h(0.)
 				.w_full()
-				.pt(8.)
-				.overflow_hidden()
 				.child(switch(
 					move || shown.get(),
 					move |shown: Rc<PinsShown>, _| pin_cards(&list_layer, channel_id, &shown),
@@ -291,12 +309,105 @@ fn pin_cards(layer: &Rc<ThreadsLayer>, channel_id: Snowflake, shown: &PinsShown)
 	if shown.loaded && shown.entries.is_empty() {
 		return empty("pin", NO_PINS);
 	}
-	column().w_full().children(
+	column().w_full().p(tok("space_12")).gap(tok("space_8")).children(
 		shown
 			.entries
 			.iter()
 			.map(|(entry, avatar)| pin_card(layer, channel_id, entry, avatar.as_ref(), shown.can_manage)),
 	)
+}
+
+pub fn message_card(
+	layer: &Rc<ThreadsLayer>,
+	avatar: Option<&ImageName>,
+	author: &str,
+	time: &str,
+	body: View,
+	tools: View,
+) -> View {
+	let hovered = layer.runtime.signal(false);
+	let (enter, leave, shown, border) = (hovered.clone(), hovered.clone(), hovered.clone(), hovered);
+	div()
+		.relative()
+		.w_full()
+		.pl(tok("message_card_inset"))
+		.pr(tok("space_12"))
+		.py(tok("space_8"))
+		.rounded(tok("radius_sm"))
+		.bg(tok("bg_4"))
+		.border(tok("border_thickness"))
+		.reactive_style(move || {
+			Styles::new().border_color(tok(if border.get() { "border_light" } else { "border" }))
+		})
+		.on_event(move |event| match event.event {
+			InputEvent::PointerEnter => {
+				enter.set(true);
+			}
+			InputEvent::PointerLeave => {
+				leave.set(false);
+			}
+			_ => {}
+		})
+		.child(
+			div()
+				.absolute()
+				.left(12.)
+				.top(8.)
+				.child(portrait(layer, avatar, CARD_AVATAR)),
+		)
+		.child(
+			row()
+				.w_full()
+				.items_end()
+				.gap(tok("space_6"))
+				.child(
+					text(author.to_owned())
+						.shrink_0()
+						.text_size(tok("font_size_md"))
+						.line_height(tok("line_height_md"))
+						.font_weight(500)
+						.text_color(tok("text_2")),
+				)
+				.child(
+					text(time.to_owned())
+						.min_w(0.)
+						.truncate()
+						.text_size(tok("font_size_xs"))
+						.line_height(tok("line_height_md"))
+						.font_weight(500)
+						.text_color(tok("text_5")),
+				),
+		)
+		.child(body)
+		.child(tools.absolute().top(8.).right(8.).reactive_style(move || {
+			if shown.get() {
+				Styles::new().visible()
+			} else {
+				Styles::new().invisible()
+			}
+		}))
+}
+
+pub fn jump_button(on_click: impl FnMut() + 'static) -> View {
+	button()
+		.h(CARD_BUTTON)
+		.px(tok("space_6"))
+		.py(0.)
+		.shrink_0()
+		.items_center()
+		.justify_center()
+		.rounded(tok("radius_sm"))
+		.bg(tok("bg_2"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border_light"))
+		.cursor(Cursor::Pointer)
+		.text_color(tok("text_3"))
+		.text_size(tok("font_size_xs"))
+		.line_height(tok("line_height_label"))
+		.font_weight(500)
+		.hover(|style| style.bg(tok("bg_1")))
+		.child(text("Jump"))
+		.on_click(on_click)
 }
 
 fn pin_card(
@@ -308,96 +419,48 @@ fn pin_card(
 ) -> View {
 	let (jump, unpin) = (layer.clone(), layer.clone());
 	let message_id = entry.id;
-	column()
-		.mx(8.)
-		.mb(8.)
-		.p(12.)
-		.gap(8.)
-		.rounded(tok("radius_md"))
-		.bg(tok("background_primary"))
-		.border(1.)
-		.border_color(tok("divider"))
-		.child(
-			row()
-				.items_center()
-				.gap(8.)
-				.child(portrait(layer, avatar, &entry.author))
-				.child(
-					column()
-						.grow()
-						.min_w(0.)
-						.child(
-							text(entry.author.clone())
-								.truncate()
-								.type_size("font_sm")
-								.font_weight(600)
-								.text_color(tok("header_primary")),
-						)
-						.child(
-							text(entry.time.clone())
-								.type_size("font_tiny")
-								.text_color(tok("text_muted")),
-						),
-				)
-				.child(small_button("Jump", Fill::Outline).on_click(move || {
-					jump.request(Request::Jump {
-						channel_id,
-						message_id,
-					})
-				}))
-				.when(can_manage, move |row| {
-					row.child(
-						button()
-							.size(CLOSE_HIT, CLOSE_HIT)
-							.shrink_0()
-							.p(0.)
-							.border(0.)
-							.items_center()
-							.justify_center()
-							.rounded(tok("radius_sm"))
-							.bg(clear())
-							.cursor(Cursor::Pointer)
-							.child(icon("unpin", CLOSE_GLYPH, "interactive_normal"))
-							.tooltip("Unpin Message")
-							.on_click(move || {
-								unpin.request(Request::Unpin {
-									channel_id,
-									message_id,
-								})
-							}),
-					)
-				}),
-		)
-		.child(
-			text(entry.text.clone())
-				.text_wrap(true)
-				.line_clamp(PIN_LINES)
-				.type_size("font_sm")
-				.text_color(tok("text_normal")),
-		)
+	let tools = row()
+		.gap(tok("space_4"))
+		.child(jump_button(move || {
+			jump.request(Request::Jump {
+				channel_id,
+				message_id,
+			})
+		}))
+		.when(can_manage, move |tools| {
+			tools.child(
+				button()
+					.size(CARD_BUTTON, CARD_BUTTON)
+					.shrink_0()
+					.p(0.)
+					.border(0.)
+					.items_center()
+					.justify_center()
+					.rounded(tok("radius_sm"))
+					.bg(clear())
+					.cursor(Cursor::Pointer)
+					.text_color(tok("text_4"))
+					.hover(|style| style.text_color(tok("text_3")))
+					.child(crate::timeline::icons::glyph("close", SEARCH_GLYPH))
+					.tooltip("Unpin Message")
+					.on_click(move || {
+						unpin.request(Request::Unpin {
+							channel_id,
+							message_id,
+						})
+					}),
+			)
+		});
+	let body = text(entry.text.clone())
+		.w_full()
+		.text_wrap(true)
+		.line_clamp(PIN_LINES)
+		.text_size(tok("font_size_md"))
+		.line_height(tok("line_height_md"))
+		.text_color(tok("text_3"));
+	message_card(layer, avatar, &entry.author, &entry.time, body, tools)
 }
 
-fn portrait(layer: &Rc<ThreadsLayer>, avatar: Option<&ImageName>, name: &str) -> View {
-	let initial = name.chars().next().map(String::from).unwrap_or_default();
-	let base = div()
-		.size(PORTRAIT, PORTRAIT)
-		.shrink_0()
-		.rounded(PORTRAIT / 2.)
-		.overflow_hidden()
-		.bg(tok("brand"))
-		.items_center()
-		.justify_center();
-	let Some(avatar) = avatar else {
-		return base.child(
-			text(initial)
-				.text_size(PORTRAIT * 0.42)
-				.font_weight(600)
-				.text_color(tok("text_on_brand")),
-		);
-	};
-	let picture = layer.pictures.picture(avatar);
-	base.reactive_style(move || match picture.get() {
-		Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
-		None => Styles::new(),
-	})
+fn portrait(layer: &Rc<ThreadsLayer>, avatar: Option<&ImageName>, side: f32) -> View {
+	parts::avatar(&layer.pictures, avatar, side, None, "bg_4")
 }

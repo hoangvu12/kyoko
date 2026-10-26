@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use bridge::{ForumSort, ThreadTab, today};
+use bridge::{ForumSort, today};
 use protocol::{ChannelType, Snowflake};
 use session::Command;
 use state::State;
@@ -23,39 +23,53 @@ fn channel_of(state: &State, kind: ChannelType) -> Snowflake {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_thread_list_shows_a_channels_active_threads_newest_first() {
+async fn the_thread_list_groups_a_channels_threads_newest_first() {
 	let running = Running::start("threads-list").await;
 	{
 		let state = running.session().state().read();
 		let guild_id = first_guild(&state);
 		let parent = channel_of(&state, ChannelType::GuildText);
-		let mut expected: Vec<(Snowflake, Snowflake)> = state
+		let mut expected: Vec<(bool, Snowflake, Snowflake)> = state
 			.guild(guild_id)
 			.expect("the guild")
 			.threads
 			.values()
 			.filter(|thread| thread.parent_id == Some(parent))
-			.map(|thread| (thread.last_message_id.unwrap_or(thread.id), thread.id))
+			.map(|thread| {
+				(
+					thread.member.is_some(),
+					thread.last_message_id.unwrap_or(thread.id),
+					thread.id,
+				)
+			})
 			.collect();
 		expected.sort_by(|left, right| right.cmp(left));
-		let entries = bridge::thread_list(&state, parent, ThreadTab::Active, today());
-		assert!(!entries.is_empty(), "the fixtures give the channel threads");
+		let sections = bridge::thread_sections(&state, parent, today());
+		assert!(!sections.is_empty(), "the fixtures give the channel threads");
+		let entries: Vec<_> = sections
+			.iter()
+			.flat_map(|section| section.entries.clone())
+			.collect();
 		assert_eq!(
 			entries.iter().map(|entry| entry.id).collect::<Vec<_>>(),
-			expected.iter().map(|(_, id)| *id).collect::<Vec<_>>()
+			expected.iter().map(|(_, _, id)| *id).collect::<Vec<_>>()
 		);
-		for entry in &entries {
-			let thread = state.channel(entry.id).expect("the thread");
-			let owner = state.display_name(Some(guild_id), thread.owner_id.expect("an owner"));
+		for section in &sections {
+			let joined = section.title.ends_with(" Joined Threads");
 			assert!(
-				entry.detail.starts_with(&format!("{owner} - ")),
+				joined || section.title.ends_with(" Other Active Threads"),
 				"{}",
-				entry.detail
+				section.title
 			);
-			assert!(entry.detail.contains(" messages - "), "{}", entry.detail);
-			assert!(!entry.archived);
+			assert!(section.title.starts_with(&section.entries.len().to_string()));
+			for entry in &section.entries {
+				assert_eq!(entry.joined, joined);
+				assert!(!entry.archived);
+				let thread = state.channel(entry.id).expect("the thread");
+				assert_eq!(entry.count, thread.message_count.unwrap_or(0).to_string());
+				assert!(!entry.author.is_empty());
+			}
 		}
-		assert!(bridge::thread_list(&state, parent, ThreadTab::Archived, today()).is_empty());
 		assert!(bridge::can_create_threads(&state, parent));
 		let header = bridge::thread_header(&state, entries[0].id).expect("a thread header");
 		assert_eq!(header.parent_id, Some(parent));

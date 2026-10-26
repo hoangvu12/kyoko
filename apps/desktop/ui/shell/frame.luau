@@ -107,6 +107,7 @@ local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
 					and state.sidebar.guild_id:get() ~= ""
 					and not state.threads.panel:get().open
 					and not state.hidden.view:get().open
+					and not state.forum.view:get().open
 			end, panel { w = theme.size.member_list_panel_width, h_full = true, member_list() })),
 			ui.show(function()
 				return dm_side(members_room) and state.dms.profile:get().open and state.shell.dm_profile_visible:get()

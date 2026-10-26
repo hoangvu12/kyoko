@@ -10,22 +10,17 @@ use zgx::reactive::{Effect, Runtime, Signal};
 use zgx::style::ObjectFit;
 
 use crate::motion;
-use crate::timeline::{Pictures, TypeSize, icon, tok};
+use crate::timeline::{Pictures, icon, tok};
 
-const WIDTH: f32 = 560.;
-const TOP: f32 = 96.;
-const PADDING: f32 = 32.;
-const GAP: f32 = 8.;
-const INPUT_HEIGHT: f32 = 44.;
-const LIST_MAX: f32 = 360.;
-const FOCUS_RING: f32 = 2.;
-const ROW_HEIGHT: f32 = 36.;
-const LEADING: f32 = 24.;
+const TOP: f32 = 180.;
+const LIST_MAX: f32 = 400.;
 const ICON: f32 = 20.;
-const AVATAR: f64 = 24.;
+const AVATAR: f64 = 20.;
 const PLACEHOLDER: &str = "Where would you like to go?";
 const EMPTY: &str = "No results match your search.";
-const TIP: &str = "PROTIP: Start searches with @, #, ! or * to narrow results.";
+const TIP_LEAD: &str = "PROTIP: ";
+const TIP: &str = "Start searches with @, #, !, or * to narrow down results.";
+const ENTER: &str = "↵";
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 
@@ -191,26 +186,26 @@ impl SwitcherView {
 		self.choose(selected);
 	}
 
+	pub fn type_query(&self, text: &str) {
+		self.query.set(text.to_owned());
+	}
+
 	pub fn view(self: &Rc<Self>) -> View {
 		let keys = self.clone();
 		let input = text_input(PLACEHOLDER, self.query.clone())
 			.placeholder(PLACEHOLDER)
 			.w_full()
-			.h(INPUT_HEIGHT)
+			.h(tok("switcher_input_height"))
 			.shrink_0()
-			.px(16.)
+			.px(tok("space_16"))
 			.rounded(tok("radius_sm"))
-			.border(1.)
-			.border_color(tok("interactive_muted"))
-			.bg(tok("input_background"))
-			.text_color(tok("text_normal"))
-			.type_size("font_md")
-			.focus(|style| {
-				style
-					.border_color(tok("brand"))
-					.outline_color(tok("focus_ring"))
-					.outline_width(FOCUS_RING)
-			})
+			.border(tok("border_thickness"))
+			.border_color(tok("accent_2"))
+			.bg(tok("bg_3"))
+			.text_color(tok("text_2"))
+			.text_size(tok("font_size_xl"))
+			.line_height(tok("line_height_xl"))
+			.focus(|style| style.border_color(tok("accent_2")).outline_width(0.))
 			.on_event(move |event| {
 				let InputEvent::KeyDown { key, .. } = &event.event else {
 					return;
@@ -240,52 +235,47 @@ impl SwitcherView {
 					y: PlacementEdge::Start,
 					insets: [TOP, 0., 0., 0.],
 				})
-				.w(WIDTH)
-				.p(PADDING)
-				.gap(GAP)
-				.rounded(tok("radius_md"))
-				.bg(tok("background_primary"))
-				.border(1.)
-				.border_color(tok("divider"))
-				.text_color(tok("text_normal"))
+				.w(tok("modal_width_md"))
+				.pt(tok("space_24"))
+				.px(tok("space_24"))
+				.pb(tok("space_16"))
+				.gap(tok("space_16"))
+				.rounded(tok("radius_lg"))
+				.bg(tok("bg_4"))
+				.border(tok("border_thickness"))
+				.border_color(tok("border"))
+				.text_color(tok("text_3"))
 				.child(input)
 				.child(list)
-				.child(
-					text(TIP)
-						.w_full()
-						.shrink_0()
-						.pt(GAP)
-						.border_edges(zgx::scene::Insets {
-							top: 1.,
-							..Default::default()
-						})
-						.border_color(tok("divider"))
-						.type_size("font_tiny")
-						.font_weight(600)
-						.text_color(tok("text_muted")),
-				),
+				.child(tip()),
 		)
 	}
 
 	fn list(self: &Rc<Self>, items: &[Item]) -> View {
-		let list = column().w_full().gap(2.).max_h(LIST_MAX).overflow_hidden();
+		let list = column()
+			.w_full()
+			.gap(tok("space_2"))
+			.max_h(LIST_MAX)
+			.overflow_hidden();
 		if items.is_empty() {
 			return list.child(
 				text(EMPTY)
-					.p(GAP)
-					.type_size("font_sm")
-					.text_color(tok("text_muted")),
+					.p(tok("space_8"))
+					.text_size(tok("font_size_sm"))
+					.line_height(tok("line_height_sm"))
+					.text_color(tok("text_4")),
 			);
 		}
-		list.children(items.iter().map(|item| {
+		list.children(items.iter().enumerate().map(|(index, item)| {
 			match item {
 				Item::Header(category) => text(category.title())
-					.px(GAP)
-					.pt(GAP)
-					.pb(4.)
-					.type_size("font_tiny")
+					.px(tok("space_8"))
+					.when(index > 0, |header| header.pt(tok("space_8")))
+					.pb(tok("space_4"))
+					.text_size(tok("font_size_xs"))
+					.line_height(tok("line_height_xs"))
 					.font_weight(700)
-					.text_color(tok("header_secondary")),
+					.text_color(tok("text_4")),
 				Item::Entry {
 					position,
 					entry,
@@ -297,47 +287,40 @@ impl SwitcherView {
 
 	fn row(self: &Rc<Self>, position: usize, entry: &SwitcherEntry, selected: bool) -> View {
 		let this = self.clone();
-		let leading = div()
-			.w(LEADING)
-			.shrink_0()
-			.items_center()
-			.justify_center()
-			.child(self.leading(entry));
 		row()
 			.w_full()
-			.h(ROW_HEIGHT)
+			.h(tok("switcher_row_height"))
+			.shrink_0()
 			.items_center()
-			.gap(GAP)
-			.px(GAP)
-			.rounded(tok("radius_sm"))
+			.gap(tok("space_8"))
+			.px(tok("space_8"))
+			.rounded(tok("radius_xs"))
 			.cursor(Cursor::Pointer)
-			.text_color(tok(if selected {
-				"interactive_active"
-			} else {
-				"interactive_normal"
-			}))
-			.when(selected, |row| row.bg(tok("modifier_selected")))
-			.when(!selected, |row| {
-				row.hover(|style| style.bg(tok("modifier_hover")))
-			})
+			.when(selected, |row| row.bg(tok("active")))
+			.when(!selected, |row| row.hover(|style| style.bg(tok("hover"))))
 			.on_click(move || this.choose(position))
-			.child(leading)
+			.child(self.leading(entry))
 			.child(
 				text(entry.name.clone())
 					.grow()
 					.min_w(0.)
 					.truncate()
-					.type_size("font_md")
-					.font_weight(600),
+					.text_size(tok("font_size_md"))
+					.line_height(tok("line_height_label"))
+					.font_weight(500)
+					.text_color(tok(if selected { "text_2" } else { "text_3" })),
 			)
 			.when_some(entry.context.clone(), |row, context| {
 				row.child(
-					text(context)
+					text(context.to_uppercase())
 						.shrink_0()
-						.type_size("font_sm")
-						.text_color(tok("text_muted")),
+						.text_size(tok("font_size_xs"))
+						.line_height(tok("line_height_xs"))
+						.font_weight(600)
+						.text_color(tok("text_4")),
 				)
 			})
+			.when(selected, |row| row.child(enter_key()))
 	}
 
 	fn leading(&self, entry: &SwitcherEntry) -> View {
@@ -346,7 +329,7 @@ impl SwitcherView {
 				Leading::Icon(name) => name,
 				_ => "at_sign",
 			};
-			return icon(glyph, ICON, "text_muted");
+			return icon(glyph, ICON, "text_4");
 		};
 		let picture = self.pictures.picture(&name);
 		let size = AVATAR as f32;
@@ -356,7 +339,8 @@ impl SwitcherView {
 			.size(size, size)
 			.rounded(size / 2.)
 			.overflow_hidden()
-			.bg(tok("brand"))
+			.shrink_0()
+			.bg(tok("bg_2"))
 			.items_center()
 			.justify_center()
 			.reactive_style(move || match shown.get() {
@@ -367,7 +351,7 @@ impl SwitcherView {
 				text(initial)
 					.text_size(size * 0.42)
 					.font_weight(600)
-					.text_color(tok("text_on_brand"))
+					.text_color(tok("text_0"))
 					.reactive_style(move || {
 						if picture.with(Option::is_some) {
 							Styles::new().invisible()
@@ -377,4 +361,42 @@ impl SwitcherView {
 					}),
 			)
 	}
+}
+
+fn tip() -> View {
+	row()
+		.w_full()
+		.shrink_0()
+		.pt(tok("space_12"))
+		.border_edges(zgx::scene::Insets {
+			top: 1.,
+			..Default::default()
+		})
+		.border_color(tok("border"))
+		.child(
+			text(TIP_LEAD)
+				.text_size(tok("font_size_xs"))
+				.line_height(tok("line_height_xs"))
+				.font_weight(700)
+				.text_color(tok("green_2")),
+		)
+		.child(
+			text(TIP)
+				.text_size(tok("font_size_xs"))
+				.line_height(tok("line_height_xs"))
+				.text_color(tok("text_4")),
+		)
+}
+
+fn enter_key() -> View {
+	text(ENTER)
+		.shrink_0()
+		.px(tok("space_4"))
+		.rounded(tok("radius_xs"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.text_size(tok("font_size_xs"))
+		.line_height(tok("line_height_xs"))
+		.font_weight(600)
+		.text_color(tok("text_4"))
 }

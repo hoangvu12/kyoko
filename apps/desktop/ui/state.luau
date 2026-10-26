@@ -212,13 +212,28 @@ export type UserPanel = {
 	status: string,
 	latency: string,
 }
-export type SearchHit = { key: string, id: string, author: string, avatar: string, time: string, place: string, text: string }
+export type SearchHit = {
+	key: string,
+	id: string,
+	author: string,
+	avatar: string,
+	time: string,
+	place: string,
+	text: string,
+	runs: { { text: string, mark: boolean } }?,
+	group: string,
+	group_icon: string,
+}
 export type SearchPanel = {
 	open: boolean,
 	title: string,
 	notice: string,
 	busy: boolean,
 	more: boolean,
+	tab: string,
+	oldest: boolean,
+	page: number,
+	pages: number,
 }
 export type ThreadPanel = {
 	open: boolean,
@@ -228,8 +243,28 @@ export type ThreadPanel = {
 	archived: boolean,
 	joined: boolean,
 	can_manage: boolean,
+	creating: boolean,
+	serial: number,
+	draft_name: string,
+	starter_author: string,
+	starter_time: string,
+	starter_text: string,
+	starter_avatar: string,
+	can_private: boolean,
+	post: boolean,
+	tags: { string },
 }
-export type ForumView = { open: boolean, id: string, sort: string, gallery: boolean }
+export type ForumView = {
+	open: boolean,
+	id: string,
+	sort: string,
+	gallery: boolean,
+	composing: boolean,
+	serial: number,
+	draft_title: string,
+	require_tag: boolean,
+}
+export type ForumFile = { key: string, name: string, size: string }
 export type ForumTag = { key: string, id: string, label: string, active: boolean }
 export type ForumBadge = { key: string, label: string, moderated: boolean }
 export type ForumCard = {
@@ -241,6 +276,7 @@ export type ForumCard = {
 	author: string,
 	avatar: string,
 	replies: string,
+	count: string,
 	activity: string,
 	pinned: boolean,
 	archived: boolean,
@@ -452,6 +488,10 @@ M.search = {
 		notice = "",
 		busy = false,
 		more = false,
+		tab = "messages",
+		oldest = false,
+		page = 1,
+		pages = 1,
 	} :: SearchPanel),
 	hits = ui.shared("search.hits", {} :: { SearchHit }),
 	chips = ui.shared("search.chips", {} :: { string }),
@@ -499,11 +539,31 @@ M.threads = {
 		archived = false,
 		joined = true,
 		can_manage = false,
+		creating = false,
+		serial = 0,
+		draft_name = "",
+		starter_author = "",
+		starter_time = "",
+		starter_text = "",
+		starter_avatar = "",
+		can_private = false,
+		post = false,
+		tags = {},
 	} :: ThreadPanel),
 }
 
 M.forum = {
-	view = ui.shared("forum.view", { open = false, id = "", sort = "Recently Active", gallery = false } :: ForumView),
+	view = ui.shared("forum.view", {
+		open = false,
+		id = "",
+		sort = "Recently Active",
+		gallery = false,
+		composing = false,
+		serial = 0,
+		draft_title = "",
+		require_tag = false,
+	} :: ForumView),
+	files = ui.shared("forum.files", {} :: { ForumFile }),
 	tags = ui.shared("forum.tags", {} :: { ForumTag }),
 	cards = ui.shared("forum.cards", {} :: { ForumCard }),
 }

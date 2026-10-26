@@ -1,36 +1,30 @@
-mod dialogs;
 mod popouts;
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use bridge::{NewPostForm, PinEntry, ThreadEntry, ThreadTab};
+use bridge::{PinEntry, ThreadSection};
 use media::ImageName;
 use protocol::Snowflake;
-use rest::UploadFile;
-use session::Command;
 use zgx::compose::Tasks;
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent};
 use zgx::platform::{FilePicker, PlatformService};
 use zgx::reactive::{Runtime, Signal};
 
+use crate::profile::parts;
 use crate::timeline::Pictures;
 
-const POPOVER_GAP: f32 = 12.;
+const ANCHOR_RIGHT: f32 = 24.;
 const SNAP_MARGIN: f32 = 8.;
-const POPOVER_WIDTH: f32 = 400.;
-const POPOVER_HEIGHT: f32 = 440.;
-const PIN_AVATAR: f64 = 32.;
-const MAX_FILES: usize = 10;
+const PIN_AVATAR: f64 = 40.;
+const ROW_AVATAR: f64 = 16.;
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 
 #[derive(Debug)]
 pub enum Request {
-	Command(Command),
 	OpenThread(Snowflake),
 	NewThread(Snowflake),
 	Jump {
@@ -41,7 +35,6 @@ pub enum Request {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 	},
-	Archived(Snowflake),
 	ReadFiles(Vec<PathBuf>),
 }
 
@@ -61,7 +54,8 @@ pub struct Popout {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ThreadsShown {
-	pub entries: Vec<ThreadEntry>,
+	pub sections: Vec<ThreadSection>,
+	pub avatars: Vec<(Snowflake, ImageName)>,
 	pub can_create: bool,
 }
 
@@ -72,46 +66,14 @@ pub struct PinsShown {
 	pub can_manage: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateShown {
-	serial: u64,
-	pub channel_id: Snowflake,
-	pub message_id: Option<Snowflake>,
-	pub preview: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PostShown {
-	serial: u64,
-	pub channel_id: Snowflake,
-	pub form: Rc<NewPostForm>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileChip {
-	pub name: String,
-	pub size: String,
-}
-
 pub struct ThreadsLayer {
 	runtime: Runtime,
 	pictures: Rc<Pictures>,
 	window: Signal<(f32, f32)>,
 	popout: Signal<Option<Popout>>,
 	threads: Signal<Rc<ThreadsShown>>,
-	tab: Signal<ThreadTab>,
+	search: Signal<String>,
 	pins: Signal<Rc<PinsShown>>,
-	create: Signal<Option<CreateShown>>,
-	create_open: Signal<bool>,
-	name: Signal<String>,
-	archive: Signal<usize>,
-	post: Signal<Option<PostShown>>,
-	post_open: Signal<bool>,
-	title: Signal<String>,
-	body: Signal<String>,
-	chosen: Signal<BTreeSet<Snowflake>>,
-	files: Signal<Rc<Vec<FileChip>>>,
-	uploads: RefCell<Vec<UploadFile>>,
 	serials: Cell<u64>,
 	images: RefCell<Vec<ImageName>>,
 	requests: Hook<Request>,
@@ -129,19 +91,8 @@ impl ThreadsLayer {
 			window: runtime.signal((0., 0.)),
 			popout: runtime.signal(None),
 			threads: runtime.signal(Rc::default()),
-			tab: runtime.signal(ThreadTab::Active),
+			search: runtime.signal(String::new()),
 			pins: runtime.signal(Rc::default()),
-			create: runtime.signal(None),
-			create_open: runtime.signal(false),
-			name: runtime.signal(String::new()),
-			archive: runtime.signal(bridge::DEFAULT_ARCHIVE_CHOICE),
-			post: runtime.signal(None),
-			post_open: runtime.signal(false),
-			title: runtime.signal(String::new()),
-			body: runtime.signal(String::new()),
-			chosen: runtime.signal(BTreeSet::new()),
-			files: runtime.signal(Rc::default()),
-			uploads: RefCell::default(),
 			serials: Cell::new(0),
 			images: RefCell::default(),
 			requests: RefCell::new(None),
@@ -182,12 +133,8 @@ impl ThreadsLayer {
 		self.popout.with_untracked(|popout| *popout)
 	}
 
-	pub fn tab(&self) -> ThreadTab {
-		self.tab.with_untracked(|tab| *tab)
-	}
-
 	pub fn open_threads(&self, channel_id: Snowflake, at: (f32, f32)) {
-		self.tab.set(ThreadTab::Active);
+		self.search.set(String::new());
 		self.threads.set(Rc::default());
 		self.popout.set(Some(Popout {
 			serial: self.serial(),
@@ -215,9 +162,12 @@ impl ThreadsLayer {
 	}
 
 	pub fn show_threads(&self, shown: ThreadsShown) {
-		if self.threads.with_untracked(|current| **current != shown) {
-			self.threads.set(Rc::new(shown));
+		if self.threads.with_untracked(|current| **current == shown) {
+			return;
 		}
+		let images = shown.avatars.iter().map(|(_, name)| name.clone()).collect();
+		self.threads.set(Rc::new(shown));
+		self.set_images(images);
 	}
 
 	pub fn show_pins(&self, shown: PinsShown) {
@@ -235,6 +185,10 @@ impl ThreadsLayer {
 
 	pub fn pin_avatar(&self, user: &protocol::User) -> Option<ImageName> {
 		self.pictures.avatar(user, PIN_AVATAR)
+	}
+
+	pub fn row_avatar(&self, user: &protocol::User) -> Option<ImageName> {
+		self.pictures.avatar(user, ROW_AVATAR)
 	}
 
 	fn set_images(&self, images: Vec<ImageName>) {
@@ -258,52 +212,11 @@ impl ThreadsLayer {
 			.all(|name| self.pictures.is_settled(name))
 	}
 
-	pub fn open_create(&self, channel_id: Snowflake, message_id: Option<Snowflake>, preview: Option<String>) {
-		self.close_popout();
-		self.name.set(preview.clone().unwrap_or_default());
-		self.archive.set(bridge::DEFAULT_ARCHIVE_CHOICE);
-		self.create.set(Some(CreateShown {
-			serial: self.serial(),
-			channel_id,
-			message_id,
-			preview,
-		}));
-		self.create_open.set(true);
-	}
-
-	pub fn open_post(&self, channel_id: Snowflake, form: NewPostForm) {
-		self.close_popout();
-		self.title.set(String::new());
-		self.body.set(String::new());
-		self.chosen.set(BTreeSet::new());
-		self.uploads.borrow_mut().clear();
-		self.files.set(Rc::default());
-		self.post.set(Some(PostShown {
-			serial: self.serial(),
-			channel_id,
-			form: Rc::new(form),
-		}));
-		self.post_open.set(true);
-	}
-
-	pub fn has_dialog(&self) -> bool {
-		self.create_open.with_untracked(|open| *open) || self.post_open.with_untracked(|open| *open)
-	}
-
 	pub fn is_open(&self) -> bool {
-		self.popout.with_untracked(Option::is_some) || self.has_dialog()
-	}
-
-	pub fn close_dialogs(&self) {
-		self.create_open.set(false);
-		self.post_open.set(false);
+		self.popout.with_untracked(Option::is_some)
 	}
 
 	pub fn escape(&self) -> bool {
-		if self.has_dialog() {
-			self.close_dialogs();
-			return true;
-		}
 		if self.popout.with_untracked(Option::is_some) {
 			self.close_popout();
 			return true;
@@ -311,39 +224,7 @@ impl ThreadsLayer {
 		false
 	}
 
-	pub fn add_upload(&self, file: UploadFile) {
-		let mut uploads = self.uploads.borrow_mut();
-		if uploads.len() >= MAX_FILES {
-			return;
-		}
-		uploads.push(file);
-		let chips = uploads
-			.iter()
-			.map(|file| FileChip {
-				name: file.name.clone(),
-				size: bridge::file_size(file.bytes.len() as u64),
-			})
-			.collect();
-		drop(uploads);
-		self.files.set(Rc::new(chips));
-	}
-
-	fn remove_upload(&self, index: usize) {
-		let mut uploads = self.uploads.borrow_mut();
-		if index < uploads.len() {
-			uploads.remove(index);
-		}
-		drop(uploads);
-		self.files.update(|files| {
-			let mut list = (**files).clone();
-			if index < list.len() {
-				list.remove(index);
-			}
-			*files = Rc::new(list);
-		});
-	}
-
-	fn pick_files(self: &Rc<Self>) {
+	pub fn pick_files(self: &Rc<Self>) {
 		if self.picking.replace(true) {
 			return;
 		}
@@ -373,70 +254,10 @@ impl ThreadsLayer {
 		});
 	}
 
-	fn submit_create(&self) {
-		let Some(shown) = self.create.with_untracked(Clone::clone) else {
-			return;
-		};
-		let name = self.name.with_untracked(|name| bridge::trimmed_name(name));
-		if name.is_empty() {
-			return;
-		}
-		let (minutes, _) = bridge::ARCHIVE_CHOICES[self.archive.with_untracked(|choice| *choice)];
-		self.request(Request::Command(Command::CreateThread {
-			channel_id: shown.channel_id,
-			message_id: shown.message_id,
-			name,
-			auto_archive_minutes: minutes,
-		}));
-		self.create_open.set(false);
-	}
-
-	fn can_post(&self) -> bool {
-		let titled = self.title.with(|title| !bridge::trimmed_name(title).is_empty());
-		let tagged = self.post.with(|post| {
-			post.as_ref()
-				.is_none_or(|post| !post.form.require_tag || self.chosen.with(|chosen| !chosen.is_empty()))
-		});
-		titled && tagged
-	}
-
-	fn submit_post(&self) {
-		let Some(shown) = self.post.with_untracked(Clone::clone) else {
-			return;
-		};
-		if !self.runtime.untracked(|| self.can_post()) {
-			return;
-		}
-		let name = self.title.with_untracked(|title| bridge::trimmed_name(title));
-		let content = self.body.with_untracked(|body| body.trim().to_owned());
-		let tags = self
-			.chosen
-			.with_untracked(|chosen| chosen.iter().copied().collect());
-		let files = std::mem::take(&mut *self.uploads.borrow_mut());
-		self.request(Request::Command(Command::CreateForumPost {
-			channel_id: shown.channel_id,
-			name,
-			content,
-			tags,
-			files,
-		}));
-		self.post_open.set(false);
-	}
-
-	fn place(at: (f32, f32), window: (f32, f32)) -> (f32, f32) {
-		let below = at.1 <= window.1 / 2.;
-		let x = at.0 - POPOVER_WIDTH;
-		let y = if below {
-			at.1 + POPOVER_GAP
-		} else {
-			at.1 - POPOVER_GAP - POPOVER_HEIGHT
-		};
-		let clamp =
-			|value: f32, extent: f32, room: f32| value.min(room - extent - SNAP_MARGIN).max(SNAP_MARGIN);
-		(
-			clamp(x, POPOVER_WIDTH, window.0),
-			clamp(y, POPOVER_HEIGHT, window.1),
-		)
+	fn place(at: (f32, f32), width: f32, window: (f32, f32)) -> f32 {
+		(at.0 + ANCHOR_RIGHT - width)
+			.min(window.0 - width - SNAP_MARGIN)
+			.max(SNAP_MARGIN)
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
@@ -448,43 +269,35 @@ impl ThreadsLayer {
 			if let Some(platform) = cx.try_service::<PlatformService>() {
 				*this.platform.borrow_mut() = Some(platform);
 			}
-			div()
-				.absolute()
-				.left(0.)
-				.top(0.)
-				.w(0.)
-				.h(0.)
-				.child(
-					div()
-						.absolute()
-						.left(0.)
-						.top(0.)
-						.reactive_style({
-							let (popout, window) = (popout.clone(), window.clone());
-							move || {
-								let (width, height) = if popout.with(Option::is_some) {
-									window.get()
-								} else {
-									(0., 0.)
-								};
-								Styles::new().w(width).h(height)
+			div().absolute().left(0.).top(0.).w(0.).h(0.).child(
+				div()
+					.absolute()
+					.left(0.)
+					.top(0.)
+					.reactive_style({
+						let (popout, window) = (popout.clone(), window.clone());
+						move || {
+							let (width, height) = if popout.with(Option::is_some) {
+								window.get()
+							} else {
+								(0., 0.)
+							};
+							Styles::new().w(width).h(height)
+						}
+					})
+					.on_event({
+						let outside = outside.clone();
+						move |event| {
+							if event.phase == EventPhase::Target
+								&& matches!(event.event, InputEvent::PointerDown { .. })
+							{
+								outside.close_popout();
+								event.stop_propagation();
 							}
-						})
-						.on_event({
-							let outside = outside.clone();
-							move |event| {
-								if event.phase == EventPhase::Target
-									&& matches!(event.event, InputEvent::PointerDown { .. })
-								{
-									outside.close_popout();
-									event.stop_propagation();
-								}
-							}
-						})
-						.child(this.popout_view()),
-				)
-				.child(dialogs::create_dialog(&this))
-				.child(dialogs::post_dialog(&this))
+						}
+					})
+					.child(this.popout_view()),
+			)
 		})
 	}
 
@@ -496,18 +309,17 @@ impl ThreadsLayer {
 			move |shown: Popout, _| {
 				let window = this.window.clone();
 				let at = shown.at;
-				let panel = match shown.kind {
-					PopoutKind::Threads => popouts::threads(&this, shown.channel_id),
-					PopoutKind::Pins => popouts::pins(&this, shown.channel_id),
+				let (panel, width) = match shown.kind {
+					PopoutKind::Threads => (popouts::threads(&this, shown.channel_id), "thread_popout_width"),
+					PopoutKind::Pins => (popouts::pins(&this, shown.channel_id), "pins_popout_width"),
 				};
+				let side = parts::size(&this.runtime, width);
+				let top = parts::size(&this.runtime, "header_popout_top");
 				panel
 					.absolute()
-					.w(POPOVER_WIDTH)
-					.h(POPOVER_HEIGHT)
-					.reactive_style(move || {
-						let (x, y) = ThreadsLayer::place(at, window.get());
-						Styles::new().left(x).top(y)
-					})
+					.w(side)
+					.top(top)
+					.reactive_style(move || Styles::new().left(ThreadsLayer::place(at, side, window.get())))
 					.on_event(|event| {
 						if event.phase != EventPhase::Capture
 							&& matches!(event.event, InputEvent::PointerDown { .. })

@@ -18,6 +18,7 @@ pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
+pub const SWITCHER_QUERY: &str = "gen";
 pub const COMPOSER_PICKER: (f32, f32) = (954., 755.);
 pub const TOP_BAR_THREADS: (f32, f32) = (721., 37.);
 pub const TOP_BAR_PINS: (f32, f32) = (801., 37.);

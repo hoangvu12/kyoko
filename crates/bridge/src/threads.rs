@@ -12,6 +12,7 @@ use crate::message::{Body, Names, snippet};
 use crate::timeline::detached_entry;
 
 pub const PIN_SNIPPET: usize = 260;
+pub const THREAD_SNIPPET: usize = 120;
 pub const FORUM_EXCERPT: usize = 180;
 pub const THREAD_NAME_LIMIT: usize = 100;
 pub const ARCHIVE_CHOICES: [(u32, &str); 4] = [
@@ -22,20 +23,23 @@ pub const ARCHIVE_CHOICES: [(u32, &str); 4] = [
 ];
 pub const DEFAULT_ARCHIVE_CHOICE: usize = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ThreadTab {
-	#[default]
-	Active,
-	Archived,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadEntry {
 	pub id: Snowflake,
 	pub name: String,
-	pub detail: String,
+	pub author: String,
+	pub author_id: Option<Snowflake>,
+	pub snippet: String,
+	pub activity: String,
+	pub count: String,
 	pub joined: bool,
 	pub archived: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadSection {
+	pub title: String,
+	pub entries: Vec<ThreadEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +94,7 @@ pub struct ForumCard {
 	pub author: String,
 	pub author_id: Option<Snowflake>,
 	pub replies: String,
+	pub count: String,
 	pub activity: String,
 	pub pinned: bool,
 	pub archived: bool,
@@ -128,6 +133,15 @@ pub fn can_create_threads(state: &State, channel_id: Snowflake) -> bool {
 	})
 }
 
+pub fn can_create_private_threads(state: &State, channel_id: Snowflake) -> bool {
+	state.channel(channel_id).is_some_and(|channel| {
+		channel.kind == ChannelType::GuildText
+			&& state
+				.my_permissions(channel_id)
+				.contains(Permissions::CREATE_PRIVATE_THREADS)
+	})
+}
+
 pub fn messages_label(count: i64) -> String {
 	match count {
 		1 => "1 message".to_owned(),
@@ -157,45 +171,65 @@ fn owner_name(state: &State, guild_id: Option<Snowflake>, owner: Option<Snowflak
 
 fn entry(state: &State, guild_id: Option<Snowflake>, thread: &Channel, today: NaiveDate) -> ThreadEntry {
 	let activity = thread.last_message_id.unwrap_or(thread.id).timestamp();
+	let last = state
+		.messages(thread.id)
+		.and_then(|cache| cache.ordered.last().cloned());
+	let (author_id, snippet) = match &last {
+		Some(message) => (
+			Some(message.author.id),
+			plain_text(state, guild_id, message, THREAD_SNIPPET),
+		),
+		None => (thread.owner_id, String::new()),
+	};
 	ThreadEntry {
 		id: thread.id,
 		name: thread.name.clone().unwrap_or_default(),
-		detail: format!(
-			"{} - {} - {}",
-			owner_name(state, guild_id, thread.owner_id),
-			messages_label(thread.message_count.unwrap_or(0)),
-			message_time(activity, today)
-		),
+		author: owner_name(state, guild_id, author_id),
+		author_id,
+		snippet,
+		activity: message_time(activity, today),
+		count: thread.message_count.unwrap_or(0).to_string(),
 		joined: thread.member.is_some(),
 		archived: archived(thread),
 	}
 }
 
-pub fn thread_list(
-	state: &State,
-	channel_id: Snowflake,
-	tab: ThreadTab,
-	today: NaiveDate,
-) -> Vec<ThreadEntry> {
-	let guild_id = state.channel_guild(channel_id);
-	let mut threads: Vec<&Channel> = match tab {
-		ThreadTab::Active => guild_id
-			.and_then(|guild_id| state.guild(guild_id))
-			.map(|guild| {
-				guild
-					.threads
-					.values()
-					.filter(|thread| thread.parent_id == Some(channel_id) && !archived(thread))
-					.collect()
-			})
-			.unwrap_or_default(),
-		ThreadTab::Archived => state.archived_threads(channel_id),
-	};
+fn newest_first(threads: &mut [&Channel]) {
 	threads.sort_by_key(|thread| std::cmp::Reverse(thread.last_message_id.unwrap_or(thread.id)));
-	threads
-		.into_iter()
-		.map(|thread| entry(state, guild_id, thread, today))
-		.collect()
+}
+
+pub fn thread_sections(state: &State, channel_id: Snowflake, today: NaiveDate) -> Vec<ThreadSection> {
+	let guild_id = state.channel_guild(channel_id);
+	let mut active: Vec<&Channel> = guild_id
+		.and_then(|guild_id| state.guild(guild_id))
+		.map(|guild| {
+			guild
+				.threads
+				.values()
+				.filter(|thread| thread.parent_id == Some(channel_id) && !archived(thread))
+				.collect()
+		})
+		.unwrap_or_default();
+	newest_first(&mut active);
+	let (joined, others): (Vec<&Channel>, Vec<&Channel>) =
+		active.into_iter().partition(|thread| thread.member.is_some());
+	let mut older = state.archived_threads(channel_id);
+	newest_first(&mut older);
+	let section = |title: String, threads: Vec<&Channel>| ThreadSection {
+		title,
+		entries: threads
+			.into_iter()
+			.map(|thread| entry(state, guild_id, thread, today))
+			.collect(),
+	};
+	[
+		section(format!("{} Joined Threads", joined.len()), joined),
+		section(format!("{} Other Active Threads", others.len()), others),
+		section("Older Threads".to_owned(), older),
+	]
+	.into_iter()
+	.filter(|section| !section.entries.is_empty())
+	.collect()
 }
 
 pub fn thread_header(state: &State, thread_id: Snowflake) -> Option<ThreadHeader> {
@@ -311,6 +345,7 @@ fn card(
 		author: owner_name(state, guild_id, post.owner_id),
 		author_id: post.owner_id,
 		replies: replies_label((post.message_count - 1).max(0)),
+		count: (post.message_count - 1).max(0).to_string(),
 		activity: message_time(post.last_activity, today),
 		pinned: post.pinned,
 		archived: post.archived,
@@ -350,7 +385,8 @@ pub fn forum_cards(
 
 pub fn starter_preview(state: &State, channel_id: Snowflake, message_id: Snowflake) -> Option<String> {
 	let message = state.messages(channel_id)?.by_id.get(&message_id)?;
-	Some(message.content.chars().take(THREAD_NAME_LIMIT).collect())
+	let text = plain_text(state, state.channel_guild(channel_id), message, THREAD_NAME_LIMIT);
+	Some(text.chars().take(THREAD_NAME_LIMIT).collect())
 }
 
 pub fn trimmed_name(text: &str) -> String {

@@ -18,13 +18,37 @@ use zgx::reactive::{Runtime, Signal};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use super::composer::{self, ComposerView, Pane, content_type};
-use super::{Link, Slot, field, number, record, snowflake};
+use super::{Link, Slot, field, number, record, snowflake, text};
 use crate::capture;
 use crate::profile::Anchor;
 use crate::threads::{PinsShown, Request, ThreadsLayer, ThreadsShown};
 use crate::timeline::{Compose, Setup, TimelineView};
 
 const FORUM_AVATAR: f64 = 24.;
+const STARTER_AVATAR: f64 = 40.;
+const STARTER_TEXT: usize = 260;
+const MAX_POST_FILES: usize = 10;
+
+#[derive(Debug, Clone, PartialEq)]
+struct ThreadDraft {
+	serial: u64,
+	channel_id: Snowflake,
+	message_id: Option<Snowflake>,
+	name: String,
+	author: String,
+	time: String,
+	text: String,
+	avatar: String,
+	can_private: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct PanelShown {
+	header: Option<ThreadHeader>,
+	draft: Option<ThreadDraft>,
+	post: bool,
+	tags: Vec<String>,
+}
 pub(super) const THREAD_SLOT: &str = "thread";
 
 pub(super) struct ThreadPane {
@@ -35,12 +59,21 @@ pub(super) struct ThreadPane {
 	reported: Cell<Slot>,
 	panel: Shared,
 	header: RefCell<Option<ThreadHeader>>,
+	shown: RefCell<Option<PanelShown>>,
+	draft: RefCell<Option<ThreadDraft>>,
+	drafts: Cell<u64>,
+	first_message: RefCell<Option<(Snowflake, String)>>,
 	forum: Cell<Option<OpenChannel>>,
 	forum_shown: Signal<bool>,
 	sort: Cell<ForumSort>,
 	gallery: Cell<bool>,
 	filter: RefCell<HashSet<Snowflake>>,
 	forum_view: Shared,
+	forum_files: Shared,
+	composing: Cell<bool>,
+	post_serial: Cell<u64>,
+	draft_title: RefCell<String>,
+	uploads: RefCell<Vec<UploadFile>>,
 	forum_tags: Shared,
 	forum_cards: Shared,
 	forum_published: RefCell<Option<(Vec<ForumCard>, Vec<TagChip>)>>,
@@ -74,12 +107,21 @@ impl ThreadPane {
 			reported: Cell::new(Slot::default()),
 			panel: host.shared("threads.panel", closed_panel()),
 			header: RefCell::new(None),
+			shown: RefCell::new(None),
+			draft: RefCell::new(None),
+			drafts: Cell::new(0),
+			first_message: RefCell::new(None),
 			forum: Cell::new(None),
 			forum_shown: runtime.signal(false),
 			sort: Cell::new(ForumSort::Activity),
 			gallery: Cell::new(false),
 			filter: RefCell::default(),
 			forum_view: host.shared("forum.view", closed_forum()),
+			forum_files: host.shared("forum.files", Value::List(Rc::from(Vec::new()))),
+			composing: Cell::new(false),
+			post_serial: Cell::new(0),
+			draft_title: RefCell::new(String::new()),
+			uploads: RefCell::default(),
 			forum_tags: host.shared("forum.tags", Value::List(Rc::from(Vec::new()))),
 			forum_cards: host.shared("forum.cards", Value::List(Rc::from(Vec::new()))),
 			forum_published: RefCell::new(None),
@@ -109,7 +151,20 @@ impl ThreadPane {
 }
 
 fn closed_panel() -> Value {
-	record([
+	panel_map(closed_fields())
+}
+
+fn panel_map(fields: Vec<(&'static str, Value)>) -> Value {
+	let map: std::collections::BTreeMap<&str, Value> = fields.into_iter().collect();
+	Value::Map(
+		map.into_iter()
+			.map(|(key, value)| (Rc::from(key), value))
+			.collect(),
+	)
+}
+
+fn closed_fields() -> Vec<(&'static str, Value)> {
+	vec![
 		("open", false.into()),
 		("id", "".into()),
 		("name", "".into()),
@@ -117,7 +172,51 @@ fn closed_panel() -> Value {
 		("archived", false.into()),
 		("joined", true.into()),
 		("can_manage", false.into()),
-	])
+		("creating", false.into()),
+		("serial", 0.0.into()),
+		("draft_name", "".into()),
+		("starter_author", "".into()),
+		("starter_time", "".into()),
+		("starter_text", "".into()),
+		("starter_avatar", "".into()),
+		("can_private", false.into()),
+		("post", false.into()),
+		("tags", Value::List(Rc::from(Vec::new()))),
+	]
+}
+
+fn panel_value(shown: &PanelShown) -> Value {
+	let mut fields = match (&shown.header, &shown.draft) {
+		(Some(header), _) => vec![
+			("open", true.into()),
+			("id", header.id.to_string().as_str().into()),
+			("name", header.name.as_str().into()),
+			("members", (header.members as f64).into()),
+			("archived", header.archived.into()),
+			("joined", header.joined.into()),
+			("can_manage", header.can_manage.into()),
+		],
+		(None, Some(_)) => vec![("open", true.into())],
+		(None, None) => return closed_panel(),
+	};
+	let draft = shown.draft.as_ref().filter(|_| shown.header.is_none());
+	if let Some(draft) = draft {
+		fields.extend([
+			("creating", true.into()),
+			("serial", (draft.serial as f64).into()),
+			("draft_name", draft.name.as_str().into()),
+			("starter_author", draft.author.as_str().into()),
+			("starter_time", draft.time.as_str().into()),
+			("starter_text", draft.text.as_str().into()),
+			("starter_avatar", draft.avatar.as_str().into()),
+			("can_private", draft.can_private.into()),
+		]);
+	}
+	let tags: Vec<Value> = shown.tags.iter().map(|tag| tag.as_str().into()).collect();
+	fields.extend([("post", shown.post.into()), ("tags", Value::List(tags.into()))]);
+	let mut all = closed_fields();
+	all.extend(fields);
+	panel_map(all)
 }
 
 fn closed_forum() -> Value {
@@ -126,6 +225,10 @@ fn closed_forum() -> Value {
 		("id", "".into()),
 		("sort", ForumSort::Activity.label().into()),
 		("gallery", false.into()),
+		("composing", false.into()),
+		("serial", 0.0.into()),
+		("draft_title", "".into()),
+		("require_tag", false.into()),
 	])
 }
 
@@ -194,6 +297,20 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
+		host.action("threads.create", move |argument| {
+			let Some(link) = actions.upgrade() else {
+				return;
+			};
+			let read = |key: &str| {
+				field(&argument, key)
+					.and_then(text)
+					.unwrap_or_default()
+					.to_owned()
+			};
+			let private = matches!(field(&argument, "private"), Some(Value::Bool(true)));
+			link.create_from_draft(&read("name"), &read("message"), private);
+		});
+		let actions = Rc::downgrade(link);
 		host.action("threads.join", move |argument| {
 			if let (Some(link), Some(thread_id)) = (actions.upgrade(), snowflake(&argument)) {
 				link.send(Command::JoinThread { thread_id });
@@ -216,10 +333,45 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
-		host.action("forum.new_post", move |_| {
+		host.action("forum.new_post", move |argument| {
 			if let Some(link) = actions.upgrade() {
-				link.open_new_post();
+				link.open_new_post(text(&argument).unwrap_or_default());
 			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("forum.cancel_post", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.close_new_post();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("forum.attach", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.threads.layer.pick_files();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("forum.remove_file", move |argument| {
+			if let (Some(link), Value::Num(index)) = (actions.upgrade(), argument) {
+				link.remove_post_file(index as usize);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("forum.post", move |argument| {
+			let Some(link) = actions.upgrade() else {
+				return;
+			};
+			let read = |key: &str| {
+				field(&argument, key)
+					.and_then(text)
+					.unwrap_or_default()
+					.to_owned()
+			};
+			let tags = match field(&argument, "tags") {
+				Some(Value::List(tags)) => tags.iter().filter_map(snowflake).collect(),
+				_ => Vec::new(),
+			};
+			link.submit_post(&read("title"), &read("body"), tags);
 		});
 		let actions = Rc::downgrade(link);
 		host.action("forum.open_post", move |argument| {
@@ -356,14 +508,13 @@ impl Link {
 	pub(super) async fn follow_post_files(self: Rc<Self>) {
 		while let Some(batch) = self.threads.files.next().await {
 			for file in batch {
-				self.threads.layer.add_upload(file);
+				self.add_post_file(file);
 			}
 		}
 	}
 
 	fn layer_request(&self, request: Request) {
 		match request {
-			Request::Command(command) => self.send(command),
 			Request::OpenThread(thread_id) => {
 				self.threads.layer.close_popout();
 				self.open_thread(thread_id);
@@ -383,13 +534,6 @@ impl Link {
 				channel_id,
 				message_id,
 			} => self.timeline_view.confirm_unpin(channel_id, message_id),
-			Request::Archived(channel_id) => {
-				self.send(Command::LoadArchivedThreads {
-					channel_id,
-					more: false,
-				});
-				self.refresh_layer();
-			}
 			Request::ReadFiles(paths) => self.read_post_files(paths),
 		}
 	}
@@ -500,9 +644,11 @@ impl Link {
 		if let Some(command) = command {
 			self.send(command);
 		}
+		self.send_first_message(thread_id, parent);
 	}
 
 	pub(super) fn close_thread_pane(&self, reselect: bool) {
+		self.threads.draft.borrow_mut().take();
 		if !self.threads.timeline.borrow_mut().close() && self.thread_open().is_none() {
 			self.publish_thread_closed();
 			return;
@@ -573,6 +719,9 @@ impl Link {
 		if self.threads.forum.take().is_none() {
 			return;
 		}
+		self.threads.composing.set(false);
+		self.threads.uploads.borrow_mut().clear();
+		self.publish_post_files();
 		self.threads.forum_published.borrow_mut().take();
 		self.threads.forum_shown.set(false);
 		self.threads.forum_view.set(closed_forum());
@@ -597,8 +746,18 @@ impl Link {
 		{
 			self.threads.timeline.borrow_mut().close();
 			self.threads.header.borrow_mut().take();
+			self.threads.shown.borrow_mut().take();
 			self.threads.panel.set(closed_panel());
 			self.threads.slot.set(Slot::default());
+		}
+		let stale = self
+			.threads
+			.draft
+			.borrow()
+			.as_ref()
+			.is_some_and(|draft| open.is_some_and(|open| open.channel_id != draft.channel_id));
+		if stale {
+			self.drop_draft();
 		}
 	}
 
@@ -627,6 +786,10 @@ impl Link {
 		}
 		self.size_layer();
 		self.threads.layer.open_threads(open.channel_id, at);
+		self.send(Command::LoadArchivedThreads {
+			channel_id: open.channel_id,
+			more: false,
+		});
 		self.refresh_layer();
 	}
 
@@ -646,21 +809,219 @@ impl Link {
 		let Some(shared) = self.state() else {
 			return;
 		};
-		let preview =
-			message_id.and_then(|message_id| bridge::starter_preview(&shared.read(), channel_id, message_id));
-		self.threads.layer.open_create(channel_id, message_id, preview);
+		self.threads.layer.close_popout();
+		if self.thread_open().is_some() {
+			self.close_thread_pane(false);
+		}
+		let serial = self.threads.drafts.get() + 1;
+		self.threads.drafts.set(serial);
+		let draft = {
+			let state = shared.read();
+			let mut draft = ThreadDraft {
+				serial,
+				channel_id,
+				message_id,
+				name: message_id
+					.and_then(|message_id| bridge::starter_preview(&state, channel_id, message_id))
+					.unwrap_or_default(),
+				author: String::new(),
+				time: String::new(),
+				text: String::new(),
+				avatar: String::new(),
+				can_private: message_id.is_none() && bridge::can_create_private_threads(&state, channel_id),
+			};
+			let starter = message_id.and_then(|message_id| {
+				state
+					.messages(channel_id)
+					.and_then(|cache| cache.by_id.get(&message_id).cloned())
+			});
+			if let Some(message) = starter {
+				let guild_id = state.channel_guild(channel_id);
+				let entry = bridge::detached_entry(&state, guild_id, &message);
+				draft.author = entry.author.clone();
+				draft.time = bridge::message_time(entry.sent_at, today());
+				draft.text = bridge::snippet(&entry.body.content, &entry.names, STARTER_TEXT);
+				draft.avatar = self
+					.timeline_view
+					.pictures()
+					.avatar(&message.author, STARTER_AVATAR)
+					.map(|name| format!("host:{name}"))
+					.unwrap_or_default();
+			}
+			draft
+		};
+		*self.threads.draft.borrow_mut() = Some(draft);
+		self.publish_thread_closed();
+		self.refresh_visible();
 	}
 
-	fn open_new_post(&self) {
+	fn drop_draft(&self) {
+		if self.threads.draft.borrow_mut().take().is_some() {
+			self.publish_thread_closed();
+			self.refresh_visible();
+		}
+	}
+
+	fn draft_settled(&self) -> bool {
+		let shown = self.shown.borrow();
+		self.draft_images().iter().all(|name| shown.contains(name))
+	}
+
+	pub(super) fn thread_drafting(&self) -> bool {
+		self.threads.draft.borrow().is_some()
+	}
+
+	pub(super) fn draft_images(&self) -> Vec<String> {
+		self.threads
+			.draft
+			.borrow()
+			.iter()
+			.filter_map(|draft| draft.avatar.strip_prefix("host:").map(str::to_owned))
+			.collect()
+	}
+
+	fn create_from_draft(&self, name: &str, message: &str, private: bool) {
+		let Some(draft) = self.threads.draft.borrow_mut().take() else {
+			return;
+		};
+		let message = message.trim().to_owned();
+		let mut name = bridge::trimmed_name(name);
+		if name.is_empty() {
+			name = bridge::trimmed_name(&message);
+		}
+		if name.is_empty() {
+			name = bridge::trimmed_name(&draft.name);
+		}
+		if name.is_empty() {
+			*self.threads.draft.borrow_mut() = Some(draft);
+			return;
+		}
+		if !message.is_empty() {
+			*self.threads.first_message.borrow_mut() = Some((draft.channel_id, message));
+		}
+		self.send(Command::CreateThread {
+			channel_id: draft.channel_id,
+			message_id: draft.message_id,
+			name,
+			auto_archive_minutes: bridge::ARCHIVE_CHOICES[bridge::DEFAULT_ARCHIVE_CHOICE].0,
+			private: private && draft.can_private,
+		});
+		self.publish_thread_closed();
+		self.refresh_visible();
+	}
+
+	fn send_first_message(&self, thread_id: Snowflake, parent: Option<Snowflake>) {
+		let waiting = self
+			.threads
+			.first_message
+			.borrow()
+			.as_ref()
+			.is_some_and(|(channel_id, _)| Some(*channel_id) == parent);
+		if !waiting {
+			return;
+		}
+		if let Some((_, content)) = self.threads.first_message.borrow_mut().take() {
+			self.send(Command::SendMessage {
+				channel_id: thread_id,
+				content,
+				reply_to: None,
+				ping_reply: false,
+				files: Vec::new(),
+			});
+		}
+	}
+
+	fn open_new_post(&self, title: &str) {
+		if self.forum_open().is_none() {
+			return;
+		}
+		self.threads.post_serial.set(self.threads.post_serial.get() + 1);
+		*self.threads.draft_title.borrow_mut() = title.trim().to_owned();
+		self.threads.uploads.borrow_mut().clear();
+		self.threads.composing.set(true);
+		self.publish_post_files();
+		self.refresh_forum();
+	}
+
+	fn close_new_post(&self) {
+		self.threads.composing.set(false);
+		self.threads.uploads.borrow_mut().clear();
+		self.publish_post_files();
+		self.refresh_forum();
+	}
+
+	pub(super) fn forum_composing(&self) -> bool {
+		self.threads.composing.get()
+	}
+
+	fn add_post_file(&self, file: UploadFile) {
+		{
+			let mut uploads = self.threads.uploads.borrow_mut();
+			if uploads.len() >= MAX_POST_FILES {
+				return;
+			}
+			uploads.push(file);
+		}
+		self.publish_post_files();
+	}
+
+	fn remove_post_file(&self, index: usize) {
+		{
+			let mut uploads = self.threads.uploads.borrow_mut();
+			if index < uploads.len() {
+				uploads.remove(index);
+			}
+		}
+		self.publish_post_files();
+	}
+
+	fn publish_post_files(&self) {
+		let files: Vec<Value> = self
+			.threads
+			.uploads
+			.borrow()
+			.iter()
+			.enumerate()
+			.map(|(index, file)| {
+				record([
+					("key", format!("{index}-{}", file.name).as_str().into()),
+					("name", file.name.as_str().into()),
+					("size", bridge::file_size(file.bytes.len() as u64).as_str().into()),
+				])
+			})
+			.collect();
+		self.threads.forum_files.set(Value::List(files.into()));
+	}
+
+	fn submit_post(&self, title: &str, body: &str, tags: Vec<Snowflake>) {
 		let (Some(forum), Some(shared)) = (self.forum_open(), self.state()) else {
 			return;
 		};
+		let name = bridge::trimmed_name(title);
 		let form = bridge::new_post_form(&shared.read(), forum.channel_id);
-		self.threads.layer.open_post(forum.channel_id, form);
+		if name.is_empty() || (form.require_tag && tags.is_empty()) {
+			return;
+		}
+		let files = std::mem::take(&mut *self.threads.uploads.borrow_mut());
+		self.send(Command::CreateForumPost {
+			channel_id: forum.channel_id,
+			name,
+			content: body.trim().to_owned(),
+			tags,
+			files,
+		});
+		self.close_new_post();
 	}
 
 	pub(super) fn threads_escape(&self) -> bool {
-		self.threads.layer.escape()
+		if self.threads.layer.escape() {
+			return true;
+		}
+		if self.thread_drafting() {
+			self.drop_draft();
+			return true;
+		}
+		false
 	}
 
 	pub(super) fn threads_apply(&self, state: &State, changes: &Changes) {
@@ -727,10 +1088,26 @@ impl Link {
 			return;
 		};
 		match popout.kind {
-			crate::threads::PopoutKind::Threads => layer.show_threads(ThreadsShown {
-				entries: bridge::thread_list(state, popout.channel_id, layer.tab(), today()),
-				can_create: bridge::can_create_threads(state, popout.channel_id),
-			}),
+			crate::threads::PopoutKind::Threads => {
+				let sections = bridge::thread_sections(state, popout.channel_id, today());
+				let mut avatars: Vec<(Snowflake, media::ImageName)> = Vec::new();
+				for user_id in sections
+					.iter()
+					.flat_map(|section| section.entries.iter().filter_map(|entry| entry.author_id))
+				{
+					if avatars.iter().any(|(known, _)| *known == user_id) {
+						continue;
+					}
+					if let Some(name) = state.user(user_id).and_then(|user| layer.row_avatar(user)) {
+						avatars.push((user_id, name));
+					}
+				}
+				layer.show_threads(ThreadsShown {
+					sections,
+					avatars,
+					can_create: bridge::can_create_threads(state, popout.channel_id),
+				});
+			}
 			crate::threads::PopoutKind::Pins => {
 				let pins = bridge::pin_entries(state, popout.channel_id, today());
 				let entries = pins
@@ -771,21 +1148,39 @@ impl Link {
 	fn publish_thread(&self, state: &State) {
 		let open = self.thread_open();
 		let header = open.and_then(|open| bridge::thread_header(state, open.channel_id));
-		if *self.threads.header.borrow() != header {
-			self.threads.panel.set(match &header {
-				Some(header) => record([
-					("open", true.into()),
-					("id", header.id.to_string().as_str().into()),
-					("name", header.name.as_str().into()),
-					("members", (header.members as f64).into()),
-					("archived", header.archived.into()),
-					("joined", header.joined.into()),
-					("can_manage", header.can_manage.into()),
-				]),
-				None => closed_panel(),
-			});
-			*self.threads.header.borrow_mut() = header;
+		let post = header
+			.as_ref()
+			.and_then(|header| header.parent_id)
+			.and_then(|parent| state.channel(parent))
+			.is_some_and(|parent| bridge::is_forum(parent.kind));
+		let tags = match (&header, post) {
+			(Some(header), true) => {
+				let applied = state
+					.channel(header.id)
+					.map(|thread| thread.applied_tags.clone())
+					.unwrap_or_default();
+				header
+					.parent_id
+					.map(|forum| bridge::forum_tags(state, forum))
+					.unwrap_or_default()
+					.into_iter()
+					.filter(|tag| applied.contains(&tag.id))
+					.map(|tag| tag.label)
+					.collect()
+			}
+			_ => Vec::new(),
+		};
+		let shown = PanelShown {
+			header: header.clone(),
+			draft: self.threads.draft.borrow().clone(),
+			post,
+			tags,
+		};
+		if self.threads.shown.borrow().as_ref() != Some(&shown) {
+			self.threads.panel.set(panel_value(&shown));
+			*self.threads.shown.borrow_mut() = Some(shown);
 		}
+		*self.threads.header.borrow_mut() = header;
 		if open.is_none() {
 			self.threads.slot.set(Slot::default());
 		} else {
@@ -846,6 +1241,13 @@ impl Link {
 			("id", forum.channel_id.to_string().as_str().into()),
 			("sort", sort.label().into()),
 			("gallery", self.threads.gallery.get().into()),
+			("composing", self.threads.composing.get().into()),
+			("serial", (self.threads.post_serial.get() as f64).into()),
+			("draft_title", self.threads.draft_title.borrow().as_str().into()),
+			(
+				"require_tag",
+				bridge::new_post_form(state, forum.channel_id).require_tag.into(),
+			),
 		]));
 		let published = Some((cards.clone(), tags.clone()));
 		let same = *self.threads.forum_published.borrow() == published;
@@ -902,6 +1304,7 @@ impl Link {
 							.into(),
 					),
 					("replies", card.replies.as_str().into()),
+					("count", card.count.as_str().into()),
 					("activity", card.activity.as_str().into()),
 					("pinned", card.pinned.into()),
 					("archived", card.archived.into()),
@@ -930,6 +1333,7 @@ impl Link {
 			.collect();
 		names.extend(self.threads.layer.images().iter().map(ToString::to_string));
 		names.extend(self.threads.forum_avatars.borrow().iter().cloned());
+		names.extend(self.draft_images());
 		names.extend(self.threads.composer.images());
 		names
 	}
@@ -939,8 +1343,10 @@ impl Link {
 			capture::Screen::ThreadsList => self.open_thread_list(capture::TOP_BAR_THREADS),
 			capture::Screen::Pins => self.open_pins(capture::TOP_BAR_PINS),
 			capture::Screen::ThreadCreate => {
-				if let Some(open) = self.timeline.borrow().open() {
-					self.open_create_thread(open.channel_id, None);
+				let open = self.timeline.borrow().open();
+				if let Some(open) = open {
+					let newest = self.timeline.borrow().messages().last().map(|entry| entry.id);
+					self.open_create_thread(open.channel_id, newest);
 				}
 			}
 			capture::Screen::ThreadPanel => {
@@ -963,7 +1369,7 @@ impl Link {
 							self.open_thread(post);
 						}
 					}
-					capture::Screen::ForumPostCreate => self.open_new_post(),
+					capture::Screen::ForumPostCreate => self.open_new_post(""),
 					_ => {}
 				}
 			}
@@ -1029,9 +1435,8 @@ impl Link {
 						.zip(self.threads.layer.popout())
 						.is_some_and(|(shared, popout)| shared.read().pins(popout.channel_id).is_some())
 			}
-			capture::Screen::ThreadCreate | capture::Screen::ForumPostCreate => {
-				self.threads.layer.has_dialog()
-			}
+			capture::Screen::ThreadCreate => self.thread_drafting() && self.draft_settled(),
+			capture::Screen::ForumPostCreate => self.forum_composing(),
 			capture::Screen::ThreadPanel | capture::Screen::ForumPost => {
 				self.threads.timeline.borrow().messages().next().is_some() && self.threads.view.settled()
 			}

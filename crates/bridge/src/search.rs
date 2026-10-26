@@ -255,11 +255,53 @@ pub struct SearchHit {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchPanel {
 	pub serial: u64,
+	pub total: u64,
 	pub title: String,
 	pub hits: Vec<SearchHit>,
 	pub notice: Option<String>,
 	pub busy: bool,
 	pub more: bool,
+}
+
+pub const RESULTS_PAGE: usize = 25;
+
+pub fn result_pages(total: u64) -> usize {
+	(total as usize).div_ceil(RESULTS_PAGE).max(1)
+}
+
+pub fn search_terms(content: Option<&str>) -> Vec<String> {
+	content
+		.unwrap_or_default()
+		.split_whitespace()
+		.map(|word| word.trim_matches('"').to_lowercase())
+		.filter(|word| !word.is_empty())
+		.collect()
+}
+
+pub fn marked_runs(text: &str, terms: &[String]) -> Vec<(String, bool)> {
+	let lower = text.to_lowercase();
+	if terms.is_empty() || lower.len() != text.len() {
+		return vec![(text.to_owned(), false)];
+	}
+	let mut marks = vec![false; text.len()];
+	for term in terms {
+		let mut from = 0;
+		while let Some(found) = lower[from..].find(term.as_str()) {
+			let start = from + found;
+			let end = start + term.len();
+			marks[start..end].iter_mut().for_each(|mark| *mark = true);
+			from = end;
+		}
+	}
+	let mut runs: Vec<(String, bool)> = Vec::new();
+	for (index, character) in text.char_indices() {
+		let marked = marks[index];
+		match runs.last_mut() {
+			Some((run, mark)) if *mark == marked => run.push(character),
+			_ => runs.push((character.to_string(), marked)),
+		}
+	}
+	runs
 }
 
 pub fn result_count(total: u64) -> String {
@@ -331,6 +373,7 @@ impl SearchPanel {
 		let searching = results.status == SearchStatus::Searching && results.messages.is_empty();
 		Self {
 			serial: results.serial,
+			total: results.total,
 			title: if searching {
 				"Searching...".to_owned()
 			} else {

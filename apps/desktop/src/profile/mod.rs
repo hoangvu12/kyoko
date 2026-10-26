@@ -1,6 +1,6 @@
 mod custom_status;
 mod full;
-mod parts;
+pub(crate) mod parts;
 mod popout;
 mod status_menu;
 
