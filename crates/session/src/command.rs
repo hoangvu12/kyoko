@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use protocol::{
-	ChannelType, Gif, InteractionOption, Nonce, NotificationLevel, PermissionOverwriteKind, Permissions,
-	Snowflake, StatusKind,
+	ChannelType, FavoriteGif, Gif, InteractionOption, Nonce, NotificationLevel, PermissionOverwriteKind,
+	Permissions, Snowflake, StatusKind,
 };
 use rest::UploadFile;
 use rest::api::SearchQuery;
@@ -535,6 +535,15 @@ pub enum Command {
 		guild_id: Option<Snowflake>,
 		query: String,
 		candidates: Vec<EmojiCandidate>,
+	},
+	LoadFavorites,
+	SetGifFavorite {
+		gif: FavoriteGif,
+		favorite: bool,
+	},
+	SuppressEmbeds {
+		channel_id: Snowflake,
+		message_id: Snowflake,
 	},
 	Reconnect,
 	Logout,

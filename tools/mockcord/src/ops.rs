@@ -1,9 +1,9 @@
 use chrono::{SecondsFormat, Utc};
 use protocol::capability::DEBOUNCE_MESSAGE_REACTIONS;
 use protocol::{
-	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, LenientVec, Message, MessageFlags,
-	MessageReference, MessageReferenceKind, MessageType, Nonce, ReadState, ReadStateKind, Snowflake,
-	StickerFormat, StickerItem, User,
+	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, Embed, EmbedKind, EmbedProvider,
+	LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind, MessageType, Nonce, ReadState,
+	ReadStateKind, Snowflake, StickerFormat, StickerItem, User,
 };
 use serde_json::{Value, json};
 
@@ -90,6 +90,39 @@ fn scan_mentions(content: &str) -> (Vec<u64>, Vec<u64>) {
 	(users, roles)
 }
 
+fn unfurled(content: &str) -> Vec<Embed> {
+	content
+		.split_whitespace()
+		.filter(|word| word.starts_with("https://") && !word.starts_with("<"))
+		.filter_map(|link| {
+			let rest = link.strip_prefix("https://")?;
+			let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+			let host = host.trim_start_matches("www.").to_owned();
+			if host.is_empty() {
+				return None;
+			}
+			let title = path
+				.split(['?', '#'])
+				.next()
+				.unwrap_or_default()
+				.trim_matches('/')
+				.to_owned();
+			Some(Embed {
+				kind: Some(EmbedKind::Link),
+				url: Some(link.to_owned()),
+				title: Some(if title.is_empty() { host.clone() } else { title }),
+				description: Some(format!("A page on {host}.")),
+				provider: Some(EmbedProvider {
+					name: Some(host),
+					url: None,
+				}),
+				..Embed::default()
+			})
+		})
+		.take(1)
+		.collect()
+}
+
 fn sanitized_filename(name: &str) -> String {
 	name.chars()
 		.map(|c| {
@@ -155,6 +188,7 @@ impl Shared {
 			.filter_map(|user_id| self.fixtures.users.get(user_id).cloned())
 			.collect();
 		let mention_everyone = draft.content.contains("@everyone") || draft.content.contains("@here");
+		let embeds = unfurled(&draft.content);
 		let mut attachments = Vec::with_capacity(draft.files.len());
 		for (index, file) in draft.files.iter().enumerate() {
 			let attachment_id = store.next_snowflake();
@@ -179,6 +213,7 @@ impl Shared {
 			nonce: draft.nonce.map(Nonce),
 			flags: draft.flags,
 			kind: draft.kind.unwrap_or_default(),
+			embeds: LenientVec::from(embeds),
 			sticker_items: LenientVec::from(
 				draft
 					.sticker_ids
@@ -279,6 +314,7 @@ impl Shared {
 		if editor.is_some_and(|editor| author_id(message) != editor) {
 			return Err(ApiError::not_author());
 		}
+		let edited = edit.content.is_some() || edit.attachments.is_some();
 		if let Some(content) = edit.content {
 			message["content"] = Value::String(content);
 		}
@@ -291,7 +327,9 @@ impl Shared {
 					.is_some_and(|attachment_id| keep.iter().any(|kept| kept.id.0 == attachment_id))
 			});
 		}
-		message["edited_timestamp"] = Value::String(now_iso());
+		if edited {
+			message["edited_timestamp"] = Value::String(now_iso());
+		}
 		let value = message.clone();
 		let gateway = self.gateway_message(&store, &value);
 		drop(store);

@@ -161,7 +161,10 @@ impl Control {
 
 	pub fn update_favorite_emojis(&self, favorites: &[&str]) {
 		self.set_favorite_emojis(favorites);
-		let encoded = protocol::encode_favorite_emojis(&self.favorite_emojis());
+		let encoded = {
+			let store = self.shared.store.lock();
+			protocol::encode_frecency(&store.favorite_emojis, &store.favorite_gifs)
+		};
 		self.shared.hub.broadcast(
 			"USER_SETTINGS_PROTO_UPDATE",
 			&json!({ "settings": { "type": 2, "proto": encoded }, "partial": false }),
@@ -194,6 +197,10 @@ impl Control {
 
 	pub fn qr_codes_shown(&self) -> usize {
 		self.shared.remote_auth.waiting_phones()
+	}
+
+	pub fn favorite_gifs(&self) -> Vec<protocol::FavoriteGif> {
+		self.shared.store.lock().favorite_gifs.clone()
 	}
 
 	pub fn add_audit_entries(&self, guild_id: u64, count: usize) {

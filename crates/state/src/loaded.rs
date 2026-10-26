@@ -107,6 +107,7 @@ pub enum Loaded {
 	RecentGifs(Vec<Gif>),
 	RecentStickers(Vec<Sticker>),
 	Frecency(String),
+	FavoriteGifs(Vec<protocol::FavoriteGif>),
 	EmojiRanked(crate::favorites::EmojiRanking),
 	UserSettings(Value),
 	AuthSessions(Value),
@@ -658,6 +659,7 @@ impl State {
 				changes.loaded.insert(EXPRESSIONS_KEY);
 			}
 			Loaded::Frecency(encoded) => return self.frecency_loaded(encoded),
+			Loaded::FavoriteGifs(gifs) => return self.favorite_gifs_changed(gifs.clone()),
 			Loaded::EmojiRanked(ranking) => return self.emoji_ranked(ranking),
 		}
 		changes

@@ -1,11 +1,12 @@
 use std::time::{Duration, Instant};
 
-use protocol::{Gif, GifCategory};
+use protocol::{Attachment, Embed, EmbedKind, FavoriteGif, Gif, GifCategory, GifFormat};
 use session::Command;
 use state::State;
 
 pub const GIF_SEARCH_DELAY: Duration = Duration::from_millis(300);
 pub const GIF_SUGGESTION_CHIPS: usize = 8;
+pub const FAVORITES_TITLE: &str = "Favorites";
 const MIN_SUGGEST: usize = 2;
 const MIN_TILE: f32 = 64.;
 const MAX_TILE: f32 = 240.;
@@ -14,6 +15,7 @@ const MAX_TILE: f32 = 240.;
 pub enum GifView {
 	Home {
 		suggestions: Vec<String>,
+		favorites: Vec<Gif>,
 		categories: Vec<GifCategory>,
 		trending: Vec<Gif>,
 	},
@@ -29,11 +31,17 @@ pub struct GifTile {
 	pub height: f32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Active {
+	Query(String),
+	Favorites,
+}
+
 #[derive(Debug, Default)]
 pub struct GifSearch {
 	typed: String,
 	due: Option<Instant>,
-	active: Option<String>,
+	active: Option<Active>,
 }
 
 fn normalized(text: &str) -> String {
@@ -43,10 +51,14 @@ fn normalized(text: &str) -> String {
 impl GifSearch {
 	pub fn open(&mut self, state: &State) -> Vec<Command> {
 		*self = GifSearch::default();
-		match state.gif_trending() {
-			Some(_) => Vec::new(),
-			None => vec![Command::LoadGifTrending],
+		let mut commands = Vec::new();
+		if state.gif_trending().is_none() {
+			commands.push(Command::LoadGifTrending);
 		}
+		if !state.favorites_loaded() {
+			commands.push(Command::LoadFavorites);
+		}
+		commands
 	}
 
 	pub fn typed(&mut self, state: &State, text: &str, now: Instant) -> Vec<Command> {
@@ -92,7 +104,7 @@ impl GifSearch {
 			return Vec::new();
 		}
 		let known = state.gif_search(&query).is_some();
-		self.active = Some(query.clone());
+		self.active = Some(Active::Query(query.clone()));
 		if known {
 			Vec::new()
 		} else {
@@ -100,16 +112,34 @@ impl GifSearch {
 		}
 	}
 
+	pub fn show_favorites(&mut self) {
+		self.typed.clear();
+		self.due = None;
+		self.active = Some(Active::Favorites);
+	}
+
 	pub fn active(&self) -> Option<&str> {
-		self.active.as_deref()
+		match self.active.as_ref()? {
+			Active::Query(query) => Some(query),
+			Active::Favorites => Some(FAVORITES_TITLE),
+		}
 	}
 
 	pub fn view(&self, state: &State) -> GifView {
-		if let Some(query) = &self.active {
-			return GifView::Results {
-				query: query.clone(),
-				gifs: state.gif_search(query).map(<[Gif]>::to_vec),
-			};
+		match &self.active {
+			Some(Active::Query(query)) => {
+				return GifView::Results {
+					query: query.clone(),
+					gifs: state.gif_search(query).map(<[Gif]>::to_vec),
+				};
+			}
+			Some(Active::Favorites) => {
+				return GifView::Results {
+					query: FAVORITES_TITLE.to_owned(),
+					gifs: Some(favorite_gifs(state)),
+				};
+			}
+			None => {}
 		}
 		let trending = state.gif_trending();
 		GifView::Home {
@@ -118,6 +148,7 @@ impl GifSearch {
 				.filter(|_| !self.typed.is_empty())
 				.map(|terms| terms.iter().take(GIF_SUGGESTION_CHIPS).cloned().collect())
 				.unwrap_or_default(),
+			favorites: favorite_gifs(state),
 			categories: trending
 				.map(|trending| trending.categories.to_vec())
 				.unwrap_or_default(),
@@ -125,6 +156,66 @@ impl GifSearch {
 				.map(|trending| trending.gifs.to_vec())
 				.unwrap_or_default(),
 		}
+	}
+}
+
+pub fn favorite_gifs(state: &State) -> Vec<Gif> {
+	state.favorite_gifs().iter().map(gif_of_favorite).collect()
+}
+
+fn dimension(value: Option<i64>) -> u32 {
+	value.and_then(|value| u32::try_from(value).ok()).unwrap_or(0)
+}
+
+pub fn favorite_gif(embed: &Embed) -> Option<FavoriteGif> {
+	if embed.kind != Some(EmbedKind::Gifv) {
+		return None;
+	}
+	let url = embed.url.clone().filter(|url| !url.is_empty())?;
+	let video = embed.video.as_ref()?;
+	let src = video.url.clone().or_else(|| video.proxy_url.clone())?;
+	Some(FavoriteGif {
+		url,
+		src,
+		width: dimension(video.width),
+		height: dimension(video.height),
+		video: true,
+		order: 0,
+	})
+}
+
+pub fn favorite_gif_attachment(attachment: &Attachment) -> Option<FavoriteGif> {
+	let gif = attachment
+		.content_type
+		.as_deref()
+		.is_some_and(|kind| kind.eq_ignore_ascii_case("image/gif"))
+		|| attachment.filename.to_ascii_lowercase().ends_with(".gif");
+	let url = attachment.url.clone().filter(|url| gif && !url.is_empty())?;
+	Some(FavoriteGif {
+		src: url.clone(),
+		url,
+		width: dimension(attachment.width),
+		height: dimension(attachment.height),
+		video: false,
+		order: 0,
+	})
+}
+
+pub fn gif_of_favorite(favorite: &FavoriteGif) -> Gif {
+	Gif {
+		id: favorite.url.clone(),
+		title: String::new(),
+		url: favorite.url.clone(),
+		src: favorite.src.clone(),
+		gif_src: favorite.src.clone(),
+		width: favorite.width,
+		height: favorite.height,
+		preview: String::new(),
+		format: if favorite.video {
+			GifFormat::Mp4
+		} else {
+			GifFormat::Gif
+		},
 	}
 }
 

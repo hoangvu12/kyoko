@@ -21,6 +21,17 @@ const FOLDER_ID: u32 = 2;
 const FOLDER_NAME: u32 = 3;
 const FOLDER_COLOR: u32 = 4;
 const WRAPPED_VALUE: u32 = 1;
+const FRECENCY_FAVORITE_GIFS: u32 = 2;
+const FAVORITE_GIFS: u32 = 1;
+const MAP_KEY: u32 = 1;
+const MAP_VALUE: u32 = 2;
+const GIF_FORMAT: u32 = 1;
+const GIF_SRC: u32 = 2;
+const GIF_WIDTH: u32 = 3;
+const GIF_HEIGHT: u32 = 4;
+const GIF_ORDER: u32 = 5;
+const GIF_FORMAT_IMAGE: u64 = 1;
+const GIF_FORMAT_VIDEO: u64 = 2;
 const FRECENCY_FAVORITE_EMOJIS: u32 = 5;
 const FAVORITE_EMOJIS: u32 = 1;
 const FAVORITE_LIMIT: usize = 512;
@@ -59,6 +70,16 @@ pub struct ProtoStatusSettings {
 	pub custom_status: Option<ProtoCustomStatus>,
 	pub status_expires_at_ms: Option<u64>,
 	pub other: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FavoriteGif {
+	pub url: String,
+	pub src: String,
+	pub width: u32,
+	pub height: u32,
+	pub video: bool,
+	pub order: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -273,13 +294,113 @@ pub fn decode_favorite_emojis(encoded: &str) -> Option<Vec<String>> {
 	})
 }
 
-pub fn encode_favorite_emojis(favorites: &[String]) -> String {
+fn favorite_emoji_field(settings: &mut Writer, favorites: &[String]) {
 	let mut inner = Writer::new();
 	for emoji in favorites {
 		inner.bytes_field(FAVORITE_EMOJIS, emoji.as_bytes());
 	}
-	let mut settings = Writer::new();
 	settings.bytes_field(FRECENCY_FAVORITE_EMOJIS, &inner.bytes);
+}
+
+pub fn encode_favorite_emojis(favorites: &[String]) -> String {
+	let mut settings = Writer::new();
+	favorite_emoji_field(&mut settings, favorites);
+	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
+}
+
+pub fn encode_frecency(favorites: &[String], gifs: &[FavoriteGif]) -> String {
+	let mut settings = Writer::new();
+	favorite_gif_field(&mut settings, gifs);
+	favorite_emoji_field(&mut settings, favorites);
+	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
+}
+
+fn small(value: u64) -> u32 {
+	u32::try_from(value).unwrap_or(u32::MAX)
+}
+
+fn decode_gif(url: String, bytes: &[u8]) -> FavoriteGif {
+	let mut gif = FavoriteGif {
+		url,
+		..FavoriteGif::default()
+	};
+	for (number, wire) in Fields::new(bytes) {
+		match (number, wire) {
+			(GIF_FORMAT, Wire::Varint(format)) => gif.video = format == GIF_FORMAT_VIDEO,
+			(GIF_SRC, Wire::Bytes(src)) => gif.src = text(src),
+			(GIF_WIDTH, Wire::Varint(width)) => gif.width = small(width),
+			(GIF_HEIGHT, Wire::Varint(height)) => gif.height = small(height),
+			(GIF_ORDER, Wire::Varint(order)) => gif.order = small(order),
+			_ => {}
+		}
+	}
+	gif
+}
+
+fn decode_gif_entry(bytes: &[u8]) -> Option<FavoriteGif> {
+	let mut url = None;
+	let mut value: &[u8] = &[];
+	for (number, wire) in Fields::new(bytes) {
+		match (number, wire) {
+			(MAP_KEY, Wire::Bytes(key)) => url = std::str::from_utf8(key).ok().map(str::to_owned),
+			(MAP_VALUE, Wire::Bytes(inner)) => value = inner,
+			_ => {}
+		}
+	}
+	let url = url.filter(|url| !url.is_empty())?;
+	Some(decode_gif(url, value))
+}
+
+fn decode_gifs(bytes: &[u8]) -> Vec<FavoriteGif> {
+	let mut gifs: Vec<FavoriteGif> = Vec::new();
+	for (number, wire) in Fields::new(bytes) {
+		if let (FAVORITE_GIFS, Wire::Bytes(entry)) = (number, wire)
+			&& let Some(gif) = decode_gif_entry(entry)
+			&& !gifs.iter().any(|known| known.url == gif.url)
+			&& gifs.len() < FAVORITE_LIMIT
+		{
+			gifs.push(gif);
+		}
+	}
+	gifs.sort_by(|left, right| right.order.cmp(&left.order));
+	gifs
+}
+
+pub fn decode_favorite_gifs(encoded: &str) -> Option<Vec<FavoriteGif>> {
+	let bytes = LENIENT.decode(encoded.trim()).ok()?;
+	Fields::new(&bytes).find_map(|(number, wire)| match (number, wire) {
+		(FRECENCY_FAVORITE_GIFS, Wire::Bytes(inner)) => Some(decode_gifs(inner)),
+		_ => None,
+	})
+}
+
+fn favorite_gif_field(settings: &mut Writer, gifs: &[FavoriteGif]) {
+	let mut inner = Writer::new();
+	for gif in gifs {
+		let mut value = Writer::new();
+		value.varint_field(
+			GIF_FORMAT,
+			if gif.video {
+				GIF_FORMAT_VIDEO
+			} else {
+				GIF_FORMAT_IMAGE
+			},
+		);
+		value.bytes_field(GIF_SRC, gif.src.as_bytes());
+		value.varint_field(GIF_WIDTH, u64::from(gif.width));
+		value.varint_field(GIF_HEIGHT, u64::from(gif.height));
+		value.varint_field(GIF_ORDER, u64::from(gif.order));
+		let mut entry = Writer::new();
+		entry.bytes_field(MAP_KEY, gif.url.as_bytes());
+		entry.bytes_field(MAP_VALUE, &value.bytes);
+		inner.bytes_field(FAVORITE_GIFS, &entry.bytes);
+	}
+	settings.bytes_field(FRECENCY_FAVORITE_GIFS, &inner.bytes);
+}
+
+pub fn encode_favorite_gifs(gifs: &[FavoriteGif]) -> String {
+	let mut settings = Writer::new();
+	favorite_gif_field(&mut settings, gifs);
 	base64::engine::general_purpose::STANDARD.encode(settings.bytes)
 }
 

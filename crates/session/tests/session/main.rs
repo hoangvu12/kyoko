@@ -8,6 +8,7 @@ mod community;
 mod composer;
 mod deletes;
 mod dms;
+mod embeds;
 mod expressions;
 mod favourites;
 mod fingerprint;

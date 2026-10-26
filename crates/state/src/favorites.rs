@@ -1,5 +1,5 @@
 use protocol::expressions::unicode::by_shortcode;
-use protocol::{Snowflake, decode_favorite_emojis};
+use protocol::{FavoriteGif, Snowflake, decode_favorite_emojis, decode_favorite_gifs};
 
 use crate::changes::Changes;
 use crate::state::State;
@@ -37,6 +37,7 @@ fn bare(glyph: &str) -> String {
 pub(crate) struct Favorites {
 	entries: Vec<String>,
 	resolved: Vec<Favorite>,
+	gifs: Vec<FavoriteGif>,
 	loaded: bool,
 	generation: u64,
 }
@@ -99,17 +100,50 @@ impl State {
 			.map(|ranking| ranking.order.as_slice())
 	}
 
+	pub fn favorite_gifs(&self) -> &[FavoriteGif] {
+		&self.lazy.expressions.favorites.gifs
+	}
+
+	pub fn is_favorite_gif(&self, url: &str) -> bool {
+		self.favorite_gifs().iter().any(|gif| gif.url == url)
+	}
+
 	pub(crate) fn frecency_loaded(&mut self, encoded: &str) -> Changes {
 		let favorites = decode_favorite_emojis(encoded).unwrap_or_default();
+		let gifs = decode_favorite_gifs(encoded).unwrap_or_default();
 		self.lazy.expressions.favorites.loaded = true;
-		self.set_favorites(favorites)
+		let mut changes = self.set_favorites(favorites);
+		changes.merge(self.set_favorite_gifs(gifs));
+		changes
 	}
 
 	pub(crate) fn frecency_updated(&mut self, encoded: &str, partial: bool) -> Changes {
-		match decode_favorite_emojis(encoded) {
+		let mut changes = match decode_favorite_emojis(encoded) {
 			Some(favorites) => self.set_favorites(favorites),
 			None if !partial => self.set_favorites(Vec::new()),
 			None => Changes::default(),
+		};
+		changes.merge(match decode_favorite_gifs(encoded) {
+			Some(gifs) => self.set_favorite_gifs(gifs),
+			None if !partial => self.set_favorite_gifs(Vec::new()),
+			None => Changes::default(),
+		});
+		changes
+	}
+
+	pub(crate) fn favorite_gifs_changed(&mut self, gifs: Vec<FavoriteGif>) -> Changes {
+		self.set_favorite_gifs(gifs)
+	}
+
+	fn set_favorite_gifs(&mut self, gifs: Vec<FavoriteGif>) -> Changes {
+		let favorites = &mut self.lazy.expressions.favorites;
+		if favorites.gifs == gifs {
+			return Changes::default();
+		}
+		favorites.gifs = gifs;
+		Changes {
+			favorite_gifs: true,
+			..Changes::default()
 		}
 	}
 

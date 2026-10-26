@@ -161,6 +161,10 @@ impl Link {
 			let commands = match &search {
 				Search::Typed(Tab::Gif, typed) => gifs.typed(&state, typed, now),
 				Search::Submitted(Tab::Gif, typed) => gifs.submit(&state, typed),
+				Search::Favorites => {
+					gifs.show_favorites();
+					Vec::new()
+				}
 				Search::Typed(Tab::Sticker, _) if !expressions.stickers_asked.replace(true) => {
 					StickerPicker::needs(&state, self.composer_channel().and_then(|(guild_id, _)| guild_id))
 				}
@@ -202,7 +206,9 @@ impl Link {
 
 	pub(super) fn expressions_apply(&self, state: &State, changes: &Changes) {
 		let expressions = &self.expressions;
-		if !expressions.picker.is_open() || (changes.loaded.is_empty() && !changes.guild_list) {
+		if !expressions.picker.is_open()
+			|| (changes.loaded.is_empty() && !changes.guild_list && !changes.favorite_gifs)
+		{
 			return;
 		}
 		let Some((guild_id, channel_id)) = self.composer_channel() else {

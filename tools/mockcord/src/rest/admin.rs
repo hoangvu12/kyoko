@@ -6,8 +6,9 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
 use protocol::{
-	decode_favorite_emojis, decode_guild_folders, decode_status_settings, encode_favorite_emojis,
-	encode_guild_folders, encode_status_settings,
+	decode_favorite_emojis, decode_favorite_gifs, decode_guild_folders, decode_status_settings,
+	encode_favorite_emojis, encode_favorite_gifs, encode_frecency, encode_guild_folders,
+	encode_status_settings,
 };
 use serde_json::{Value, json};
 
@@ -100,10 +101,21 @@ pub async fn patch_settings_proto(
 		.as_str()
 		.ok_or(ApiError::invalid_body("settings is required"))?;
 	if kind == FRECENCY_SETTINGS {
-		let favorites =
-			decode_favorite_emojis(encoded).ok_or(ApiError::invalid_body("Only favourite emoji are kept"))?;
-		let stored = encode_favorite_emojis(&favorites);
-		shared.store.lock().favorite_emojis = favorites;
+		let favorites = decode_favorite_emojis(encoded);
+		let gifs = decode_favorite_gifs(encoded);
+		let stored = match (favorites, gifs) {
+			(Some(favorites), _) => {
+				let stored = encode_favorite_emojis(&favorites);
+				shared.store.lock().favorite_emojis = favorites;
+				stored
+			}
+			(None, Some(gifs)) => {
+				let stored = encode_favorite_gifs(&gifs);
+				shared.store.lock().favorite_gifs = gifs;
+				stored
+			}
+			(None, None) => return Err(ApiError::invalid_body("Only favourite emoji and GIFs are kept")),
+		};
 		shared.hub.broadcast(
 			"USER_SETTINGS_PROTO_UPDATE",
 			&json!({ "settings": { "type": FRECENCY_SETTINGS, "proto": stored }, "partial": true }),
@@ -153,7 +165,10 @@ pub async fn settings_proto(State(shared): Mock, Path(kind): Path<u32>) -> ApiRe
 	if kind != FRECENCY_SETTINGS {
 		return Err(ApiError::invalid_body("Only frecency settings are served"));
 	}
-	let encoded = encode_favorite_emojis(&shared.store.lock().favorite_emojis);
+	let encoded = {
+		let store = shared.store.lock();
+		encode_frecency(&store.favorite_emojis, &store.favorite_gifs)
+	};
 	Ok(Json(json!({ "settings": encoded })))
 }
 

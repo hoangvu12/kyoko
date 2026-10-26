@@ -47,9 +47,13 @@ impl Core {
 
 	pub(super) fn on_loaded(&mut self, loaded: Loaded) {
 		let joined = matches!(loaded, Loaded::InviteAccepted { .. });
+		let frecency = matches!(loaded, Loaded::Frecency(_));
 		self.apply_local(LocalEvent::Loaded(Box::new(loaded)));
 		if joined {
 			self.after_join();
+		}
+		if frecency {
+			self.frecency_arrived();
 		}
 	}
 

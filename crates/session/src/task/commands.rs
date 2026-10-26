@@ -101,6 +101,12 @@ impl Core {
 				query,
 				candidates,
 			} => self.rank_emoji(guild_id, query, candidates),
+			Command::LoadFavorites => self.want_frecency(),
+			Command::SetGifFavorite { gif, favorite } => self.set_gif_favorite(gif, favorite),
+			Command::SuppressEmbeds {
+				channel_id,
+				message_id,
+			} => self.suppress_embeds(channel_id, message_id),
 			command @ (Command::AddFriend { .. }
 			| Command::AcceptFriend { .. }
 			| Command::RemoveRelationship { .. }

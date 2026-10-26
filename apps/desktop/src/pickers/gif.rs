@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use bridge::{GifTile, GifView, gif_masonry, gif_motion, gif_still, is_video_url};
+use bridge::{FAVORITES_TITLE, GifTile, GifView, gif_masonry, gif_motion, gif_still, is_video_url};
 use media::ImageName;
 use protocol::{Gif, GifCategory};
 use zgx::compose::prelude::*;
@@ -31,6 +31,7 @@ impl GifState {
 		Self {
 			view: runtime.signal(Rc::new(GifView::Home {
 				suggestions: Vec::new(),
+				favorites: Vec::new(),
 				categories: Vec::new(),
 				trending: Vec::new(),
 			})),
@@ -77,11 +78,22 @@ impl ExpressionPicker {
 	fn gif_images(&self, view: &GifView) -> Vec<ImageName> {
 		match view {
 			GifView::Home {
-				categories, trending, ..
-			} => categories
-				.iter()
-				.filter(|category| !is_video_url(&category.src))
-				.map(|category| self.pictures.remote(&category.src, (COLUMN, CATEGORY_HEIGHT)))
+				favorites,
+				categories,
+				trending,
+				..
+			} => favorites
+				.first()
+				.map(gif_still)
+				.filter(|url| !url.is_empty() && !is_video_url(url))
+				.map(|url| self.pictures.remote(url, (COLUMN, CATEGORY_HEIGHT)))
+				.into_iter()
+				.chain(
+					categories
+						.iter()
+						.filter(|category| !is_video_url(&category.src))
+						.map(|category| self.pictures.remote(&category.src, (COLUMN, CATEGORY_HEIGHT))),
+				)
 				.chain(self.still_names(trending))
 				.collect(),
 			GifView::Results { gifs, .. } => self.still_names(gifs.as_deref().unwrap_or_default()),
@@ -101,6 +113,7 @@ impl ExpressionPicker {
 		match view {
 			GifView::Home {
 				suggestions,
+				favorites,
 				categories,
 				trending,
 			} => column()
@@ -113,6 +126,7 @@ impl ExpressionPicker {
 					row()
 						.flex_wrap()
 						.gap(GAP)
+						.child(self.favorites_tile(favorites.first()))
 						.children(categories.iter().map(|category| self.category_tile(category))),
 				)
 				.child(heading("Trending GIFs"))
@@ -166,12 +180,28 @@ impl ExpressionPicker {
 			}))
 	}
 
+	fn favorites_tile(self: &Rc<Self>, first: Option<&Gif>) -> View {
+		let still = first
+			.map(gif_still)
+			.filter(|url| !url.is_empty() && !is_video_url(url))
+			.map(|url| self.pictures.remote(url, (COLUMN, CATEGORY_HEIGHT)));
+		let this = self.clone();
+		self.tile(FAVORITES_TITLE, still, move || this.search(Search::Favorites))
+			.id("gif-favorites")
+	}
+
 	fn category_tile(self: &Rc<Self>, category: &GifCategory) -> View {
-		let picture = (!is_video_url(&category.src)).then(|| {
-			self.pictures
-				.picture(&self.pictures.remote(&category.src, (COLUMN, CATEGORY_HEIGHT)))
-		});
+		let still = (!is_video_url(&category.src))
+			.then(|| self.pictures.remote(&category.src, (COLUMN, CATEGORY_HEIGHT)));
 		let (query, this, name) = (self.query.clone(), self.clone(), category.name.to_lowercase());
+		self.tile(&category.name, still, move || {
+			query.set(name.clone());
+			this.search(Search::Submitted(Tab::Gif, name.clone()));
+		})
+	}
+
+	fn tile(&self, label: &str, still: Option<ImageName>, chosen: impl FnMut() + 'static) -> View {
+		let picture = still.map(|name| self.pictures.picture(&name));
 		div()
 			.relative()
 			.size(COLUMN, CATEGORY_HEIGHT)
@@ -186,10 +216,7 @@ impl ExpressionPicker {
 					None => Styles::new(),
 				})
 			})
-			.on_click(move || {
-				query.set(name.clone());
-				this.search(Search::Submitted(Tab::Gif, name.clone()));
-			})
+			.on_click(chosen)
 			.child(
 				div()
 					.absolute()
@@ -201,7 +228,7 @@ impl ExpressionPicker {
 					.justify_center()
 					.bg(tok("gif_shade"))
 					.child(
-						text(category.name.clone())
+						text(label.to_owned())
 							.text_size(tok("font_md"))
 							.font_weight(700)
 							.text_color(tok("header_primary")),

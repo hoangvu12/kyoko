@@ -74,6 +74,7 @@ pub enum Mode {
 pub enum Search {
 	Typed(Tab, String),
 	Submitted(Tab, String),
+	Favorites,
 }
 
 type Handler<T> = RefCell<Option<Box<dyn Fn(T)>>>;

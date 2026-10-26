@@ -63,6 +63,11 @@ impl RestClient {
 		self.send(Request::get("/users/@me/settings-proto/2")).await
 	}
 
+	pub async fn patch_frecency_settings(&self, settings: String) -> Result<Value> {
+		self.send(Request::patch("/users/@me/settings-proto/2").json(&json!({ "settings": settings })))
+			.await
+	}
+
 	pub async fn auth_sessions(&self) -> Result<Value> {
 		self.send(Request::get("/auth/sessions")).await
 	}

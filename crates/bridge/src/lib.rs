@@ -65,7 +65,8 @@ pub use emoji_picker::{
 };
 pub use friends::{FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, status_label};
 pub use gif_picker::{
-	GIF_SEARCH_DELAY, GIF_SUGGESTION_CHIPS, GifSearch, GifTile, GifView, gif_masonry, gif_motion, gif_still,
+	FAVORITES_TITLE, GIF_SEARCH_DELAY, GIF_SUGGESTION_CHIPS, GifSearch, GifTile, GifView, favorite_gif,
+	favorite_gif_attachment, favorite_gifs, gif_masonry, gif_motion, gif_of_favorite, gif_still,
 	gif_tile_height, is_video_url,
 };
 pub use guild_admin::{

@@ -8,6 +8,7 @@ mod dms;
 mod expressions;
 mod favourites;
 mod friends;
+mod gif_favourites;
 mod guild_admin;
 mod harness;
 mod media;

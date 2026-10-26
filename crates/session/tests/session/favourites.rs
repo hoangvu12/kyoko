@@ -4,9 +4,12 @@ use std::time::Duration;
 use anyhow::{Result, bail};
 use mockcord::Recording;
 use parking_lot::Mutex;
-use protocol::{ProtoStatusSettings, Snowflake, encode_status_settings};
+use protocol::{
+	FavoriteGif, ProtoStatusSettings, Snowflake, decode_favorite_emojis, decode_favorite_gifs,
+	encode_status_settings,
+};
 use serde_json::json;
-use session::{Command, EmojiRankRequest, SessionHooks};
+use session::{Command, EmojiRankRequest, RestTuning, SessionHooks};
 use state::{EmojiCandidate, State};
 
 use crate::harness::{Options, Running};
@@ -149,6 +152,87 @@ async fn favourites_follow_frecency_updates_from_other_devices() {
 		["smile".to_owned(), "heart".to_owned()],
 		"other settings and partial updates without favourites leave them"
 	);
+	running.stop().await;
+}
+
+fn cat_dance() -> FavoriteGif {
+	FavoriteGif {
+		url: "https://klipy.com/gifs/cat-dance".to_owned(),
+		src: "https://static.klipy.com/cat-dance.mp4".to_owned(),
+		width: 498,
+		height: 280,
+		video: true,
+		order: 0,
+	}
+}
+
+fn written_gifs(recording: &Recording) -> Vec<Vec<FavoriteGif>> {
+	recording
+		.requests_to("PATCH", FRECENCY)
+		.map(|request| {
+			let body: serde_json::Value = serde_json::from_slice(&request.body).expect("a JSON body");
+			let encoded = body["settings"].as_str().expect("the settings").to_owned();
+			assert_eq!(
+				decode_favorite_emojis(&encoded),
+				None,
+				"only the GIF field is sent"
+			);
+			decode_favorite_gifs(&encoded).expect("the GIF favourites field")
+		})
+		.collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_favourited_gif_is_read_then_written_to_the_frecency_proto_and_unfavouriting_removes_it() {
+	let running = Running::start_with(Options::new("gif-favourites").rest(RestTuning {
+		settings_delay: Duration::from_millis(50),
+		mutation_gap: Duration::ZERO,
+		..RestTuning::default()
+	}))
+	.await;
+	running.connected().await;
+	running.session().send(Command::SetGifFavorite {
+		gif: cat_dance(),
+		favorite: true,
+	});
+	running
+		.until("the favourite GIF", |state: &State| {
+			state.is_favorite_gif(&cat_dance().url)
+		})
+		.await;
+	running
+		.eventually("the favourite stored by Discord", || {
+			running.mock().favorite_gifs().len() == 1
+		})
+		.await;
+	let stored = running.mock().favorite_gifs();
+	assert_eq!(stored[0].src, cat_dance().src);
+	assert!(stored[0].video);
+	assert_eq!(stored[0].order, 1);
+	assert_eq!(
+		frecency_reads(&running.mock().recording()),
+		1,
+		"the favourites are read before the first write, so other favourites survive"
+	);
+	assert!(
+		!running.mock().favorite_emojis().is_empty(),
+		"the favourite emoji are left alone"
+	);
+	running.session().send(Command::SetGifFavorite {
+		gif: cat_dance(),
+		favorite: false,
+	});
+	running
+		.eventually("the favourite removed at Discord", || {
+			running.mock().favorite_gifs().is_empty()
+		})
+		.await;
+	tokio::time::sleep(QUIET).await;
+	let writes = written_gifs(&running.mock().recording());
+	assert_eq!(writes.len(), 2, "one write per change: {writes:?}");
+	assert_eq!(writes[0].len(), 1);
+	assert!(writes[1].is_empty());
+	assert!(running.session().state().read().favorite_gifs().is_empty());
 	running.stop().await;
 }
 

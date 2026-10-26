@@ -103,7 +103,7 @@ impl Core {
 		}
 	}
 
-	fn want_frecency(&mut self) {
+	pub(super) fn want_frecency(&mut self) {
 		if self.state.read().favorites_loaded() {
 			return;
 		}
