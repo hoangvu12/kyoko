@@ -60,20 +60,48 @@ const COMMAND_IDS: [(u64, u64, &str); 13] = [
 	(IGNORE_COMMAND, MOCKBOT_ID, "ignore"),
 	(BUG_COMMAND, MOCKBOT_ID, "bug"),
 	(REMIND_COMMAND, REMINDY_ID, "remind"),
-	(9_100_000_000_000_000_301, POLLY_ID, "poll"),
-	(9_100_000_000_000_000_401, SNAPPER_ID, "snap"),
+	(POLL_COMMAND, POLLY_ID, "poll"),
+	(SNAP_COMMAND, SNAPPER_ID, "snap"),
 	(RESIZE_COMMAND, SNAPPER_ID, "resize"),
 ];
 const APPLICATION_COMMAND: i64 = 2;
 const APPLICATION_COMMAND_AUTOCOMPLETE: i64 = 4;
 const MESSAGE_COMPONENT: i64 = 3;
 const MODAL_SUBMIT: i64 = 5;
-const APPLICATIONS: [(u64, &str); 4] = [
-	(MOCKBOT_ID, "Mockbot"),
-	(REMINDY_ID, "Remindy"),
-	(POLLY_ID, "Polly"),
-	(SNAPPER_ID, "Snapper"),
+const APPLICATIONS: [(u64, &str, &str); 4] = [
+	(
+		MOCKBOT_ID,
+		"Mockbot",
+		"Test bot for kyoko's command and component states",
+	),
+	(REMINDY_ID, "Remindy", "Reminders for you and your server"),
+	(POLLY_ID, "Polly", "Quick polls with buttons and live results"),
+	(SNAPPER_ID, "Snapper", "Resize, crop and convert images"),
 ];
+pub const WARDEN_ID: u64 = 9_100_000_000_000_000_005;
+pub const LYRA_ID: u64 = 9_100_000_000_000_000_006;
+pub const TICKETEER_ID: u64 = 9_100_000_000_000_000_007;
+pub const COUNTR_ID: u64 = 9_100_000_000_000_000_008;
+pub const ARCADE_ID: u64 = 9_100_000_000_000_000_009;
+pub const POLL_COMMAND: u64 = 9_100_000_000_000_000_301;
+pub const SNAP_COMMAND: u64 = 9_100_000_000_000_000_401;
+pub const WARN_COMMAND: u64 = 9_100_000_000_000_000_501;
+pub const PLAY_COMMAND: u64 = 9_100_000_000_000_000_601;
+const LAUNCH_COMMAND: u64 = 9_100_000_000_000_000_951;
+const MORE_APPLICATIONS: [(u64, &str, &str); 5] = [
+	(WARDEN_ID, "Warden", "Moderation, logging and reaction roles"),
+	(LYRA_ID, "Lyra", "Music and playlists for voice channels"),
+	(TICKETEER_ID, "Ticketeer", "Support tickets in private threads"),
+	(COUNTR_ID, "Countr", "A counting game for one channel"),
+	(ARCADE_ID, "Arcade", "Party games for voice channels"),
+];
+const MORE_COMMANDS: [(u64, u64, &str); 4] = [
+	(WARN_COMMAND, WARDEN_ID, "warn"),
+	(PLAY_COMMAND, LYRA_ID, "play"),
+	(9_100_000_000_000_000_701, TICKETEER_ID, "ticket"),
+	(9_100_000_000_000_000_801, COUNTR_ID, "count"),
+];
+const PRIMARY_ENTRY_POINT: i64 = 4;
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 const COMMAND_VERSION: u64 = 9_100_000_000_000_000_900;
 
@@ -184,6 +212,16 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 		"whisper" => ("Answers so only you can see it", json!([])),
 		"ignore" => ("Never answers, to test timeouts", json!([])),
 		"bug" => ("Report a bug in a form", json!([])),
+		"warn" => (
+			"Warn a member",
+			json!([string_option("reason", "Why they are warned", true)]),
+		),
+		"play" => (
+			"Play a song in your voice channel",
+			json!([string_option("song", "What to play", true)]),
+		),
+		"ticket" => ("Open a support ticket", json!([])),
+		"count" => ("Show the current count", json!([])),
 		_ => ("Always fails, to test error states", json!([])),
 	};
 	json!({
@@ -199,53 +237,112 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 	})
 }
 
-fn index() -> Value {
+fn application(id: u64, name: &str, description: &str) -> Value {
 	json!({
-		"applications": APPLICATIONS.iter().map(|(id, name)| json!({
-			"id": id.to_string(),
-			"name": name,
-			"icon": null,
-			"bot_id": id.to_string(),
-		})).collect::<Vec<_>>(),
-		"application_commands": COMMAND_IDS
-			.iter()
-			.map(|(id, application_id, name)| command(*id, *application_id, name))
-			.collect::<Vec<_>>(),
+		"id": id.to_string(),
+		"name": name,
+		"description": description,
+		"icon": null,
+		"bot_id": id.to_string(),
+	})
+}
+
+fn entry_point(id: u64, application_id: u64) -> Value {
+	json!({
+		"id": id.to_string(),
+		"type": PRIMARY_ENTRY_POINT,
+		"application_id": application_id.to_string(),
+		"version": COMMAND_VERSION.to_string(),
+		"name": "launch",
+		"description": "Launch the activity",
+		"handler": 2,
+		"integration_types": [0],
+		"contexts": [0, 1, 2],
+	})
+}
+
+fn index(more_apps: bool) -> Value {
+	let mut applications: Vec<Value> = APPLICATIONS
+		.iter()
+		.map(|(id, name, description)| application(*id, name, description))
+		.collect();
+	let mut commands: Vec<Value> = COMMAND_IDS
+		.iter()
+		.map(|(id, application_id, name)| command(*id, *application_id, name))
+		.collect();
+	if more_apps {
+		applications.extend(
+			MORE_APPLICATIONS
+				.iter()
+				.map(|(id, name, description)| application(*id, name, description)),
+		);
+		commands.extend(
+			MORE_COMMANDS
+				.iter()
+				.map(|(id, application_id, name)| command(*id, *application_id, name)),
+		);
+		commands.push(entry_point(LAUNCH_COMMAND, ARCADE_ID));
+	}
+	json!({
+		"applications": applications,
+		"application_commands": commands,
 		"version": COMMAND_VERSION.to_string(),
 	})
 }
 
 pub fn frequent_commands(anchor: DateTime<Utc>) -> Vec<CommandUse> {
+	command_uses(
+		anchor,
+		vec![
+			(REMIND_COMMAND.to_string(), 12),
+			(ROLL_COMMAND.to_string(), 7),
+			(SHRUG_COMMAND.to_owned(), 3),
+		],
+	)
+}
+
+pub fn launcher_uses(anchor: DateTime<Utc>) -> Vec<CommandUse> {
+	command_uses(
+		anchor,
+		vec![
+			(ROLL_COMMAND.to_string(), 12),
+			(REMIND_COMMAND.to_string(), 10),
+			(POLL_COMMAND.to_string(), 8),
+			(SNAP_COMMAND.to_string(), 6),
+			(PLAY_COMMAND.to_string(), 4),
+			(WARN_COMMAND.to_string(), 3),
+		],
+	)
+}
+
+fn command_uses(anchor: DateTime<Utc>, uses: Vec<(String, u32)>) -> Vec<CommandUse> {
 	let now = anchor.timestamp_millis();
-	[
-		(REMIND_COMMAND.to_string(), 12),
-		(ROLL_COMMAND.to_string(), 7),
-		(SHRUG_COMMAND.to_owned(), 3),
-	]
-	.into_iter()
-	.map(|(key, uses)| CommandUse {
-		key,
-		total_uses: uses,
-		recent_uses: (0..uses.min(10))
-			.map(|day| (now - i64::from(day) * DAY_MS) as u64)
-			.collect(),
-		frecency: -1,
-		score: -1,
-	})
-	.collect()
+	uses.into_iter()
+		.map(|(key, uses)| CommandUse {
+			key,
+			total_uses: uses,
+			recent_uses: (0..uses.min(10))
+				.map(|day| (now - i64::from(day) * DAY_MS) as u64)
+				.collect(),
+			frecency: -1,
+			score: -1,
+		})
+		.collect()
 }
 pub async fn guild_index(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
 	if !shared.fixtures.guilds.iter().any(|guild| guild.id == id) {
 		return Err(ApiError::unknown_guild());
 	}
-	Ok(Json(index()))
+	let more_apps = shared.store.lock().more_apps;
+	Ok(Json(index(more_apps)))
 }
 
 pub async fn channel_index(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> ApiResult {
 	if !shared.store.lock().channels.contains_key(&id) {
 		return Err(ApiError::unknown_channel());
 	}
-	Ok(Json(index()))
+	let more_apps = shared.store.lock().more_apps;
+	Ok(Json(index(more_apps)))
 }
 
 pub async fn user_index() -> ApiResult {

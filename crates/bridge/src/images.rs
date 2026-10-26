@@ -78,6 +78,20 @@ pub fn app_icon_request(
 	)
 }
 
+pub fn app_tile_request(
+	cdn: &str,
+	application_id: Snowflake,
+	hash: &str,
+	points: f64,
+	scale: f64,
+) -> ImageRequest {
+	let pixels = device_pixels(points, scale);
+	ImageRequest::new(
+		cdn::app_icon_url(cdn, application_id.0, hash, pixels),
+		Variant::new(SizeHint::square(pixels), Shape::Square),
+	)
+}
+
 pub fn emoji_request(
 	cdn: &str,
 	emoji_id: Snowflake,

@@ -1,3 +1,4 @@
+mod apps;
 mod command;
 mod marks;
 mod suggest;
@@ -13,6 +14,7 @@ use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
 use crate::emoji_picker::EmojiCell;
 use crate::sticker_picker::StickerCell;
 
+pub use apps::{AppSearch, AppsLauncher, LauncherApp, RECENT_TILES, apps_launcher, search_apps};
 pub use command::{
 	ActiveCommand, BuiltIn, ChoiceList, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
 	CommandSource, OptionChoices, OptionField, OptionFile, Prepared, command_catalog, command_picker,
@@ -91,6 +93,7 @@ pub struct Composer {
 	dirty: bool,
 	picker: Option<CommandPicker>,
 	command: Option<ActiveCommand>,
+	app_filter: Option<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -194,18 +197,39 @@ impl Composer {
 			.query
 			.as_ref()
 			.filter(|query| query.trigger == Trigger::Command && self.command.is_none())?;
-		Some(command_picker(
-			state,
-			self.guild_id,
-			channel_id,
-			&query.text,
-			now_ms(),
-		))
+		let picker = command_picker(state, self.guild_id, channel_id, &query.text, now_ms());
+		Some(match self.app_filter {
+			Some(app_id) => picker.only_app(app_id),
+			None => picker,
+		})
+	}
+
+	pub fn app_filter(&self) -> Option<Snowflake> {
+		self.app_filter
+	}
+
+	pub fn open_app(&mut self, app_id: Snowflake) -> Option<(String, usize)> {
+		if self.editing.is_some() || self.channel_id.is_none() {
+			return None;
+		}
+		self.command = None;
+		self.app_filter = Some(app_id);
+		self.dirty = true;
+		Some(("/".to_owned(), 1))
+	}
+
+	pub fn pick_command(&mut self, entry: CommandEntry) -> bool {
+		if self.editing.is_some() || self.channel_id.is_none() {
+			return false;
+		}
+		self.activate(entry);
+		true
 	}
 
 	fn activate(&mut self, entry: CommandEntry) {
 		self.command = Some(ActiveCommand::new(entry));
 		self.picker = None;
+		self.app_filter = None;
 		self.query = None;
 		self.suggestions.clear();
 		self.selected = 0;
@@ -402,6 +426,13 @@ impl Composer {
 
 	fn update_query(&mut self, state: &State, text: &str, caret: usize) {
 		self.query = query_at(text, caret);
+		if self
+			.query
+			.as_ref()
+			.is_none_or(|query| query.trigger != Trigger::Command)
+		{
+			self.app_filter = None;
+		}
 		self.selected = 0;
 		self.suggestions = match (&self.query, self.channel_id) {
 			(Some(query), Some(channel_id)) => suggestions(state, self.guild_id, channel_id, query),
@@ -532,6 +563,7 @@ impl Composer {
 	pub fn dismiss(&mut self) -> bool {
 		if self.picker.take().is_some() {
 			self.query = None;
+			self.app_filter = None;
 			return true;
 		}
 		if let Some(command) = self.command.as_mut().filter(|command| command.optional_open) {

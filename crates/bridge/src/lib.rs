@@ -67,6 +67,7 @@ pub use composer::{
 	command_catalog, command_picker, exact_command, failure_text, interaction_options, line_marks,
 	option_value, placeholder, query_at, suggestion_heading, suggestions, text_marks, too_big, typing_line,
 };
+pub use composer::{AppSearch, AppsLauncher, LauncherApp, RECENT_TILES, apps_launcher, search_apps};
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use display::{Display, person, relative_text, relative_time};
@@ -101,9 +102,9 @@ pub use hidden::{
 	HiddenChannel, ModeratorNotes, Overwriter, channel_kind_label, hidden_channel, moderator_notes,
 };
 pub use images::{
-	app_icon_request, attachment_request, avatar_request, avatar_url, device_pixels, embed_icon_request,
-	embed_request, emoji_request, guild_icon_request, is_image, is_video, local_audio, local_media,
-	media_fetcher, refresh_command, sticker_request,
+	app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url, device_pixels,
+	embed_icon_request, embed_request, emoji_request, guild_icon_request, is_image, is_video, local_audio,
+	local_media, media_fetcher, refresh_command, sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};

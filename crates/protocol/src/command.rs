@@ -120,6 +120,7 @@ pub struct CommandApplication {
 	pub name: String,
 	pub icon: Option<String>,
 	pub bot_id: Option<Snowflake>,
+	pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Deserialize)]

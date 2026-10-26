@@ -109,7 +109,9 @@ impl Fixtures {
 			read_states,
 			user_guild_settings,
 			messages: builder.messages,
-			command_uses: if config.frequent_commands {
+			command_uses: if config.more_apps {
+				crate::rest::launcher_uses(anchor)
+			} else if config.frequent_commands {
 				crate::rest::frequent_commands(anchor)
 			} else {
 				Vec::new()

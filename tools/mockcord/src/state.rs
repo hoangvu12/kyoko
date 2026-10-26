@@ -58,6 +58,7 @@ pub struct Store {
 	pub autocomplete: crate::config::AutocompleteReply,
 	pub interactions: crate::config::InteractionTiming,
 	pub failing_modals: bool,
+	pub more_apps: bool,
 	pub uploads: HashMap<String, UploadedFile>,
 	pub reactors: HashMap<(u64, String, bool), Vec<u64>>,
 	last_id: u64,
@@ -169,6 +170,7 @@ impl Store {
 			autocomplete: crate::config::AutocompleteReply::Answer,
 			interactions: crate::config::InteractionTiming::default(),
 			failing_modals: false,
+			more_apps: false,
 			uploads: HashMap::new(),
 			reactors: HashMap::new(),
 			last_id,
@@ -242,6 +244,7 @@ impl Shared {
 		store.autocomplete = config.autocomplete;
 		store.interactions = config.interactions;
 		store.failing_modals = config.failing_modals;
+		store.more_apps = config.more_apps;
 		let store = Mutex::new(store);
 		let recorder = Recorder::new(config.record);
 		let token = Mutex::new(config.token.clone());

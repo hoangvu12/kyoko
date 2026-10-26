@@ -1,4 +1,5 @@
 mod actions;
+mod apps;
 mod cloner;
 mod composer;
 mod connection;
