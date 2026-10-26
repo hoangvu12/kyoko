@@ -49,6 +49,7 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("gif-picker-results", "gif-picker-results"),
 	("emoji-picker-search", "emoji-picker-search"),
 	("emoji-picker-no-nitro", "emoji-picker-no-nitro"),
+	("emoji-autocomplete", "emoji-autocomplete"),
 	("threads-list", "threads-list"),
 	("thread-panel", "threads-split-view"),
 	("thread-create", "threads-create"),

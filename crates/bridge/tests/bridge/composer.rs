@@ -1,6 +1,8 @@
-use bridge::{ChannelKind, Composer, FileEdit, Mark, Notice, Visual, text_marks, too_big};
+use bridge::{
+	ChannelKind, Composer, EmojiPicker, FileEdit, Mark, NITRO_LOCK, Notice, Visual, text_marks, too_big,
+};
 use chrono::Utc;
-use mockcord::Reply as MockReply;
+use mockcord::{MockConfig, Reply as MockReply};
 use std::time::Duration;
 
 use protocol::{ChannelType, CommandOptionType, Snowflake};
@@ -15,7 +17,11 @@ const ECHO_ID: Snowflake = Snowflake(9_100_000_000_000_000_102);
 const ROLL_ID: Snowflake = Snowflake(9_100_000_000_000_000_103);
 
 async fn opened(name: &str) -> (Running, Composer, Snowflake) {
-	let mut running = Running::start(name).await;
+	opened_with(name, MockConfig::default()).await
+}
+
+async fn opened_with(name: &str, config: MockConfig) -> (Running, Composer, Snowflake) {
+	let mut running = Running::start_with(name, config).await;
 	let guild_id = running.view.sidebar.selected();
 	let channel_id = running
 		.view
@@ -127,6 +133,77 @@ async fn mentions_channels_and_emoji_complete_from_state() {
 	typed(&mut composer, &running, "nice :s");
 	assert!(composer.suggestions().is_empty());
 	assert!(composer.dismiss() || composer.suggestions().is_empty());
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn locked_emoji_are_listed_last_and_never_inserted() {
+	let config = MockConfig {
+		nitro: false,
+		autocomplete_emoji: true,
+		..MockConfig::default()
+	};
+	let (mut running, mut composer, _) = opened_with("composer-locked-emoji", config).await;
+	running
+		.until_state("the user without Nitro", |state| {
+			state.current_user().is_some() && !state.has_nitro()
+		})
+		.await;
+	let text = "wow :sm";
+	typed(&mut composer, &running, text);
+	assert_eq!(composer.heading(), Some(("Emoji matching", ":sm".to_owned())));
+	let suggestions = composer.suggestions().to_vec();
+	let locked = suggestions
+		.iter()
+		.position(|suggestion| suggestion.lock == Some(NITRO_LOCK))
+		.expect("an emoji from another server is listed, locked");
+	let usable = suggestions
+		.iter()
+		.position(|suggestion| matches!(suggestion.visual, Visual::Emoji { .. }) && suggestion.lock.is_none())
+		.expect("an emoji of this server is listed, usable");
+	assert!(
+		suggestions[locked..]
+			.iter()
+			.all(|suggestion| suggestion.lock.is_some()),
+		"locked rows come last: {suggestions:?}"
+	);
+	let name = suggestions[locked].label.trim_matches(':').to_owned();
+	let picker = EmojiPicker::of(&running.session().state().read(), composer.guild());
+	let cell = picker
+		.search(&name, 0)
+		.into_iter()
+		.find(|cell| cell.label == suggestions[locked].label)
+		.expect("the picker finds it too");
+	assert_eq!(
+		cell.lock, suggestions[locked].lock,
+		"picker and autocomplete agree"
+	);
+
+	assert_eq!(
+		composer.choose(text, Some(locked)),
+		None,
+		"a click on a locked row does nothing"
+	);
+	assert_eq!(composer.suggestions(), suggestions.as_slice());
+	composer.move_selection(locked as i32);
+	assert_eq!(composer.selected(), locked);
+	assert_eq!(
+		composer.choose(text, None),
+		None,
+		"Enter or Tab on a locked row does nothing"
+	);
+	assert_eq!(composer.suggestions(), suggestions.as_slice());
+
+	let (completed, _) = composer
+		.choose(text, Some(usable))
+		.expect("a usable emoji completes");
+	assert_eq!(completed, format!("wow {}", suggestions[usable].insert));
+	assert_eq!(composer.heading(), None);
+
+	typed(&mut composer, &running, "hi @a");
+	assert_eq!(composer.heading(), Some(("Members matching", "@a".to_owned())));
+	typed(&mut composer, &running, "see #");
+	assert_eq!(composer.heading(), Some(("Channels matching", "#".to_owned())));
 	running.stop().await;
 }
 

@@ -5,7 +5,11 @@ use protocol::expressions::unicode::search_unicode;
 use protocol::{ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, ChannelType, Snowflake};
 use state::{EmojiCandidate, MemberListRow, State};
 
+use crate::emoji_picker::emoji_lock;
+
 const MAX_SUGGESTIONS: usize = 8;
+const MAX_EMOJI_SUGGESTIONS: usize = 9;
+const LOCKED_ROWS: usize = 2;
 const MIN_EMOJI_QUERY: usize = 2;
 const RECENT_AUTHORS: usize = 200;
 const RANK_CANDIDATES: usize = 100;
@@ -52,6 +56,7 @@ pub struct Suggestion {
 	pub detail: Option<String>,
 	pub insert: String,
 	pub visual: Visual,
+	pub lock: Option<&'static str>,
 }
 
 pub fn query_at(text: &str, caret: usize) -> Option<Query> {
@@ -156,6 +161,7 @@ fn mentions(
 					detail: username,
 					insert: format!("<@{id}> "),
 					visual: Visual::Avatar(id),
+					lock: None,
 				},
 			));
 		}
@@ -173,6 +179,7 @@ fn mentions(
 						detail: None,
 						insert: format!("<@&{}> ", role.id),
 						visual: Visual::Icon("at_sign"),
+						lock: None,
 					},
 				));
 			}
@@ -189,6 +196,7 @@ fn mentions(
 					detail: None,
 					insert: format!("@{everyone} "),
 					visual: Visual::Icon("at_sign"),
+					lock: None,
 				},
 			));
 		}
@@ -212,6 +220,7 @@ fn channels(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<(u8,
 						detail: category.clone(),
 						insert: format!("<#{}> ", channel.id),
 						visual: Visual::Icon(channel_icon(channel.kind)),
+						lock: None,
 					},
 				));
 			}
@@ -226,9 +235,10 @@ struct EmojiMatch {
 }
 
 fn emoji_matches(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec<EmojiMatch> {
+	let nitro = state.has_nitro();
 	let mut found = Vec::new();
 	for section in state.emoji_catalog(guild_id).guilds {
-		for emoji in section.emojis.iter().filter(|emoji| emoji.usable) {
+		for emoji in &section.emojis {
 			if let Some(hit) = rank(&emoji.name, query) {
 				let prefix = if emoji.animated { "a" } else { "" };
 				found.push((
@@ -242,6 +252,7 @@ fn emoji_matches(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec
 								id: emoji.id,
 								animated: emoji.animated,
 							},
+							lock: emoji_lock(emoji, nitro),
 						},
 						candidate: EmojiCandidate {
 							key: emoji.id.to_string(),
@@ -265,6 +276,7 @@ fn emoji_matches(state: &State, guild_id: Option<Snowflake>, query: &str) -> Vec
 					detail: None,
 					insert: format!("{} ", emoji.emoji),
 					visual: Visual::Glyph(emoji.emoji.to_owned()),
+					lock: None,
 				},
 				candidate: EmojiCandidate {
 					key: emoji.shortcode.to_owned(),
@@ -297,11 +309,29 @@ fn ranked(matches: Vec<EmojiMatch>, order: Option<&[String]>) -> Vec<Suggestion>
 	let mut ranked: Vec<Suggestion> = first
 		.into_iter()
 		.filter_map(|index| slots[index].take())
-		.take(MAX_SUGGESTIONS)
 		.collect();
 	ranked.extend(slots.into_iter().flatten());
-	ranked.truncate(MAX_SUGGESTIONS);
-	ranked
+	with_locked_last(ranked)
+}
+
+fn with_locked_last(ranked: Vec<Suggestion>) -> Vec<Suggestion> {
+	let (mut shown, locked): (Vec<Suggestion>, Vec<Suggestion>) = ranked
+		.into_iter()
+		.partition(|suggestion| suggestion.lock.is_none());
+	shown.truncate(MAX_EMOJI_SUGGESTIONS - locked.len().min(LOCKED_ROWS));
+	let room = MAX_EMOJI_SUGGESTIONS - shown.len();
+	shown.extend(locked.into_iter().take(room));
+	shown
+}
+
+pub fn suggestion_heading(query: &Query) -> (&'static str, String) {
+	let (title, sign) = match query.trigger {
+		Trigger::Emoji => ("Emoji matching", ':'),
+		Trigger::Mention => ("Members matching", '@'),
+		Trigger::Channel => ("Channels matching", '#'),
+		Trigger::Command => ("Commands matching", '/'),
+	};
+	(title, format!("{sign}{}", query.text))
 }
 
 pub fn emoji_candidates(state: &State, guild_id: Option<Snowflake>, query: &Query) -> Vec<EmojiCandidate> {
@@ -310,6 +340,7 @@ pub fn emoji_candidates(state: &State, guild_id: Option<Snowflake>, query: &Quer
 	}
 	emoji_matches(state, guild_id, &query.text)
 		.into_iter()
+		.filter(|found| found.suggestion.lock.is_none())
 		.enumerate()
 		.filter(|(index, found)| {
 			*index < RANK_CANDIDATES
@@ -353,6 +384,7 @@ fn commands(index: Option<&ApplicationCommandIndex>, query: &str) -> Vec<(u8, Su
 					detail: (!detail.is_empty()).then_some(detail),
 					insert: format!("/{} ", command.name),
 					visual: Visual::Icon("plugins"),
+					lock: None,
 				},
 			))
 		})

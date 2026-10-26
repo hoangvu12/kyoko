@@ -86,6 +86,9 @@ impl Fixtures {
 		if let Some(read_state) = add_showcase(&mut builder, &mut guilds) {
 			read_states.push(read_state);
 		}
+		if config.autocomplete_emoji {
+			guilds::add_autocomplete_emojis(&mut builder, &mut guilds);
+		}
 		let user_guild_settings = build_user_guild_settings(&guilds);
 		let mut users: BTreeMap<u64, User> = builder
 			.people

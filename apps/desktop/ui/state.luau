@@ -142,7 +142,8 @@ export type FriendAdd = { phase: string, text: string }
 export type ComposerReplace = { serial: number, text: string, caret: number }
 export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
 export type ComposerFile = { id: string, name: string, size: string, image: string, kind: string, spoiler: boolean }
-export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string, svg: string? }
+export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string, svg: string?, lock: string? }
+export type SuggestionHeading = { title: string, query: string }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
 export type MemberWindow = {
 	first: number,
@@ -398,6 +399,7 @@ M.composer = {
 	editing = ui.shared("composer.editing", false),
 	files = ui.shared("composer.files", {} :: { ComposerFile }),
 	suggestions = ui.shared("composer.suggestions", {} :: { ComposerSuggestion }),
+	heading = ui.shared("composer.heading", { title = "", query = "" } :: SuggestionHeading),
 	selected = ui.shared("composer.selected", 1),
 	typing = ui.shared("composer.typing", ""),
 	notice = ui.shared("composer.notice", { kind = "" } :: ComposerNotice),
@@ -479,6 +481,7 @@ M.thread_composer = {
 	editing = ui.shared("thread_composer.editing", false),
 	files = ui.shared("thread_composer.files", {} :: { ComposerFile }),
 	suggestions = ui.shared("thread_composer.suggestions", {} :: { ComposerSuggestion }),
+	heading = ui.shared("thread_composer.heading", { title = "", query = "" } :: SuggestionHeading),
 	selected = ui.shared("thread_composer.selected", 1),
 	typing = ui.shared("thread_composer.typing", ""),
 	notice = ui.shared("thread_composer.notice", { kind = "" } :: ComposerNotice),

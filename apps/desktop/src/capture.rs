@@ -138,6 +138,7 @@ pub enum ComposerShot {
 	Drop,
 	UploadFailed,
 	PlusMenu,
+	EmojiAutocomplete,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +227,7 @@ impl Screen {
 			"composer-drop" => Some(Screen::ComposerShot(ComposerShot::Drop)),
 			"composer-upload-failed" => Some(Screen::ComposerShot(ComposerShot::UploadFailed)),
 			"composer-plus-menu" => Some(Screen::ComposerShot(ComposerShot::PlusMenu)),
+			"emoji-autocomplete" => Some(Screen::ComposerShot(ComposerShot::EmojiAutocomplete)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),

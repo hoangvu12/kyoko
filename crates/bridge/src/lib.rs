@@ -60,7 +60,7 @@ pub use community::{
 pub use composer::{
 	Attachment, Composer, FileEdit, LineState, Mark, Marked, Notice, Outcome, Query, Reply, Slash,
 	Suggestion, Trigger, Visual, apply_suggestion, failure_text, line_marks, parse_slash, placeholder,
-	query_at, suggestions, text_marks, too_big, typing_line,
+	query_at, suggestion_heading, suggestions, text_marks, too_big, typing_line,
 };
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
@@ -70,7 +70,7 @@ pub use dm_panel::{DmPanel, DmProfile, GroupMember, since_label};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, EmojiSection, FAVORITES_SECTION, NITRO_LOCK, PERMISSION_LOCK,
 	PickerSection, RECENT_SECTION, RailEntry, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE, TONES,
-	UNAVAILABLE_LOCK, category_title, custom_markup, toned,
+	UNAVAILABLE_LOCK, category_title, custom_markup, emoji_lock, toned,
 };
 pub use expression_popout::{
 	Area, DEFAULT_EMOJI_NOTE, ExpressionDetails, PopoutServer, PopoutSubject, expression_details,

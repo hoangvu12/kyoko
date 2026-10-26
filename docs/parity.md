@@ -122,6 +122,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `gif-picker-results` | `gif-picker-results.html` |
 | `emoji-picker-search` | `emoji-picker-search.html` |
 | `emoji-picker-no-nitro` | `emoji-picker-no-nitro.html` |
+| `emoji-autocomplete` | `emoji-autocomplete.html` |
 | `threads-list` | `threads-list.html` |
 | `thread-panel` | `threads-split-view.html` |
 | `thread-create` | `threads-create.html` |
@@ -166,7 +167,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `emoji-autocomplete`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -441,6 +442,14 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). Files are handed to the main co
 | `composer-drop` | 16 | Default selection, then files hovering the window (`Link::files_hovering`): the dashed "Upload to #channel" card. | yes |
 | `composer-upload-failed` | 16 | Default selection, then send "here it is" with `stalled-upload.mp4` (mockcord never answers its upload) and "and the other angle" with `broken-upload.mp4` (mockcord answers its upload with a 500), and refuse a `cat.mov` twice the upload limit: an upload in progress, "Upload failed" with Retry and Remove, and the too-big notice above the composer. | yes |
 | `composer-plus-menu` | 16 | Default selection, then the `+` menu opened above the composer as its button does (`Link::composer_plus`). | yes |
+
+### Midnight 09 Emoji autocomplete
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The parity tool starts mockcord with `--no-nitro --autocomplete-emoji`: the first guild gets `:smug:` and `:smol_wave:`, the second `:smolcat:` and an animated `:smash:`, so the second guild's pair is locked.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `emoji-autocomplete` | 09 | Default selection, then the draft `wow :sm` with the caret at its end: the suggestion container with the default emoji, the server's two custom emoji and the two locked ones last, the first row selected. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

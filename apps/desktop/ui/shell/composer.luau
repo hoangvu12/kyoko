@@ -9,7 +9,8 @@ local LEADING = 56
 local LINE = 22
 local TEXT_SIZE = 16
 local MAX_LINES = 10
-local ROW = 36
+local EMOJI = 20
+local HINT = "↑↓ to navigate, ↵/tab to select, esc to dismiss"
 local COUNTER_FROM = 200
 local DOT = 6
 local DOT_DIM = 0.4
@@ -38,20 +39,26 @@ local function length(text: string): number
 	return utf8.len(text) or #text
 end
 
+local function is_locked(item: state.ComposerSuggestion): boolean
+	return item.lock ~= nil and item.lock ~= ""
+end
+
 local function suggestion_visual(item: state.ComposerSuggestion)
 	if item.kind == "glyph" and item.svg and item.svg ~= "" then
-		return ui.row {
-			w = 24,
-			h = 24,
-			shrink = 0,
-			items = "center",
-			justify = "center",
-			ui.svg { code = item.svg, w = 20, h = 20, shrink = 0 },
-		}
+		return ui.svg { code = item.svg, w = EMOJI, h = EMOJI, shrink = 0 }
 	elseif item.kind == "glyph" then
-		return ui.text { item.glyph, literal = true, text_size = 20, w = 24, align = "center", shrink = 0 }
+		return ui.text { item.glyph, literal = true, text_size = EMOJI, w = EMOJI, align = "center", shrink = 0 }
+	elseif item.kind == "emoji" then
+		return ui.row {
+			w = EMOJI,
+			h = EMOJI,
+			shrink = 0,
+			saturate = if is_locked(item) then 0 else 1,
+			opacity = if is_locked(item) then theme.number(theme.size.locked_opacity)() else 1,
+			ui.show(item.image ~= "", ui.image { src = item.image, w = EMOJI, h = EMOJI, fit = "contain" }),
+		}
 	elseif item.kind == "icon" then
-		return icon { name = item.icon, size = 20, color = theme.color.text_muted }
+		return icon { name = item.icon, size = EMOJI, color = theme.color.text_4 }
 	elseif item.kind == "avatar" then
 		return ui.row {
 			w = 24,
@@ -72,17 +79,23 @@ local function suggestion_visual(item: state.ComposerSuggestion)
 end
 
 local function suggestion_row(item: state.ComposerSuggestion, index: number, text: any, shared: any, area: string)
+	local locked = is_locked(item)
+	local function selected(): boolean
+		return shared.selected:get() == index
+	end
 	return ui.row {
-		h = ROW,
+		id = area .. "_suggestion_" .. index,
+		w_full = true,
+		h = theme.size.autocomplete_row_height,
 		px = theme.size.space_8,
 		gap = theme.size.space_8,
 		items = "center",
 		rounded = theme.size.radius_sm,
-		cursor = "pointer",
+		cursor = if locked then "default" else "pointer",
 		bg = function()
-			return if shared.selected:get() == index then theme.color.modifier_selected else "#00000000"
+			return if selected() then theme.color.hover else "#00000000"
 		end,
-		hover = { bg = theme.color.modifier_hover },
+		hover = { bg = theme.color.hover },
 		on_click = function()
 			actions.composer_choose(index, text:peek(), area)
 		end,
@@ -93,36 +106,98 @@ local function suggestion_row(item: state.ComposerSuggestion, index: number, tex
 			min_w = 0,
 			shrink = 0,
 			truncate = true,
-			text_size = theme.size.font_md,
+			text_size = theme.size.font_size_md,
+			line_height = theme.size.line_height_label,
 			weight = theme.weight.medium,
-			color = theme.color.text_normal,
+			color = function()
+				return if selected() then theme.color.text_2 else theme.color.text_3
+			end,
 		},
+		ui.show(
+			locked,
+			ui.row {
+				shrink = 0,
+				tooltip = item.lock,
+				icon { name = "lock", size = theme.size.icon_size_xs :: any, color = theme.color.text_4 },
+			}
+		),
 		ui.show(item.detail ~= "", ui.text {
 			item.detail,
 			literal = true,
+			grow = 1,
 			min_w = 0,
+			align = "right",
 			truncate = true,
-			text_size = theme.size.font_sm,
-			color = theme.color.text_muted,
+			text_size = theme.size.font_size_xs,
+			line_height = theme.size.line_height_xs,
+			color = theme.color.text_5,
 		}),
 	}
 end
 
-local function popup(text: any, shared: any, area: string)
-	return ui.show(function()
-		return #shared.suggestions:get() > 0
-	end, ui.column {
+local function popup_line(content: { any }, justify: string)
+	local props: { [any]: any } = {
+		w_full = true,
+		h = theme.size.space_24,
+		shrink = 0,
+		px = theme.size.space_8,
+		items = "center",
+		justify = justify,
+		text_size = theme.size.font_size_xs,
+		line_height = theme.size.line_height_xs,
+	}
+	for _, child in content do
+		table.insert(props, child)
+	end
+	return ui.row(props)
+end
+
+local function popup(text: any, shared: any, area: string, suggesting: () -> boolean)
+	return ui.show(suggesting, ui.column {
+		id = area .. "_suggestions",
 		mx = theme.size.space_8,
-		mb = theme.size.space_8,
 		p = theme.size.space_8,
-		rounded = theme.size.radius_md,
+		gap = theme.size.space_2,
+		shrink = 0,
+		rounded_tl = theme.number(theme.size.radius_md),
+		rounded_tr = theme.number(theme.size.radius_md),
 		border = 1,
+		border_sides = { 1, 1, 0, 1 },
 		border_color = theme.color.border,
 		bg = theme.color.bg_3,
 		color = theme.color.text_3,
+		popup_line({
+			ui.text {
+				function()
+					return string.upper(shared.heading:get().title or "")
+				end,
+				literal = true,
+				shrink = 0,
+				weight = theme.weight.semibold,
+				color = theme.color.text_4,
+			},
+			ui.text {
+				function()
+					return shared.heading:get().query or ""
+				end,
+				literal = true,
+				ml = theme.size.space_4,
+				min_w = 0,
+				truncate = true,
+				weight = theme.weight.semibold,
+				color = theme.color.text_2,
+			},
+		}, "start"),
 		ui.each(shared.suggestions, function(item: state.ComposerSuggestion, index: number)
 			return suggestion_row(item, index, text, shared, area)
-		end, { key = by_key, w_full = true }),
+		end, { key = by_key, w_full = true, gap = theme.size.space_2 }),
+		popup_line({
+			ui.text {
+				HINT,
+				literal = true,
+				color = theme.color.text_5,
+			},
+		}, "end"),
 	})
 end
 
@@ -365,6 +440,7 @@ return function(scope: any?)
 	local picking = false
 	local field_box: any = nil
 	local chatbar = theme.number(theme.size.chatbar_height)
+	local radius = theme.number(theme.size.radius_md)
 
 	local function notice_kind(): string
 		return shared.notice:get().kind
@@ -384,6 +460,10 @@ return function(scope: any?)
 
 	local function joined(): boolean
 		return notice_kind() ~= "" or has_reply() or has_edit() or has_files()
+	end
+
+	local function suggesting(): boolean
+		return #shared.suggestions:get() > 0
 	end
 
 	local function bar(content: { any }, background: any?)
@@ -538,8 +618,12 @@ return function(scope: any?)
 			mx = theme.size.space_8,
 			shrink = 0,
 			overflow = "hidden",
-			rounded_tl = theme.number(theme.size.radius_md),
-			rounded_tr = theme.number(theme.size.radius_md),
+			rounded_tl = function()
+				return if suggesting() then 0 else radius()
+			end,
+			rounded_tr = function()
+				return if suggesting() then 0 else radius()
+			end,
 			bg = theme.color.bg_3,
 			border = 1,
 			border_sides = { 1, 1, 0, 1 },
@@ -756,7 +840,9 @@ return function(scope: any?)
 	end
 
 	local function typing_line()
-		return ui.row {
+		return ui.show(function()
+			return not suggesting()
+		end, ui.row {
 			w_full = true,
 			h = theme.size.typing_height,
 			shrink = 0,
@@ -778,10 +864,8 @@ return function(scope: any?)
 				line_height = theme.size.line_height_sm,
 				color = theme.color.text_3,
 			},
-		}
+		})
 	end
-
-	local radius = theme.number(theme.size.radius_md)
 	local text = ui.state(current.text_key, "")
 	local box = ui.ref()
 	local function plus()
@@ -794,7 +878,7 @@ return function(scope: any?)
 		relative = true,
 		w_full = true,
 		shrink = 0,
-		popup(text, shared, area),
+		popup(text, shared, area, suggesting),
 		typing_line(),
 		joined_bars(),
 		ui.row {
@@ -816,10 +900,10 @@ return function(scope: any?)
 			rounded_bl = radius,
 			rounded_br = radius,
 			rounded_tl = function()
-				return if joined() then 0 else radius()
+				return if joined() or suggesting() then 0 else radius()
 			end,
 			rounded_tr = function()
-				return if joined() then 0 else radius()
+				return if joined() or suggesting() then 0 else radius()
 			end,
 			ui.row {
 				w = LEADING,

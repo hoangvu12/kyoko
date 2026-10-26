@@ -946,6 +946,103 @@ fn the_typing_dots_animate_only_while_the_setting_allows() {
 	);
 }
 
+fn suggestion(key: &str, label: &str, detail: &str, kind: &str, lock: &str) -> serde_json::Value {
+	json!({
+		"key": key,
+		"label": label,
+		"detail": detail,
+		"kind": kind,
+		"image": "",
+		"glyph": if kind == "glyph" { "😄" } else { "" },
+		"svg": "",
+		"icon": if kind == "icon" { "hash" } else { "" },
+		"lock": lock,
+	})
+}
+
+#[test]
+fn emoji_members_and_channels_share_the_suggestion_container() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let main = [
+		("login.screen", json!("main")),
+		("rail.items", rail_items()),
+		("sidebar.guild_id", json!("10")),
+		("sidebar.guild_name", json!("Kyoko")),
+		("sidebar.rows", sidebar_rows()),
+		("timeline.channel_id", json!("20")),
+		("timeline.channel_name", json!("general")),
+		("composer.open", json!(true)),
+	];
+	let mut emoji = main.to_vec();
+	emoji.extend([
+		(
+			"composer.heading",
+			json!({ "title": "Emoji matching", "query": ":sm" }),
+		),
+		(
+			"composer.suggestions",
+			json!([
+				suggestion("1", ":smile:", "", "glyph", ""),
+				suggestion("2", ":smug:", "Kyoko", "emoji", ""),
+				suggestion(
+					"3",
+					":smolcat:",
+					"Elsewhere",
+					"emoji",
+					"You need Nitro to use this emoji here"
+				),
+			]),
+		),
+	]);
+	shows(&mut app, "the emoji suggestions", "EMOJI MATCHING", &emoji);
+	assert!(app.texts().iter().any(|text| text == ":smolcat:"));
+	assert!(
+		app.texts()
+			.iter()
+			.any(|text| text == "↑↓ to navigate, ↵/tab to select, esc to dismiss")
+	);
+	shows(
+		&mut app,
+		"the member suggestions",
+		"MEMBERS MATCHING",
+		&[
+			(
+				"composer.heading",
+				json!({ "title": "Members matching", "query": "@ad" }),
+			),
+			(
+				"composer.suggestions",
+				json!([suggestion("1", "ada", "ada.lovelace", "avatar", "")]),
+			),
+		],
+	);
+	shows(
+		&mut app,
+		"the channel suggestions",
+		"CHANNELS MATCHING",
+		&[
+			(
+				"composer.heading",
+				json!({ "title": "Channels matching", "query": "#ge" }),
+			),
+			(
+				"composer.suggestions",
+				json!([suggestion("1", "general", "Text", "icon", "")]),
+			),
+		],
+	);
+	assert!(app.texts().iter().any(|text| text == "#ge"));
+}
+
 fn watch_dots(app: &mut TestApp, span: Duration) -> Vec<[f32; 3]> {
 	let deadline = Instant::now() + span;
 	let mut seen = Vec::new();

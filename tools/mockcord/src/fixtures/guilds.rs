@@ -525,9 +525,30 @@ fn build_members(builder: &mut Builder, index: usize, guild_id: u64, roles: &Rol
 	members
 }
 
+const GUILD_EMOJIS: [(&str, bool); 3] = [("pepe_ok", false), ("blob_wave", false), ("party_parrot", true)];
+const AUTOCOMPLETE_EMOJIS: [&[(&str, bool)]; 2] = [
+	&[("smug", false), ("smol_wave", false)],
+	&[("smolcat", false), ("smash", true)],
+];
+
 fn build_emojis(builder: &mut Builder, owner: &User) -> Vec<Emoji> {
-	[("pepe_ok", false), ("blob_wave", false), ("party_parrot", true)]
-		.into_iter()
+	named_emojis(builder, owner, &GUILD_EMOJIS)
+}
+
+pub(super) fn add_autocomplete_emojis(builder: &mut Builder, guilds: &mut [GuildFixture]) {
+	for (guild, names) in guilds.iter_mut().zip(AUTOCOMPLETE_EMOJIS) {
+		let Some(owner) = guild.emojis.first().and_then(|emoji| emoji.user.clone()) else {
+			continue;
+		};
+		let added = named_emojis(builder, &owner, names);
+		guild.emojis.extend(added);
+	}
+}
+
+fn named_emojis(builder: &mut Builder, owner: &User, names: &[(&str, bool)]) -> Vec<Emoji> {
+	names
+		.iter()
+		.copied()
 		.map(|(name, animated)| Emoji {
 			id: Some(Snowflake(builder.ids.next())),
 			name: Some(name.to_owned()),

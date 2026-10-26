@@ -17,7 +17,7 @@ pub use marks::{LineState, Mark, Marked, line_marks, text_marks};
 pub use slash::{Slash, parse_slash};
 pub use suggest::{
 	Query, Suggestion, Trigger, Visual, apply_suggestion, emoji_candidates, placeholder, query_at,
-	suggestions, typing_line,
+	suggestion_heading, suggestions, typing_line,
 };
 
 const MIB: f64 = 1024.0 * 1024.0;
@@ -159,6 +159,13 @@ impl Composer {
 		self.selected
 	}
 
+	pub fn heading(&self) -> Option<(&'static str, String)> {
+		self.query
+			.as_ref()
+			.filter(|_| !self.suggestions.is_empty())
+			.map(suggestion_heading)
+	}
+
 	pub fn is_dirty(&self) -> bool {
 		self.dirty
 	}
@@ -289,8 +296,12 @@ impl Composer {
 	}
 
 	pub fn choose(&mut self, text: &str, index: Option<usize>) -> Option<(String, usize)> {
+		let suggestion = self
+			.suggestions
+			.get(index.unwrap_or(self.selected))
+			.filter(|suggestion| suggestion.lock.is_none())?
+			.clone();
 		let query = self.query.take()?;
-		let suggestion = self.suggestions.get(index.unwrap_or(self.selected))?.clone();
 		self.suggestions.clear();
 		self.selected = 0;
 		Some(apply_suggestion(text, &query, &suggestion))

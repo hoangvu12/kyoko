@@ -161,6 +161,18 @@ pub fn toned(glyph: &str, tone: usize) -> String {
 	out
 }
 
+pub fn emoji_lock(emoji: &CatalogEmoji, nitro: bool) -> Option<&'static str> {
+	if emoji.usable {
+		None
+	} else if !emoji.available {
+		Some(UNAVAILABLE_LOCK)
+	} else if !nitro {
+		Some(NITRO_LOCK)
+	} else {
+		Some(PERMISSION_LOCK)
+	}
+}
+
 pub fn custom_markup(name: &str, id: Snowflake, animated: bool) -> String {
 	let prefix = if animated { "a" } else { "" };
 	format!("<{prefix}:{name}:{id}>")
@@ -213,15 +225,7 @@ impl EmojiPicker {
 	}
 
 	fn lock_of(&self, emoji: &CatalogEmoji) -> Option<&'static str> {
-		if emoji.usable {
-			None
-		} else if !emoji.available {
-			Some(UNAVAILABLE_LOCK)
-		} else if !self.nitro {
-			Some(NITRO_LOCK)
-		} else {
-			Some(PERMISSION_LOCK)
-		}
+		emoji_lock(emoji, self.nitro)
 	}
 
 	fn favorite_of(&self, entry: String) -> (String, bool) {

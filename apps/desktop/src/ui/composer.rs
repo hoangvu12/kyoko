@@ -26,6 +26,7 @@ const WAITING: &str = "Waiting for connection...";
 type Handler = fn(&Link, Pane);
 
 const CAPTURE_DRAFT: &str = "Checking how the composer looks with a draft in it";
+const CAPTURE_EMOJI_QUERY: &str = "wow :sm";
 
 pub(super) use crate::composer_layer::Pane;
 
@@ -89,6 +90,7 @@ pub(super) struct Names {
 	editing: &'static str,
 	files: &'static str,
 	suggestions: &'static str,
+	heading: &'static str,
 	selected: &'static str,
 	typing: &'static str,
 	notice: &'static str,
@@ -124,6 +126,7 @@ pub(super) const MAIN: Names = Names {
 	editing: "composer.editing",
 	files: "composer.files",
 	suggestions: "composer.suggestions",
+	heading: "composer.heading",
 	selected: "composer.selected",
 	typing: "composer.typing",
 	notice: "composer.notice",
@@ -159,6 +162,7 @@ pub(super) const THREAD: Names = Names {
 	editing: "thread_composer.editing",
 	files: "thread_composer.files",
 	suggestions: "thread_composer.suggestions",
+	heading: "thread_composer.heading",
 	selected: "thread_composer.selected",
 	typing: "thread_composer.typing",
 	notice: "thread_composer.notice",
@@ -219,6 +223,7 @@ pub(super) struct ComposerView {
 	editing: Shared,
 	files: Shared,
 	suggestions: Shared,
+	heading: Shared,
 	selected: Shared,
 	typing: Shared,
 	notice: Shared,
@@ -410,6 +415,10 @@ impl ComposerView {
 			editing: host.shared(names.editing, false),
 			files: host.shared(names.files, Value::List(Rc::new([]))),
 			suggestions: host.shared(names.suggestions, Value::List(Rc::new([]))),
+			heading: host.shared(
+				names.heading,
+				record([("title", "".into()), ("query", "".into())]),
+			),
 			selected: host.shared(names.selected, 1.0),
 			typing: host.shared(names.typing, ""),
 			notice: host.shared(names.notice, record([("kind", "".into())])),
@@ -890,6 +899,7 @@ impl Link {
 		};
 		let view = self.pane_composer(pane);
 		let echoed = view.replaced.borrow().as_deref() == Some(typed.as_str());
+		let caret = if echoed { view.caret.get() } else { caret };
 		*view.text.borrow_mut() = typed.clone();
 		view.caret.set(caret.min(typed.len()));
 		let commands = {
@@ -1252,11 +1262,17 @@ impl Link {
 					("glyph", glyph.into()),
 					("svg", crate::emoji::luau_code(glyph).as_str().into()),
 					("icon", icon.into()),
+					("lock", suggestion.lock.unwrap_or_default().into()),
 				])
 			})
 			.collect();
 		let selected = composer.selected() + 1;
+		let (title, query) = composer.heading().unwrap_or_default();
 		drop(composer);
+		view.heading.set(record([
+			("title", title.into()),
+			("query", query.as_str().into()),
+		]));
 		view.suggestions.set(Value::List(items.into()));
 		view.selected.set((selected as f64).into());
 		let changed = *view.images.borrow() != images;
@@ -1355,6 +1371,22 @@ impl Link {
 					self.composer_plus(Pane::Main, (slot.x, slot.y));
 				}
 				self.until_capture(|link| link.composer_layer.menu_shown()).await;
+			}
+			capture::ComposerShot::EmojiAutocomplete => {
+				self.replace_text(
+					Pane::Main,
+					Some((CAPTURE_EMOJI_QUERY.to_owned(), CAPTURE_EMOJI_QUERY.len())),
+				);
+				self.request_focus(Pane::Main);
+				self.until_capture(|link| {
+					let composer = link.composer.composer.borrow();
+					let suggestions = composer.suggestions();
+					suggestions.iter().any(|suggestion| suggestion.lock.is_some())
+						&& suggestions.iter().any(|suggestion| {
+							matches!(suggestion.visual, Visual::Emoji { .. }) && suggestion.lock.is_none()
+						})
+				})
+				.await;
 			}
 		}
 	}
