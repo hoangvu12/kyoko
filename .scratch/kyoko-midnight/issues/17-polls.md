@@ -4,7 +4,7 @@
 
 **Blocked by:** 16; v1 26
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/poll-create.html`, `docs/design/mockups/poll-in-messages.html`, `docs/design/mockups/poll-in-messages-ended.html`
 
