@@ -4,7 +4,7 @@
 
 **Blocked by:** Midnight 21
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A test reproduces the panic deterministically (collapse the slot, or remove rows, between layout and the inline placement pass) and passes after the fix
 - [ ] 20 consecutive Home/friends captures show no zgx error banner
