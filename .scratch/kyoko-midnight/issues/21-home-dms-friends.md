@@ -4,7 +4,7 @@
 
 **Blocked by:** 03; v1 24, 34
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/home-friends.html`, `docs/design/mockups/friends-all.html`, `docs/design/mockups/friends-pending.html`, `docs/design/mockups/friends-blocked.html`, `docs/design/mockups/friends-add-friend.html`, `docs/design/mockups/dm.html`, `docs/design/mockups/group-dm.html`
 
