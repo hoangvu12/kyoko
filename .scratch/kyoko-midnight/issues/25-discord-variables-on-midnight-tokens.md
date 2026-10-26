@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 03; v1 57
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Spec:** `docs/design/midnight.md` (intro: kyoko reads a theme's variable block), `docs/themes.md`
 
