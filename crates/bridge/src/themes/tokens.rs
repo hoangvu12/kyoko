@@ -440,6 +440,14 @@ pub const SIZES: &[(&str, f32)] = &[
 	("space_lg", 24.),
 	("channel_item_pitch", 38.),
 	("member_row_pitch", 44.),
+	("guild_pill_hover_height", 20.),
+	("guild_pill_inset", 4.),
+	("user_panel_box_height", 56.),
+	("sidebar_header_height", 49.),
+	("window_control_hit", 28.),
+	("window_controls_width", 106.),
+	("window_controls_top", 21.),
+	("window_controls_right", 13.),
 	("disabled_opacity", 0.3),
 	("offline_opacity", 0.3),
 	("locked_opacity", 0.5),
@@ -694,6 +702,55 @@ pub const DERIVED_SIZES: &[(&str, SizeTerms, f32)] = &[
 	(
 		"settings_dialog_inset",
 		&[("space_40", 1.), ("top_strip_height", 1.)],
+		0.,
+	),
+	(
+		"channel_item_pitch",
+		&[("channel_item_height", 1.), ("space_1", 2.)],
+		0.,
+	),
+	(
+		"member_row_pitch",
+		&[("member_row_height", 1.), ("space_1", 2.)],
+		0.,
+	),
+	(
+		"guild_pill_inset",
+		&[("guild_list_padding", 0.5), ("guild_pill_width", -0.5)],
+		0.,
+	),
+	(
+		"user_panel_box_height",
+		&[("chatbar_height", 1.), ("space_xs", 1.), ("border_thickness", 1.)],
+		0.,
+	),
+	(
+		"sidebar_header_height",
+		&[("channel_header_height", 1.), ("border_thickness", -1.)],
+		0.,
+	),
+	("window_control_hit", &[("window_control_size", 2.)], 0.),
+	(
+		"window_controls_width",
+		&[
+			("window_control_hit", 3.),
+			("window_controls_padding", 1.),
+			("space_xs", 2.),
+		],
+		0.,
+	),
+	(
+		"window_controls_top",
+		&[
+			("top_strip_height", 1.),
+			("space_xs", 1.),
+			("border_thickness", 1.),
+		],
+		0.,
+	),
+	(
+		"window_controls_right",
+		&[("gap", 1.), ("border_thickness", 1.)],
 		0.,
 	),
 ];

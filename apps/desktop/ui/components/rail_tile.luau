@@ -1,11 +1,12 @@
 local theme = require("../theme")
-local motion = require("./motion")
 local unread_pill = require("./unread_pill")
 local mention_badge = require("./mention_badge")
 
 export type Style = {
 	rest_bg: string,
 	rest_fg: string,
+	hover_bg: string?,
+	hover_fg: string?,
 	active_bg: string,
 	active_fg: string,
 }
@@ -13,21 +14,21 @@ export type Style = {
 export type Drop = { drop: string, target: string, accepts: (payload: any) -> boolean }
 
 export type Props = {
-	face: (foreground: () -> string) -> any,
+	face: (foreground: () -> string, hovered: any) -> any,
 	style: Style,
 	tooltip: string,
 	on_click: any,
+	id: string?,
+	size: string?,
+	radius: string?,
 	selected: (() -> boolean)?,
 	unread: (() -> boolean)?,
 	mentions: (() -> number)?,
-	pill_inset: number?,
 	drag: (() -> any)?,
 	preview: ((payload: any) -> any)?,
 	onto: Drop?,
 	on_drop: ((payload: any, drop: string, target: string) -> ())?,
 }
-
-local SIZE = 48
 
 local function never(): boolean
 	return false
@@ -37,36 +38,46 @@ local function none(): number
 	return 0
 end
 
+local selected_pill = theme.number(theme.size.guild_pill_selected_height)
+local hover_pill = theme.number(theme.size.guild_pill_hover_height)
+local unread_pill_height = theme.number(theme.size.guild_pill_unread_height)
+
 return ui.component(function(props: Props)
 	local hovered = ui.use_state(false)
 	local over = ui.use_state(false)
 	local selected = props.selected or never
 	local unread = props.unread or never
 	local mentions = props.mentions or none
+	local size = props.size or theme.size.guildbar_avatar_size
+	local radius = props.radius or theme.size.radius_md
 	local pill = ui.computed(function()
 		if selected() then
-			return 40
+			return selected_pill()
 		elseif hovered:get() then
-			return 20
+			return hover_pill()
 		elseif unread() then
-			return 8
+			return unread_pill_height()
 		end
 		return 0
 	end)
-	local round = ui.computed(function()
-		return selected() or hovered:get()
-	end)
-	local function active(): boolean
-		return round:get()
-	end
 	local function foreground(): string
-		return if active() then props.style.active_fg else props.style.rest_fg
+		if selected() then
+			return props.style.active_fg
+		end
+		return if hovered:get() then props.style.hover_fg or props.style.active_fg else props.style.rest_fg
+	end
+	local function background(): string
+		if selected() then
+			return props.style.active_bg
+		end
+		return if hovered:get() then props.style.hover_bg or props.style.active_bg else props.style.rest_bg
 	end
 	local onto = props.onto
 	return ui.button {
+		id = props.id,
 		relative = true,
 		w_full = true,
-		h = SIZE,
+		h = size,
 		shrink = 0,
 		p = 0,
 		border = 0,
@@ -100,23 +111,21 @@ return ui.component(function(props: Props)
 				end
 			end
 			else nil,
-		unread_pill { height = pill, inset = props.pill_inset },
+		unread_pill { height = pill },
 		ui.div {
 			relative = true,
-			w = SIZE,
-			h = SIZE,
+			w = size,
+			h = size,
 			shrink = 0,
 			ui.row {
-				w = SIZE,
-				h = SIZE,
+				w = size,
+				h = size,
 				justify = "center",
 				items = "center",
 				overflow = "hidden",
-				rounded = ui.tween(round, { from = 24, to = 16, duration = motion.duration(140), ease = "outQuint" }),
-				bg = function()
-					return if active() then props.style.active_bg else props.style.rest_bg
-				end,
-				props.face(foreground),
+				rounded = radius,
+				bg = background,
+				props.face(foreground, hovered),
 			},
 			ui.show(
 				over,
@@ -124,11 +133,11 @@ return ui.component(function(props: Props)
 					absolute = true,
 					top = 0,
 					left = 0,
-					w = SIZE,
-					h = SIZE,
-					rounded = theme.size.radius_lg,
+					w = size,
+					h = size,
+					rounded = radius,
 					border = 2,
-					border_color = theme.color.brand,
+					border_color = theme.color.accent_2,
 				}
 			),
 			ui.show(function()
@@ -137,7 +146,7 @@ return ui.component(function(props: Props)
 				absolute = true,
 				right = -6,
 				bottom = -6,
-				mention_badge { count = mentions, ring = theme.color.background_tertiary },
+				mention_badge { count = mentions, ring = theme.color.bg_4 },
 			}),
 		},
 	}

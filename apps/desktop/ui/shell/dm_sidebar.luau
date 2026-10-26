@@ -1,24 +1,21 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
+local motion = require("@components/motion")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local mention_badge = require("@components/mention_badge")
 local avatar = require("@components/avatar")
 
-local SEARCH_HEIGHT = 28
-local SEARCH_SIDES = 10
-local NAV_ICON = 24
-local AVATAR = 32
-local GROUP_ICON = 18
-local HEADER_HEIGHT = 24
 local HEADER_PLUS = 16
 local HEADER_PLUS_HIT = 18
 local CLOSE_ICON = 16
 local CLOSE_HIT = 20
 local CONFIRM_WIDTH = 224
-local NAME_LINE = 20
-local SUBTITLE_LINE = 14
+
+local icon_sm = theme.number(theme.size.icon_size_sm)
+local icon_lg = theme.number(theme.size.icon_size_lg)
+local avatar_sm = theme.number(theme.size.avatar_size_sm)
 
 local function by_key(item: { key: string })
 	return item.key
@@ -31,20 +28,19 @@ end
 local function open_dm(id: string): boolean
 	return state.home.page:get() == "" and state.timeline.channel_id:get() == id
 end
-
 local function search()
 	return ui.row {
 		w_full = true,
-		h = theme.size.top_bar_height,
+		h = theme.size.sidebar_header_height,
 		shrink = 0,
-		px = SEARCH_SIDES,
+		px = theme.size.space_10,
 		items = "center",
 		border_sides = { 0, 0, 1, 0 },
-		border_color = theme.color.background_tertiary,
+		border_color = theme.color.border,
 		ui.button {
 			grow = 1,
 			min_w = 0,
-			h = SEARCH_HEIGHT,
+			h = theme.size.button_height_sm,
 			px = theme.size.space_8,
 			border = 0,
 			focus = { border = 0 },
@@ -52,14 +48,16 @@ local function search()
 			justify = "start",
 			items = "center",
 			cursor = "pointer",
-			bg = theme.color.background_tertiary,
+			bg = theme.color.bg_3,
 			on_click = actions.dm_action("search"),
 			ui.text {
 				"Find or start a conversation",
 				min_w = 0,
 				truncate = true,
-				text_size = theme.size.font_sm,
-				color = theme.color.text_muted,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				weight = theme.weight.medium,
+				color = theme.color.text_4,
 			},
 		},
 	}
@@ -70,41 +68,36 @@ local nav_row = ui.component(function(props: { page: string, icon: string, label
 	local function selected(): boolean
 		return state.home.page:get() == props.page
 	end
-	local function rest(): string
-		return if selected() then theme.color.interactive_active else theme.color.text_muted
+	local function tone(): string
+		if selected() then
+			return theme.color.text_2
+		end
+		return if hovered:get() then theme.color.text_3 else theme.color.text_4
 	end
 	return ui.row {
-		h = theme.size.member_row_height,
-		mx = theme.size.space_8,
+		h = theme.size.dm_row_height,
+		ml = motion.slide(hovered, theme.size.space_8, theme.size.list_item_hover_shift),
+		mr = theme.size.space_8,
 		px = theme.size.space_8,
 		gap = theme.size.space_12,
 		rounded = theme.size.radius_sm,
 		items = "center",
 		cursor = "pointer",
-		text_size = theme.size.font_md,
+		text_size = theme.size.font_size_md,
 		weight = theme.weight.medium,
-		color = rest,
+		color = tone,
 		bg = function()
 			if selected() then
-				return theme.color.modifier_selected
+				return theme.color.active
 			end
-			return if hovered:get() then theme.color.modifier_hover else nil
+			return if hovered:get() then theme.color.hover else nil
 		end,
 		on_hover = function(inside: boolean)
 			hovered:set(inside)
 		end,
 		on_click = actions.show_home_page(props.page),
-		icon {
-			name = props.icon,
-			size = NAV_ICON,
-			color = function()
-				if selected() then
-					return theme.color.interactive_active
-				end
-				return if hovered:get() then theme.color.interactive_hover else theme.color.text_muted
-			end,
-		},
-		ui.text { props.label, grow = 1, min_w = 0, truncate = true, color = rest },
+		icon { name = props.icon, size = icon_lg(), color = tone },
+		ui.text { props.label, grow = 1, min_w = 0, truncate = true, line_height = theme.size.line_height_label, color = tone },
 		if props.count
 			then ui.show(function()
 				return (props.count :: () -> number)() > 0
@@ -116,53 +109,50 @@ end)
 local section_header = ui.component(function()
 	local hovered = ui.use_state(false)
 	local function tone(): string
-		return if hovered:get() then theme.color.interactive_hover else theme.color.header_secondary
+		return if hovered:get() then theme.color.text_3 else theme.color.text_4
 	end
-	return ui.div {
-		w_full = true,
-		pt = theme.size.space_16,
-		ui.row {
-			w_full = true,
-			h = HEADER_HEIGHT,
-			px = theme.size.space_8,
-			gap = theme.size.space_2,
-			items = "center",
-			on_hover = function(inside: boolean)
-				hovered:set(inside)
-			end,
-			ui.text {
-				"DIRECT MESSAGES",
-				grow = 1,
-				min_w = 0,
-				truncate = true,
-				text_size = theme.size.font_tiny,
-				weight = theme.weight.semibold,
-				color = tone,
-			},
-			icon_button {
-				name = "plus",
-				icon_size = HEADER_PLUS,
-				hit_size = HEADER_PLUS_HIT,
-				tooltip = "Create DM",
-				on_click = actions.dm_action("create_group"),
-			},
+	return ui.row {
+		mt = theme.size.space_16,
+		mr = theme.size.space_8,
+		mb = theme.size.space_4,
+		ml = theme.size.space_16,
+		pr = theme.size.space_8,
+		items = "center",
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		ui.text {
+			"Direct Messages",
+			grow = 1,
+			min_w = 0,
+			truncate = true,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			weight = theme.weight.medium,
+			color = tone,
+		},
+		icon_button {
+			name = "plus",
+			icon_size = HEADER_PLUS,
+			hit_size = HEADER_PLUS_HIT,
+			tooltip = "Create DM",
+			on_click = actions.dm_action("create_group"),
 		},
 	}
 end)
 
 local function group_face()
 	return ui.row {
-		w = AVATAR,
-		h = AVATAR,
+		w = theme.size.avatar_size_sm,
+		h = theme.size.avatar_size_sm,
 		shrink = 0,
-		rounded = AVATAR,
+		rounded = theme.size.avatar_size_sm,
 		justify = "center",
 		items = "center",
-		bg = theme.color.brand,
-		icon { name = "group", size = GROUP_ICON, color = theme.color.text_on_brand },
+		bg = theme.color.accent_2,
+		icon { name = "group", size = icon_sm(), color = theme.color.text_0 },
 	}
 end
-
 local function close_confirm(row: state.DmRow, open: any)
 	local title = if row.group then "Leave Group" else "Close Conversation"
 	local body = if row.group
@@ -222,20 +212,18 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 		return open_dm(row.id)
 	end
 	local function name_color(): string
-		if selected() then
-			return theme.color.interactive_active
+		if selected() or row.unread then
+			return theme.color.text_2
 		end
-		return if row.unread then theme.color.header_primary else theme.color.text_muted
+		return if hovered:get() then theme.color.text_3 else theme.color.text_4
 	end
 	local face = if row.group
 		then group_face()
 		else avatar {
 			src = row.avatar,
-			size = AVATAR,
+			size = avatar_sm(),
 			status = row.status,
-			cutout = function()
-				return if selected() then theme.color.modifier_selected else theme.color.background_secondary
-			end,
+			cutout = theme.color.bg_4,
 		}
 	local lines = {
 		ui.text {
@@ -244,10 +232,10 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 			w_full = true,
 			min_w = 0,
 			truncate = true,
-			text_size = theme.size.font_md,
-			line_height = NAME_LINE,
+			text_size = theme.size.font_size_md,
+			line_height = theme.size.line_height_label,
 			weight = function()
-				return if row.unread or selected() then theme.weight.semibold else theme.weight.medium
+				return if row.unread then theme.weight.semibold else theme.weight.medium
 			end,
 			color = name_color,
 		},
@@ -260,15 +248,16 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 				w_full = true,
 				min_w = 0,
 				truncate = true,
-				text_size = theme.size.font_tiny,
-				line_height = SUBTITLE_LINE,
-				color = theme.color.text_muted,
+				text_size = theme.size.font_size_xs,
+				line_height = theme.size.line_height_xs,
+				color = theme.color.text_4,
 			}
 		)
 	end
 	return ui.column { w_full = true, ui.row {
-		h = theme.size.member_row_height,
-		mx = theme.size.space_8,
+		h = theme.size.dm_row_height,
+		ml = motion.slide(hovered, theme.size.space_8, theme.size.member_hover_shift),
+		mr = theme.size.space_8,
 		px = theme.size.space_8,
 		gap = theme.size.space_12,
 		rounded = theme.size.radius_sm,
@@ -276,9 +265,9 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 		cursor = "pointer",
 		bg = function()
 			if selected() then
-				return theme.color.modifier_selected
+				return theme.color.active
 			end
-			return if hovered:get() then theme.color.modifier_hover else nil
+			return if hovered:get() then theme.color.hover else nil
 		end,
 		on_hover = function(inside: boolean)
 			hovered:set(inside)
@@ -333,7 +322,6 @@ return function()
 		w_full = true,
 		grow = 1,
 		min_h = 0,
-		bg = theme.color.background_secondary,
 		search(),
 		ui.scroll {
 			grow = 1,
@@ -342,6 +330,7 @@ return function()
 				w_full = true,
 				pt = theme.size.space_8,
 				pb = theme.size.space_16,
+				gap = theme.size.space_2,
 				nav_row { page = "friends", icon = "friends", label = "Friends" },
 				nav_row { page = "nitro", icon = "nitro", label = "Nitro" },
 				nav_row { page = "shop", icon = "shop", label = "Shop" },
@@ -359,6 +348,7 @@ return function()
 				end, {
 					key = by_key,
 					w_full = true,
+					gap = theme.number(theme.size.space_2),
 				}),
 			},
 		},

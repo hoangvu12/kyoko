@@ -51,7 +51,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(
 		&mut app,
 		"the direct messages",
-		"DIRECT MESSAGES",
+		"Direct Messages",
 		&[
 			("login.screen", json!("main")),
 			("rail.items", rail_items()),
@@ -70,7 +70,7 @@ fn the_interface_loads_and_builds_every_screen() {
 			("timeline.channel_id", json!("20")),
 			("timeline.channel_name", json!("general")),
 			("composer.open", json!(true)),
-			("members.heights", json!([44, 42, 42])),
+			("members.heights", json!([40, 44, 44])),
 			("members.window", member_window()),
 		],
 	);
@@ -889,6 +889,77 @@ fn watch_dots(app: &mut TestApp, span: Duration) -> Vec<[f32; 3]> {
 	}
 	seen.dedup();
 	seen
+}
+
+#[test]
+fn hover_slides_and_the_home_spin_stay_still_under_reduced_motion() {
+	for reduced in [false, true] {
+		let mut app = TestApp::new(|runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "midnight");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			host
+		});
+		app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+		let mut settings = store::Settings::default();
+		settings.accessibility.reduced_motion = reduced;
+		shows(
+			&mut app,
+			"a server with its channels",
+			"general",
+			&[
+				("login.screen", json!("main")),
+				("rail.items", rail_items()),
+				("sidebar.guild_id", json!("10")),
+				("sidebar.guild_name", json!("Kyoko")),
+				("sidebar.rows", sidebar_rows()),
+				("settings.values", values_of(&settings)),
+			],
+		);
+		let rest = app.bounds("channel_20");
+		let home = app.bounds("rail_home");
+		let still = format!("{:?}", transform_of(&mut app, "rail_home_mark"));
+		hover(&mut app, rest.x + rest.width / 2., rest.y + rest.height / 2.);
+		let slid = app.bounds("channel_20").x - rest.x;
+		hover(&mut app, home.x + home.width / 2., home.y + home.height / 2.);
+		let spun = format!("{:?}", transform_of(&mut app, "rail_home_mark")) != still;
+		if reduced {
+			assert!(
+				slid.abs() < 0.5,
+				"under reduced motion the row stays put, moved {slid}"
+			);
+			assert!(!spun, "under reduced motion the home mark stays still");
+		} else {
+			assert!(
+				(slid - 10.).abs() < 0.5,
+				"a hovered row slides 10 points, moved {slid}"
+			);
+			assert!(spun, "a hovered home mark spins");
+		}
+	}
+}
+
+fn hover(app: &mut TestApp, x: f32, y: f32) {
+	app.ui.dispatch(zgx::input::InputEvent::PointerMove { x, y });
+	app.settle();
+	app.frames(30);
+}
+
+fn transform_of(app: &mut TestApp, id: &str) -> zgx::scene::LocalTransform {
+	let node = app.find(id).unwrap_or_else(|| panic!("no node `{id}`"));
+	app.ui.scene.borrow().local_transform(node)
+}
+
+fn values_of(settings: &store::Settings) -> serde_json::Value {
+	serde_json::Value::Object(
+		bridge::setting_values(settings)
+			.into_iter()
+			.map(|(key, value)| (key.to_owned(), value))
+			.collect(),
+	)
 }
 
 fn setting_values(typing_animation: bool) -> serde_json::Value {

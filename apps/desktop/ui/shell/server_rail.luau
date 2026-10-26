@@ -1,29 +1,51 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
+local motion = require("@components/motion")
 local icon = require("@components/icon")
 local rail_tile = require("@components/rail_tile")
 local rail_gap = require("@components/rail_gap")
 local plugin_slot = require("@components/plugin_slot")
 
-local SIZE = 48
-local RAIL = 72
-local EDGE = (RAIL - SIZE) / 2
-local NESTED_PILL = (SIZE - RAIL) / 2
 local FOLDER_CELLS = 4
+local HOME_SPIN = 400
+local HOME_TURN = -360
+local HOME_SHRINK = 0.8
 
-local brand_style = {
-	rest_bg = theme.color.background_primary,
-	rest_fg = theme.color.text_normal,
-	active_bg = theme.color.brand,
-	active_fg = theme.color.text_on_brand,
+local avatar_size = theme.number(theme.size.guildbar_avatar_size)
+local folder_size = theme.number(theme.size.folder_size)
+local cell_size = theme.number(theme.size.icon_size_sm)
+local mark_size = theme.number(theme.size.icon_size_lg)
+local glyph_size = theme.number(theme.size.icon_size_md)
+
+local guild_style = {
+	rest_bg = theme.color.hover,
+	rest_fg = theme.color.text_3,
+	active_bg = theme.color.accent_2,
+	active_fg = theme.color.text_0,
+}
+
+local home_style = {
+	rest_bg = theme.color.hover,
+	rest_fg = theme.color.text_4,
+	hover_bg = theme.color.active,
+	hover_fg = theme.color.text_1,
+	active_bg = theme.color.accent_2,
+	active_fg = theme.color.text_0,
 }
 
 local action_style = {
-	rest_bg = theme.color.background_primary,
-	rest_fg = theme.color.status_online,
-	active_bg = theme.color.status_online,
-	active_fg = theme.color.text_on_brand,
+	rest_bg = theme.color.hover,
+	rest_fg = theme.color.text_3,
+	active_bg = theme.color.accent_2,
+	active_fg = theme.color.bg_4,
+}
+
+local folder_style = {
+	rest_bg = theme.color.hover,
+	rest_fg = theme.color.text_3,
+	active_bg = theme.color.active,
+	active_fg = theme.color.text_3,
 }
 
 local function by_key(item: state.RailItem)
@@ -44,29 +66,36 @@ local function accepts_guild(payload: any): boolean
 	return type(payload) == "table" and payload.guild ~= nil
 end
 
-local function icon_face(name: string, color: string?)
+local function glyph_face(name: string, size: () -> number)
 	return function(foreground: () -> string)
-		return icon { name = name, size = 26, color = color or foreground }
+		return icon { name = name, size = size(), color = foreground }
 	end
+end
+
+local function home_face(foreground: () -> string, hovered: any)
+	local spinning = motion.moving(hovered)
+	return ui.div {
+		id = "rail_home_mark",
+		rotate = ui.tween(spinning, { from = 0, to = HOME_TURN, duration = HOME_SPIN, ease = "inOutSine" }),
+		scale = ui.tween(spinning, { from = 1, to = HOME_SHRINK, duration = HOME_SPIN, ease = "inOutSine" }),
+		icon { name = "kyoko", size = mark_size(), color = foreground },
+	}
 end
 
 local function acronym_size(acronym: string): any
 	local count = utf8.len(acronym) or #acronym
 	if count <= 2 then
-		local large = theme.number(theme.size.font_lg)
-		return function()
-			return large() * 0.9
-		end
+		return theme.size.font_size_md
 	elseif count == 3 then
-		return theme.size.font_md
+		return theme.size.font_size_sm
 	end
-	return theme.size.font_sm
+	return theme.size.font_size_xs
 end
 
 local function guild_face(guild: state.RailGuild)
 	return function(foreground: () -> string)
 		if guild.icon ~= "" then
-			return ui.image { src = guild.icon, w = SIZE, h = SIZE, fit = "cover" }
+			return ui.image { src = guild.icon, w = avatar_size(), h = avatar_size(), fit = "cover" }
 		end
 		return ui.text {
 			guild.acronym,
@@ -81,21 +110,21 @@ end
 local function guild_preview(guild: state.RailGuild)
 	return function()
 		local face = if guild.icon ~= ""
-			then ui.image { src = guild.icon, w = SIZE, h = SIZE, fit = "cover" }
+			then ui.image { src = guild.icon, w = avatar_size(), h = avatar_size(), fit = "cover" }
 			else ui.text {
 				guild.acronym,
 				literal = true,
-				text_size = theme.size.font_md,
+				text_size = theme.size.font_size_md,
 				weight = theme.weight.semibold,
-				color = theme.color.text_on_brand,
+				color = theme.color.text_0,
 			}
 		return ui.row {
-			w = SIZE,
-			h = SIZE,
-			rounded = theme.size.radius_lg,
+			w = theme.size.guildbar_avatar_size,
+			h = theme.size.guildbar_avatar_size,
+			rounded = theme.size.radius_md,
 			overflow = "hidden",
 			opacity = 0.85,
-			bg = theme.color.brand,
+			bg = theme.color.accent_2,
 			justify = "center",
 			items = "center",
 			face,
@@ -103,20 +132,20 @@ local function guild_preview(guild: state.RailGuild)
 	end
 end
 
-local function slot(tile: any, before: string, target: string, inset: number)
+local function slot(tile: any, before: string, target: string)
 	return ui.div {
 		relative = true,
 		w_full = true,
 		shrink = 0,
 		tile,
-		rail_gap { drop = before, target = target, inset = inset, on_drop = drop },
+		rail_gap { drop = before, target = target, on_drop = drop },
 	}
 end
 
-local function guild_tile(guild: state.RailGuild, nested: boolean)
+local function guild_tile(guild: state.RailGuild)
 	local tile = rail_tile {
 		face = guild_face(guild),
-		style = brand_style,
+		style = guild_style,
 		tooltip = guild.name,
 		on_click = actions.select_guild(guild.id),
 		selected = function()
@@ -128,7 +157,6 @@ local function guild_tile(guild: state.RailGuild, nested: boolean)
 		mentions = function()
 			return guild.mentions
 		end,
-		pill_inset = if nested then NESTED_PILL else 0,
 		drag = function()
 			return { guild = guild.id }
 		end,
@@ -136,24 +164,24 @@ local function guild_tile(guild: state.RailGuild, nested: boolean)
 		onto = { drop = "onto_guild", target = guild.id, accepts = accepts_guild_except(guild.id) },
 		on_drop = drop,
 	}
-	return slot(tile, "before_guild", guild.id, if nested then 0 else EDGE)
+	return slot(tile, "before_guild", guild.id)
 end
 
 local function mini(guild: state.RailGuild)
 	local face = if guild.icon ~= ""
-		then ui.image { src = guild.icon, w = theme.size.space_16, h = theme.size.space_16, fit = "cover" }
+		then ui.image { src = guild.icon, w = cell_size(), h = cell_size(), fit = "cover" }
 		else ui.text { guild.letter, literal = true }
 	return ui.row {
-		w = theme.size.space_16,
-		h = theme.size.space_16,
+		w = theme.size.icon_size_sm,
+		h = theme.size.icon_size_sm,
 		shrink = 0,
-		rounded = 8,
+		rounded = theme.size.radius_xs,
 		overflow = "hidden",
 		justify = "center",
 		items = "center",
-		bg = theme.color.background_primary,
-		color = theme.color.text_normal,
-		text_size = 9,
+		bg = theme.color.bg_2,
+		color = theme.color.text_3,
+		text_size = theme.size.font_size_tag,
 		face,
 	}
 end
@@ -167,13 +195,10 @@ local function folder_grid(folder: state.RailFolder)
 			end
 			table.insert(cells, mini(guild))
 		end
-		return ui.row {
-			w_full = true,
-			h_full = true,
-			flex_wrap = true,
-			p = 6,
+		return ui.div {
+			grid = true,
+			cols = 2,
 			gap = theme.number(theme.size.space_4),
-			content = "start",
 			cells,
 		}
 	end
@@ -182,27 +207,31 @@ end
 local function folder_preview(folder: state.RailFolder)
 	return function()
 		return ui.row {
-			w = SIZE,
-			h = SIZE,
+			w = theme.size.folder_size,
+			h = theme.size.folder_size,
 			rounded = theme.size.radius_lg,
 			opacity = 0.85,
-			bg = folder.tint,
+			bg = theme.color.hover,
 			justify = "center",
 			items = "center",
-			icon { name = "folder", size = 26, color = folder.color },
+			icon { name = "folder", size = mark_size(), color = folder.color },
 		}
 	end
 end
 
 local function folder_tile(folder: state.RailFolder, open: boolean)
 	return rail_tile {
-		face = if open then icon_face("folder", folder.color) else folder_grid(folder),
-		style = {
-			rest_bg = folder.tint,
-			rest_fg = theme.color.text_normal,
-			active_bg = folder.tint,
-			active_fg = theme.color.text_normal,
-		},
+		face = if open then glyph_face("folder", mark_size) else folder_grid(folder),
+		style = if open
+			then {
+				rest_bg = "#00000000",
+				rest_fg = folder.color,
+				active_bg = "#00000000",
+				active_fg = folder.color,
+			}
+			else folder_style,
+		size = if open then theme.size.guildbar_avatar_size else theme.size.folder_size,
+		radius = theme.size.radius_lg,
 		tooltip = folder.name,
 		on_click = actions.toggle_folder(folder.id),
 		unread = if open
@@ -225,21 +254,32 @@ local function folder_tile(folder: state.RailFolder, open: boolean)
 end
 
 local function open_folder(folder: state.RailFolder)
-	local rows = { slot(folder_tile(folder, true), "before_folder", folder.id, 0) }
+	local rows = { slot(folder_tile(folder, true), "before_folder", folder.id) }
 	for _, guild in folder.guilds do
-		table.insert(rows, guild_tile(guild, true))
+		table.insert(rows, guild_tile(guild))
 	end
-	return ui.row {
+	return ui.column {
+		relative = true,
 		w_full = true,
 		shrink = 0,
-		justify = "center",
-		ui.column {
-			w = SIZE,
-			gap = theme.number(theme.size.space_8),
-			rounded = theme.size.radius_lg,
-			bg = folder.tint,
-			rows,
+		py = theme.size.space_4,
+		gap = theme.number(theme.size.space_8),
+		ui.row {
+			absolute = true,
+			top = 0,
+			left = 0,
+			right = 0,
+			bottom = 0,
+			justify = "center",
+			pointer_events = "none",
+			ui.div {
+				w = theme.size.folder_size,
+				h_full = true,
+				rounded = theme.size.radius_lg,
+				bg = theme.color.hover,
+			},
 		},
+		table.unpack(rows),
 	}
 end
 
@@ -247,29 +287,30 @@ local function folder(item: state.RailFolder)
 	local function is_open(): boolean
 		return table.find(state.rail.open_folders:get(), item.id) ~= nil
 	end
-	return ui.show(is_open, open_folder(item), slot(folder_tile(item, false), "before_folder", item.id, EDGE))
+	return ui.show(is_open, open_folder(item), slot(folder_tile(item, false), "before_folder", item.id))
 end
 
 local function entry(item: state.RailItem)
 	if item.kind == "folder" then
 		return folder(item :: any)
 	end
-	return guild_tile(item :: any, false)
+	return guild_tile(item :: any)
 end
 
-local function divider()
+local function separator()
 	return ui.div {
-		w = theme.size.space_32,
-		h = 2,
+		w = theme.size.guild_separator_width,
+		h = theme.size.border_thickness,
 		shrink = 0,
-		bg = theme.color.background_primary,
+		bg = theme.color.border,
 	}
 end
 
 return function()
 	local home = rail_tile {
-		face = icon_face("home"),
-		style = brand_style,
+		id = "rail_home",
+		face = home_face,
+		style = home_style,
 		tooltip = "Direct Messages",
 		on_click = actions.select_home(),
 		selected = function()
@@ -280,27 +321,25 @@ return function()
 		end,
 	}
 	local add = rail_tile {
-		face = icon_face("plus"),
+		face = glyph_face("plus", glyph_size),
 		style = action_style,
 		tooltip = "Add a Server",
 		on_click = actions.add_server(),
 	}
 	local explore = rail_tile {
-		face = icon_face("compass"),
+		face = glyph_face("compass", glyph_size),
 		style = action_style,
 		tooltip = "Discover",
 		on_click = actions.discover(),
 	}
 	return ui.scroll {
-		w = theme.size.server_rail_width,
+		w_full = true,
 		h_full = true,
-		shrink = 0,
-		bg = theme.color.background_tertiary,
 		ui.column {
 			w_full = true,
 			items = "center",
 			gap = theme.number(theme.size.space_8),
-			py = theme.size.space_12,
+			py = theme.size.guild_list_padding,
 			home,
 			plugin_slot {
 				name = "rail.buttons",
@@ -308,13 +347,13 @@ return function()
 				direction = "column",
 				gap = theme.number(theme.size.space_8),
 			},
-			divider(),
+			separator(),
 			ui.each(state.rail.items, entry, {
 				key = by_key,
 				w_full = true,
 				gap = theme.number(theme.size.space_8),
 			}),
-			slot(add, "end", "", EDGE),
+			slot(add, "end", ""),
 			explore,
 		},
 	}

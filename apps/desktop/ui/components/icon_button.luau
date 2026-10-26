@@ -31,7 +31,7 @@ return ui.component(function(props: Props)
 		bg = "#00000000",
 		border = 0,
 		focus = { border = 0 },
-		hover = if props.filled_hover then { bg = theme.color.modifier_hover } else nil,
+		hover = if props.filled_hover then { bg = theme.color.hover } else nil,
 		rounded = theme.size.radius_sm,
 		justify = "center",
 		items = "center",
@@ -47,11 +47,11 @@ return ui.component(function(props: Props)
 			size = props.icon_size or 20,
 			color = function()
 				if active() then
-					return theme.color.interactive_active
+					return theme.color.text_1
 				elseif danger() then
-					return theme.color.danger
+					return theme.color.red_3
 				end
-				return if hovered:get() then theme.color.interactive_hover else theme.color.interactive_normal
+				return if hovered:get() then theme.color.text_3 else theme.color.text_4
 			end,
 		},
 	}

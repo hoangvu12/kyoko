@@ -1,22 +1,19 @@
 local theme = require("../theme")
-local motion = require("@components/motion")
 local state = require("../state")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local status_dot = require("@components/status_dot")
 local actions = require("../actions")
 
-local SEARCH_WIDTH = 144
-local SEARCH_FOCUSED_WIDTH = 240
-local SEARCH_SLIDE = 180
-local SEARCH_HEIGHT = 24
-local TITLE_ICON = 24
-local SEARCH_ICON = 16
-local STATUS_DOT = 10
 local STATUSES = { "online", "idle", "dnd", "offline" }
 
 local query = ui.state("query", "")
-local searching = ui.state("top_bar.search_focused", false)
+
+local icon_lg = theme.number(theme.size.icon_size_lg)
+local icon_md = theme.number(theme.size.icon_size_md)
+local icon_sm = theme.number(theme.size.icon_size_sm)
+local button = theme.number(theme.size.button_size)
+local status_size = theme.number(theme.size.status_size)
 
 local function topic()
 	return ui.show(function()
@@ -25,8 +22,14 @@ local function topic()
 		grow = 1,
 		min_w = 0,
 		items = "center",
-		gap = theme.size.space_8,
-		ui.div { w = 1, h = 24, shrink = 0, bg = theme.color.divider },
+		ui.div {
+			w = theme.size.space_4,
+			h = theme.size.space_4,
+			shrink = 0,
+			mx = theme.size.space_8,
+			rounded = theme.size.space_4,
+			bg = theme.color.text_5,
+		},
 		ui.text {
 			function()
 				return state.timeline.channel_topic:get()
@@ -35,10 +38,17 @@ local function topic()
 			grow = 1,
 			min_w = 0,
 			truncate = true,
-			text_size = theme.size.font_sm,
-			color = theme.color.text_muted,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			color = theme.color.text_5,
 		},
 	})
+end
+
+local function tool(props: { [string]: any })
+	props.hit_size = button()
+	props.icon_size = icon_md()
+	return icon_button(props)
 end
 
 local function direct(): boolean
@@ -69,41 +79,38 @@ local function status()
 			dots,
 			ui.show(function()
 				return direct_status() == name
-			end, status_dot { status = name, size = STATUS_DOT, cutout = theme.color.background_primary })
+			end, status_dot { status = name, size = status_size(), cutout = theme.color.bg_4 })
 		)
 	end
-	return ui.row { shrink = 0, items = "center", table.unpack(dots) }
+	return ui.row { shrink = 0, items = "center", pl = theme.size.space_8, table.unpack(dots) }
 end
 
 local function search()
 	return ui.row {
-		w = ui.tween(searching, { from = SEARCH_WIDTH, to = SEARCH_FOCUSED_WIDTH, duration = motion.duration(SEARCH_SLIDE), ease = "outQuint" }),
-		h = SEARCH_HEIGHT,
+		w = theme.size.search_width,
+		h = theme.size.button_size,
 		shrink = 0,
+		ml = theme.size.space_4,
+		px = theme.size.space_8,
+		gap = theme.size.space_8,
 		items = "center",
-		pl = theme.size.space_4,
-		pr = theme.size.space_8,
 		rounded = theme.size.radius_sm,
-		bg = theme.color.background_tertiary,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_light,
 		ui.input {
 			grow = 1,
 			min_w = 0,
-			h = SEARCH_HEIGHT,
-			px = 8,
+			h_full = true,
+			p = 0,
 			bg = "#00000000",
 			border = 0,
 			focus = { border = 0 },
-			text_size = theme.size.font_sm,
-			color = theme.color.text_normal,
+			text_size = theme.size.font_size_sm,
+			color = theme.color.text_3,
 			placeholder = "Search",
-			placeholder_color = theme.color.text_muted,
+			placeholder_color = theme.color.text_5,
 			value = query,
-			on_focus = function()
-				searching:set(true)
-			end,
-			on_blur = function()
-				searching:set(false)
-			end,
 			on_key = function(event: any): boolean?
 				if event.key == "Enter" then
 					local text = query:get()
@@ -115,80 +122,96 @@ local function search()
 				return nil
 			end,
 		},
-		icon { name = "search", size = SEARCH_ICON, color = theme.color.text_muted },
+		icon { name = "search", size = icon_sm(), color = theme.color.text_4 },
+	}
+end
+
+local function title()
+	return ui.row {
+		grow = 1,
+		min_w = 0,
+		items = "center",
+		icon {
+			name = function()
+				return state.timeline.channel_icon:get()
+			end,
+			size = icon_lg(),
+			color = theme.color.text_4,
+		},
+		ui.text {
+			function()
+				return state.timeline.channel_name:get()
+			end,
+			literal = true,
+			shrink = 0,
+			ml = theme.size.space_8,
+			text_size = theme.size.font_size_md,
+			line_height = theme.size.line_height_md,
+			weight = theme.weight.semibold,
+			color = theme.color.text_2,
+		},
+		status(),
+		topic(),
+	}
+end
+
+local function toolbar()
+	return ui.row {
+		shrink = 0,
+		items = "center",
+		gap = theme.size.space_8,
+		pr = theme.size.space_12,
+		ui.show(guild, tool {
+			name = "thread",
+			id = "top_bar_threads",
+			tooltip = "Threads",
+			on_press = function(point: any)
+				actions.open_threads(point.x, point.y)
+			end,
+		}),
+		ui.show(direct, tool { name = "phone", tooltip = "Start Voice Call" }),
+		ui.show(direct, tool { name = "video", tooltip = "Start Video Call" }),
+		ui.show(guild, tool { name = "bell", tooltip = "Notification Settings" }),
+		tool {
+			name = "pin",
+			id = "top_bar_pins",
+			tooltip = "Pinned Messages",
+			on_press = function(point: any)
+				actions.open_pins(point.x, point.y)
+			end,
+		},
+		ui.show(guild, tool {
+			name = "members",
+			tooltip = "Member List",
+			active = function()
+				return state.shell.members_visible:get()
+			end,
+			on_click = ui.toggle(state.shell.members_visible),
+		}),
+		search(),
 	}
 end
 
 return function()
 	return ui.row {
 		w_full = true,
-		h = theme.size.top_bar_height,
-		shrink = 0,
+		h_full = true,
 		items = "center",
-		gap = theme.size.space_8,
-		px = theme.size.space_16,
-		bg = theme.color.background_primary,
-		border_sides = { 0, 0, 1, 0 },
-		border_color = theme.color.background_tertiary,
+		pl = theme.size.space_8,
 		ui.row {
 			grow = 1,
 			min_w = 0,
 			items = "center",
-			gap = theme.size.space_8,
-			icon {
-				name = function()
-					return state.timeline.channel_icon:get()
-				end,
-				size = TITLE_ICON,
-				color = theme.color.text_muted,
-			},
-			ui.text {
-				function()
-					return state.timeline.channel_name:get()
-				end,
-				literal = true,
-				shrink = 0,
-				text_size = theme.size.font_md,
-				weight = theme.weight.semibold,
-				color = theme.color.header_primary,
-			},
-			status(),
-			topic(),
+			pl = theme.size.space_6,
+			title(),
 		},
+		toolbar(),
 		ui.row {
 			shrink = 0,
 			items = "center",
-			gap = theme.size.space_16,
-			ui.show(guild, icon_button {
-				name = "thread",
-				id = "top_bar_threads",
-				tooltip = "Threads",
-				on_press = function(point: any)
-					actions.open_threads(point.x, point.y)
-				end,
-			}),
-			ui.show(direct, icon_button { name = "phone", tooltip = "Start Voice Call" }),
-			ui.show(direct, icon_button { name = "video", tooltip = "Start Video Call" }),
-			ui.show(guild, icon_button { name = "bell", tooltip = "Notification Settings" }),
-			icon_button {
-				name = "pin",
-				id = "top_bar_pins",
-				tooltip = "Pinned Messages",
-				on_press = function(point: any)
-					actions.open_pins(point.x, point.y)
-				end,
-			},
-			ui.show(guild, icon_button {
-				name = "members",
-				tooltip = "Member List",
-				active = function()
-					return state.shell.members_visible:get()
-				end,
-				on_click = ui.toggle(state.shell.members_visible),
-			}),
-			search(),
-			icon_button { name = "inbox", tooltip = "Inbox" },
-			icon_button { name = "help", tooltip = "Help" },
+			gap = theme.size.space_8,
+			tool { name = "inbox", tooltip = "Inbox" },
+			ui.div { w = theme.size.window_controls_width, h_full = true, shrink = 0 },
 		},
 	}
 end

@@ -164,9 +164,6 @@ return function()
 		h_full = true,
 		shrink = 0,
 		min_h = 0,
-		bg = theme.color.background_primary,
-		border_sides = { 0, 0, 0, 1 },
-		border_color = theme.color.background_tertiary,
 		header(),
 		ui.column {
 			grow = 1,

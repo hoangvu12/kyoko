@@ -4,31 +4,29 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local mention_badge = require("@components/mention_badge")
+local motion = require("@components/motion")
 local dm_sidebar = require("./dm_sidebar")
 
 local MENU_WIDTH = 224
-local CHEVRON = 18
-local CATEGORY_HEIGHT = 24
-local CATEGORY_CHEVRON = 12
 local CATEGORY_PLUS = 16
 local CATEGORY_PLUS_HIT = 18
-local ROW_GAP = 6
-local GLYPH = 20
 local LOCK_BADGE = 11
 local LOCK_ICON = 9
 local LOCK_OFFSET = -3
-local PILL_LEFT = -8
-local PILL_TOP = 12
-local PILL_WIDTH = 4
-local PILL_HEIGHT = 8
 local SPINE_LEFT = 32
 local SPINE_WIDTH = 16
-local SPINE_HALF = 16
+local SPINE_HALF = 19
 local SPINE_LINE = 2
 local SPINE_CORNER = 8
 local THREAD_INDENT = 40
 local VOICE_INDENT = 28
 local SMALL_TEXT_LIFT = 2
+
+local icon_xs = theme.number(theme.size.icon_size_xs)
+local icon_sm = theme.number(theme.size.icon_size_sm)
+local icon_md = theme.number(theme.size.icon_size_md)
+local button_size = theme.number(theme.size.button_size)
+local dot_size = theme.number(theme.size.unread_dot_size)
 
 local menu_style = {
 	w = MENU_WIDTH,
@@ -203,11 +201,16 @@ local header = ui.component(function()
 	local open = ui.use_state(false)
 	local hovered = ui.use_state(false)
 	local mute_open = ui.use_state(false)
-	return ui.div {
+	return ui.row {
 		w_full = true,
+		h = theme.size.sidebar_header_height,
 		shrink = 0,
+		items = "center",
+		gap = theme.size.space_4,
+		pl = theme.size.space_8,
+		pr = theme.size.space_8,
 		border_sides = { 0, 0, 1, 0 },
-		border_color = theme.color.background_tertiary,
+		border_color = theme.color.border,
 		ui.menu {
 			open = open,
 			label = "Server menu",
@@ -218,59 +221,70 @@ local header = ui.component(function()
 			placement = { side = "bottom", align = "center", offset = 4 },
 			anchor = ui.button {
 				id = "server_menu",
-				w_full = true,
-				h = theme.size.guild_header_height,
+				grow = 1,
+				min_w = 0,
+				h = theme.size.button_size,
 				p = 0,
+				px = theme.size.space_8,
 				border = 0,
-				rounded = 0,
+				rounded = theme.size.radius_sm,
 				focus = { border = 0 },
-				justify = "center",
+				justify = "start",
 				items = "center",
 				cursor = "pointer",
 				bg = function()
-					return if hovered:get() or open:get() then theme.color.modifier_hover else "#00000000"
+					return if hovered:get() or open:get() then theme.color.hover else "#00000000"
 				end,
 				on_hover = function(inside: boolean)
 					hovered:set(inside)
 				end,
 				on_click = ui.toggle(open),
-				ui.row {
+				ui.text {
+					function()
+						return state.sidebar.guild_name:get()
+					end,
+					literal = true,
 					min_w = 0,
-					px = theme.size.space_16,
-					items = "center",
-					ui.text {
-						function()
-							return state.sidebar.guild_name:get()
-						end,
-						literal = true,
-						min_w = 0,
-						truncate = true,
-						text_size = theme.size.font_md,
-						weight = theme.weight.semibold,
-						color = theme.color.header_primary,
-					},
-					icon { name = "chevron_down", size = CHEVRON, color = theme.color.header_primary },
+					truncate = true,
+					text_size = theme.size.font_size_md,
+					line_height = theme.size.line_height_md,
+					weight = theme.weight.semibold,
+					color = theme.color.text_2,
+				},
+				ui.div {
+					shrink = 0,
+					ml = theme.size.space_4,
+					icon { name = "chevron_down", size = icon_sm(), color = theme.color.text_2 },
 				},
 			},
 			table.unpack(header_menu(mute_open)),
 		},
+		ui.show(
+			header_flag("can_invite"),
+			icon_button {
+				name = "friend_requests",
+				tooltip = "Invite People",
+				hit_size = button_size(),
+				icon_size = icon_md(),
+				on_click = later("invite"),
+			}
+		),
 	}
 end)
 
-local category = ui.component(function(props: { row: state.SidebarRow })
+local category = ui.component(function(props: { row: state.SidebarRow, first: boolean })
 	local row = props.row
 	local hovered = ui.use_state(false)
 	local function tone()
-		return if hovered:get() then theme.color.interactive_hover else theme.color.header_secondary
+		return if hovered:get() then theme.color.text_3 else theme.color.text_4
 	end
 	return ui.div {
 		w_full = true,
-		pt = theme.size.space_16,
+		pt = if props.first then theme.size.space_10 else theme.size.space_16,
 		ui.row {
-			w_full = true,
-			h = CATEGORY_HEIGHT,
-			px = theme.size.space_8,
-			pb = SMALL_TEXT_LIFT,
+			h = theme.size.category_row_height,
+			mx = theme.size.space_8,
+			px = theme.size.space_6,
 			gap = theme.size.space_2,
 			items = "center",
 			cursor = "pointer",
@@ -278,21 +292,23 @@ local category = ui.component(function(props: { row: state.SidebarRow })
 				hovered:set(inside)
 			end,
 			on_click = actions.toggle_category(row.id),
+			ui.text {
+				row.name,
+				literal = true,
+				min_w = 0,
+				shrink = 1,
+				truncate = true,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				weight = theme.weight.medium,
+				color = tone,
+			},
 			icon {
 				name = if row.collapsed then "chevron_right" else "chevron_down",
-				size = CATEGORY_CHEVRON,
+				size = icon_xs(),
 				color = tone,
 			},
-			ui.text {
-				string.upper(row.name),
-				literal = true,
-				grow = 1,
-				min_w = 0,
-				truncate = true,
-				text_size = theme.size.font_tiny,
-				weight = theme.weight.semibold,
-				color = tone,
-			},
+			ui.div { grow = 1 },
 			ui.row {
 				items = "center",
 				opacity = function()
@@ -312,22 +328,22 @@ end)
 
 local function tones(row: state.SidebarRow, selected: boolean): (string, string)
 	if selected then
-		return theme.color.interactive_active, theme.color.interactive_active
-	elseif row.unread then
-		return theme.color.header_primary, theme.color.header_primary
+		return theme.color.text_2, theme.color.text_3
 	elseif row.muted or row.locked then
-		return theme.color.interactive_muted, theme.color.interactive_normal
+		return theme.color.text_5, theme.color.text_5
+	elseif row.unread then
+		return theme.color.text_3, theme.color.text_3
 	end
-	return theme.color.text_muted, theme.color.interactive_hover
+	return theme.color.text_4, theme.color.text_3
 end
 
 local function glyph(row: state.SidebarRow, color: () -> string)
 	return ui.div {
 		relative = true,
-		w = GLYPH,
-		h = GLYPH,
+		w = theme.size.icon_size_md,
+		h = theme.size.icon_size_md,
 		shrink = 0,
-		icon { name = row.icon or "hash", size = GLYPH, color = color },
+		icon { name = row.icon or "hash", size = icon_md(), color = color },
 		ui.show(
 			row.locked == true,
 			ui.row {
@@ -339,20 +355,19 @@ local function glyph(row: state.SidebarRow, color: () -> string)
 				rounded = LOCK_BADGE,
 				justify = "center",
 				items = "center",
-				bg = theme.color.background_secondary,
+				bg = theme.color.bg_4,
 				icon { name = "lock", size = LOCK_ICON, color = color },
 			}
 		),
 	}
 end
-
 local function spine(last: boolean)
 	return ui.div {
 		absolute = true,
 		left = SPINE_LEFT,
 		top = 0,
 		w = SPINE_WIDTH,
-		h = theme.size.channel_row_height,
+		h = theme.size.channel_item_pitch,
 		ui.div {
 			absolute = true,
 			left = 0,
@@ -360,7 +375,7 @@ local function spine(last: boolean)
 			w = SPINE_WIDTH,
 			h = SPINE_HALF,
 			border_sides = { 0, 0, SPINE_LINE, SPINE_LINE },
-			border_color = theme.color.interactive_muted,
+			border_color = theme.color.text_5,
 			rounded_bl = SPINE_CORNER,
 		},
 		ui.show(
@@ -371,7 +386,7 @@ local function spine(last: boolean)
 				top = SPINE_HALF,
 				h = SPINE_HALF,
 				w = SPINE_LINE,
-				bg = theme.color.interactive_muted,
+				bg = theme.color.text_5,
 			}
 		),
 	}
@@ -381,14 +396,14 @@ local function voice_state_icons(member: state.VoiceMember): { any }
 	local icons = {}
 	local size = theme.number(theme.size.voice_badge_icon)
 	if member.video == "camera" then
-		table.insert(icons, icon { name = "video", size = size(), color = theme.color.text_muted })
+		table.insert(icons, icon { name = "video", size = size(), color = theme.color.text_4 })
 	elseif member.video == "screen" then
-		table.insert(icons, icon { name = "screen_share", size = size(), color = theme.color.text_muted })
+		table.insert(icons, icon { name = "screen_share", size = size(), color = theme.color.text_4 })
 	end
 	if member.deafened then
-		table.insert(icons, icon { name = "headphones_off", size = size(), color = theme.color.danger })
+		table.insert(icons, icon { name = "headphones_off", size = size(), color = theme.color.red_3 })
 	elseif member.muted then
-		table.insert(icons, icon { name = "mic_off", size = size(), color = theme.color.danger })
+		table.insert(icons, icon { name = "mic_off", size = size(), color = theme.color.red_3 })
 	end
 	return icons
 end
@@ -403,14 +418,14 @@ local function voice_member(member: state.VoiceMember)
 		gap = theme.size.space_8,
 		rounded = theme.size.radius_sm,
 		items = "center",
-		hover = { bg = theme.color.modifier_hover },
+		hover = { bg = theme.color.hover },
 		ui.div {
 			w = theme.size.voice_row_avatar,
 			h = theme.size.voice_row_avatar,
 			shrink = 0,
 			rounded = theme.size.voice_row_avatar,
 			overflow = "hidden",
-			bg = theme.color.background_tertiary,
+			bg = theme.color.bg_3,
 			ui.show(
 				member.avatar ~= "",
 				ui.image {
@@ -427,8 +442,8 @@ local function voice_member(member: state.VoiceMember)
 			grow = 1,
 			min_w = 0,
 			truncate = true,
-			text_size = theme.size.font_sm,
-			color = theme.color.text_muted,
+			text_size = theme.size.font_size_sm,
+			color = theme.color.text_4,
 		},
 		ui.show(
 			member.live,
@@ -437,14 +452,34 @@ local function voice_member(member: state.VoiceMember)
 				shrink = 0,
 				px = theme.size.space_4,
 				rounded = theme.size.radius_sm,
-				bg = theme.color.live_badge,
-				text_size = theme.size.font_tiny,
+				bg = theme.color.red_2,
+				text_size = theme.size.font_size_xs,
 				line_height = 16,
 				weight = theme.weight.bold,
-				color = theme.color.text_on_brand,
+				color = theme.color.text_0,
 			}
 		),
 		table.unpack(voice_state_icons(member)),
+	}
+end
+
+local function unread_dot(hovered: any)
+	return ui.row {
+		absolute = true,
+		top = 0,
+		bottom = 0,
+		left = motion.slide(hovered, 0, theme.size.unread_dot_size),
+		w = 0,
+		justify = "center",
+		items = "center",
+		pointer_events = "none",
+		ui.div {
+			w = theme.size.unread_dot_size,
+			h = theme.size.unread_dot_size,
+			shrink = 0,
+			rounded = theme.size.unread_dot_size,
+			bg = theme.color.text_3,
+		},
 	}
 end
 
@@ -458,7 +493,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 		local value = tones(row, selected())
 		return value
 	end
-	local function glyph_color(): string
+	local function lit(): string
 		local value, hover = tones(row, selected())
 		return if hovered:get() then hover else value
 	end
@@ -471,64 +506,63 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 		relative = true,
 		w_full = true,
 		ui.show(row.thread == true, spine(row.last_thread == true)),
-		ui.row {
-			id = `channel_{row.id}`,
+		ui.div {
 			relative = true,
-			h = theme.size.channel_row_height,
-			ml = if row.thread then THREAD_INDENT else theme.size.space_8,
-			mr = theme.size.space_8,
-			px = theme.size.space_8,
-			gap = ROW_GAP,
-			rounded = theme.size.radius_sm,
-			items = "center",
-			text_size = theme.size.font_md,
-			color = rest,
-			cursor = if selectable then "pointer" else "not-allowed",
-			bg = function()
-				if selected() then
-					return theme.color.modifier_selected
-				end
-				return if hovered:get() then theme.color.modifier_hover else nil
-			end,
-			on_hover = function(inside: boolean)
-				hovered:set(inside)
-			end,
-			on_click = if selectable then actions.select_channel(row.id) else nil,
-			context_menu_below = true,
-			context_menu_style = menu_style,
-			context_menu = function()
-				return channel_menu(row)
-			end,
+			w_full = true,
+			py = theme.size.space_1,
 			ui.show(function()
-				return row.unread == true and not selected()
-			end, ui.div {
-				absolute = true,
-				left = PILL_LEFT,
-				top = PILL_TOP,
-				w = PILL_WIDTH,
-				h = PILL_HEIGHT,
-				rounded_tr = PILL_WIDTH,
-				rounded_br = PILL_WIDTH,
-				bg = theme.color.unread_pill,
-			}),
-			glyph(row, glyph_color),
-			ui.text {
-				row.name,
-				literal = true,
-				grow = 1,
-				min_w = 0,
-				truncate = true,
+				return row.unread == true and not row.muted
+			end, unread_dot(hovered)),
+			ui.row {
+				id = `channel_{row.id}`,
+				relative = true,
+				h = theme.size.channel_item_height,
+				ml = if row.thread
+					then motion.slide(hovered, theme.size.space_40, theme.size.list_item_hover_shift)
+					else motion.slide(hovered, theme.size.space_8, theme.size.list_item_hover_shift),
+				mr = theme.size.space_8,
+				px = theme.size.space_8,
+				gap = theme.size.space_6,
+				rounded = theme.size.radius_sm,
+				items = "center",
+				text_size = theme.size.font_size_md,
 				color = rest,
-				weight = theme.weight.semibold,
+				cursor = if selectable then "pointer" else "not-allowed",
+				bg = function()
+					if selected() then
+						return theme.color.active
+					end
+					return if hovered:get() then theme.color.hover else nil
+				end,
+				on_hover = function(inside: boolean)
+					hovered:set(inside)
+				end,
+				on_click = if selectable then actions.select_channel(row.id) else nil,
+				context_menu_below = true,
+				context_menu_style = menu_style,
+				context_menu = function()
+					return channel_menu(row)
+				end,
+				glyph(row, lit),
+				ui.text {
+					row.name,
+					literal = true,
+					grow = 1,
+					min_w = 0,
+					truncate = true,
+					line_height = theme.size.line_height_md,
+					color = rest,
+					weight = theme.weight.medium,
+				},
+				ui.show(
+					(row.mentions or 0) > 0,
+					mention_badge {
+						count = function()
+							return row.mentions or 0
+						end,
+					}
+				),
 			},
-			ui.show(
-				(row.mentions or 0) > 0,
-				mention_badge {
-					count = function()
-						return row.mentions or 0
-					end,
-				}
-			),
 		},
 		ui.column {
 			w_full = true,
@@ -537,9 +571,9 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 	}
 end)
 
-local function sidebar_row(row: state.SidebarRow)
+local function sidebar_row(row: state.SidebarRow, index: number)
 	if row.kind == "category" then
-		return category { row = row }
+		return category { row = row, first = index == 1 }
 	end
 	return channel { row = row }
 end
@@ -553,7 +587,6 @@ return function()
 		w_full = true,
 		grow = 1,
 		min_h = 0,
-		bg = theme.color.background_secondary,
 		header(),
 		ui.scroll {
 			grow = 1,

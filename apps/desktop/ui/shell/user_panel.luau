@@ -2,15 +2,13 @@ local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
 local avatar = require("@components/avatar")
-local icon_button = require("@components/icon_button")
+local icon = require("@components/icon")
 local plugin_slot = require("@components/plugin_slot")
 
-local AVATAR = 32
-local AREA_HEIGHT = 40
-local BUTTON = 32
-local NAME_LINE = 18
-local SUBTITLE_LINE = 13
 local EMOJI = 14
+
+local avatar_sm = theme.number(theme.size.avatar_size_sm)
+local icon_md = theme.number(theme.size.icon_size_md)
 
 local muted = ui.state("user.muted", false)
 local deafened = ui.state("user.deafened", false)
@@ -48,9 +46,9 @@ local function subtitle(panel: any)
 				literal = true,
 				min_w = 0,
 				truncate = true,
-				text_size = theme.size.font_tiny,
-				line_height = SUBTITLE_LINE,
-				color = theme.color.text_muted,
+				text_size = theme.size.font_size_xs,
+				line_height = theme.size.line_height_xs,
+				color = theme.color.text_4,
 			}
 			else nil,
 	}
@@ -64,10 +62,10 @@ local function identity(panel: any)
 			literal = true,
 			min_w = 0,
 			truncate = true,
-			text_size = theme.size.font_sm,
-			line_height = NAME_LINE,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
 			weight = theme.weight.semibold,
-			color = theme.color.header_primary,
+			color = theme.color.text_2,
 		},
 		subtitle(panel),
 	}
@@ -77,13 +75,12 @@ local function user_area()
 	return ui.row {
 		grow = 1,
 		min_w = 0,
-		h = AREA_HEIGHT,
-		px = theme.size.space_4,
+		h = theme.size.input_height,
 		gap = theme.size.space_8,
 		items = "center",
 		rounded = theme.size.radius_sm,
 		cursor = "pointer",
-		hover = { bg = theme.color.modifier_hover },
+		hover = { bg = theme.color.hover },
 		tooltip = ui.text { function()
 			return state.user.panel:get().latency
 		end },
@@ -95,9 +92,9 @@ local function user_area()
 		end, function(shown: any)
 			return avatar {
 				src = shown.src,
-				size = AVATAR,
+				size = avatar_sm(),
 				status = shown.status,
-				cutout = theme.color.user_panel_background,
+				cutout = theme.color.bg_4,
 			}
 		end),
 		ui.presence(function()
@@ -112,53 +109,101 @@ local function toggle(signal: any)
 	end
 end
 
+local panel_button = ui.component(function(props: {
+	name: () -> string,
+	tooltip: any,
+	on: () -> boolean,
+	on_click: any,
+})
+	local hovered = ui.use_state(false)
+	return ui.button {
+		w = theme.size.button_size,
+		h = theme.size.button_size,
+		shrink = 0,
+		p = 0,
+		border = 0,
+		focus = { border = 0 },
+		rounded = theme.size.radius_sm,
+		justify = "center",
+		items = "center",
+		cursor = "pointer",
+		tooltip = props.tooltip,
+		bg = function()
+			if props.on() then
+				return if hovered:get()
+					then theme.color.user_panel_button_active_hover
+					else theme.color.user_panel_button_active
+			end
+			return if hovered:get() then theme.color.hover else "#00000000"
+		end,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		on_click = props.on_click,
+		icon {
+			name = props.name,
+			size = icon_md(),
+			color = function()
+				if props.on() then
+					return theme.color.accent_new
+				end
+				return if hovered:get() then theme.color.text_3 else theme.color.text_4
+			end,
+		},
+	}
+end)
+
+local function never(): boolean
+	return false
+end
+
 return function()
 	return ui.row {
 		w_full = true,
-		h = theme.size.user_panel_height,
-		shrink = 0,
+		h_full = true,
 		px = theme.size.space_8,
-		gap = theme.size.space_4,
+		gap = theme.size.space_8,
 		items = "center",
-		bg = theme.color.user_panel_background,
 		user_area(),
 		plugin_slot { name = "panel.buttons", context = { area = "panel" }, gap = theme.size.space_4 },
-		icon_button {
-			name = function()
-				return if muted:get() or deafened:get() then "mic_off" else "mic"
-			end,
-			tooltip = ui.text { function()
-				return if muted:get() then "Unmute" else "Mute"
-			end },
-			hit_size = BUTTON,
-			filled_hover = true,
-			danger = function()
-				return muted:get() or deafened:get()
-			end,
-			on_click = toggle(muted),
-		},
-		icon_button {
-			name = function()
-				return if deafened:get() then "headphones_off" else "headphones"
-			end,
-			tooltip = ui.text { function()
-				return if deafened:get() then "Undeafen" else "Deafen"
-			end },
-			hit_size = BUTTON,
-			filled_hover = true,
-			danger = function()
-				return deafened:get()
-			end,
-			on_click = toggle(deafened),
-		},
-		icon_button {
-			name = "settings",
-			tooltip = "User Settings",
-			hit_size = BUTTON,
-			filled_hover = true,
-			on_click = function()
-				actions.open_settings("my-account")
-			end,
+		ui.row {
+			shrink = 0,
+			items = "center",
+			gap = theme.size.space_4,
+			panel_button {
+				name = function()
+					return if muted:get() or deafened:get() then "mic_off" else "mic"
+				end,
+				tooltip = ui.text { function()
+					return if muted:get() then "Unmute" else "Mute"
+				end },
+				on = function()
+					return muted:get() or deafened:get()
+				end,
+				on_click = toggle(muted),
+			},
+			panel_button {
+				name = function()
+					return if deafened:get() then "headphones_off" else "headphones"
+				end,
+				tooltip = ui.text { function()
+					return if deafened:get() then "Undeafen" else "Deafen"
+				end },
+				on = function()
+					return deafened:get()
+				end,
+				on_click = toggle(deafened),
+			},
+			panel_button {
+				name = function()
+					return "settings"
+				end,
+				tooltip = "User Settings",
+				on = never,
+				on_click = function()
+					actions.open_settings("my-account")
+				end,
+			},
 		},
 	}
 end

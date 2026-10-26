@@ -1,24 +1,24 @@
 local theme = require("../theme")
 local motion = require("./motion")
 
+local PILL_MORPH = 160
+
 export type Props = {
 	height: any,
-	inset: number?,
 }
 
 return function(props: Props)
 	return ui.row {
 		absolute = true,
-		left = props.inset or 0,
+		left = theme.number(theme.size.guild_pill_inset),
 		top = 0,
 		h_full = true,
 		items = "center",
 		ui.div {
-			w = 4,
-			h = ui.tween(props.height, { duration = motion.duration(160), ease = "outQuint" }),
-			rounded_tr = 4,
-			rounded_br = 4,
-			bg = theme.color.unread_pill,
+			w = theme.size.guild_pill_width,
+			h = ui.tween(props.height, { duration = motion.duration(PILL_MORPH), ease = "outQuint" }),
+			rounded = theme.size.guild_pill_width,
+			bg = theme.color.text_2,
 		},
 	}
 end

@@ -1,6 +1,8 @@
 local theme = require("../theme")
 local state = require("../state")
+local panel = require("@components/panel")
 local title_bar = require("./title_bar")
+local window_controls = require("./window_controls")
 local top_bar = require("./top_bar")
 local server_rail = require("./server_rail")
 local channel_sidebar = require("./channel_sidebar")
@@ -22,6 +24,79 @@ local connection_banner = require("./connection_banner")
 local SIDEBAR_MIN_WIDTH = 900
 local MEMBER_LIST_MIN_WIDTH = 1200
 
+local function sidebar_column()
+	return ui.column {
+		w = theme.size.sidebar_width,
+		h_full = true,
+		shrink = 0,
+		gap = theme.size.gap,
+		panel { w_full = true, grow = 1, min_h = 0, channel_sidebar() },
+		panel { w_full = true, h = theme.size.user_panel_box_height, user_panel() },
+	}
+end
+
+local function chat()
+	return panel {
+		grow = 1,
+		shrink = 1,
+		min_w = 0,
+		h_full = true,
+		ui.show(function()
+			return state.forum.view:get().open
+		end, forum(), ui.column {
+			w_full = true,
+			grow = 1,
+			min_h = 0,
+			connection_banner(),
+			timeline(),
+			composer(),
+		}),
+	}
+end
+
+local function home_cover()
+	return ui.show(function()
+		return state.home.page:get() ~= ""
+	end, panel {
+		absolute = true,
+		left = 0,
+		top = 0,
+		right = 0,
+		bottom = 0,
+		home_page(),
+	})
+end
+
+local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
+	return ui.column {
+		relative = true,
+		grow = 1,
+		min_w = 0,
+		h_full = true,
+		gap = theme.size.gap,
+		panel { w_full = true, h = theme.size.channel_header_height, top_bar() },
+		ui.row {
+			w_full = true,
+			grow = 1,
+			min_h = 0,
+			gap = theme.size.gap,
+			chat(),
+			ui.show(function()
+				return state.threads.panel:get().open
+			end, panel { h_full = true, thread_panel() }),
+			ui.show(function()
+				return state.search.panel:get().open and sidebar_shown()
+			end, panel { h_full = true, search_panel() }, ui.show(function()
+				return members_room()
+					and state.shell.members_visible:get()
+					and state.sidebar.guild_id:get() ~= ""
+					and not state.threads.panel:get().open
+			end, panel { w = theme.size.member_list_panel_width, h_full = true, member_list() })),
+		},
+		home_cover(),
+	}
+end
+
 return function()
 	local root = ui.ref()
 	local function wider(than: number): () -> boolean
@@ -32,14 +107,9 @@ return function()
 	local sidebar_shown = wider(SIDEBAR_MIN_WIDTH)
 	local members_room = wider(MEMBER_LIST_MIN_WIDTH)
 	local shell = ui.column {
-		ref = root,
 		relative = true,
 		w_full = true,
 		h_full = true,
-		bg = theme.color.background_tertiary,
-		color = theme.color.text_normal,
-		text_size = theme.size.font_md,
-		font = theme.font.ui,
 		title_bar(),
 		storage_notice(),
 		plugin_notice(),
@@ -47,56 +117,28 @@ return function()
 			w_full = true,
 			grow = 1,
 			min_h = 0,
-			server_rail(),
-			ui.show(sidebar_shown, ui.column {
-				w = theme.size.channel_sidebar_width,
-				h_full = true,
-				shrink = 0,
-				rounded_tl = theme.number(theme.size.radius_md),
-				overflow = "hidden",
-				channel_sidebar(),
-				user_panel(),
-			}),
-			ui.column {
-				relative = true,
-				grow = 1,
-				min_w = 0,
-				h_full = true,
-				bg = theme.color.background_primary,
-				top_bar(),
-				ui.row {
-					w_full = true,
-					grow = 1,
-					min_h = 0,
-					ui.show(function()
-						return state.forum.view:get().open
-					end, forum(), ui.column {
-						grow = 1,
-						min_w = 0,
-						h_full = true,
-						connection_banner(),
-						timeline(),
-						composer(),
-					}),
-					ui.show(function()
-						return state.threads.panel:get().open
-					end, thread_panel()),
-					ui.show(function()
-						return state.search.panel:get().open and sidebar_shown()
-					end, search_panel(), ui.show(function()
-						return members_room()
-							and state.shell.members_visible:get()
-							and state.sidebar.guild_id:get() ~= ""
-							and not state.threads.panel:get().open
-					end, member_list())),
-				},
-				home_page(),
-			},
+			gap = theme.size.gap,
+			px = theme.size.gap,
+			pb = theme.size.gap,
+			panel { w = theme.size.guild_list_width, h_full = true, server_rail() },
+			ui.show(sidebar_shown, sidebar_column()),
+			page(sidebar_shown, members_room),
 		},
 		settings(),
 		server_settings(),
 	}
-	return ui.show(function()
-		return state.login.screen:get() == "main"
-	end, shell, login())
+	return ui.column {
+		ref = root,
+		relative = true,
+		w_full = true,
+		h_full = true,
+		bg = theme.color.bg_3,
+		color = theme.color.text_3,
+		text_size = theme.size.font_size_md,
+		font = theme.font.ui,
+		ui.show(function()
+			return state.login.screen:get() == "main"
+		end, shell, login()),
+		window_controls(),
+	}
 end
