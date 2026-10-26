@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 04
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/emoji-autocomplete.html`
 
