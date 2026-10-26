@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 03; v1 27
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/composer-markdown.html`, `docs/design/mockups/composer-markdown-over-limit.html`, `docs/design/mockups/composer-uploads.html`, `docs/design/mockups/composer-drop.html`, `docs/design/mockups/composer-upload-failed.html`, `docs/design/mockups/composer-plus-menu.html`
 
