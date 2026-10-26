@@ -1,6 +1,6 @@
 use anyhow::Result;
 use protocol::{DispatchEvent, Message, Snowflake};
-use session::{Rewrite, SessionHooks};
+use session::{DisplayHooks, Formatting, Person, RelativeTime, Rewrite, SessionHooks, ShownName};
 
 use crate::calls::{Call, MessageView, PluginEvent};
 use crate::host::PluginHost;
@@ -61,5 +61,22 @@ impl SessionHooks for PluginHost {
 			self.deliver(event);
 		}
 		Ok(())
+	}
+}
+
+impl DisplayHooks for PluginHost {
+	fn formatters(&self, formatting: Formatting) -> Vec<String> {
+		match formatting {
+			Formatting::Names => PluginHost::formatters(self, Hook::DisplayName, "format_name"),
+			Formatting::RelativeTimes => PluginHost::formatters(self, Hook::Timestamp, "format_relative"),
+		}
+	}
+
+	fn format_name(&self, person: &Person) -> Option<ShownName> {
+		self.name_of(person)
+	}
+
+	fn format_relative(&self, time: &RelativeTime) -> Option<String> {
+		self.relative_of(time)
 	}
 }

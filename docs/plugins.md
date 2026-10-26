@@ -109,8 +109,8 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `hook:edit` | `before_edit`: read and rewrite the text of your edits, DMs included | yes |
 | `hook:typing` | `allow_typing`: veto your typing indicator | yes |
 | `hook:notify` | `allow_notification`: read messages that would notify you, and silence them | yes |
-| `hook:display_name` | display-name formatting | reserved for 48 |
-| `hook:timestamp` | relative-timestamp formatting | reserved for 48 |
+| `hook:display_name` | `format_name`: change how people's names show in the timeline, the member list and profiles | yes |
+| `hook:timestamp` | `format_relative`: change the text of relative times (`<t:...:R>`) | yes |
 | `hook:emoji_rank` | emoji autocomplete ranking | reserved for 50 |
 | `hook:message_render` | message render access to kept deleted and edited versions | reserved for 52 |
 | `action:mark_read` | `kyoko.actions.mark_all_read`, `mark_guild_read` | yes |
@@ -136,6 +136,8 @@ return {
 	before_edit = function(message) return nil end,
 	allow_typing = function(channel) return true end,
 	allow_notification = function(message) return true end,
+	format_name = function(person) return nil end,
+	format_relative = function(time) return nil end,
 	on_event = function(event) end,
 	on_action = function(key, context) end,
 	on_settings_changed = function() end,
@@ -152,12 +154,15 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `before_edit(message)` | `hook:edit` | before an edit is sent | `{ channel_id, guild_id?, message_id, content }` | as `before_send` | 250 ms |
 | `allow_typing(channel)` | `hook:typing` | before each typing indicator (at most one per 9 s per channel) | `{ channel_id, guild_id? }` | `false` vetoes; anything else allows | 100 ms |
 | `allow_notification(message)` | `hook:notify` | after kyoko's own notification rules and the burst limit, for each OS notification and its sound about to be shown (never for in-window toasts) | `{ id, channel_id, guild_id?, author_id, author_name, content }` | `false` silences; anything else allows | 100 ms |
+| `format_name(person)` | `hook:display_name` | off the UI thread, once per person and inputs, then cached (below) | `{ user_id, guild_id?, username, global_name?, nick?, name, extra? }`; `name` is what kyoko shows (the server nickname, else the display name, else the username) | a string to show instead of `name`, or `{ name?, extra? }`, where `extra` is shown after it, dimmed; `nil` for no change | 50 ms |
+| `format_relative(time)` | `hook:timestamp` | off the UI thread, once per distinct span, then cached | `{ seconds, past, unit, value, text }`: whole seconds between now and the time, whether it is in the past, the largest unit that fits (`second`, `minute`, `hour`, `day`, `month` of 30 days, `year` of 365 days), the exact count of that unit (`2.96`), and kyoko's own text (`3 days ago`) | a string to show instead, or `nil` | 50 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting or one of its slot buttons | the key, and `{ source = "settings" }` or `{ source = "slot", slot = "composer.buttons" }` | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
 
 - Text hooks chain in plugin id order: each sees the previous plugin's output. A replacement that is empty, longer than 4000 characters or equal to the input counts as no change. A rewritten send or edit is recorded as altered by the last plugin that changed it (`State::altered_by`); an edit no plugin changed clears the mark. There is no "cancel" in v1: the spec asks for rewriting only.
 - Vetoes stop at the first plugin that returns `false`.
+- Display hooks chain too: each sees the previous plugin's `name` and `extra` (or `text`). A name or text that is empty or longer than 100 characters counts as no change; an empty or too long `extra` is dropped. See "Display hooks" below for when they run.
 - A failing or overrunning hook counts as a strike (below) and the session goes on with the unmodified value; a veto hook that fails allows.
 - `allow_notification` is asked only about alerts the burst limit would show: the session reserves the alert's place first and a veto gives it back, so a plugin that remembers what it allowed is never told about an alert the user did not get. Calls for separate messages may run in either order. Silencing a notification changes nothing else: unread counts, mention badges and the tray badge stay as they are. `guild_id` is filled from state when the gateway leaves it out.
 
@@ -197,6 +202,19 @@ Events queue per plugin (at most 256; more are dropped and logged) and are deliv
 
 State queries read the session's `State` snapshot under its read lock and copy what they return, so shared Discord data is read-only to plugins. There is no API to write app state, fake client features, change the identity, reach REST or the gateway, or bypass a permission check. `print` is removed; the Luau standard library is the sandboxed one (`string`, `table`, `math`, `utf8`, `bit32`, `buffer`, `coroutine`, `os.time`/`clock`/`date`).
 
+## Display hooks
+
+`format_name` and `format_relative` change what the window draws, and the window draws every frame, so they never run on the UI thread or per frame. `bridge::Display` (`crates/bridge/src/display.rs`) stands between the two:
+
+- The window only looks into its cache. A hit is used at once; a miss shows kyoko's own text, and the question goes to the `display-hooks` thread, which asks `PluginHost` (and through it each plugin's worker, with its 50 ms deadline). When a batch of answers is in, the desktop gets one wake (`Formatting::Names` or `Formatting::RelativeTimes`) and redraws only what changed: the timeline re-projects its rows (an author whose name changed is a `Delta.updated` row; for relative times, the rows whose text has a `<t:...:R>`), the thread pane does the same, the member list republishes its window and an open profile is recomputed.
+- Names are cached per `Person`: the user, the server, and the username, display name and nickname themselves, so a rename or a new nickname is a new question and nothing else is. Relative times are cached per signed span in whole seconds. The caches hold 4096 names and 1024 spans, and start over when full.
+- The cache is dropped whenever `formatters(kind)` changes: a formatting plugin is enabled, disabled, suspended, restarted or reloaded, or one of its settings changes (`PluginHost::set_setting` bumps the plugin's revision). While the new answers come in, the old ones stay on screen, so a settings change does not flash kyoko's names; when no plugin formats any more, kyoko's own text is back at once.
+- The desktop connects the two with `PluginHost::on_change(display.refresher())`. Projections ask only while some plugin formats (`Display::formats`), so with no such plugin a row costs one atomic check.
+- A failing, overrunning or suspended plugin falls back to kyoko's own text for that name or span, which is cached too, so a broken plugin is asked once per person, not once per frame; three strikes suspend it as for every hook. A slow plugin holds up only the `display-hooks` thread, never a row: the row shows kyoko's text until the answer arrives.
+- What is formatted: the author of every message in the timeline and the thread pane (not system lines, reply previews, mentions or search results), each member row, and the name on the profile popout and full profile. Relative times are those of `<t:...:R>` in message bodies. Kyoko's own relative text rounds to the nearest unit ("2 days and 23 hours ago" is "3 days ago"), as Discord's does.
+
+A full mock session (`cargo xtask headless-run --mock`, 150 messages of one channel with ShowMeYourName and DontRoundMyTimestamps on) makes 43 to 53 display calls (runs differ by when members' nicknames arrive, each a new question): one per distinct author and nickname seen, and one for the relative time it checks; re-projecting the channel 100 times more makes none.
+
 ## Actions and the gesture rule
 
 A Discord action runs only inside a user gesture:
@@ -214,6 +232,7 @@ A Discord action runs only inside a user gesture:
 |---|---|
 | send and edit hooks | 250 ms |
 | typing and notification vetoes | 100 ms |
+| `format_name`, `format_relative` (`name_deadline`, `time_deadline`) | 50 ms each |
 | events, `on_settings_changed` | 200 ms |
 | `on_action` | 500 ms |
 | loading `logic.luau` | 1 s |
@@ -322,6 +341,19 @@ A slot inside the timeline cannot be a zgx contribution, because the Rust timeli
 
 Vencord's OnePingPerDM is the behaviour reference (its choice of which DMs count); no code is shared. Vencord also has switches to let mentions and `@everyone` inside DMs through; they are left out, since a mention in a DM is already a DM notification.
 
+## ShowMeYourName
+
+`plugins/show-me-your-name/` (`hook:display_name`, ships disabled). Its `format_name` puts the username beside the name kyoko shows (the server nickname, else the display name), dimmed, or shows it instead, in the timeline, the member list and profiles.
+
+- "Show" (`mode`): "Nickname, then username" (`nick-user`, the default: `Gecko quiet_gecko`), "Username, then nickname" (`user-nick`: `quiet_gecko Gecko`) or "Username only" (`user`).
+- "Hide the username when it matches" (`hide_same`, on): one name when the shown name is the username, ignoring case.
+
+Vencord's ShowMeYourName is the behaviour reference for the modes; no code is shared. Its reply and friend-nickname switches are left out, since kyoko formats message authors, member rows and profiles only.
+
+## DontRoundMyTimestamps
+
+`plugins/dont-round-my-timestamps/` (`hook:timestamp`, ships disabled). Its `format_relative` rounds relative times down instead of to the nearest unit: `math.floor(time.value)` of the unit that fits, so 2 days and 23 hours ago reads "2 days ago" where kyoko says "3 days ago", and 59 minutes 59 seconds reads "59 minutes ago" rather than "1 hour ago". Vencord's DontRoundMyTimestamps is the behaviour reference.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -335,6 +367,8 @@ While writing it, run `cargo run -p kyoko -- --mock --plugins-dir plugins` and e
 
 Behaviour tests drive a session against an in-process mockcord with the plugin host as its hooks: `crates/plugins/tests/plugins/` (it reuses the session harness, `crates/session/tests/session/harness.rs`). `support::write_plugin` writes a test plugin into a scratch development folder, `support::start` starts the host and a session, `support::approve` approves what the manifest asks for. Observe behaviour through the session seam: the echoed message text, `State`, and mockcord's recorded traffic (`recording().requests_to(...)`). A handy trick for observing a plugin's internals is a `before_send` that appends what it saw to the message.
 
-What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read) and a failing plugin against the mock.
+What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read), ShowMeYourName and DontRoundMyTimestamps (every author of the loaded channel shown through `bridge::Display`, no calls on re-projection, a relative time rounded down) and a failing plugin against the mock.
+
+Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
 
 UI halves are covered headless in `apps/desktop/src/ui/scripts/plugins.rs`, part of the load check: `the_interface_loads_and_builds_every_screen` mounts a probe plugin in every placed slot; `a_plugin_shows_only_in_the_slots_it_was_granted` (its settings value, its action naming only a granted slot); `a_broken_or_overreaching_plugin_interface_leaves_the_shell_building` (a syntax error, an error while loading, an error while building, and reaching for an app value, another plugin's value, the network and an app action, beside a working plugin); `the_silent_typing_button_switches_its_setting_and_unmounts_with_the_plugin` (the real `PluginsView` and host: a click without a gesture does nothing, a click with one switches `silent`, the button follows `button`, disabling unmounts it and enabling mounts it again). The `composer-silent-typing` capture clicks the real button in a window.

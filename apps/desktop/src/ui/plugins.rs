@@ -224,6 +224,27 @@ impl Link {
 		self.plugins.activated();
 	}
 
+	pub(super) async fn enable_capture_plugins(&self, ids: &[String]) {
+		for id in ids {
+			let shown = self
+				.plugin(id)
+				.map(|plugin| plugin.permissions)
+				.unwrap_or_default();
+			let approved = id.clone();
+			self.plugins.run(move |host| {
+				if let Err(error) = host.approve(&approved, &shown) {
+					tracing::warn!(%error, plugin = %approved, "the capture could not turn a plugin on");
+				}
+			});
+			self.until_capture(|link| {
+				link.plugin(id)
+					.is_some_and(|plugin| plugin.status == Status::Running)
+			})
+			.await;
+			tracing::info!(plugin = %id, "the capture turned a plugin on");
+		}
+	}
+
 	pub(super) async fn drive_silent_typing(&self) {
 		let shown = self
 			.plugin(SILENT_TYPING)

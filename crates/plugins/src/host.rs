@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use protocol::Snowflake;
 use serde_json::{Map, Value as Json, json};
-use session::Commander;
+use session::{Commander, Person, RelativeTime, ShownName};
 use state::SharedState;
 
 use crate::bundled;
@@ -142,6 +142,7 @@ struct Entry {
 	worker: Option<Arc<Worker>>,
 	ui: Option<PathBuf>,
 	generation: u64,
+	revision: u64,
 }
 
 impl Entry {
@@ -419,6 +420,7 @@ impl PluginHost {
 				.accept(value)
 				.ok_or_else(|| format!("{value} is not a valid value for {key}"))?;
 			entry.settings.write().insert(key.to_owned(), accepted.clone());
+			entry.revision += 1;
 			let worker = entry.worker.clone().filter(|_| entry.run == Run::Running);
 			self.inner.save(&mut registry);
 			(accepted, worker)
@@ -532,6 +534,56 @@ impl PluginHost {
 			}
 		}
 		true
+	}
+
+	pub(crate) fn formatters(&self, hook: Hook, name: &str) -> Vec<String> {
+		let registry = self.inner.registry.lock();
+		registry
+			.entries
+			.values()
+			.filter(|entry| {
+				entry.status() == Status::Running && entry.grants().contains(&Permission::Hook(hook))
+			})
+			.filter(|entry| entry.worker.as_ref().is_some_and(|worker| worker.defines(name)))
+			.map(|entry| format!("{}/{}/{}", entry.package.id(), entry.generation, entry.revision))
+			.collect()
+	}
+
+	pub(crate) fn name_of(&self, person: &Person) -> Option<ShownName> {
+		let deadline = self.inner.config.limits.name_deadline;
+		let original = ShownName {
+			name: person.name().to_owned(),
+			extra: None,
+		};
+		let mut shown = original.clone();
+		for target in self.inner.targets(Hook::DisplayName, "format_name", true) {
+			let call = Call::FormatName {
+				person: person.clone(),
+				shown: shown.clone(),
+			};
+			match target.worker.call(call, deadline) {
+				Ok(Reply::Name(Some(formatted))) => shown = formatted,
+				Ok(_) => {}
+				Err(fault) => self.inner.strike(&target.id, fault),
+			}
+		}
+		(shown != original).then_some(shown)
+	}
+
+	pub(crate) fn relative_of(&self, time: &RelativeTime) -> Option<String> {
+		let deadline = self.inner.config.limits.time_deadline;
+		let mut current = time.clone();
+		for target in self.inner.targets(Hook::Timestamp, "format_relative", true) {
+			match target
+				.worker
+				.call(Call::FormatRelative(current.clone()), deadline)
+			{
+				Ok(Reply::Text(Some(text))) => current.text = text,
+				Ok(_) => {}
+				Err(fault) => self.inner.strike(&target.id, fault),
+			}
+		}
+		(current.text != time.text).then_some(current.text)
 	}
 
 	pub(crate) fn deliver(&self, event: crate::calls::PluginEvent) {
@@ -888,6 +940,7 @@ impl Inner {
 						worker: None,
 						ui: None,
 						generation: 0,
+						revision: 0,
 					};
 					self.start(&mut entry);
 					registry.entries.insert(id, entry);

@@ -4,6 +4,8 @@ use std::time::Duration;
 pub struct Limits {
 	pub send_deadline: Duration,
 	pub veto_deadline: Duration,
+	pub name_deadline: Duration,
+	pub time_deadline: Duration,
 	pub event_deadline: Duration,
 	pub action_deadline: Duration,
 	pub load_deadline: Duration,
@@ -26,6 +28,8 @@ impl Default for Limits {
 		Self {
 			send_deadline: Duration::from_millis(250),
 			veto_deadline: Duration::from_millis(100),
+			name_deadline: Duration::from_millis(50),
+			time_deadline: Duration::from_millis(50),
 			event_deadline: Duration::from_millis(200),
 			action_deadline: Duration::from_millis(500),
 			load_deadline: Duration::from_secs(1),

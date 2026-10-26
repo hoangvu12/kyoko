@@ -1,6 +1,7 @@
 mod community;
 mod composer;
 mod connection;
+mod display;
 mod expressions;
 mod friends;
 mod home;
@@ -29,11 +30,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use bridge::{ConnectionWatch, Flow, Inbox, OpenChannel, Timeline};
+use bridge::{ConnectionWatch, Display, Flow, Inbox, OpenChannel, Timeline};
 use media::{Gallery, ImageName, Update};
 use protocol::Snowflake;
 use session::Alert;
-use session::{Command, Session};
+use session::{Command, Formatting, Session};
 
 pub use sign_in::SignIn;
 use state::{Changes, ConnectionStatus, DisconnectReason, State};
@@ -92,6 +93,8 @@ struct Views {
 	settings: settings::SettingsView,
 	plugins: plugins::PluginsView,
 	themes: themes::ThemesView,
+	display: Display,
+	display_wakes: Inbox<Formatting>,
 }
 
 pub struct Launch {
@@ -155,6 +158,7 @@ pub fn run(
 			let settings = settings::SettingsView::new(&host, desktop.store.clone(), catalog);
 			let plugins = plugins::PluginsView::new(&host, plugin_host.clone(), sign_in.runtime.clone());
 			let themes = themes::ThemesView::new(&host, desktop.store.clone(), themes);
+			let (display, display_wakes) = display::start(&plugin_host);
 			let link = Link::install(
 				&host,
 				window,
@@ -166,6 +170,8 @@ pub fn run(
 					settings,
 					plugins,
 					themes,
+					display,
+					display_wakes,
 				},
 			);
 			link.opening.set(opening);
@@ -181,6 +187,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
 			cx.tasks.spawn(link.clone().follow_theme_folder());
+			cx.tasks.spawn(link.clone().follow_display());
 			cx.tasks.spawn(link.clone().follow_gif_search());
 			cx.tasks.spawn(link.clone().follow_server_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
@@ -403,6 +410,8 @@ pub(crate) struct Link {
 	finder: search::Finder,
 	plugins: plugins::PluginsView,
 	themes: themes::ThemesView,
+	display: Display,
+	display_wakes: Inbox<Formatting>,
 	moderation: Rc<ModerationLayer>,
 	moderation_effect: RefCell<Option<Effect>>,
 	server: server_settings::ServerSettingsView,
@@ -436,6 +445,8 @@ impl Link {
 			settings,
 			plugins,
 			themes,
+			display,
+			display_wakes,
 		} = views;
 		let image_wakes = Inbox::new();
 		let wakes = image_wakes.clone();
@@ -451,6 +462,7 @@ impl Link {
 				store: messages.store.clone(),
 				developer_mode: messages.developer_mode,
 				pictures: None,
+				display: display.clone(),
 			},
 		);
 		let thread_pane = threads::ThreadPane::new(
@@ -466,6 +478,7 @@ impl Link {
 				store: messages.store,
 				developer_mode: messages.developer_mode,
 				pictures: Some(timeline_view.pictures()),
+				display: display.clone(),
 			},
 		);
 		let composer = composer::ComposerView::install(host, sign_in.runtime.clone(), &composer::MAIN);
@@ -474,6 +487,10 @@ impl Link {
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
 		let moderation = ModerationLayer::new(&window.runtime);
+		let mut timeline = Timeline::default();
+		timeline.set_display(display.clone());
+		let members = MemberListView::new(host);
+		members.set_display(display.clone());
 		let toasts = ToastLayer::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let link = Rc::new(Link {
@@ -493,10 +510,10 @@ impl Link {
 			dms: DmSidebarView::new(host),
 			dm_avatars: RefCell::new(Vec::new()),
 			friends: FriendsPage::new(host),
-			members: MemberListView::new(host),
+			members,
 			member_avatars: RefCell::new(Vec::new()),
 			reported_slot: Cell::new(Slot::default()),
-			timeline: RefCell::new(Timeline::default()),
+			timeline: RefCell::new(timeline),
 			timeline_view,
 			profile,
 			community,
@@ -520,6 +537,8 @@ impl Link {
 			finder,
 			plugins,
 			themes,
+			display,
+			display_wakes,
 			moderation,
 			moderation_effect: RefCell::new(None),
 			server: server_settings::ServerSettingsView::new(host),
@@ -772,6 +791,7 @@ impl Link {
 
 	async fn signal_when_settled(self: Rc<Self>, capture: Capture) {
 		self.drive_capture(capture.screen);
+		self.enable_capture_plugins(&capture.plugins).await;
 		self.until_settled(&capture, false).await;
 		match &capture.screen {
 			capture::Screen::RailFolders => self.rail.open_all(),
@@ -867,6 +887,7 @@ impl Link {
 			capture::Screen::Disconnected => self.drive_disconnected(),
 			capture::Screen::FirstChannel | capture::Screen::LoginTos | capture::Screen::LoginToken => {}
 		}
+		self.until_capture(|link| link.display.pending() == 0).await;
 		zgx::timer::sleep(capture::SETTLE).await;
 		match capture::signal_ready(&capture.ready) {
 			Ok(()) => tracing::info!(screen = %capture.name, "capture screen ready"),

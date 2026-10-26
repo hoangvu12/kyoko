@@ -3,9 +3,10 @@ use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use protocol::{Message, MessageType, Snowflake};
-use session::Command;
+use session::{Command, Formatting, ShownName};
 use state::{Changes, MessageRow, MessageView, RenderedMessage, State};
 
+use crate::display::{Display, person};
 use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
 use crate::sidebar::ChannelKind;
 
@@ -32,6 +33,7 @@ pub enum Row {
 pub struct MessageEntry {
 	pub id: Snowflake,
 	pub author: String,
+	pub author_extra: Option<String>,
 	pub author_color: Option<u32>,
 	pub content: String,
 	pub sent_at: DateTime<Utc>,
@@ -55,6 +57,7 @@ impl PartialEq for MessageEntry {
 	fn eq(&self, other: &Self) -> bool {
 		self.id == other.id
 			&& self.author == other.author
+			&& self.author_extra == other.author_extra
 			&& self.author_color == other.author_color
 			&& self.content == other.content
 			&& self.sent_at == other.sent_at
@@ -197,6 +200,7 @@ pub struct Timeline {
 	detached: bool,
 	pending: Delta,
 	bodies: HashMap<Snowflake, Parsed>,
+	display: Display,
 }
 
 impl Timeline {
@@ -221,6 +225,45 @@ impl Timeline {
 
 	pub fn has_older(&self) -> bool {
 		matches!(self.rows.first().map(|row| &row.row), Some(Row::Loading))
+	}
+
+	pub fn set_display(&mut self, display: Display) {
+		self.display = display;
+	}
+
+	pub fn redraw(&mut self, state: &State, formatting: Formatting) -> bool {
+		let Some(open) = self.open else {
+			return false;
+		};
+		if state.channel(open.channel_id).is_none() {
+			return false;
+		}
+		let fresh = self.project(state, open);
+		let mut delta = if fresh == self.rows {
+			Delta::default()
+		} else {
+			Delta::between(&self.rows, &fresh)
+		};
+		if formatting == Formatting::RelativeTimes && !delta.reset {
+			let timed = fresh.iter().filter(|row| match &row.row {
+				Row::Message(entry) => entry
+					.body
+					.documents()
+					.any(|document| document.has_relative_timestamp()),
+				_ => false,
+			});
+			for row in timed {
+				if !delta.updated.contains(&row.key) && !delta.inserted.contains(&row.key) {
+					delta.updated.push(row.key.clone());
+				}
+			}
+		}
+		self.rows = fresh;
+		if delta.is_empty() {
+			return false;
+		}
+		self.pending.merge(delta);
+		true
 	}
 
 	pub fn take_delta(&mut self) -> Option<Delta> {
@@ -310,7 +353,7 @@ impl Timeline {
 						view.message.id,
 						(view.message.clone(), view.rendered.clone(), body.clone()),
 					);
-					let entry = entry(state, open.guild_id, *view, body);
+					let entry = entry(state, open.guild_id, *view, body, &self.display);
 					Some(TimelineRow {
 						key: message_key(&entry),
 						row: Row::Message(Box::new(entry)),
@@ -364,8 +407,31 @@ fn message_key(entry: &MessageEntry) -> RowKey {
 	}
 }
 
-fn entry(state: &State, guild_id: Option<Snowflake>, view: MessageView, body: Arc<Body>) -> MessageEntry {
+fn author_name(
+	state: &State,
+	guild_id: Option<Snowflake>,
+	message: &Message,
+	display: &Display,
+) -> Option<ShownName> {
+	if !is_plain(message.kind) || !display.formats(Formatting::Names) {
+		return None;
+	}
+	let mut author = person(state, guild_id, &message.author);
+	if author.nick.is_none() {
+		author.nick = message.member.as_ref().and_then(|member| member.nick.clone());
+	}
+	display.name(&author)
+}
+
+fn entry(
+	state: &State,
+	guild_id: Option<Snowflake>,
+	view: MessageView,
+	body: Arc<Body>,
+	display: &Display,
+) -> MessageEntry {
 	let message = view.message;
+	let shown = author_name(state, guild_id, &message, display);
 	let names = Names::of(state, guild_id, &message, body.documents());
 	let reply = ReplyPreview::of(state, guild_id, &message);
 	let system = (!is_plain(message.kind)).then(|| {
@@ -382,7 +448,8 @@ fn entry(state: &State, guild_id: Option<Snowflake>, view: MessageView, body: Ar
 		reply,
 		system,
 		id: message.id,
-		author: view.author_display,
+		author_extra: shown.as_ref().and_then(|shown| shown.extra.clone()),
+		author: shown.map_or(view.author_display, |shown| shown.name),
 		author_color: view.author_color,
 		content: message.content.clone(),
 		sent_at: message.timestamp.unwrap_or_else(|| message.id.timestamp()),
@@ -406,7 +473,7 @@ pub fn detached_entry(state: &State, guild_id: Option<Snowflake>, message: &Arc<
 		.or_else(|| state.channel_guild(message.channel_id));
 	let view = state.detached_view(guild_id, message);
 	let body = Arc::new(Body::parse(&view.message, view.rendered.as_deref()));
-	entry(state, guild_id, view, body)
+	entry(state, guild_id, view, body, &Display::default())
 }
 
 pub fn busiest_channel(state: &State) -> Option<OpenChannel> {

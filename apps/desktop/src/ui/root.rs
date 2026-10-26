@@ -147,6 +147,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 				store: None,
 				developer_mode: false,
 				pictures: Some(pictures.clone()),
+				display: bridge::Display::default(),
 			},
 		)
 	};

@@ -161,11 +161,7 @@ fn card(layer: &Rc<ProfileLayer>, shown: &Shown) -> View {
 						.child(
 							column()
 								.min_w(0.)
-								.child(
-									label(card.name.clone(), "font_xl")
-										.font_weight(700)
-										.text_color(tok("header_primary")),
-								)
+								.child(parts::name_line(&card, "font_xl"))
 								.child(
 									label(card.handle_line(), "font_sm").text_color(tok("header_secondary")),
 								)

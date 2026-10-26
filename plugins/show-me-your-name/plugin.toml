@@ -1,0 +1,26 @@
+id = "show-me-your-name"
+name = "ShowMeYourName"
+version = "1.0.0"
+api = 1
+description = "Shows usernames next to nicknames and display names, or in their place, in messages, the member list and profiles."
+authors = ["Kyoko"]
+permissions = ["hook:display_name"]
+
+[[settings]]
+key = "mode"
+type = "select"
+label = "Show"
+description = "Which name comes first. The second one is shown dimmed beside it."
+default = "nick-user"
+options = [
+	{ value = "nick-user", label = "Nickname, then username" },
+	{ value = "user-nick", label = "Username, then nickname" },
+	{ value = "user", label = "Username only" },
+]
+
+[[settings]]
+key = "hide_same"
+type = "boolean"
+label = "Hide the username when it matches"
+description = "Show one name when the nickname or display name is the username, ignoring case."
+default = true

@@ -29,4 +29,5 @@ toml.workspace = true
 
 [dev-dependencies]
 mockcord.workspace = true
+plugins.workspace = true
 serde_json.workspace = true

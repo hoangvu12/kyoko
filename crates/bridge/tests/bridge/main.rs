@@ -2,6 +2,7 @@ mod actions;
 mod composer;
 mod connection;
 mod deep_links;
+mod display;
 mod dms;
 mod expressions;
 mod friends;

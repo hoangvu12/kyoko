@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use markdown::{Document, GuildNavKind, Mentions, Node, TimestampStyle};
 use protocol::{Message, MessageType, Poll, Snowflake, User};
 use state::{RenderedMessage, ReplyTarget, State};
@@ -286,29 +286,9 @@ where
 		TimestampStyle::LongDate => local.format("%B %-d, %Y").to_string(),
 		TimestampStyle::ShortDateTime => local.format("%B %-d, %Y %-I:%M %p").to_string(),
 		TimestampStyle::LongDateTime => local.format("%A, %B %-d, %Y %-I:%M %p").to_string(),
-		TimestampStyle::Relative => relative(time, now),
-	}
-}
-
-fn relative(time: DateTime<Utc>, now: DateTime<Utc>) -> String {
-	let delta = now - time;
-	let past = delta >= TimeDelta::zero();
-	let seconds = delta.num_seconds().unsigned_abs();
-	let (unit, amount) = match seconds {
-		0..=59 => ("second", seconds),
-		60..=3599 => ("minute", seconds / 60),
-		3600..=86_399 => ("hour", seconds / 3600),
-		_ => ("day", seconds / 86_400),
-	};
-	let span = if amount == 1 {
-		format!("1 {unit}")
-	} else {
-		format!("{amount} {unit}s")
-	};
-	if past {
-		format!("{span} ago")
-	} else {
-		format!("in {span}")
+		TimestampStyle::Relative => {
+			crate::display::relative_time(unix, now).map_or_else(|| unix.to_string(), |time| time.text)
+		}
 	}
 }
 

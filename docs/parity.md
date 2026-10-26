@@ -39,6 +39,8 @@ Both apps take the same hidden flags:
 
 Kyoko's capture mode lives in `apps/desktop/src/capture.rs`. It is only active when `--capture-screen` is passed, and it refuses to run without `--mock` or `--mock-server`. For a screen it has no steps for, kyoko exits with code 3 before opening a window, and the capture command draws a "not built yet" placeholder in its place. Oxidcord's capture mode is `crates/ui/src/shell/capture.rs` in the reference patch. When a step fails, oxidcord exits with code 4 and the pair shows "capture failed".
 
+`KYOKO_CAPTURE_PLUGINS=<id>,<id>` in the environment of `cargo xtask parity capture` turns those bundled plugins on in kyoko before any screen's steps (approved in-process, as the Allow button does), and kyoko signals ready only once the display hooks have answered (`Display::pending`). Use it with `--out` to keep a plugin-on run apart: `KYOKO_CAPTURE_PLUGINS=show-me-your-name` with `timeline,member-list,profile-popout` shows ShowMeYourName's usernames (ticket 48). Oxidcord ignores it.
+
 The mock fixtures are deterministic for a seed and fixture date, but some text is relative to the wall clock, such as "Today" and "Yesterday" in timestamps. Captures of the same day compare cleanly. Both apps show timestamps in the machine's local time zone.
 
 ## Adding kyoko's steps for a screen

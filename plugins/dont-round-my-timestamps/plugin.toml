@@ -1,0 +1,7 @@
+id = "dont-round-my-timestamps"
+name = "DontRoundMyTimestamps"
+version = "1.0.0"
+api = 1
+description = "Relative times round down, so 2 days and 23 hours ago reads 2 days ago instead of 3."
+authors = ["Kyoko"]
+permissions = ["hook:timestamp"]

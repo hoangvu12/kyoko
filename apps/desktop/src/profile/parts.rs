@@ -21,6 +21,28 @@ pub fn label(value: impl Into<String>, size: &str) -> View {
 	text(value.into()).type_size(size)
 }
 
+pub fn name_line(card: &ProfileCard, size: &str) -> View {
+	row()
+		.items_center()
+		.gap(6.)
+		.min_w(0.)
+		.child(
+			label(card.name.clone(), size)
+				.font_weight(700)
+				.text_color(tok("header_primary"))
+				.shrink_0(),
+		)
+		.when_some(card.name_extra.clone(), |line, extra| {
+			line.child(
+				label(extra, size)
+					.font_weight(500)
+					.text_color(tok("text_muted"))
+					.min_w(0.)
+					.truncate(),
+			)
+		})
+}
+
 pub fn section_label(value: &str) -> View {
 	label(value.to_uppercase(), "font_tiny")
 		.font_weight(700)

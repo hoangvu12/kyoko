@@ -88,8 +88,9 @@ impl Link {
 
 	pub(super) fn publish_profiles(&self, state: &State, changes: &Changes) {
 		if let Some((user_id, guild_id)) = self.profile.target() {
+			let card = ProfileCard::of(state, user_id, guild_id, Utc::now());
 			self.profile
-				.show_card(ProfileCard::of(state, user_id, guild_id, Utc::now()));
+				.show_card(card.map(|card| card.shown_with(state, &self.display)));
 		}
 		if let Some(user_id) = self.pending_dm.get()
 			&& let Some(channel_id) = bridge::dm_channel(state, user_id)

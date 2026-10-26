@@ -116,6 +116,7 @@ pub struct RowEnv {
 	pub commands: Rc<Sender>,
 	pub actions: Rc<MessageActions>,
 	pub lightbox: Rc<super::lightbox::Lightbox>,
+	pub display: bridge::Display,
 }
 
 impl RowEnv {
@@ -390,6 +391,14 @@ fn first_of_group(
 				.text_color(name_color)
 				.cursor(Cursor::Pointer)
 				.on_click(move || actions.profile(author))
+		})
+		.when_some(entry.author_extra.clone(), |header, extra| {
+			header.child(
+				text(extra)
+					.text_size(tok("font_md"))
+					.font_weight(500)
+					.text_color(tok("text_muted")),
+			)
 		})
 		.when(entry.bot, |header| header.child(bot_tag()))
 		.child(

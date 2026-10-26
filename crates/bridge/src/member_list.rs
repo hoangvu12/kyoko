@@ -1,9 +1,10 @@
 use std::time::{Duration, Instant};
 
 use protocol::{MemberListGroup, Snowflake};
-use session::Command;
+use session::{Command, Formatting};
 use state::{Changes, MemberList, MemberListRow, MemberSlot, State};
 
+use crate::display::{Display, person};
 use crate::dm_list::DmStatus;
 
 pub const MEMBER_PUBLISH_GAP: Duration = Duration::from_millis(150);
@@ -66,6 +67,7 @@ impl MemberGroup {
 pub struct MemberEntry {
 	pub user_id: Snowflake,
 	pub name: String,
+	pub extra: Option<String>,
 	pub color: Option<u32>,
 	pub status: DmStatus,
 	pub activity: Option<String>,
@@ -107,6 +109,7 @@ pub struct MemberPanel {
 	restyled: bool,
 	dirty_since: Option<Instant>,
 	published_at: Option<Instant>,
+	display: Display,
 }
 
 impl Default for MemberPanel {
@@ -131,7 +134,26 @@ impl MemberPanel {
 			restyled: false,
 			dirty_since: None,
 			published_at: None,
+			display: Display::default(),
 		}
+	}
+
+	pub fn set_display(&mut self, display: Display) {
+		self.display = display;
+	}
+
+	pub fn reset(&mut self) {
+		let display = std::mem::take(&mut self.display);
+		*self = Self::default();
+		self.display = display;
+	}
+
+	pub fn redraw(&mut self, now: Instant) -> bool {
+		if self.open.is_none() {
+			return false;
+		}
+		self.mark(now);
+		true
 	}
 
 	pub fn open(&self) -> Option<OpenMembers> {
@@ -312,6 +334,10 @@ impl MemberPanel {
 			}
 			_ => (0, Vec::new()),
 		};
+		let entries = match self.open {
+			Some(open) => self.shown(state, open.guild_id, entries),
+			None => entries,
+		};
 		let change = MemberChange {
 			layout: relaid,
 			window: first != self.first || entries != self.entries,
@@ -319,6 +345,30 @@ impl MemberPanel {
 		self.first = first;
 		self.entries = entries;
 		(change.layout || change.window).then_some(change)
+	}
+
+	fn shown(
+		&self,
+		state: &State,
+		guild_id: Snowflake,
+		mut entries: Vec<MemberListEntry>,
+	) -> Vec<MemberListEntry> {
+		if !self.display.formats(Formatting::Names) {
+			return entries;
+		}
+		for entry in &mut entries {
+			let MemberListEntry::Member(member) = entry else {
+				continue;
+			};
+			let Some(user) = state.user(member.user_id) else {
+				continue;
+			};
+			if let Some(shown) = self.display.name(&person(state, Some(guild_id), user)) {
+				member.name = shown.name;
+				member.extra = shown.extra;
+			}
+		}
+		entries
 	}
 
 	fn mark(&mut self, now: Instant) {
@@ -451,6 +501,7 @@ fn entry_of(state: &State, row: MemberListRow) -> MemberListEntry {
 		MemberListRow::Member(member) => MemberListEntry::Member(MemberEntry {
 			user_id: member.user_id,
 			name: member.display,
+			extra: None,
 			color: member.color,
 			status: DmStatus::from_kind(&member.status),
 			activity: member.activity,
@@ -491,6 +542,7 @@ fn search_entries(state: &State, guild_id: Snowflake, query: &str) -> Vec<Member
 		MemberListEntry::Member(MemberEntry {
 			user_id,
 			name,
+			extra: None,
 			color: state.role_color(guild_id, user_id),
 			status: DmStatus::of(state, user_id),
 			activity: None,

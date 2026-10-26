@@ -22,6 +22,7 @@ pub const COMPOSER_PICKER: (f32, f32) = (1001., 755.);
 pub const TOP_BAR_THREADS: (f32, f32) = (871., 46.);
 pub const TOP_BAR_PINS: (f32, f32) = (958., 46.);
 pub const TOAST: &str = "You are sending messages too quickly.";
+pub const PLUGINS_VARIABLE: &str = "KYOKO_CAPTURE_PLUGINS";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -239,6 +240,17 @@ pub struct Capture {
 	pub name: String,
 	pub screen: Screen,
 	pub ready: PathBuf,
+	pub plugins: Vec<String>,
+}
+
+pub fn plugins_from_env() -> Vec<String> {
+	std::env::var(PLUGINS_VARIABLE)
+		.unwrap_or_default()
+		.split(',')
+		.map(str::trim)
+		.filter(|id| !id.is_empty())
+		.map(str::to_owned)
+		.collect()
 }
 
 pub fn signal_ready(path: &Path) -> std::io::Result<()> {

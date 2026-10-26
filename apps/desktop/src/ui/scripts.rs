@@ -74,6 +74,12 @@ fn the_interface_loads_and_builds_every_screen() {
 			("members.window", member_window()),
 		],
 	);
+	shows(
+		&mut app,
+		"a member's username beside the name",
+		"ada_lovelace",
+		&[("members.window", member_window())],
+	);
 	for marker in plugins::PROBE_MARKERS {
 		shows(&mut app, "a plugin in every placed slot", marker, &[]);
 	}
@@ -1182,8 +1188,9 @@ pub(super) fn member_window() -> serde_json::Value {
 		"rows": [
 			{ "kind": "group", "key": "online", "title": "ONLINE — 1" },
 			{
-				"kind": "member", "key": "m30", "id": "30", "name": "ada", "color": "#f47b67",
-				"status": "online", "activity": "Playing Chess", "bot": false, "badge": "", "avatar": "",
+				"kind": "member", "key": "m30", "id": "30", "name": "ada", "extra": "ada_lovelace",
+				"color": "#f47b67", "status": "online", "activity": "Playing Chess", "bot": false, "badge": "",
+				"avatar": "",
 			},
 			{ "kind": "placeholder", "key": "p2", "index": 2 },
 		],

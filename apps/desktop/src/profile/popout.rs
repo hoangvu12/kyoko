@@ -21,11 +21,7 @@ pub fn card(layer: &Rc<ProfileLayer>, shown: &Shown) -> View {
 	let full = layer.clone();
 	let user_id = card.id;
 	let identity = column()
-		.child(
-			label(card.name.clone(), "font_lg")
-				.font_weight(700)
-				.text_color(tok("header_primary")),
-		)
+		.child(parts::name_line(&card, "font_lg"))
 		.child(label(card.handle_line(), "font_sm").text_color(tok("header_secondary")))
 		.when_some(
 			parts::status_line(&pictures, &card.custom_status, images.emoji.as_ref()),

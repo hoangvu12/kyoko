@@ -40,7 +40,7 @@ impl MemberListView {
 	}
 
 	pub(crate) fn reset(&self) {
-		*self.panel.borrow_mut() = MemberPanel::default();
+		self.panel.borrow_mut().reset();
 		self.avatars.borrow_mut().clear();
 		self.heights.set(Value::List(Rc::new([])));
 		self.window.set(empty_window());
@@ -60,6 +60,16 @@ impl MemberListView {
 
 	pub(crate) fn show(&self, open: Option<OpenMembers>) {
 		if self.panel.borrow_mut().show(open, Instant::now()) {
+			self.wakes.push(());
+		}
+	}
+
+	pub(crate) fn set_display(&self, display: bridge::Display) {
+		self.panel.borrow_mut().set_display(display);
+	}
+
+	pub(crate) fn redraw(&self) {
+		if self.panel.borrow_mut().redraw(Instant::now()) {
 			self.wakes.push(());
 		}
 	}
@@ -228,6 +238,7 @@ fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
 		("key", format!("m{}", member.user_id).as_str().into()),
 		("id", member.user_id.to_string().as_str().into()),
 		("name", member.name.as_str().into()),
+		("extra", member.extra.as_deref().unwrap_or_default().into()),
 		("color", color.as_str().into()),
 		("status", member.status.as_str().into()),
 		("activity", member.activity.as_deref().unwrap_or_default().into()),

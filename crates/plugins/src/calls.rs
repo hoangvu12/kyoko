@@ -1,4 +1,5 @@
 use protocol::{DispatchEvent, Message, Snowflake};
+use session::{Person, RelativeTime, ShownName};
 
 use crate::permission::Scope;
 
@@ -47,6 +48,11 @@ pub(crate) enum Call {
 		guild_id: Option<Snowflake>,
 	},
 	AllowNotification(MessageView),
+	FormatName {
+		person: Person,
+		shown: ShownName,
+	},
+	FormatRelative(RelativeTime),
 	Action {
 		key: String,
 		context: Vec<(String, String)>,
@@ -61,6 +67,8 @@ impl Call {
 			Call::BeforeEdit { .. } => "before_edit",
 			Call::AllowTyping { .. } => "allow_typing",
 			Call::AllowNotification(_) => "allow_notification",
+			Call::FormatName { .. } => "format_name",
+			Call::FormatRelative(_) => "format_relative",
 			Call::Action { .. } => "on_action",
 			Call::SettingsChanged => "on_settings_changed",
 		}
@@ -74,6 +82,7 @@ impl Call {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Reply {
 	Text(Option<String>),
+	Name(Option<ShownName>),
 	Allow(bool),
 	Done,
 }

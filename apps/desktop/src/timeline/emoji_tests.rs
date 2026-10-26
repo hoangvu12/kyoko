@@ -35,6 +35,7 @@ fn setup(gallery: Gallery, cdn: String, mock_origin: Option<String>) -> Setup {
 		store: None,
 		developer_mode: false,
 		pictures: None,
+		display: bridge::Display::default(),
 	}
 }
 

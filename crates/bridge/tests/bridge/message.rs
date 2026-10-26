@@ -37,12 +37,19 @@ fn timestamps_format_in_the_local_zone() {
 	let later = now + Duration::days(3);
 	assert_eq!(
 		bridge::timestamp_in(unix, TimestampStyle::Relative, later, &zone),
-		"2 days ago"
+		"3 days ago"
 	);
 	assert_eq!(
 		bridge::timestamp_in(now.timestamp() - 1, TimestampStyle::Relative, now, &zone),
 		"1 second ago"
 	);
+	let ago =
+		|seconds: i64| bridge::timestamp_in(now.timestamp() - seconds, TimestampStyle::Relative, now, &zone);
+	assert_eq!(ago(89), "1 minute ago");
+	assert_eq!(ago(90), "2 minutes ago");
+	assert_eq!(ago(59 * 60 + 50), "1 hour ago");
+	assert_eq!(ago(40 * 86_400), "1 month ago");
+	assert_eq!(ago(7 * 365 * 86_400 + 200 * 86_400), "8 years ago");
 }
 
 #[test]

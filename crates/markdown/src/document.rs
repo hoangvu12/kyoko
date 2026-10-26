@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::ast::{GuildNavKind, Node, for_each};
+use crate::ast::{GuildNavKind, Node, TimestampStyle, for_each};
 
 const JUMBO_EMOJI_LIMIT: usize = 30;
 
@@ -46,6 +46,20 @@ impl Document {
 			}
 		});
 		links
+	}
+
+	pub fn has_relative_timestamp(&self) -> bool {
+		let mut found = false;
+		for_each(&self.nodes, &mut |node| {
+			found |= matches!(
+				node,
+				Node::Timestamp {
+					style: TimestampStyle::Relative,
+					..
+				}
+			);
+		});
+		found
 	}
 
 	pub fn is_only_emoji(&self) -> bool {

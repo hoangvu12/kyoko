@@ -1,6 +1,7 @@
 mod alerts;
 mod command;
 mod config;
+mod display;
 mod hooks;
 mod identity;
 pub mod login;
@@ -14,6 +15,7 @@ mod theme_links;
 pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use command::{Command, FriendSource, InviteSource};
 pub use config::{NotifyFn, SessionConfig};
+pub use display::{DisplayHooks, Formatting, Person, RelativeTime, ShownName};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};

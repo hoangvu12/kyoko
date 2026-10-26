@@ -64,6 +64,7 @@ pub struct Setup {
 	pub store: Option<Arc<store::Store>>,
 	pub developer_mode: bool,
 	pub pictures: Option<Rc<Pictures>>,
+	pub display: bridge::Display,
 }
 
 struct Measured<'a>(&'a VariableHeights);
@@ -151,6 +152,7 @@ impl TimelineView {
 				commands: commands.clone(),
 				actions: actions.clone(),
 				lightbox: lightbox.clone(),
+				display: setup.display,
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,

@@ -7,6 +7,7 @@ use media::{ImageRequest, Shape, SizeHint, Variant};
 use protocol::{Activity, ActivityKind, ChannelType, RelationshipKind, Snowflake, StatusKind, User};
 use state::{ConnectionStatus, CustomStatus, RiskyLock, State};
 
+use crate::display::Display;
 use crate::dm_list::DmStatus;
 use crate::images::{avatar_request, device_pixels, emoji_request, guild_icon_request};
 
@@ -110,6 +111,7 @@ pub struct ProfileCard {
 	pub guild_id: Option<Snowflake>,
 	pub user: User,
 	pub name: String,
+	pub name_extra: Option<String>,
 	pub username: String,
 	pub handle: String,
 	pub member_avatar: Option<String>,
@@ -185,6 +187,7 @@ impl ProfileCard {
 			id: user_id,
 			guild_id,
 			name: state.display_name(guild_id, user_id),
+			name_extra: None,
 			username: user.username.clone(),
 			handle,
 			member_avatar: member.and_then(|member| member.avatar.clone()),
@@ -288,6 +291,14 @@ impl ProfileCard {
 	) -> Option<ImageRequest> {
 		let hash = guild.icon.as_deref()?;
 		Some(guild_icon_request(cdn_base, guild.id, hash, points, scale, false))
+	}
+
+	pub fn shown_with(mut self, state: &State, display: &Display) -> Self {
+		if let Some(shown) = display.person_name(state, self.guild_id, &self.user) {
+			self.name = shown.name;
+			self.name_extra = shown.extra;
+		}
+		self
 	}
 
 	pub fn handle_line(&self) -> String {

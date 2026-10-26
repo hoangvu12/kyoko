@@ -115,7 +115,10 @@ impl Hook {
 	}
 
 	pub fn available(self) -> bool {
-		matches!(self, Hook::Send | Hook::Edit | Hook::Typing | Hook::Notify)
+		matches!(
+			self,
+			Hook::Send | Hook::Edit | Hook::Typing | Hook::Notify | Hook::DisplayName | Hook::Timestamp
+		)
 	}
 }
 

@@ -11,7 +11,7 @@ use bridge::{
 use chrono::Utc;
 use protocol::Snowflake;
 use rest::UploadFile;
-use session::Command;
+use session::{Command, Formatting};
 use state::{Changes, State};
 use zgx::compose::prelude::*;
 use zgx::reactive::{Runtime, Signal};
@@ -58,10 +58,12 @@ impl ThreadPane {
 		handle: tokio::runtime::Handle,
 		setup: Setup,
 	) -> Self {
+		let mut timeline = Timeline::default();
+		timeline.set_display(setup.display.clone());
 		let view = TimelineView::new(runtime, setup);
 		let layer = ThreadsLayer::new(runtime, view.pictures());
 		Self {
-			timeline: RefCell::new(Timeline::default()),
+			timeline: RefCell::new(timeline),
 			view,
 			composer: ComposerView::install(host, handle, &composer::THREAD),
 			slot: runtime.signal(Slot::default()),
@@ -739,6 +741,12 @@ impl Link {
 					can_manage: state.can_manage_messages(popout.channel_id),
 				});
 			}
+		}
+	}
+
+	pub(super) fn redraw_thread(&self, state: &State, formatting: Formatting) {
+		if self.threads.timeline.borrow_mut().redraw(state, formatting) {
+			self.publish_thread(state);
 		}
 	}
 

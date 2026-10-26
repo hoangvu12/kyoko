@@ -363,7 +363,7 @@ impl Body<'_> {
 				self.custom_emoji(inline, (name, *id, *animated), style)
 			}
 			Node::Timestamp { unix, style: kind } => {
-				let label = bridge::timestamp_text(*unix, *kind, Utc::now());
+				let label = self.env.display.timestamp(*unix, *kind, Utc::now());
 				let next = Style {
 					background: Some(Themed::Token(tok("code_background"))),
 					..style.clone()

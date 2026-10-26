@@ -5,6 +5,7 @@ mod community;
 mod composer;
 mod connection;
 mod deep_link;
+mod display;
 mod dm_list;
 mod emoji_picker;
 mod friends;
@@ -47,6 +48,7 @@ pub use composer::{
 };
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
+pub use display::{Display, person, relative_text, relative_time};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,

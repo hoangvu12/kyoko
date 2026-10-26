@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use mlua::chunk::ChunkMode;
 use mlua::{Error, Function, Lua, RegistryKey, Table, Value, VmState};
+use session::ShownName;
 
 use crate::api;
 use crate::calls::{Call, Fault, MessageView, ON_EVENT, PluginEvent, Reply};
@@ -14,11 +15,14 @@ use crate::package::Package;
 
 const ERROR_LIMIT: usize = 160;
 const TEXT_LIMIT: usize = 4000;
-const HOOK_NAMES: [&str; 7] = [
+const LABEL_LIMIT: usize = 100;
+const HOOK_NAMES: [&str; 9] = [
 	"before_send",
 	"before_edit",
 	"allow_typing",
 	"allow_notification",
+	"format_name",
+	"format_relative",
 	"on_action",
 	"on_settings_changed",
 	ON_EVENT,
@@ -115,6 +119,8 @@ impl LogicVm {
 			Call::AllowTyping { .. } | Call::AllowNotification(_) => {
 				Reply::Allow(!matches!(value, Value::Boolean(false)))
 			}
+			Call::FormatName { shown, .. } => Reply::Name(shown_name(&value, shown)),
+			Call::FormatRelative(time) => Reply::Text(label(&value).filter(|text| *text != time.text)),
 			Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 		})
 	}
@@ -188,6 +194,34 @@ impl LogicVm {
 				],
 			)?)],
 			Call::AllowNotification(message) => vec![Value::Table(message_table(lua, message)?)],
+			Call::FormatName { person, shown } => {
+				let argument = table(
+					lua,
+					&[
+						("user_id", Some(person.user_id.to_string())),
+						("guild_id", person.guild_id.map(|id| id.to_string())),
+						("username", Some(person.username.clone())),
+						("global_name", person.global_name.clone()),
+						("nick", person.nick.clone()),
+						("name", Some(shown.name.clone())),
+						("extra", shown.extra.clone()),
+					],
+				)?;
+				vec![Value::Table(argument)]
+			}
+			Call::FormatRelative(time) => {
+				let argument = table(
+					lua,
+					&[
+						("unit", Some(time.unit.to_owned())),
+						("text", Some(time.text.clone())),
+					],
+				)?;
+				argument.raw_set("seconds", time.seconds.min(i64::MAX as u64) as i64)?;
+				argument.raw_set("past", time.past)?;
+				argument.raw_set("value", time.value)?;
+				vec![Value::Table(argument)]
+			}
 			Call::Action { key, context } => {
 				let details = lua.create_table()?;
 				for (name, value) in context {
@@ -299,8 +333,40 @@ fn default_reply(call: &Call) -> Reply {
 	match call {
 		Call::BeforeSend { .. } | Call::BeforeEdit { .. } => Reply::Text(None),
 		Call::AllowTyping { .. } | Call::AllowNotification(_) => Reply::Allow(true),
+		Call::FormatName { .. } => Reply::Name(None),
+		Call::FormatRelative(_) => Reply::Text(None),
 		Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 	}
+}
+
+fn label(value: &Value) -> Option<String> {
+	let Value::String(text) = value else {
+		return None;
+	};
+	let text = text.to_str().ok()?.to_owned();
+	(!text.trim().is_empty() && text.chars().count() <= LABEL_LIMIT).then_some(text)
+}
+
+fn shown_name(value: &Value, current: &ShownName) -> Option<ShownName> {
+	let shown = match value {
+		Value::String(_) => ShownName {
+			name: label(value)?,
+			extra: None,
+		},
+		Value::Table(table) => {
+			let name = match table.raw_get::<Value>("name").ok()? {
+				Value::Nil => current.name.clone(),
+				name => label(&name)?,
+			};
+			let extra = table
+				.raw_get::<Value>("extra")
+				.ok()
+				.and_then(|extra| label(&extra));
+			ShownName { name, extra }
+		}
+		_ => return None,
+	};
+	(shown != *current).then_some(shown)
 }
 
 fn rewrite(value: &Value, original: &str) -> Option<String> {

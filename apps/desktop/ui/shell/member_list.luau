@@ -101,6 +101,7 @@ local function name_line(row: any)
 		then row.color
 		elseif offline then theme.color.text_muted
 		else theme.color.text_normal
+	local extra = row.extra ~= nil and row.extra ~= ""
 	return ui.row {
 		min_w = 0,
 		items = "center",
@@ -109,12 +110,25 @@ local function name_line(row: any)
 			row.name,
 			literal = true,
 			min_w = 0,
+			shrink = if extra then 0 else 1,
 			truncate = true,
 			text_size = theme.size.font_md,
 			line_height = NAME_LINE,
 			weight = theme.weight.semibold,
 			color = color,
 		},
+		if extra
+			then ui.text {
+				row.extra,
+				literal = true,
+				min_w = 0,
+				truncate = true,
+				text_size = theme.size.font_md,
+				line_height = NAME_LINE,
+				weight = theme.weight.medium,
+				color = theme.color.text_muted,
+			}
+			else nil,
 		if row.bot
 			then tag("BOT", theme.color.brand, theme.color.text_on_brand, TAG_TEXT, TAG_LINE, TAG_SIDES, theme.weight.bold)
 			else nil,

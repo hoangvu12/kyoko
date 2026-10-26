@@ -57,7 +57,36 @@ const ONE_PING_PER_DM: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 4] = [CLEAR_URLS, SILENT_TYPING, TEXT_REPLACE, ONE_PING_PER_DM];
+const SHOW_ME_YOUR_NAME: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/show-me-your-name/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/show-me-your-name/logic.luau"),
+	),
+];
+
+const DONT_ROUND_MY_TIMESTAMPS: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/dont-round-my-timestamps/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/dont-round-my-timestamps/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 6] = [
+	CLEAR_URLS,
+	SILENT_TYPING,
+	TEXT_REPLACE,
+	ONE_PING_PER_DM,
+	SHOW_ME_YOUR_NAME,
+	DONT_ROUND_MY_TIMESTAMPS,
+];
 
 pub fn packages() -> Vec<Package> {
 	PACKAGES

@@ -11,7 +11,7 @@ use mockcord::{FixtureSummary, MockConfig, Server};
 use plugins::{HostConfig, PluginHost};
 use protocol::{Channel, ChannelType, Snowflake, Token};
 use serde_json::json;
-use session::{Command, Session, SessionConfig, SessionHooks};
+use session::{Command, Formatting, Session, SessionConfig, SessionHooks};
 use state::{SharedState, State};
 use store::{Paths, Settings, Store};
 use tokio::sync::Notify;
@@ -49,6 +49,10 @@ const TYPO_EDITED: &str = "headless typo: teh dog";
 const TYPO_EDIT_FIXED: &str = "headless typo: the dog";
 const TYPING_QUIET: Duration = Duration::from_millis(500);
 const ONE_PING_PER_DM: &str = "one-ping-per-dm";
+const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
+const DONT_ROUND: &str = "dont-round-my-timestamps";
+const FORMAT_POLL: Duration = Duration::from_millis(20);
+const REDRAWS: usize = 100;
 const PING_TEXT: &str = "headless ping";
 const ALERT_QUIET: Duration = Duration::from_millis(500);
 const BROKEN_HOOK_TEXT: &str = "headless hook fails";
@@ -180,6 +184,8 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		SILENT_TYPING,
 		TEXT_REPLACE,
 		ONE_PING_PER_DM,
+		SHOW_ME_YOUR_NAME,
+		DONT_ROUND,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -337,11 +343,75 @@ impl Harness {
 		.await
 	}
 
+	async fn formats_names_and_times(
+		&self,
+		plugins: &PluginHost,
+		guild_id: Snowflake,
+		channel_id: Snowflake,
+	) -> Result<u64> {
+		let display = bridge::Display::new(Arc::new(plugins.clone()), |_| {});
+		let mut timeline = bridge::Timeline::default();
+		timeline.set_display(display.clone());
+		timeline.select(&self.state.read(), Some(guild_id), channel_id);
+		let deadline = Instant::now() + STEP_TIMEOUT;
+		loop {
+			let shown = {
+				let state = self.state.read();
+				timeline.redraw(&state, Formatting::Names);
+				let mut plain = timeline.messages().filter(|entry| entry.is_plain()).peekable();
+				plain.peek().is_some() && plain.all(|entry| shows_username(&state, guild_id, entry))
+			};
+			if shown {
+				break;
+			}
+			ensure!(
+				Instant::now() < deadline,
+				"ShowMeYourName did not reach the timeline"
+			);
+			tokio::time::sleep(FORMAT_POLL).await;
+		}
+		let calls = display.calls();
+		for _ in 0..REDRAWS {
+			timeline.redraw(&self.state.read(), Formatting::Names);
+		}
+		ensure!(
+			display.calls() == calls,
+			"redrawing the timeline asked ShowMeYourName again"
+		);
+		let now = chrono::Utc::now();
+		let unix = (now - chrono::TimeDelta::hours(2 * 24 + 23)).timestamp();
+		loop {
+			if display.relative(unix, now) == "2 days ago" {
+				break;
+			}
+			ensure!(
+				Instant::now() < deadline,
+				"DontRoundMyTimestamps did not round a relative time down"
+			);
+			tokio::time::sleep(FORMAT_POLL).await;
+		}
+		Ok(display.calls())
+	}
+
 	async fn stop(self) -> Result<()> {
 		tokio::task::spawn_blocking(move || self.session.shutdown())
 			.await
 			.context("session shutdown panicked")
 	}
+}
+
+fn shows_username(state: &State, guild_id: Snowflake, entry: &bridge::MessageEntry) -> bool {
+	let mut person = bridge::person(state, Some(guild_id), &entry.message.author);
+	if person.nick.is_none() {
+		person.nick = entry
+			.message
+			.member
+			.as_ref()
+			.and_then(|member| member.nick.clone());
+	}
+	let name = person.name().to_owned();
+	let extra = (name.to_lowercase() != person.username.to_lowercase()).then_some(person.username.as_str());
+	entry.author == name && entry.author_extra.as_deref() == extra
 }
 
 fn first_text_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
@@ -500,6 +570,9 @@ async fn scenario(
 				.is_some_and(|rendered| !rendered.ast.is_empty())
 		})
 		.await?;
+	let display_calls = harness
+		.formats_names_and_times(&plugins, guild_id, channel_id)
+		.await?;
 	let cleaned_id = harness.round_trip_as(channel_id, DIRTY_LINK, CLEAN_LINK).await?;
 	ensure!(
 		harness.state.read().altered_by(cleaned_id) == Some(CLEAR_URLS_NAME),
@@ -626,6 +699,7 @@ async fn scenario(
 			"moderation_ok": text.moderation_ok,
 			"expressions_ok": text.expressions_ok,
 			"community_ok": text.community_ok,
+			"display_calls": display_calls,
 			"plugins": plugins
 				.snapshot()
 				.iter()

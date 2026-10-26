@@ -4,6 +4,7 @@ mod harness;
 
 mod clear_urls;
 mod deadlines;
+mod display;
 mod events;
 mod gestures;
 mod one_ping_per_dm;
