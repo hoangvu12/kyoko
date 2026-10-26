@@ -4,7 +4,7 @@
 
 **Blocked by:** 10
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/command-choices-and-autocomplete.html`, `docs/design/mockups/command-choices-loading.html`, `docs/design/mockups/command-choices-failed.html`, `docs/design/mockups/command-attachment-option.html`, `docs/design/mockups/command-attachment-option-picked.html`
 
