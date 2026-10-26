@@ -244,8 +244,9 @@ async fn turning_the_opt_in_on_and_off_moves_the_secrets() {
 	let token = running.token().to_owned();
 	let account = account_user(user_id);
 	running
-		.eventually("the account token to reach the keyring", || {
+		.eventually("the account to be saved with its token in the keyring", || {
 			running.keyring().secret(&account).is_some()
+				&& running.store().accounts.current() == Some(user_id)
 		})
 		.await;
 	let store = running.store();
