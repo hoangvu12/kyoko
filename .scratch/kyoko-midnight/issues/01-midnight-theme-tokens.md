@@ -4,7 +4,7 @@
 
 **Blocked by:** none (coordinate with v1 57, which reads a Vencord/BetterDiscord variable block into these tokens)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/midnight-discord.html (the `:root` block of any page holds every token)`
 
