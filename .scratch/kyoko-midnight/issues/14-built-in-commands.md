@@ -4,7 +4,7 @@
 
 **Blocked by:** 10; 08 for the GIF and sticker strips
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/command-picker-built-in.html`, `docs/design/mockups/built-in-gif.html`, `docs/design/mockups/built-in-sticker.html`, `docs/design/mockups/built-in-thread.html`
 
