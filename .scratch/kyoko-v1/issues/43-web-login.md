@@ -4,7 +4,7 @@
 
 **Blocked by:** 21 (Token login, ToS notice and sign-out)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The window uses a temporary profile and the same reduced Chrome user agent as the client
 - [ ] The token is read only from discord.com, by a document-start script, and handed to the app
