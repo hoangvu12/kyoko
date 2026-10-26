@@ -54,6 +54,7 @@ const ONE_PING_PER_DM: &str = "one-ping-per-dm";
 const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
 const DONT_ROUND: &str = "dont-round-my-timestamps";
 const EXPRESSION_CLONER: &str = "expression-cloner";
+const MESSAGE_LOGGER: &str = "message-logger";
 const CLONE_KEY: &str = "clone_emoji";
 const CLONE_NAME: &str = "headless_clone";
 const REDRAWS: usize = 100;
@@ -196,6 +197,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		DONT_ROUND,
 		FAVORITE_EMOJI_FIRST,
 		EXPRESSION_CLONER,
+		MESSAGE_LOGGER,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -397,6 +399,76 @@ impl Harness {
 		})
 		.await?;
 		Ok(display.calls())
+	}
+
+	async fn logs_kept_messages(
+		&self,
+		plugins: &PluginHost,
+		server: &Server,
+		guild_id: Snowflake,
+		channel_id: Snowflake,
+		edited_id: Snowflake,
+	) -> Result<u64> {
+		let wake = self.wake.clone();
+		let display = bridge::Display::new(Arc::new(plugins.clone()), move |_| wake.notify_one());
+		let timeline = RefCell::new(bridge::Timeline::default());
+		timeline.borrow_mut().set_display(display.clone());
+		timeline
+			.borrow_mut()
+			.select(&self.state.read(), Some(guild_id), channel_id);
+		let doomed = {
+			let state = self.state.read();
+			let mine = state.current_user_id();
+			state
+				.messages(channel_id)
+				.and_then(|cache| {
+					cache
+						.ordered
+						.iter()
+						.rev()
+						.find(|message| Some(message.author.id) != mine && !message.content.is_empty())
+						.map(|message| message.id)
+				})
+				.context("no message by someone else to delete")?
+		};
+		ensure!(
+			server.control().delete_message(channel_id.0, doomed.0),
+			"the mock refused to delete a message"
+		);
+		self.wait("MessageLogger to show the deleted and the edited message", || {
+			let state = self.state.read();
+			let mut timeline = timeline.borrow_mut();
+			timeline.redraw(&state, Formatting::Messages);
+			let deleted = timeline.messages().any(|entry| {
+				entry.id == doomed
+					&& entry.deleted
+					&& entry
+						.look
+						.as_ref()
+						.is_some_and(|look| look.deleted == Some(session::DeletedLook::Text))
+			});
+			let edited = timeline.messages().any(|entry| {
+				entry.id == edited_id
+					&& !entry.history.is_empty()
+					&& entry
+						.look
+						.as_ref()
+						.is_some_and(|look| look.history == Some(session::HistoryLook::Inline))
+			});
+			deleted && edited && display.pending() == 0
+		})
+		.await?;
+		let calls = display.look_calls();
+		for _ in 0..REDRAWS {
+			timeline
+				.borrow_mut()
+				.redraw(&self.state.read(), Formatting::Messages);
+		}
+		ensure!(
+			display.look_calls() == calls && display.pending() == 0,
+			"redrawing the timeline asked MessageLogger again"
+		);
+		Ok(calls)
 	}
 
 	async fn favourites_first(&self, server: &Server) -> Result<()> {
@@ -775,6 +847,13 @@ async fn scenario(
 				.is_some_and(|message| message.content == TYPO_EDIT_FIXED)
 		})
 		.await?;
+	ensure!(
+		harness.state.read().shows_deleted_messages(),
+		"MessageLogger did not turn on deleted messages"
+	);
+	let kept_calls = harness
+		.logs_kept_messages(&plugins, server, guild_id, channel_id, typo_id)
+		.await?;
 	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
 	harness.session.send(Command::Typing { channel_id });
 	tokio::time::sleep(TYPING_QUIET).await;
@@ -882,6 +961,7 @@ async fn scenario(
 			"community_ok": text.community_ok,
 			"clone_ok": clone_ok,
 			"display_calls": display_calls,
+			"kept_calls": kept_calls,
 			"plugins": plugins
 				.snapshot()
 				.iter()

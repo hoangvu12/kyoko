@@ -32,8 +32,10 @@ impl Link {
 		let state = shared.read();
 		let formatting = if times {
 			Formatting::RelativeTimes
-		} else {
+		} else if names {
 			Formatting::Names
+		} else {
+			Formatting::Messages
 		};
 		tracing::debug!(
 			names,

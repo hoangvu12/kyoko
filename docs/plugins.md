@@ -7,7 +7,7 @@ The runtime is `crates/plugins` (`PluginHost`). It has no UI dependency and buil
 ## The two halves
 
 - **Logic half** (`logic.luau`): data hooks, events, storage and actions. Each enabled plugin gets its own sandboxed Luau VM on a worker thread of its own, with a call deadline on every hook, so a per-message hook never runs on the UI thread or blocks the session for long. This half is built.
-- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code, and so are `message.menu` items. See "UI slots".
+- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code, and so are `message.menu` items and `message.accessory` lines. See "UI slots".
 
 ## Where plugins come from
 
@@ -113,16 +113,17 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `hook:display_name` | `format_name`: change how people's names show in the timeline, the member list and profiles | yes |
 | `hook:timestamp` | `format_relative`: change the text of relative times (`<t:...:R>`) | yes |
 | `hook:emoji_rank` | `rank_emoji`: reorder the emoji autocomplete, seeing the query and your favourite emoji | yes |
-| `hook:message_render` | message render access to kept deleted and edited versions | reserved for 52 |
+| `hook:message_render` | `render_message`: read the deleted messages and earlier versions of edited messages kyoko keeps, DMs included, and choose how they show; `show_deleted`: turn kept deleted messages on in the timeline | yes |
 | `action:mark_read` | `kyoko.actions.mark_all_read`, `mark_guild_read` | yes |
 | `action:upload_expression` | `kyoko.actions.clone_expression`: offer to copy the emoji or sticker the user chose from a menu into a server | yes |
 | `action:activity` | the activity-sharing toggle | reserved for 56 |
 | `ui:composer.buttons`, `ui:panel.buttons`, `ui:rail.buttons` | show its UI half in that slot | yes |
 | `ui:message.menu` | add its `[[menu]]` items to the message menu and the expression menus | yes |
-| `ui:settings`, `ui:user.decoration`, `ui:member.decoration`, `ui:message.accessory` | contribute to that UI slot | reserved (see UI slots) |
+| `ui:message.accessory` | add the `accessory` line its `render_message` returns under a message | yes |
+| `ui:settings`, `ui:user.decoration`, `ui:member.decoration` | contribute to that UI slot | reserved (see UI slots) |
 | `network:<host>` | contact that host | reserved; v1 has no network API at all |
 
-Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:edit`, `hook:notify`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
+Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:edit`, `hook:notify`, `hook:message_render`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
 
 Enforcement is in the host, never in the plugin: a hook is called only when its `hook:` permission is granted; every `kyoko.*` call checks its permission and raises a Luau error (`kyoko: kyoko.storage needs the storage permission`) when it is missing; events are filtered by their read scope before they reach the VM.
 
@@ -141,6 +142,8 @@ return {
 	format_name = function(person) return nil end,
 	format_relative = function(time) return nil end,
 	rank_emoji = function(request) return nil end,
+	render_message = function(message) return nil end,
+	show_deleted = function() return false end,
 	on_event = function(event) end,
 	on_action = function(key, context) end,
 	on_settings_changed = function() end,
@@ -160,6 +163,8 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `format_name(person)` | `hook:display_name` | off the UI thread, once per person and inputs, then cached (below) | `{ user_id, guild_id?, username, global_name?, nick?, name, extra? }`; `name` is what kyoko shows (the server nickname, else the display name, else the username) | a string to show instead of `name`, or `{ name?, extra? }`, where `extra` is shown after it, dimmed; `nil` for no change | 50 ms |
 | `format_relative(time)` | `hook:timestamp` | off the UI thread, once per distinct span, then cached | `{ seconds, past, unit, value, text }`: whole seconds between now and the time, whether it is in the past, the largest unit that fits (`second`, `minute`, `hour`, `day`, `month` of 30 days, `year` of 365 days), the exact count of that unit (`2.96`), and kyoko's own text (`3 days ago`) | a string to show instead, or `nil` | 50 ms |
 | `rank_emoji(request)` | `hook:emoji_rank` | after typing pauses on a `:` query (below) | `{ query, guild_id?, emojis }` | an array of keys to put first, or `nil` | 100 ms |
+| `render_message(message)` | `hook:message_render` | off the UI thread, once per kept message and revision, then cached ("Message looks") | `{ id, channel_id, guild_id?, author_id, bot, mine, content, deleted, deleted_at?, edited_at?, versions }`; times are Unix seconds, `versions` the earlier versions oldest first, each `{ content, edited_at?, replaced_at?, attachments, embeds }` (counts) | `{ deleted?, history?, accessory? }`, or `nil` for kyoko's own look | 50 ms |
+| `show_deleted()` | `hook:message_render` | whenever the set of running plugins or one's settings change, and when a session attaches | nothing | `true` to show kept deleted messages in the timeline; anything else does not | 50 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting, one of its slot buttons or one of its menu items | the key, and `{ source = "settings" }`, `{ source = "slot", slot = "composer.buttons" }` or `{ source = "menu", slot = "message.menu", target?, id?, name?, animated?, format?, channel_id?, message_id? }` ("Menu items") | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
@@ -230,6 +235,17 @@ State queries read the session's `State` snapshot under its read lock and copy w
 
 A full mock session (`cargo xtask headless-run --mock`, 150 messages of one channel with ShowMeYourName and DontRoundMyTimestamps on) makes 43 to 53 display calls (runs differ by when members' nicknames arrive, each a new question): one per distinct author and nickname seen, and one for the relative time it checks; re-projecting the channel 100 times more makes none.
 
+## Message looks
+
+`hook:message_render` lets a plugin change how the messages kyoko kept show (ticket 16, `docs/storage.md`, "Kept deleted and edited messages"). Kyoko keeps the data whatever the plugins do; the plugin only chooses what is shown, and only within kyoko's caps: 100 deleted messages per channel and 10 earlier versions per message (500 per channel) in the store, for 7 days, and fewer in memory (`CacheLimits`). A plugin has no way to keep more, keep them longer, or see a message kyoko did not keep, and kyoko never keeps a delete it sent itself.
+
+- Deleted messages are hidden at every start (`Command::ShowDeletedMessages` is off). After any change to the plugins (enable, disable, suspension, restart, a settings change, an action) and whenever a session attaches, the host asks every running plugin with the permission `show_deleted()`, and sends `ShowDeletedMessages(true)` while one answers `true`, `false` once none does. A plugin that fails, overruns or is suspended counts as `false`, so the timeline goes back to hiding deleted messages.
+- `render_message` is asked only about messages that have something kept: deleted ones (while shown) and ones with at least one earlier version. It runs on the `display-hooks` thread through `bridge::Display`, like the name hooks: a miss draws kyoko's own look at once and the answer arrives as a `Formatting::Messages` wake that redraws the rows whose look changed. Answers are cached per message and revision (deleted or not, the number of versions, the edit time and the oldest kept version), up to 2048, and dropped when a plugin with the hook starts, stops, restarts, has a setting changed or runs an action. Scrolling and redrawing never ask again.
+- The answer: `deleted` is `"text"` (red text, `danger`), `"tint"` (normal text on a `background_feedback_critical` tint) or `"hide"` (the row is left out of the timeline; the next message of the same author then shows its header), for a deleted message; `history` is `"inline"` (earlier versions dimmed above the text, oldest first, each with "(edited)") or `"collapsed"` (the "(edited)" or "(deleted)" after the text opens and closes them); `accessory` is a string, or `{ text, action? }`: a line of up to 100 characters under the message, shown only with `ui:message.accessory`. With an `action` key it is a link: a click runs `on_action(action, { source = "slot", slot = "message.accessory", channel_id, message_id })` through `PluginHost::gesture`. Unknown values are ignored.
+- Several plugins chain in id order: each later `deleted` or `history` replaces an earlier one, and every plugin's accessory is drawn, in id order.
+- It fails open: an error, an overrun or `nil` is kyoko's own look (deleted messages muted with a red "(deleted)", no history); errors and overruns count strikes as for every hook, and the cached fallback means a broken plugin is asked once per message. A `"hide"` answer arrives after the first frame, so a hidden deleted message can show for a moment.
+- Earlier versions are drawn from their text only, with mentions resolved as in the message; their attachments and embeds are not drawn.
+
 ## Actions and the gesture rule
 
 A Discord action runs only inside a user gesture:
@@ -237,7 +253,8 @@ A Discord action runs only inside a user gesture:
 1. The gesture starts in the app, never in a plugin: a click or key press on the plugin's button in kyoko's interface. The window records each pointer-down and key-down; `plugins.action` and a UI half's `plugin.<id>.action` and `plugin.<id>.set` are refused unless one happened in the last second, and consume it, so a script calling them in a loop or on a timer gets nothing.
 2. The host calls `on_action(key, context)`; only during that call is `kyoko.actions.*` allowed, and only once per gesture. From any other hook or event it raises `kyoko: ... was refused: actions only run from your click or command`.
 3. Each plugin may run at most 5 actions per 10 seconds (`Limits::actions`, `action_window`), across gestures and restarts.
-4. An allowed action is a session `Command` (`MarkAllRead`, `MarkGuildRead`) sent through the same `Commander` as the user's own clicks, so it goes through the same locks, pacing and REST safety layer (`docs/locks.md`, `docs/rest.md`). Plugins never reach around them. `clone_expression` sends no command at all: it asks the window (`PluginHost::on_request`, `PluginRequest::Clone`) to open kyoko's clone dialog, and the upload is the user's own click on a server there, a `CreateEmoji` or `CreateSticker` through the same `Commander` as server settings' uploads. A plugin names no expression: it can only clone the one the user right-clicked, which the host keeps for the length of the call.
+4. After `on_action` returns, the plugin's revision goes up, as after a settings change, so whatever kyoko cached from its display hooks and `render_message` is asked again: a click that changes what the plugin shows shows at once.
+5. An allowed action is a session `Command` (`MarkAllRead`, `MarkGuildRead`) sent through the same `Commander` as the user's own clicks, so it goes through the same locks, pacing and REST safety layer (`docs/locks.md`, `docs/rest.md`). Plugins never reach around them. `clone_expression` sends no command at all: it asks the window (`PluginHost::on_request`, `PluginRequest::Clone`) to open kyoko's clone dialog, and the upload is the user's own click on a server there, a `CreateEmoji` or `CreateSticker` through the same `Commander` as server settings' uploads. A plugin names no expression: it can only clone the one the user right-clicked, which the host keeps for the length of the call.
 
 `PluginHost::gesture(id, key, context)` is the entry point; `PluginHost::menu_gesture(id, key, slot, target, context)` is the same for a menu item (it checks the item is one the plugin declared and was granted, and adds `source`, `slot` and the target's fields to the context). The desktop calls either only after the activation check above. The spec's other gesture, a command, will call the same entry point once plugins can register commands.
 
@@ -248,6 +265,7 @@ A Discord action runs only inside a user gesture:
 | send and edit hooks | 250 ms |
 | typing and notification vetoes | 100 ms |
 | `format_name`, `format_relative` (`name_deadline`, `time_deadline`) | 50 ms each |
+| `render_message`, `show_deleted` (`render_deadline`) | 50 ms |
 | emoji ranking | 100 ms |
 | events, `on_settings_changed` | 200 ms |
 | `on_action` | 500 ms |
@@ -277,7 +295,7 @@ A Discord action runs only inside a user gesture:
 | `rail.buttons` | the server rail, under Home | placed, empty until 54 |
 | `user.decoration`, `member.decoration` | beside names in the timeline, member list and profiles | reserved for 49 |
 | `message.menu` | items appended to the message context menu (`bridge::append_plugin_entries` after `bridge::message_menu`, drawn by `MessageActions` for the timeline, the thread pane, the hover bar's More menu and search results), and the menu of a custom emoji or sticker cell in the expression pickers | placed (53), from the manifest's `[[menu]]` |
-| `message.accessory` | under a message | reserved for 52 |
+| `message.accessory` | lines of small muted text under a message in the timeline and the thread pane, after its reactions, from `render_message`'s `accessory` | placed (52), drawn by Rust |
 
 ### Menu items
 
@@ -406,6 +424,18 @@ Vencord's ShowMeYourName is the behaviour reference for the modes; no code is sh
 
 Vencord's ExpressionCloner (GPL) is the behaviour reference only; no code is shared.
 
+## MessageLogger
+
+`plugins/message-logger/` (`hook:message_render`, `ui:message.accessory`, `storage`, ships disabled). It shows deleted messages and the earlier versions of edited messages in the chat, from what kyoko keeps ("Message looks"):
+
+- "Show" (`show`): deleted messages and edit history (default), deleted messages only, or edit history only. Its `show_deleted` answers `true` unless edit history only is chosen.
+- "Deleted message style" (`deleted_style`): red text (default) or a red tint behind the message, Vencord's two styles.
+- "Show edit history inline" (`inline_edits`, on): earlier versions dimmed above the current text; off, they stay closed until you click "(edited)".
+- "Ignore bots" and "Ignore my messages" (off): those deleted messages are hidden and their edits are not shown.
+- "Show Remove from log" (`remove_button`, on): a "Remove from log" link under every message it decorates. A click stores the message id (at most 500, oldest forgotten first) and the message goes back to kyoko's own look: hidden if deleted, no history if edited. The list survives restarts in its storage.
+
+The settings page says how much kyoko keeps; the plugin cannot keep more. Vencord's MessageLogger is the behaviour reference; no code is shared. Its ignore lists for users, channels and servers are left out.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -422,6 +452,8 @@ Behaviour tests drive a session against an in-process mockcord with the plugin h
 What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), FavoriteEmojiFirst (`favorite_emoji_first.rs`: favourites first in their favourite order and after favourites change, the hook only with its permission, failing and endless rankings leaving kyoko's order beside a working one, nothing while off), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read), ShowMeYourName and DontRoundMyTimestamps (every author of the loaded channel shown through `bridge::Display`, no calls on re-projection, a relative time rounded down), FavoriteEmojiFirst (the mock's favourite ranked first) and a failing plugin against the mock. The session side of ranking (one read of the frecency proto, updates, the debounce and a failing hook) is covered in `crates/session/tests/session/favourites.rs`, and the real composer with the real plugin in the bridge test `favourites::the_emoji_autocomplete_lists_favourites_first_once_favorite_emoji_first_runs`.
 
 ExpressionCloner: `crates/plugins/tests/plugins/expression_cloner.rs` (it ships disabled; its items join the menu only once approved; a menu click asks for exactly the clicked expression, nothing for a Lottie sticker, no target, a settings click or an undeclared key; `clone_expression` is refused outside a menu gesture and past the per-plugin limit, and without `action:upload_expression`); `crates/bridge/tests/bridge/cloner.rs` with the real host and a session against mockcord (the items show only for custom emoji and image stickers and only while some server takes expressions; a full server listed with why; the animated source fetched through `MediaService` and uploaded as a GIF, a sticker too); the session seam in `crates/session/tests/session/uploads.rs` (the exact emoji body and sticker form, permission, slots, names, types and sizes refused before REST, a Discord refusal as a rejection); and `timeline::clone_tests` in the desktop (right-click on the rendered emoji, Clone Emoji, the dialog's server, the emoji arrives). `headless-run` clones an emoji through the plugin (`clone_ok`).
+
+MessageLogger: `crates/plugins/tests/plugins/message_logger.rs` (the hook only with its permission and an accessory only with `ui:message.accessory`; every setting's look; Remove from log hiding a message and surviving a restart; `ShowDeletedMessages` sent on enabling, a settings change, disabling, enabling again and a new start; a failing and an endless renderer falling back to kyoko's look, being suspended and turning deleted messages off); `crates/bridge/tests/bridge/message_logger.rs` with the real host against mockcord (`Control::edit_message` and `delete_message`: the timeline hides the deleted message on its own, then shows it in red with the accessory and the edit's earlier version once the plugin runs, one call per kept message and none on redraw, the tint setting, Remove from log, kyoko's look again once off; edit history only keeps deleted messages hidden). `headless-run` deletes another author's message and checks it and the edited typo through `bridge::Display` (`kept_calls`), and the `message-logger-deleted` and `message-logger-edits` captures show both in the window.
 
 Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
 

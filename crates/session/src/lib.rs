@@ -15,7 +15,10 @@ mod theme_links;
 pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use command::{Command, FriendSource, InviteSource};
 pub use config::{NotifyFn, SessionConfig};
-pub use display::{DisplayHooks, Formatting, Person, RelativeTime, ShownName};
+pub use display::{
+	Accessory, DeletedLook, DisplayHooks, Formatting, HistoryLook, KeptMessage, KeptVersion, MessageLook,
+	Person, RelativeTime, ShownName,
+};
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{EmojiRankRequest, RankedEmoji, Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};

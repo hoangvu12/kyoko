@@ -18,6 +18,7 @@ use super::attachments;
 use super::body::{self, Look};
 use super::extras;
 use super::icons::icon;
+use super::kept;
 use super::links::Links;
 use super::pictures::{AVATAR, Pictures, REPLY_AVATAR};
 
@@ -112,6 +113,7 @@ pub struct RowEnv {
 	pub code_font: String,
 	pub prefs: Cell<Prefs>,
 	pub revealed: RefCell<HashSet<(Snowflake, usize)>>,
+	pub opened: RefCell<HashSet<Snowflake>>,
 	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
 	pub commands: Rc<Sender>,
 	pub actions: Rc<MessageActions>,
@@ -152,8 +154,10 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 				HEADER_GAP + LINE
 			};
 			let reply = if entry.reply.is_some() { REPLY_HEIGHT } else { 0. };
+			let history = entry.history.len() as f32 * LINE;
 			header
-				+ reply + body_lines(&entry.content, width - GUTTER - RIGHT) * LINE
+				+ reply + history
+				+ body_lines(&entry.content, width - GUTTER - RIGHT) * LINE
 				+ rich_height(entry)
 				+ 4.
 		}
@@ -210,13 +214,21 @@ fn body_lines(content: &str, width: f32) -> f32 {
 fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>) -> View {
 	let actions = env.actions.clone();
 	let id = entry.id;
+	let tinted = kept::tinted(entry);
 	let frame = column()
 		.relative()
 		.w_full()
 		.pl(GUTTER)
 		.pr(RIGHT)
 		.py(2.)
-		.hover(|style| style.bg(tok("message_hover")))
+		.when(tinted, |row| row.bg(tok("background_feedback_critical")))
+		.hover(move |style| {
+			style.bg(tok(if tinted {
+				"background_feedback_critical"
+			} else {
+				"message_hover"
+			}))
+		})
 		.reactive_style(move || {
 			if actions.is_selected(id) {
 				Styles::new().bg(tok("message_selected"))
@@ -239,37 +251,19 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 }
 
 fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<View> {
-	let mut out = Vec::new();
+	let mut out = kept::history(entry, env, bump, BODY);
 	if !entry.content.is_empty() {
-		let color = if entry.failed {
-			"danger"
-		} else if entry.deleted {
-			"text_muted"
-		} else {
-			"text_normal"
-		};
-		let trailer = if entry.deleted {
-			Some(("(deleted)", "danger"))
-		} else if entry.edited {
-			Some(("(edited)", "text_muted"))
-		} else {
-			None
-		};
 		let look = Look {
 			size: BODY,
-			color,
+			color: kept::text_color(entry),
 			jumbo: entry.body.jumbo,
-			trailer,
+			trailer: kept::trailer(entry),
+			on_trailer: kept::history_toggle(entry, env, bump),
 		};
-		out.push(body::render(
-			&entry.body.content,
-			env,
-			&entry.names,
-			entry.id,
-			0,
-			bump,
-			look,
-		));
+		out.push(
+			body::render(&entry.body.content, env, &entry.names, entry.id, 0, bump, look)
+				.id(format!("message-text-{}", entry.id)),
+		);
 	} else if entry.deleted {
 		out.push(
 			text("(deleted)")
@@ -285,6 +279,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<Vi
 	out.extend(extras::thread_chip(entry, env));
 	out.extend(extras::poll(entry, env, bump));
 	out.extend(extras::reactions(entry, env));
+	out.extend(kept::accessories(entry, env));
 	out
 }
 

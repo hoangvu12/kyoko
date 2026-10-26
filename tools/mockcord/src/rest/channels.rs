@@ -2,6 +2,7 @@ use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
 use axum::extract::{FromRequest, Multipart, Path, Query, Request, State};
@@ -23,6 +24,8 @@ const DEFAULT_PAGE_SIZE: usize = 50;
 const MAX_PAGE_SIZE: usize = 100;
 const DEFAULT_SEARCH_PAGE_SIZE: usize = 25;
 const DEFAULT_ARCHIVE_MINUTES: i64 = 1440;
+pub const MODERATED_PHRASE: &str = "spoiler alert";
+const MODERATION_DELAY: Duration = Duration::from_millis(400);
 
 #[derive(Deserialize, Default)]
 pub struct MessagesParams {
@@ -182,9 +185,16 @@ pub async fn create_message(
 ) -> ApiResult {
 	let mut draft = read_draft(request).await?;
 	super::interactions::claim_uploads(&shared, &mut draft)?;
-	shared
-		.post_message(id, &shared.fixtures.current_user, draft)
-		.map(Json)
+	let moderated = draft.content.to_lowercase().contains(MODERATED_PHRASE);
+	let posted = shared.post_message(id, &shared.fixtures.current_user, draft)?;
+	if moderated && let Some(message_id) = parse_id(&posted["id"]) {
+		let moderator = shared.clone();
+		tokio::spawn(async move {
+			tokio::time::sleep(MODERATION_DELAY).await;
+			let _ = moderator.delete_message(id, message_id);
+		});
+	}
+	Ok(Json(posted))
 }
 
 pub async fn edit_message(

@@ -32,6 +32,7 @@ pub struct Look {
 	pub color: &'static str,
 	pub jumbo: bool,
 	pub trailer: Option<(&'static str, &'static str)>,
+	pub on_trailer: Option<Rc<dyn Fn()>>,
 }
 
 impl Look {
@@ -41,6 +42,7 @@ impl Look {
 			color: "text_normal",
 			jumbo: false,
 			trailer: None,
+			on_trailer: None,
 		}
 	}
 }
@@ -59,6 +61,7 @@ enum Click {
 	Link(String),
 	Spoiler(usize),
 	Profile(Snowflake),
+	Action(Rc<dyn Fn()>),
 }
 
 #[derive(Clone, Default)]
@@ -133,6 +136,7 @@ impl Body<'_> {
 		if trailing && let Some((label, color)) = self.look.trailer {
 			let muted = Style {
 				color: Some(Themed::Token(tok(color))),
+				click: self.look.on_trailer.clone().map(Click::Action),
 				..Style::default()
 			};
 			self.push(&mut inline, &format!(" {label}"), &muted);
@@ -228,6 +232,12 @@ impl Body<'_> {
 				span.hover(SpanHover::default())
 					.on_click(move || actions.profile(user))
 			}
+			Some(Click::Action(action)) => span
+				.hover(SpanHover {
+					underline: Some(Decoration::new(1.)),
+					text_color: None,
+				})
+				.on_click(move || action()),
 			None => span,
 		}
 	}

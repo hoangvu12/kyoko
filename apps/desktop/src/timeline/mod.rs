@@ -9,6 +9,9 @@ mod emoji_tests;
 mod extras;
 pub(crate) mod icons;
 mod inline;
+mod kept;
+#[cfg(test)]
+mod kept_tests;
 mod lightbox;
 mod links;
 pub(crate) mod pictures;
@@ -151,6 +154,7 @@ impl TimelineView {
 				code_font: setup.code_font,
 				prefs: Cell::new(setup.prefs),
 				revealed: RefCell::default(),
+				opened: RefCell::default(),
 				picks: RefCell::default(),
 				commands: commands.clone(),
 				actions: actions.clone(),

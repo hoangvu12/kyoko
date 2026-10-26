@@ -52,7 +52,7 @@ Pruning only deletes store rows and cache files. Memory caps live in `state::Cac
 
 ## Kept deleted and edited messages
 
-Kyoko keeps messages other people delete and the earlier versions of edited messages, within the caps above, so the MessageLogger plugin (ticket 52) can show them. The data layer is always on; whether anything is shown is the plugin's choice.
+Kyoko keeps messages other people delete and the earlier versions of edited messages, within the caps above, so the MessageLogger plugin (ticket 52) can show them. The data layer is always on; whether anything is shown is the plugin's choice. The caps are kyoko's: a plugin only sees what kyoko kept and has no way to keep more or for longer (`docs/plugins.md`, "Message looks").
 
 In memory (`state`, see `docs/caches.md`):
 

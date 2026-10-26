@@ -129,6 +129,7 @@ impl Link {
 				link.choose_plugin_item(choice);
 			}
 		});
+		Link::install_accessories(link, &menu);
 		link.timeline_view.set_plugin_menu(menu.clone());
 		link.threads.set_plugin_menu(menu.clone());
 		link.expressions.set_plugin_menu(menu);

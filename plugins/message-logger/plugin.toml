@@ -1,0 +1,58 @@
+id = "message-logger"
+name = "MessageLogger"
+version = "1.0.0"
+api = 1
+description = "Shows deleted messages and earlier versions of edited messages in the chat, from what Kyoko keeps on this computer."
+authors = ["Kyoko"]
+permissions = ["hook:message_render", "ui:message.accessory", "storage"]
+
+[[settings]]
+key = "show"
+type = "select"
+label = "Show"
+description = "Kyoko keeps up to 100 deleted messages per channel and 10 earlier versions per edited message, for 7 days. The plugin cannot keep more."
+default = "both"
+options = [
+	{ value = "both", label = "Deleted messages and edit history" },
+	{ value = "deleted", label = "Deleted messages only" },
+	{ value = "edits", label = "Edit history only" },
+]
+
+[[settings]]
+key = "deleted_style"
+type = "select"
+label = "Deleted message style"
+description = "How a deleted message stands out."
+default = "text"
+options = [
+	{ value = "text", label = "Red text" },
+	{ value = "tint", label = "Red tint" },
+]
+
+[[settings]]
+key = "inline_edits"
+type = "boolean"
+label = "Show edit history inline"
+description = "Show earlier versions above the current text. When off, click (edited) to show them."
+default = true
+
+[[settings]]
+key = "ignore_bots"
+type = "boolean"
+label = "Ignore bots"
+description = "Leave out deleted and edited messages from bots."
+default = false
+
+[[settings]]
+key = "ignore_self"
+type = "boolean"
+label = "Ignore my messages"
+description = "Leave out your own deleted and edited messages."
+default = false
+
+[[settings]]
+key = "remove_button"
+type = "boolean"
+label = "Show Remove from log"
+description = "Put a Remove from log link under each kept message, to stop showing it."
+default = true

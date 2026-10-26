@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use markdown::Document;
 use protocol::{Message, MessageType, Snowflake};
-use session::{Command, Formatting, ShownName};
-use state::{Changes, MessageRow, MessageView, RenderedMessage, State};
+use session::{Command, DeletedLook, Formatting, MessageLook, ShownName};
+use state::{Changes, MessageRow, MessageVersion, MessageView, RenderedMessage, State};
 
 use crate::display::{Display, person};
 use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
@@ -51,6 +52,8 @@ pub struct MessageEntry {
 	pub names: Arc<Names>,
 	pub reply: Option<ReplyPreview>,
 	pub system: Option<SystemLine>,
+	pub look: Option<MessageLook>,
+	pub history: Arc<[Document]>,
 }
 
 impl PartialEq for MessageEntry {
@@ -75,6 +78,8 @@ impl PartialEq for MessageEntry {
 			&& self.names == other.names
 			&& self.reply == other.reply
 			&& self.system == other.system
+			&& self.look == other.look
+			&& (Arc::ptr_eq(&self.history, &other.history) || self.history == other.history)
 	}
 }
 
@@ -192,6 +197,7 @@ pub struct OpenChannel {
 }
 
 type Parsed = (Arc<Message>, Option<Arc<RenderedMessage>>, Arc<Body>);
+type History = (Arc<[MessageVersion]>, Arc<[Document]>);
 
 #[derive(Debug, Default)]
 pub struct Timeline {
@@ -200,6 +206,7 @@ pub struct Timeline {
 	detached: bool,
 	pending: Delta,
 	bodies: HashMap<Snowflake, Parsed>,
+	histories: HashMap<Snowflake, History>,
 	display: Display,
 }
 
@@ -283,6 +290,7 @@ impl Timeline {
 		}
 		self.open = Some(channel);
 		self.bodies.clear();
+		self.histories.clear();
 		self.rows = self.project(state, channel);
 		self.detached = detached(state, channel_id);
 		self.record_reset();
@@ -293,6 +301,7 @@ impl Timeline {
 		let was_open = self.open.take().is_some();
 		let had_rows = !std::mem::take(&mut self.rows).is_empty();
 		self.bodies.clear();
+		self.histories.clear();
 		self.detached = false;
 		if was_open || had_rows {
 			self.record_reset();
@@ -343,27 +352,65 @@ fn detached(state: &State, channel_id: Snowflake) -> bool {
 impl Timeline {
 	fn project(&mut self, state: &State, open: OpenChannel) -> Vec<TimelineRow> {
 		let mut bodies = HashMap::with_capacity(self.bodies.len());
-		let rows = state
-			.channel_rows(open.channel_id)
-			.into_iter()
-			.filter_map(|row| match row {
-				MessageRow::Message(view) => {
-					let body = self.body_of(&view);
-					bodies.insert(
-						view.message.id,
-						(view.message.clone(), view.rendered.clone(), body.clone()),
-					);
-					let entry = entry(state, open.guild_id, *view, body, &self.display);
-					Some(TimelineRow {
-						key: message_key(&entry),
-						row: Row::Message(Box::new(entry)),
-					})
+		let mut histories = HashMap::new();
+		let mut rows = Vec::new();
+		let mut ungroup = false;
+		for row in state.channel_rows(open.channel_id) {
+			let MessageRow::Message(view) = row else {
+				ungroup = false;
+				rows.extend(marker_row(row));
+				continue;
+			};
+			let look = self.display.look(state, open.guild_id, &view);
+			if view.deleted.is_some()
+				&& look
+					.as_ref()
+					.is_some_and(|look| look.deleted == Some(DeletedLook::Hidden))
+			{
+				ungroup |= !view.grouped_with_previous;
+				continue;
+			}
+			let body = self.body_of(&view);
+			bodies.insert(
+				view.message.id,
+				(view.message.clone(), view.rendered.clone(), body.clone()),
+			);
+			let history = match look.as_ref().and_then(|look| look.history) {
+				Some(_) if !view.versions.is_empty() => {
+					let history = self.history_of(&view);
+					histories.insert(view.message.id, (view.versions.clone(), history.clone()));
+					history
 				}
-				other => marker_row(other),
-			})
-			.collect();
+				_ => Arc::from([]),
+			};
+			let mut entry = entry(state, open.guild_id, *view, body, &self.display);
+			if !history.is_empty() {
+				let documents = entry.body.documents().chain(history.iter());
+				entry.names = Arc::new(Names::of(state, open.guild_id, &entry.message, documents));
+			}
+			entry.look = look;
+			entry.history = history;
+			entry.grouped &= !ungroup;
+			ungroup = false;
+			rows.push(TimelineRow {
+				key: message_key(&entry),
+				row: Row::Message(Box::new(entry)),
+			});
+		}
 		self.bodies = bodies;
+		self.histories = histories;
 		rows
+	}
+
+	fn history_of(&self, view: &MessageView) -> Arc<[Document]> {
+		match self.histories.get(&view.message.id) {
+			Some((versions, history)) if Arc::ptr_eq(versions, &view.versions) => history.clone(),
+			_ => view
+				.versions
+				.iter()
+				.map(|version| markdown::parse(&version.content))
+				.collect(),
+		}
 	}
 
 	fn body_of(&self, view: &MessageView) -> Arc<Body> {
@@ -447,6 +494,8 @@ fn entry(
 		names: Arc::new(names),
 		reply,
 		system,
+		look: None,
+		history: Arc::from([]),
 		id: message.id,
 		author_extra: shown.as_ref().and_then(|shown| shown.extra.clone()),
 		author: shown.map_or(view.author_display, |shown| shown.name),

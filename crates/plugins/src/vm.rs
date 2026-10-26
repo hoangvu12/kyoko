@@ -5,10 +5,12 @@ use std::time::{Duration, Instant};
 
 use mlua::chunk::ChunkMode;
 use mlua::{Error, Function, Lua, RegistryKey, Table, Value, VmState};
-use session::ShownName;
+use session::{DeletedLook, HistoryLook, KeptMessage, ShownName};
 
 use crate::api;
-use crate::calls::{Call, Fault, MessageView, ON_EVENT, PluginEvent, RANK_EMOJI, Reply};
+use crate::calls::{
+	Call, Fault, Look, MessageView, ON_EVENT, PluginEvent, RANK_EMOJI, RENDER_MESSAGE, Reply, SHOW_DELETED,
+};
 use crate::context::Context;
 use crate::manifest::clip;
 use crate::package::Package;
@@ -17,7 +19,8 @@ const ERROR_LIMIT: usize = 160;
 const TEXT_LIMIT: usize = 4000;
 const LABEL_LIMIT: usize = 100;
 const ORDER_LIMIT: usize = 512;
-const HOOK_NAMES: [&str; 10] = [
+const ACTION_KEY_LIMIT: usize = 48;
+const HOOK_NAMES: [&str; 12] = [
 	"before_send",
 	"before_edit",
 	"allow_typing",
@@ -28,6 +31,8 @@ const HOOK_NAMES: [&str; 10] = [
 	"on_action",
 	"on_settings_changed",
 	ON_EVENT,
+	RENDER_MESSAGE,
+	SHOW_DELETED,
 ];
 
 pub(crate) struct LogicVm {
@@ -126,6 +131,8 @@ impl LogicVm {
 			Call::FormatName { shown, .. } => Reply::Name(shown_name(&value, shown)),
 			Call::FormatRelative(time) => Reply::Text(label(&value).filter(|text| *text != time.text)),
 			Call::RankEmoji { .. } => Reply::Order(order(&value)),
+			Call::RenderMessage(_) => Reply::Look(look(&value)),
+			Call::ShowDeleted => Reply::Allow(matches!(value, Value::Boolean(true))),
 			Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 		})
 	}
@@ -253,7 +260,8 @@ impl LogicVm {
 				}
 				vec![Value::String(lua.create_string(key)?), Value::Table(details)]
 			}
-			Call::SettingsChanged => Vec::new(),
+			Call::RenderMessage(message) => vec![Value::Table(kept_table(lua, message)?)],
+			Call::SettingsChanged | Call::ShowDeleted => Vec::new(),
 		};
 		Ok(mlua::MultiValue::from_iter(values))
 	}
@@ -394,8 +402,82 @@ fn default_reply(call: &Call) -> Reply {
 		Call::FormatName { .. } => Reply::Name(None),
 		Call::FormatRelative(_) => Reply::Text(None),
 		Call::RankEmoji { .. } => Reply::Order(None),
+		Call::RenderMessage(_) => Reply::Look(None),
+		Call::ShowDeleted => Reply::Allow(false),
 		Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 	}
+}
+
+fn kept_table(lua: &Lua, message: &KeptMessage) -> mlua::Result<Table> {
+	let argument = table(
+		lua,
+		&[
+			("id", Some(message.id.to_string())),
+			("channel_id", Some(message.channel_id.to_string())),
+			("guild_id", message.guild_id.map(|id| id.to_string())),
+			("author_id", Some(message.author_id.to_string())),
+			("content", Some(message.content.clone())),
+		],
+	)?;
+	argument.raw_set("bot", message.bot)?;
+	argument.raw_set("mine", message.mine)?;
+	argument.raw_set("deleted", message.deleted_at.is_some())?;
+	argument.raw_set("deleted_at", message.deleted_at)?;
+	argument.raw_set("edited_at", message.edited_at)?;
+	let versions = lua.create_table_with_capacity(message.versions.len(), 0)?;
+	for version in &message.versions {
+		let entry = table(lua, &[("content", Some(version.content.clone()))])?;
+		entry.raw_set("edited_at", version.edited_at)?;
+		entry.raw_set("replaced_at", version.replaced_at)?;
+		entry.raw_set("attachments", version.attachments)?;
+		entry.raw_set("embeds", version.embeds)?;
+		versions.raw_push(entry)?;
+	}
+	argument.raw_set("versions", versions)?;
+	Ok(argument)
+}
+
+fn word(table: &Table, key: &str) -> Option<String> {
+	match table.raw_get::<Value>(key).ok()? {
+		Value::String(text) => text.to_str().ok().map(|text| text.to_owned()),
+		_ => None,
+	}
+}
+
+fn look(value: &Value) -> Option<Look> {
+	let Value::Table(table) = value else {
+		return None;
+	};
+	let deleted = match word(table, "deleted").as_deref() {
+		Some("text") => Some(DeletedLook::Text),
+		Some("tint") => Some(DeletedLook::Tint),
+		Some("hide") => Some(DeletedLook::Hidden),
+		_ => None,
+	};
+	let history = match word(table, "history").as_deref() {
+		Some("inline") => Some(HistoryLook::Inline),
+		Some("collapsed") => Some(HistoryLook::Collapsed),
+		_ => None,
+	};
+	let accessory = match table.raw_get::<Value>("accessory").ok()? {
+		text @ Value::String(_) => label(&text).map(|text| (text, None)),
+		Value::Table(accessory) => accessory
+			.raw_get::<Value>("text")
+			.ok()
+			.and_then(|text| label(&text))
+			.map(|text| {
+				let action =
+					word(&accessory, "action").filter(|key| !key.is_empty() && key.len() <= ACTION_KEY_LIMIT);
+				(text, action)
+			}),
+		_ => None,
+	};
+	let look = Look {
+		deleted,
+		history,
+		accessory,
+	};
+	(look != Look::default()).then_some(look)
 }
 
 fn label(value: &Value) -> Option<String> {

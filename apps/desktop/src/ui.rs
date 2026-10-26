@@ -6,6 +6,7 @@ mod display;
 mod expressions;
 mod friends;
 mod home;
+mod kept;
 mod members;
 mod message_actions;
 mod notices;
@@ -839,6 +840,9 @@ impl Link {
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
 			capture::Screen::CloneMenu => self.drive_clone_menu().await,
+			capture::Screen::KeptDeleted | capture::Screen::KeptEdits => {
+				self.drive_kept(capture.screen).await
+			}
 			capture::Screen::CloneDialog => {
 				self.drive_clone_dialog().await;
 				self.until_capture(|link| link.community_settled()).await;

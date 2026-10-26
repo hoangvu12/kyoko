@@ -6,11 +6,14 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use protocol::Snowflake;
 use serde_json::{Map, Value as Json, json};
-use session::{Commander, EmojiRankRequest, Person, RankedEmoji, RelativeTime, ShownName};
+use session::{
+	Accessory, Command, Commander, EmojiRankRequest, KeptMessage, MessageLook, Person, RankedEmoji,
+	RelativeTime, ShownName,
+};
 use state::{Expression, SharedState};
 
 use crate::bundled;
-use crate::calls::{Call, Fault, Reply};
+use crate::calls::{Call, Fault, RENDER_MESSAGE, Reply, SHOW_DELETED};
 use crate::context::{ActionLog, Attachment, Link, Settings};
 use crate::limits::Limits;
 use crate::manifest::{SettingKind, SettingSpec};
@@ -224,6 +227,7 @@ struct Inner {
 	listeners: Mutex<Vec<Listener>>,
 	requests: Mutex<Vec<RequestListener>>,
 	notices: Mutex<Vec<Notice>>,
+	shown_deleted: Mutex<Option<bool>>,
 }
 
 #[derive(Clone)]
@@ -251,6 +255,7 @@ impl PluginHost {
 				listeners: Mutex::new(Vec::new()),
 				requests: Mutex::new(Vec::new()),
 				notices: Mutex::new(Vec::new()),
+				shown_deleted: Mutex::new(None),
 			}),
 		};
 		host.scan();
@@ -267,10 +272,17 @@ impl PluginHost {
 
 	pub fn attach(&self, state: SharedState, commander: Commander) {
 		*self.inner.link.write() = Some(Attachment { state, commander });
+		*self.inner.shown_deleted.lock() = Some(false);
+		self.inner.sync_deleted();
 	}
 
 	pub fn detach(&self) {
 		*self.inner.link.write() = None;
+		*self.inner.shown_deleted.lock() = None;
+	}
+
+	pub fn shows_deleted(&self) -> bool {
+		*self.inner.shown_deleted.lock() == Some(true)
 	}
 
 	pub fn on_change(&self, listener: impl Fn() + Send + Sync + 'static) {
@@ -544,7 +556,13 @@ impl PluginHost {
 			target,
 		};
 		match worker.call(call, self.inner.config.limits.action_deadline) {
-			Ok(_) => Ok(()),
+			Ok(_) => {
+				if let Some(entry) = self.inner.registry.lock().entries.get_mut(id) {
+					entry.revision += 1;
+				}
+				self.inner.changed();
+				Ok(())
+			}
 			Err(fault) => {
 				let reason = fault.describe();
 				self.inner.strike(id, fault);
@@ -670,6 +688,32 @@ impl PluginHost {
 		(current.text != time.text).then_some(current.text)
 	}
 
+	pub(crate) fn look_of(&self, message: &KeptMessage) -> Option<MessageLook> {
+		let deadline = self.inner.config.limits.render_deadline;
+		let mut look = MessageLook::default();
+		for target in self.inner.targets(Hook::MessageRender, RENDER_MESSAGE, true) {
+			match target
+				.worker
+				.call(Call::RenderMessage(Box::new(message.clone())), deadline)
+			{
+				Ok(Reply::Look(Some(answer))) => {
+					look.deleted = answer.deleted.or(look.deleted);
+					look.history = answer.history.or(look.history);
+					if let Some((text, action)) = answer.accessory.filter(|_| target.accessory) {
+						look.accessories.push(Accessory {
+							plugin: target.id.clone(),
+							text,
+							action,
+						});
+					}
+				}
+				Ok(_) => {}
+				Err(fault) => self.inner.strike(&target.id, fault),
+			}
+		}
+		(!look.is_plain()).then_some(look)
+	}
+
 	pub(crate) fn ranks(&self) -> bool {
 		!self
 			.inner
@@ -764,13 +808,42 @@ struct Target {
 	id: String,
 	name: String,
 	worker: Arc<Worker>,
+	accessory: bool,
 }
 
 impl Inner {
-	fn changed(&self) {
+	fn changed(self: &Arc<Self>) {
+		self.sync_deleted();
 		let listeners: Vec<Listener> = self.listeners.lock().clone();
 		for listener in listeners {
 			listener();
+		}
+	}
+
+	fn sync_deleted(self: &Arc<Self>) {
+		let Some(attachment) = self.link.read().clone() else {
+			return;
+		};
+		let deadline = self.config.limits.render_deadline;
+		let mut faults = Vec::new();
+		{
+			let mut shown = self.shown_deleted.lock();
+			let mut show = false;
+			for target in self.targets(Hook::MessageRender, SHOW_DELETED, false) {
+				match target.worker.call(Call::ShowDeleted, deadline) {
+					Ok(Reply::Allow(true)) => show = true,
+					Ok(_) => {}
+					Err(fault) => faults.push((target.id, fault)),
+				}
+			}
+			if *shown != Some(show) {
+				*shown = Some(show);
+				tracing::info!(show, "plugins changed whether deleted messages show");
+				attachment.commander.send(Command::ShowDeletedMessages(show));
+			}
+		}
+		for (id, fault) in faults {
+			self.strike(&id, fault);
 		}
 	}
 
@@ -800,6 +873,7 @@ impl Inner {
 					id: entry.package.id().to_owned(),
 					name: entry.name().to_owned(),
 					worker,
+					accessory: entry.grants().contains(&Permission::Ui(Slot::MessageAccessory)),
 				})
 			})
 			.collect();

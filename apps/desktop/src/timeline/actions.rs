@@ -153,6 +153,10 @@ impl MessageActions {
 		*self.plugin_menu.borrow_mut() = Some(menu);
 	}
 
+	pub fn plugin_menu(&self) -> Option<Rc<PluginMenu>> {
+		self.plugin_menu.borrow().clone()
+	}
+
 	pub fn aim(&self, target: Expression, at: (f32, f32)) {
 		*self.aimed.borrow_mut() = Some((target, at));
 	}

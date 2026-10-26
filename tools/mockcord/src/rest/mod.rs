@@ -5,6 +5,7 @@ mod guilds;
 mod interactions;
 mod users;
 
+pub use channels::MODERATED_PHRASE;
 pub(crate) use expressions::ready_stickers;
 pub use interactions::MOCKBOT_ID;
 

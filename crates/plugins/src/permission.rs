@@ -123,6 +123,7 @@ impl Hook {
 				| Hook::DisplayName
 				| Hook::Timestamp
 				| Hook::EmojiRank
+				| Hook::MessageRender
 		)
 	}
 }
@@ -149,7 +150,11 @@ impl Slot {
 	pub fn available(self) -> bool {
 		matches!(
 			self,
-			Slot::ComposerButtons | Slot::PanelButtons | Slot::RailButtons | Slot::MessageMenu
+			Slot::ComposerButtons
+				| Slot::PanelButtons
+				| Slot::RailButtons
+				| Slot::MessageMenu
+				| Slot::MessageAccessory
 		)
 	}
 
@@ -197,6 +202,7 @@ impl Permission {
 			Permission::Ui(Slot::MessageMenu) => {
 				"Add items to the menu of messages, emoji and stickers.".to_owned()
 			}
+			Permission::Ui(Slot::MessageAccessory) => "Add a line of text under messages.".to_owned(),
 			Permission::Ui(slot) => format!("Add to the interface at {}.", slot.name()),
 			Permission::Read(Scope::Messages) => "Read messages in your servers, as they arrive.".to_owned(),
 			Permission::Read(Scope::DirectMessages) => {
@@ -224,7 +230,8 @@ impl Permission {
 					.to_owned()
 			}
 			Permission::Hook(Hook::MessageRender) => {
-				"Show kept deleted and edited versions of messages.".to_owned()
+				"Read the deleted messages and earlier versions of edited messages Kyoko keeps, DMs included, and choose how they show."
+					.to_owned()
 			}
 			Permission::Action(Action::MarkRead) => {
 				"Mark channels as read when you click its button.".to_owned()
@@ -246,7 +253,7 @@ impl Permission {
 			self,
 			Permission::Network(_)
 				| Permission::Read(Scope::Messages | Scope::DirectMessages)
-				| Permission::Hook(Hook::Send | Hook::Edit | Hook::Notify)
+				| Permission::Hook(Hook::Send | Hook::Edit | Hook::Notify | Hook::MessageRender)
 				| Permission::Action(_)
 		)
 	}

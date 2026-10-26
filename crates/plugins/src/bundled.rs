@@ -105,7 +105,18 @@ const EXPRESSION_CLONER: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 8] = [
+const MESSAGE_LOGGER: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/message-logger/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/message-logger/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 9] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -114,6 +125,7 @@ const PACKAGES: [Embedded; 8] = [
 	DONT_ROUND_MY_TIMESTAMPS,
 	FAVORITE_EMOJI_FIRST,
 	EXPRESSION_CLONER,
+	MESSAGE_LOGGER,
 ];
 
 pub fn packages() -> Vec<Package> {

@@ -13,6 +13,7 @@ mod harness;
 mod media;
 mod members;
 mod message;
+mod message_logger;
 mod profile;
 mod qr_login;
 mod rail;

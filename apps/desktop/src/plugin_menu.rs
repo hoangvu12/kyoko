@@ -19,6 +19,14 @@ pub struct Choice {
 	pub message: Option<(Snowflake, Snowflake)>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccessoryClick {
+	pub plugin: String,
+	pub key: String,
+	pub channel_id: Snowflake,
+	pub message_id: Snowflake,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Shown {
 	pub items: Rc<[PluginMenuItem]>,
@@ -37,6 +45,7 @@ pub struct PluginMenu {
 	facts: Facts,
 	chosen: Hook<Choice>,
 	pressed: Hook<()>,
+	accessed: Hook<AccessoryClick>,
 }
 
 impl PluginMenu {
@@ -60,6 +69,22 @@ impl PluginMenu {
 
 	pub fn on_press(&self, pressed: impl Fn(()) + 'static) {
 		*self.pressed.borrow_mut() = Some(Box::new(pressed));
+	}
+
+	pub fn on_accessory(&self, accessed: impl Fn(AccessoryClick) + 'static) {
+		*self.accessed.borrow_mut() = Some(Box::new(accessed));
+	}
+
+	pub fn press(&self) {
+		if let Some(pressed) = self.pressed.borrow().as_ref() {
+			pressed(());
+		}
+	}
+
+	pub fn access(&self, click: AccessoryClick) {
+		if let Some(accessed) = self.accessed.borrow().as_ref() {
+			accessed(click);
+		}
 	}
 
 	pub fn shown(&self, target: Option<Expression>) -> Shown {

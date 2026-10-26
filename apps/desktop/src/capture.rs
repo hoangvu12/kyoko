@@ -23,6 +23,8 @@ pub const TOP_BAR_THREADS: (f32, f32) = (721., 37.);
 pub const TOP_BAR_PINS: (f32, f32) = (801., 37.);
 pub const TOAST: &str = "You are sending messages too quickly.";
 pub const PLUGINS_VARIABLE: &str = "KYOKO_CAPTURE_PLUGINS";
+pub const KEPT_DELETED: &str = "spoiler alert: the ship sinks at the end";
+pub const KEPT_EDITS: [&str; 3] = ["See you at 6", "See you at 7", "See you at 7:30, sorry!"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -77,6 +79,8 @@ pub enum Screen {
 	Friends(FriendsTab),
 	CloneMenu,
 	CloneDialog,
+	KeptDeleted,
+	KeptEdits,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +142,8 @@ impl Screen {
 			"friends-add" => Some(Screen::Friends(FriendsTab::Add)),
 			"message-menu-clone" => Some(Screen::CloneMenu),
 			"clone-dialog" => Some(Screen::CloneDialog),
+			"message-logger-deleted" => Some(Screen::KeptDeleted),
+			"message-logger-edits" => Some(Screen::KeptEdits),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -188,7 +194,9 @@ impl Screen {
 			| Screen::Disconnected
 			| Screen::Friends(_)
 			| Screen::CloneMenu
-			| Screen::CloneDialog => Some(Opening::First),
+			| Screen::CloneDialog
+			| Screen::KeptDeleted
+			| Screen::KeptEdits => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken | Screen::LoginQrScanned | Screen::LoginQrExpired => None,
 		}
 	}

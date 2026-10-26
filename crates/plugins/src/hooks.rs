@@ -1,10 +1,11 @@
 use anyhow::Result;
 use protocol::{DispatchEvent, Message, Snowflake};
 use session::{
-	DisplayHooks, EmojiRankRequest, Formatting, Person, RelativeTime, Rewrite, SessionHooks, ShownName,
+	DisplayHooks, EmojiRankRequest, Formatting, KeptMessage, MessageLook, Person, RelativeTime, Rewrite,
+	SessionHooks, ShownName,
 };
 
-use crate::calls::{Call, MessageView, PluginEvent};
+use crate::calls::{Call, MessageView, PluginEvent, RENDER_MESSAGE};
 use crate::host::PluginHost;
 use crate::permission::Hook;
 
@@ -79,6 +80,7 @@ impl DisplayHooks for PluginHost {
 		match formatting {
 			Formatting::Names => PluginHost::formatters(self, Hook::DisplayName, "format_name"),
 			Formatting::RelativeTimes => PluginHost::formatters(self, Hook::Timestamp, "format_relative"),
+			Formatting::Messages => PluginHost::formatters(self, Hook::MessageRender, RENDER_MESSAGE),
 		}
 	}
 
@@ -88,5 +90,9 @@ impl DisplayHooks for PluginHost {
 
 	fn format_relative(&self, time: &RelativeTime) -> Option<String> {
 		self.relative_of(time)
+	}
+
+	fn render_message(&self, message: &KeptMessage) -> Option<MessageLook> {
+		self.look_of(message)
 	}
 }

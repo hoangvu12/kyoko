@@ -1,5 +1,5 @@
 use protocol::{DispatchEvent, Message, Snowflake};
-use session::{Person, RankedEmoji, RelativeTime, ShownName};
+use session::{DeletedLook, HistoryLook, KeptMessage, Person, RankedEmoji, RelativeTime, ShownName};
 use state::Expression;
 
 use crate::permission::Scope;
@@ -65,6 +65,8 @@ pub(crate) enum Call {
 		target: Option<Expression>,
 	},
 	SettingsChanged,
+	RenderMessage(Box<KeptMessage>),
+	ShowDeleted,
 }
 
 impl Call {
@@ -79,6 +81,8 @@ impl Call {
 			Call::RankEmoji { .. } => RANK_EMOJI,
 			Call::Action { .. } => "on_action",
 			Call::SettingsChanged => "on_settings_changed",
+			Call::RenderMessage(_) => RENDER_MESSAGE,
+			Call::ShowDeleted => SHOW_DELETED,
 		}
 	}
 
@@ -100,7 +104,15 @@ pub(crate) enum Reply {
 	Name(Option<ShownName>),
 	Allow(bool),
 	Order(Option<Vec<String>>),
+	Look(Option<Look>),
 	Done,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Look {
+	pub deleted: Option<DeletedLook>,
+	pub history: Option<HistoryLook>,
+	pub accessory: Option<(String, Option<String>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,6 +136,8 @@ impl Fault {
 
 pub(crate) const ON_EVENT: &str = "on_event";
 pub(crate) const RANK_EMOJI: &str = "rank_emoji";
+pub(crate) const RENDER_MESSAGE: &str = "render_message";
+pub(crate) const SHOW_DELETED: &str = "show_deleted";
 
 #[derive(Clone, Debug)]
 pub(crate) enum PluginEvent {

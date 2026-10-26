@@ -364,6 +364,13 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 | `message-menu-clone` | 53 | With `KYOKO_CAPTURE_PLUGINS=expression-cloner`. Default selection; kyoko waits for the plugin's menu items, marks a custom emoji of the open server as under the pointer (`TimelineView::aim`, what a press on an inline emoji does) and right-clicks the last message as `message-context-menu`, so the menu ends with Clone Emoji. Oxidcord has no plugins: capture it with `--apps kyoko` and check it by eye. | yes |
 | `clone-dialog` | 53 | With `KYOKO_CAPTURE_PLUGINS=expression-cloner`. Default selection, then the Clone Emoji dialog for a custom emoji of the open server (`Dialog::Clone`). Kyoko only, `--apps kyoko`. | yes |
 
+### 52 MessageLogger
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `message-logger-deleted` | 52 | With `KYOKO_CAPTURE_PLUGINS=message-logger`. Default selection; kyoko waits for the plugin to turn deleted messages on, sends "spoiler alert: the ship sinks at the end", which mockcord's moderator deletes 400 ms later (`mockcord::MODERATED_PHRASE`), and waits for the row to show in red with "(deleted)" and "Remove from log". Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
+| `message-logger-edits` | 52 | With `KYOKO_CAPTURE_PLUGINS=message-logger`. Default selection; kyoko sends "See you at 6" and edits it twice through `Command::EditMessage`, so the two earlier versions show dimmed above "See you at 7:30, sorry!". Kyoko only, `--apps kyoko`. | yes |
+
 ### 38 Toasts, transitions and connection status
 
 | Screen | Ticket | Steps | Kyoko |

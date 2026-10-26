@@ -7,13 +7,16 @@ use chrono::{DateTime, TimeDelta, Utc};
 use markdown::TimestampStyle;
 use parking_lot::Mutex;
 use protocol::{Snowflake, User};
-use session::{DisplayHooks, Formatting, Person, RelativeTime, ShownName};
-use state::State;
+use session::{
+	DisplayHooks, Formatting, KeptMessage, KeptVersion, MessageLook, Person, RelativeTime, ShownName,
+};
+use state::{MessageView, State};
 
 use crate::message::timestamp_text;
 
 const NAME_CACHE: usize = 4096;
 const TIME_CACHE: usize = 1024;
+const LOOK_CACHE: usize = 2048;
 const UNITS: [(&str, u64, u64); 6] = [
 	("second", 1, 60),
 	("minute", 60, 60),
@@ -28,6 +31,17 @@ type Notify = Box<dyn Fn(Formatting) + Send + Sync>;
 enum Request {
 	Name(Person, u64),
 	Time(i64, RelativeTime, u64),
+	Look(LookKey, Box<KeptMessage>, u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct LookKey {
+	channel_id: Snowflake,
+	id: Snowflake,
+	deleted: bool,
+	versions: usize,
+	edited_at: Option<i64>,
+	oldest: Option<i64>,
 }
 
 struct Memo<K, V> {
@@ -93,9 +107,11 @@ struct Inner {
 	hooks: Arc<dyn DisplayHooks>,
 	names: Mutex<Memo<Person, ShownName>>,
 	times: Mutex<Memo<i64, String>>,
+	looks: Mutex<Memo<LookKey, MessageLook>>,
 	requests: Mutex<Option<Sender<Request>>>,
 	notify: Notify,
 	calls: AtomicU64,
+	look_calls: AtomicU64,
 }
 
 #[derive(Clone, Default)]
@@ -118,9 +134,11 @@ impl Display {
 			hooks,
 			names: Mutex::new(Memo::new(NAME_CACHE)),
 			times: Mutex::new(Memo::new(TIME_CACHE)),
+			looks: Mutex::new(Memo::new(LOOK_CACHE)),
 			requests: Mutex::new(None),
 			notify: Box::new(notify),
 			calls: AtomicU64::new(0),
+			look_calls: AtomicU64::new(0),
 		});
 		let display = Self { inner: Some(inner) };
 		display.refresh();
@@ -142,13 +160,18 @@ impl Display {
 		};
 		let names = inner.hooks.formatters(Formatting::Names);
 		let times = inner.hooks.formatters(Formatting::RelativeTimes);
+		let looks = inner.hooks.formatters(Formatting::Messages);
 		let names = inner.names.lock().renew(names);
 		let times = inner.times.lock().renew(times);
+		let looks = inner.looks.lock().renew(looks);
 		if names {
 			(inner.notify)(Formatting::Names);
 		}
 		if times {
 			(inner.notify)(Formatting::RelativeTimes);
+		}
+		if looks {
+			(inner.notify)(Formatting::Messages);
 		}
 	}
 
@@ -158,9 +181,15 @@ impl Display {
 			.map_or(0, |inner| inner.calls.load(Ordering::Relaxed))
 	}
 
+	pub fn look_calls(&self) -> u64 {
+		self.inner
+			.as_ref()
+			.map_or(0, |inner| inner.look_calls.load(Ordering::Relaxed))
+	}
+
 	pub fn pending(&self) -> usize {
 		self.inner.as_ref().map_or(0, |inner| {
-			inner.names.lock().asked.len() + inner.times.lock().asked.len()
+			inner.names.lock().asked.len() + inner.times.lock().asked.len() + inner.looks.lock().asked.len()
 		})
 	}
 
@@ -168,7 +197,49 @@ impl Display {
 		self.inner.as_ref().is_some_and(|inner| match formatting {
 			Formatting::Names => !inner.names.lock().active.is_empty(),
 			Formatting::RelativeTimes => !inner.times.lock().active.is_empty(),
+			Formatting::Messages => !inner.looks.lock().active.is_empty(),
 		})
+	}
+
+	pub fn look(
+		&self,
+		state: &State,
+		guild_id: Option<Snowflake>,
+		view: &MessageView,
+	) -> Option<MessageLook> {
+		let inner = self.inner.as_ref()?;
+		if view.deleted.is_none() && view.versions.is_empty() {
+			return None;
+		}
+		let message = &view.message;
+		let key = LookKey {
+			channel_id: message.channel_id,
+			id: message.id,
+			deleted: view.deleted.is_some(),
+			versions: view.versions.len(),
+			edited_at: message.edited_timestamp.map(|time| time.timestamp()),
+			oldest: view
+				.versions
+				.first()
+				.and_then(|version| version.replaced_at)
+				.map(|time| time.timestamp()),
+		};
+		let (look, ask, generation) = {
+			let mut looks = inner.looks.lock();
+			if looks.active.is_empty() {
+				return None;
+			}
+			let (look, ask) = looks.look(&key);
+			(look, ask, looks.generation)
+		};
+		if ask {
+			self.ask(Request::Look(
+				key,
+				Box::new(kept(state, guild_id, view)),
+				generation,
+			));
+		}
+		look
 	}
 
 	pub fn name(&self, person: &Person) -> Option<ShownName> {
@@ -259,7 +330,7 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 		let Some(inner) = weak.upgrade() else {
 			return;
 		};
-		let (mut names, mut times) = (false, false);
+		let (mut names, mut times, mut looks) = (false, false, false);
 		for request in batch {
 			match request {
 				Request::Name(person, generation) => {
@@ -278,6 +349,15 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 					let text = inner.hooks.format_relative(&time);
 					times |= inner.times.lock().answer(key, text, generation);
 				}
+				Request::Look(key, message, generation) => {
+					if inner.looks.lock().generation != generation {
+						continue;
+					}
+					inner.calls.fetch_add(1, Ordering::Relaxed);
+					inner.look_calls.fetch_add(1, Ordering::Relaxed);
+					let look = inner.hooks.render_message(&message);
+					looks |= inner.looks.lock().answer(key, look, generation);
+				}
 			}
 		}
 		tracing::debug!(
@@ -290,6 +370,35 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 		if times {
 			(inner.notify)(Formatting::RelativeTimes);
 		}
+		if looks {
+			(inner.notify)(Formatting::Messages);
+		}
+	}
+}
+
+fn kept(state: &State, guild_id: Option<Snowflake>, view: &MessageView) -> KeptMessage {
+	let message = &view.message;
+	KeptMessage {
+		id: message.id,
+		channel_id: message.channel_id,
+		guild_id: message.guild_id.or(guild_id),
+		author_id: message.author.id,
+		bot: message.author.bot == Some(true),
+		mine: state.current_user_id() == Some(message.author.id),
+		content: message.content.clone(),
+		deleted_at: view.deleted.map(|deleted| deleted.at.timestamp()),
+		edited_at: message.edited_timestamp.map(|time| time.timestamp()),
+		versions: view
+			.versions
+			.iter()
+			.map(|version| KeptVersion {
+				content: version.content.clone(),
+				edited_at: version.edited_timestamp.map(|time| time.timestamp()),
+				replaced_at: version.replaced_at.map(|time| time.timestamp()),
+				attachments: version.attachments.len(),
+				embeds: version.embeds.len(),
+			})
+			.collect(),
 	}
 }
 
