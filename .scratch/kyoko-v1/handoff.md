@@ -1,5 +1,44 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: sixth orchestrator hands off (main `2bbf0fd` + this note)
+
+Written by the sixth orchestrator (roboco chat `7d781d9c`, "kyoko orchestrator 6", same machine) when the user asked to hand off at about 44% context. Everything below still applies unless this section says otherwise.
+
+### State
+
+- Resolved this session (13): v1 63, 67 (new: pacing tests under load), 66; Midnight 20, 09, 22, 19, 10, 18, 23, 11, 25, 12. Added: Midnight 27 (inbox, user said yes 2026-10-27), v1 67.
+- Left: **9**. Done, verification running (see below): Midnight 13, Midnight 17, v1 62. Not started: Midnight 27 inbox, Midnight 14 built-in commands, Midnight 15 apps launcher, v1 49 PlatformIndicators/ForceOwnerCrown, v1 54 ReadAllNotificationsButton, v1 56 GameActivityToggle. **Skipped by the user (2026-10-27), status `ready-for-human`, don't pick up: v1 39 translations, v1 58 packaging.** Count with the `Status:` lines.
+- All three workers are finished and idle; nothing reports to you. Their reports are the source for the Answers (`read_chat <id>`, the long assistant message):
+
+| Ticket | Lane | Worker | Branch head (rebased on `2bbf0fd`) | Verification |
+|---|---|---|---|---|
+| Midnight 17 polls | B | `6437069f` | `4d768d0`, `06bf81e` | Fully verified once before (poll-create 8.2%, poll-in-messages 13.7%, -ended 13.4%); its pacing test then moved to `assert_released_apart`. Re-verification running now. |
+| Midnight 13 components and modals | A | `ed0822e7` | `d8eb152` | Running now. Worker: all green; parity message-components 15.8%, -multi-select 15.9%, -v2 23.7% (mock gallery colours), app-modal 10.8%, app-modal-error 10.7%; protocol facts from the public web bundle (UA `kyoko-dev`, no identity). |
+| v1 62 moderation follow-ups | C | `cc8b4eb6` | `845287f` | Running now. Worker: all green; kyoko-only capture `moderation-roles-submenu`; submenus flip left via an `rtl` trigger (zgx places submenus against the monitor, not the window); held roles use `kit::checkbox`; a deleted open channel moves to `bridge::replacement_channel` (server's first visible text channel; not checked against the live client). |
+
+- The three verifications were started in this session's background shell. Their logs are `<lane>/target/orch-verify.log`; done when it has `=== exit N for parity`. If this chat is gone they may have been cut off: check for one `=== exit` line per step, check for stray processes of that lane, rerun what's missing. Then merge in any order: rebase onto main (expect union conflicts in `capture.rs`, `docs/parity.md`, `MOCKUPS`, `ui.rs`), recheck fmt/clippy/build/`xtask test`/parity after a conflicted rebase, `merge --ff-only`, push, Answer, launch the next ticket on the freed lane.
+- Suggested next: Midnight 27 inbox (Rust popout over the slot, Mentions fetched on tab open, Unreads from read state), Midnight 14 (built-ins; M10/M12 Answers say what to fill in), Midnight 15 (apps launcher; reuse `CommandPicker::jump`, M13's select popover), then v1 49/54/56 (plugin slots from 45/47; 56's toggle can reuse M19's `show_current_game` setting).
+
+### Decisions the user made this session
+
+- One design, Midnight. Two trackers are just v1 (features) and Midnight (redesign); the user found the split confusing, so **talk about the work as one plain numbered list, not "v1 vs Midnight"**.
+- Build the inbox (Midnight 27). Skip translations (39) and packaging (58) for now.
+- Earlier ones (from orchestrator 5's follow-up): no GIF `provider` (switch to `klipy` if search fails), web login uses WebView2's own user agent (done, 66), no test sign-in for web login.
+
+### Things to know (new this session)
+
+- **Completion notices can be missed.** Three finished workers sat idle for 3–4 hours while I talked with the user. Check every worker with `get_chat` whenever you answer the user, not only on notices.
+- Workers often end their turn while their checks run in the background (10-minute foreground limit). Prompts now say: run long steps in the background and poll within the same turn. Still verify every lane yourself; don't rely on the worker's last run.
+- Queued "main moved" messages make idle workers start a new turn per message. Send one per merge with `mode: queue` only to workers still building; once a worker has reported, steer it with "stale, don't rerun, reply ok" or just verify yourself.
+- `cargo xtask test` stops at the first failing suite, so a flake there skips the desktop and Luau load checks: rerun `xtask test` alone.
+- Pacing tests must use `running.assert_released_apart` (v1 67); gaps between mockcord arrivals are banned. rules.md's flake list was trimmed accordingly.
+- Toasts live in a zgx `.layer()` portal so they show above open Luau modals (M23 found them hidden under settings). Rust dialogs and menus are zgx portals and already go on top.
+- Parity screen names: use the `MOCKUPS` keys (`login-web`, not `login`). The ticket cell in `docs/parity.md` must be digits only or xtask drops the row.
+- Python edits of ticket files: a `\\0` in a heredoc string became a NUL byte once (Midnight 10's Answer; fixed). Write literal backslashes as `bytes([92,48])` or check with `grep -c` afterwards.
+- One `git push` was rejected by GitHub once and passed on retry.
+- Open real-Discord confirmations added: M11 file option upload body, M17 whether polls also send `content`/`tts`/`flags`, v1 63 exact dialog wording, v1 62 which channel the web client opens after deleting the open one. All need the user's account; don't run them without asking.
+- Disk: 212 GB free; lane targets 22–27 GB.
+
 ## Latest: fifth orchestrator hands off (main `07233b8` + this note)
 
 Written by the fifth orchestrator (roboco chat `051e1203`, "kyoko orchestrator 5", same machine) when the user asked to hand off before implementing Midnight 19. Everything below still applies unless this section says otherwise; the "Decisions during the fifth orchestrator" list right under this section is part of it.
