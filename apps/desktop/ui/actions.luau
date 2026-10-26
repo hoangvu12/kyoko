@@ -128,6 +128,30 @@ function M.login_web_cancel()
 	ui.invoke("login.web_cancel")
 end
 
+function M.login_password_submit(login: string, password: string)
+	ui.invoke("login.password_submit", { login = login, password = password })
+end
+
+function M.login_mfa_verify(code: string)
+	ui.invoke("login.mfa_verify", code)
+end
+
+function M.login_mfa_method(method: string)
+	ui.invoke("login.mfa_method", method)
+end
+
+function M.login_password_back()
+	ui.invoke("login.password_back")
+end
+
+function M.login_mode(mode: string)
+	ui.invoke("login.mode", mode)
+end
+
+function M.login_discard_unsaved()
+	ui.invoke("login.discard_unsaved")
+end
+
 function M.sign_out()
 	return ui.action("login.sign_out")
 end

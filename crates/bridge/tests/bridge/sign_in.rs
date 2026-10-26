@@ -19,7 +19,7 @@ pub(super) struct Desk {
 	pub(super) server: Server,
 	keyring: Arc<MemoryKeyring>,
 	pub(super) store: Arc<Store>,
-	scratch: PathBuf,
+	pub(super) scratch: PathBuf,
 	pub(super) flow: Flow,
 }
 
@@ -227,7 +227,7 @@ async fn shut_down(session: Session) {
 		.expect("the session shuts down");
 }
 
-fn files_containing(root: &Path, secret: &str) -> Vec<PathBuf> {
+pub(super) fn files_containing(root: &Path, secret: &str) -> Vec<PathBuf> {
 	let mut found = Vec::new();
 	let mut pending = vec![root.to_path_buf()];
 	while let Some(dir) = pending.pop() {

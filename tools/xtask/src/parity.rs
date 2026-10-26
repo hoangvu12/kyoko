@@ -26,7 +26,15 @@ const POLL: Duration = Duration::from_millis(100);
 const UNKNOWN_SCREEN: i32 = 3;
 const DEFAULT_ANCHOR: &str = "2026-10-01T12:00:00Z";
 const REFERENCE_DIR: &str = "oxidcord-ref";
-const MOCKUP_ONLY: &[&str] = &["login-qr-scanned", "login-qr-expired", "login-web"];
+const MOCKUP_ONLY: &[&str] = &[
+	"login-qr-scanned",
+	"login-qr-expired",
+	"login-web",
+	"login-email",
+	"login-2fa",
+	"login-captcha",
+	"login-unsaved",
+];
 const PARITY_LIST: &str = "docs/parity.md";
 const MOCKUP: &str = "mockup";
 

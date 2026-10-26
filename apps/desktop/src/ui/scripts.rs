@@ -106,6 +106,7 @@ fn the_interface_loads_and_builds_every_screen() {
 			}),
 		)],
 	);
+	login_forms(&mut app);
 	shows(
 		&mut app,
 		"the direct messages",
@@ -1109,6 +1110,84 @@ fn settings_account() -> serde_json::Value {
 		"name": "Ada", "username": "ada", "email": "a•••@example.invalid", "phone": "",
 		"accent": "", "status": "online", "avatar": "",
 	})
+}
+
+fn login_forms(app: &mut TestApp) {
+	let form = json!({ "stage": "form", "problem": "" });
+	let mfa = |method: &str, phone: &str, others: serde_json::Value| {
+		json!({
+			"stage": "mfa", "problem": "Invalid two-factor code", "method": method, "phone": phone,
+			"awaits_text": false, "others": others,
+		})
+	};
+	shows(app, "the email form", "We're so excited to see you again!", &[]);
+	shows(
+		app,
+		"a wrong password",
+		"Login or password is invalid.",
+		&[(
+			"login.password",
+			json!({ "stage": "form", "problem": "Login or password is invalid." }),
+		)],
+	);
+	shows(
+		app,
+		"the token form",
+		"Sign in with your account token.",
+		&[("login.mode", json!("token")), ("login.password", form.clone())],
+	);
+	shows(
+		app,
+		"a captcha on the email form",
+		"Discord wants a captcha",
+		&[
+			("login.mode", json!("email")),
+			(
+				"login.password",
+				json!({
+					"stage": "handover", "problem": "", "title": "Discord wants a captcha",
+					"message": "Finish signing in on discord.com in a Kyoko window.",
+				}),
+			),
+		],
+	);
+	shows(
+		app,
+		"the two-factor step",
+		"Multi-Factor Authentication",
+		&[("login.password", mfa("totp", "", json!(["backup", "sms"])))],
+	);
+	shows(
+		app,
+		"the two-factor step's other methods",
+		"Receive auth code from SMS",
+		&[],
+	);
+	shows(
+		app,
+		"a texted two-factor code",
+		"Enter the 6-digit code sent to +*******0085.",
+		&[(
+			"login.password",
+			mfa("sms", "+*******0085", json!(["totp", "backup"])),
+		)],
+	);
+	shows(
+		app,
+		"a token that could not be saved",
+		"Your token couldn't be saved",
+		&[
+			("login.password", form),
+			("login.unsaved", json!(true)),
+			("login.unsaved_name", json!("oxid")),
+		],
+	);
+	shows(
+		app,
+		"the email form again",
+		"We're so excited to see you again!",
+		&[("login.unsaved", json!(false))],
+	);
 }
 
 pub(super) fn shows(app: &mut TestApp, screen: &str, marker: &str, values: &[(&str, serde_json::Value)]) {

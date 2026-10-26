@@ -8,41 +8,73 @@ local web_window = require("./login_web")
 
 local NOTICE =
 	"Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk."
-local PHI = 1.618
-local FIELD_HEIGHT = 44
-local BUTTON_HEIGHT = 32
-local CHECKBOX = 16
-local EYE = 14
-local DISABLED_FILL = 0.15
-local DISABLED_BORDER = 0.57
-local DISABLED_TEXT = 0.35
+local STORAGE_NOTE = "Kyoko keeps your token in Windows Credential Manager."
+local MFA_STAGES = { "mfa", "texting", "verifying" }
+local OTHER_METHODS = {
+	totp = "Use your authenticator app instead",
+	backup = "Use a backup code instead",
+	sms = "Receive auth code from SMS",
+}
 
 local function locked(): boolean
 	return not state.login.acknowledged:get()
 end
 
-local function leading(size: string): () -> number
-	local points = theme.number(size)
+local function password(): any
+	return state.login.password:get()
+end
+
+local function password_field(name: string): () -> any
 	return function()
-		return points() * PHI
+		local view = password()
+		return if view then view[name] else nil
 	end
 end
 
-local function layer(props: { [string]: any })
-	props.absolute = true
-	props.left = 0
-	props.top = 0
-	props.right = 0
-	props.bottom = 0
-	props.pointer_events = "none"
-	return ui.div(props)
+local function password_stage(): string
+	return password_field("stage")() or "form"
 end
 
-local function label(text: any, size: string, color: any, extra: { [string]: any }?)
+local function problem(): string
+	return password_field("problem")() or ""
+end
+
+local function busy(): boolean
+	local stage = password_stage()
+	return stage == "logging_in" or stage == "texting" or stage == "verifying" or stage == "signing_in"
+end
+
+local function view(): string
+	if state.login.unsaved:get() then
+		return "unsaved"
+	end
+	local stage = password_stage()
+	if table.find(MFA_STAGES, stage) then
+		return "mfa"
+	elseif stage == "handover" then
+		return "handover"
+	end
+	return if state.login.mode:get() == "token" then "token" else "email"
+end
+
+local function narrow(): boolean
+	local current = view()
+	return current == "mfa" or current == "unsaved"
+end
+
+local function dimmed()
+	local fade = theme.number(theme.size.disabled_opacity_control)
+	return function()
+		return if locked() then fade() else 1
+	end
+end
+
+local function line(text: any, size: string, height: string, weight: number, color: any, extra: { [string]: any }?)
 	local props: { [string]: any } = {
 		text,
 		text_size = size,
-		line_height = leading(size),
+		line_height = height,
+		weight = weight,
 		color = color,
 	}
 	for key, value in extra or {} do
@@ -51,115 +83,98 @@ local function label(text: any, size: string, color: any, extra: { [string]: any
 	return ui.text(props)
 end
 
-local function brand()
+local function heading(subtitle: string)
 	return ui.column {
-		gap = theme.size.space_8,
-		ui.row {
-			w = theme.size.login_logo,
-			h = theme.size.login_logo,
-			rounded = theme.size.login_logo,
-			bg = theme.color.brand,
-			items = "center",
-			justify = "center",
-			icon { name = "chat", size = theme.size.login_logo_icon :: any, color = theme.color.text_on_brand },
-		},
-		label("Welcome back", theme.size.font_xl, theme.color.header_primary, { weight = theme.weight.bold }),
-		label("Paste your account token to continue.", theme.size.font_sm, theme.color.text_muted),
-	}
-end
-
-local function token_field(token: any)
-	local revealed = ui.state("login_token_revealed", false)
-	local function field(secure: boolean)
-		return ui.input {
-			value = token,
-			secure = secure,
-			w_full = true,
-			h = FIELD_HEIGHT,
-			pl = theme.size.space_12,
-			pr = 40,
-			bg = "#00000000",
-			border = 0,
-			rounded = theme.size.radius_sm,
-			focus = { border = 0 },
-			text_size = theme.size.font_md,
-			color = theme.color.text_normal,
-			on_commit = function()
-				actions.login_submit(token:get())
-			end,
-		}
-	end
-	return ui.row {
-		relative = true,
 		w_full = true,
-		h = FIELD_HEIGHT,
 		items = "center",
-		layer { rounded = theme.size.radius_sm, bg = theme.color.interactive_muted, opacity = 0.3 },
-		layer { rounded = theme.size.radius_sm, border = 1, border_color = theme.color.interactive_muted },
-		ui.show(revealed, field(false), field(true)),
-		ui.show(
-			function()
-				return token:get() == ""
-			end,
-			ui.text {
-				"Account token",
-				absolute = true,
-				left = 13,
-				top = 0,
-				bottom = 0,
-				pointer_events = "none",
-				text_size = theme.size.font_md,
-				line_height = FIELD_HEIGHT,
-				color = theme.color.text_muted,
-			}
-		),
-		ui.button {
-			absolute = true,
-			right = 12,
-			top = (FIELD_HEIGHT - EYE) / 2,
-			w = EYE,
-			h = EYE,
-			p = 0,
-			bg = "#00000000",
-			border = 0,
-			focus = { border = 0 },
-			cursor = "pointer",
-			color = theme.color.text_normal,
-			hover = { color = theme.color.header_primary },
-			on_click = function()
-				revealed:set(not revealed:get())
-			end,
-			icon { name = "eye", size = EYE },
-		},
+		mb = theme.size.space_20,
+		line("Welcome back!", theme.size.font_size_xl, theme.size.line_height_xl, theme.weight.semibold, theme.color.text_2),
+		line(subtitle, theme.size.font_size_md, theme.size.line_height_label, theme.weight.regular, theme.color.text_4, {
+			mt = theme.size.space_8,
+			align = "center",
+			wrap = true,
+			w_full = true,
+		}),
 	}
 end
 
-local function status_line()
+local function label(text: string)
+	return ui.row {
+		mb = theme.size.space_8,
+		line(text, theme.size.font_size_xs, theme.size.line_height_xs, theme.weight.bold, theme.color.text_4),
+		line(" *", theme.size.font_size_xs, theme.size.line_height_xs, theme.weight.bold, theme.color.red_2),
+	}
+end
+
+local function text_field(props: { value: any, secure: boolean?, error: () -> boolean, on_commit: () -> (), reveal: boolean? })
+	return ui.input {
+		value = props.value,
+		secure = props.secure or false,
+		w_full = true,
+		h = theme.size.input_height,
+		pl = theme.size.space_12,
+		pr = if props.reveal then theme.size.space_40 else theme.size.space_12,
+		rounded = theme.size.radius_sm,
+		bg = function()
+			return if props.error() then theme.color.input_background_error else theme.color.bg_3
+		end,
+		border = theme.size.border_thickness,
+		border_color = function()
+			return if props.error() then theme.color.red_2 else theme.color.border_light
+		end,
+		hover = { border_color = theme.color.border },
+		focus = { border_color = theme.color.accent_2 },
+		text_size = theme.size.font_size_md,
+		color = theme.color.text_3,
+		on_commit = props.on_commit,
+	}
+end
+
+local function error_line(message: () -> string, color: (() -> any)?)
 	return ui.show(
 		function()
-			return state.login.message:get() ~= ""
+			return message() ~= ""
 		end,
-		label(function()
-			return state.login.message:get()
-		end, theme.size.font_sm, function()
-			return if state.login.error:get() then theme.color.danger else theme.color.text_muted
-		end, { literal = true, wrap = true })
+		ui.row {
+			w_full = true,
+			mt = theme.size.space_8,
+			gap = theme.size.space_6,
+			items = "start",
+			color = color or theme.color.red_1,
+			ui.div { pt = theme.size.space_1, icon { name = "circle_alert", size = theme.size.icon_size_sm :: any } },
+			ui.text {
+				message,
+				literal = true,
+				wrap = true,
+				grow = 1,
+				shrink = 1,
+				min_w = 0,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				weight = theme.weight.medium,
+			},
+		}
 	)
 end
 
-local button = ui.component(function(props: { text: any, primary: boolean, disabled: () -> boolean, on_click: any })
-	local fill = if props.primary then theme.color.brand else theme.color.button_secondary
+local primary_button = ui.component(function(props: { text: any, glyph: string?, disabled: () -> boolean, on_click: () -> () })
 	local hovered = ui.use_state(false)
 	return ui.button {
-		relative = true,
+		direction = "row",
 		w_full = true,
-		h = BUTTON_HEIGHT,
-		p = 0,
-		bg = "#00000000",
-		border = 0,
-		focus = { border = 0 },
-		justify = "center",
+		h = theme.size.button_height_lg,
+		px = theme.size.space_16,
+		gap = theme.size.space_8,
 		items = "center",
+		justify = "center",
+		rounded = theme.size.radius_sm,
+		bg = function()
+			return if hovered:get() and not props.disabled() then theme.color.accent_4 else theme.color.accent_3
+		end,
+		border = theme.size.border_thickness,
+		border_color = theme.color.button_border,
+		focus = { border_color = theme.color.button_border },
+		color = theme.color.text_0,
 		cursor = function()
 			return if props.disabled() then "default" else "pointer"
 		end,
@@ -171,105 +186,510 @@ local button = ui.component(function(props: { text: any, primary: boolean, disab
 				props.on_click()
 			end
 		end,
-		layer {
-			rounded = theme.size.radius_sm,
-			bg = function()
-				if hovered:get() and not props.disabled() then
-					return if props.primary then theme.color.brand_hover else theme.color.button_secondary_hover
-				end
-				return fill
-			end,
-			opacity = function()
-				return if props.disabled() then DISABLED_FILL else 1
-			end,
-		},
-		ui.show(
-			function()
-				return not props.primary and props.disabled()
-			end,
-			layer { rounded = theme.size.radius_sm, border = 1, border_color = fill, opacity = DISABLED_BORDER }
-		),
+		if props.glyph then icon { name = props.glyph, size = theme.size.icon_size_sm :: any } else nil,
 		ui.text {
 			props.text,
-			text_size = theme.size.font_md,
-			color = theme.color.text_on_brand,
-			opacity = function()
-				return if props.disabled() then DISABLED_TEXT else 1
-			end,
+			text_size = theme.size.font_size_md,
+			line_height = theme.size.line_height_label,
+			weight = theme.weight.medium,
+			color = theme.color.text_0,
 		},
 	}
 end)
+
+local function primary(props: { text: any, glyph: string?, disabled: () -> boolean, on_click: () -> () })
+	local fade = theme.number(theme.size.disabled_opacity_control)
+	return ui.div {
+		w_full = true,
+		opacity = function()
+			return if props.disabled() then fade() else 1
+		end,
+		primary_button(props),
+	}
+end
+
+local secondary = ui.component(function(props: { text: string, glyph: string, disabled: () -> boolean, on_click: () -> () })
+	local hovered = ui.use_state(false)
+	return ui.button {
+		direction = "row",
+		grow = 1,
+		basis = 0,
+		min_w = 0,
+		h = theme.size.button_height_md,
+		px = theme.size.space_16,
+		gap = theme.size.space_8,
+		items = "center",
+		justify = "center",
+		rounded = theme.size.radius_sm,
+		bg = function()
+			return if hovered:get() and not props.disabled() then theme.color.bg_1 else theme.color.bg_2
+		end,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_light,
+		focus = { border_color = theme.color.border_light },
+		color = theme.color.text_3,
+		cursor = function()
+			return if props.disabled() then "default" else "pointer"
+		end,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		on_click = function()
+			if not props.disabled() then
+				props.on_click()
+			end
+		end,
+		icon { name = props.glyph, size = theme.size.icon_size_sm :: any },
+		ui.text {
+			props.text,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_label,
+			weight = theme.weight.medium,
+			color = theme.color.text_3,
+		},
+	}
+end)
+
+local function link(text: any, on_click: () -> (), extra: { [string]: any }?)
+	local props: { [string]: any } = {
+		p = 0,
+		bg = "#00000000",
+		border = 0,
+		focus = { border = 0 },
+		cursor = "pointer",
+		on_click = on_click,
+		line(text, theme.size.font_size_sm, theme.size.line_height_sm, theme.weight.medium, theme.color.accent_1, {
+			literal = true,
+		}),
+	}
+	for key, value in extra or {} do
+		props[key] = value
+	end
+	return ui.button(props)
+end
+
+local function centered_link(text: string, on_click: () -> (), top: string)
+	return ui.row { w_full = true, mt = top, justify = "center", link(text, on_click) }
+end
+
+local function note()
+	return line(STORAGE_NOTE, theme.size.font_size_xs, theme.size.line_height_xs, theme.weight.regular, theme.color.text_5, {
+		mt = theme.size.space_16,
+		opacity = dimmed(),
+	})
+end
 
 local function web_message(): string
 	local web = state.login.web:get()
 	return if web then web.message else ""
 end
 
-local function token_column(token: any)
+local function web_line()
+	return error_line(web_message, function()
+		local web = state.login.web:get()
+		return if web and web.error then theme.color.red_1 else theme.color.text_4
+	end)
+end
+
+local function back_to_account()
+	return ui.show(
+		state.login.adding,
+		centered_link("Back to your account", function()
+			if not state.login.checking:get() and not busy() then
+				actions.login_cancel_add()
+			end
+		end, theme.size.space_12)
+	)
+end
+
+local function email_problem(): string
+	local own = problem()
+	if own ~= "" or state.login.checking:get() then
+		return own
+	end
+	return state.login.message:get()
+end
+
+local function email_form()
+	local login = ui.state("login_email", "")
+	local secret = ui.state("login_password", "")
+	local function submit()
+		if not locked() and not busy() then
+			actions.login_password_submit(login:get(), secret:get())
+		end
+	end
+	local function failed(): boolean
+		return problem() ~= ""
+	end
 	return ui.column {
 		grow = 1,
 		min_w = 0,
-		gap = theme.size.space_16,
-		brand(),
+		heading("We're so excited to see you again!"),
 		ui.column {
-			gap = theme.size.space_8,
-			label("TOKEN", theme.size.font_tiny, theme.color.header_secondary, { weight = theme.weight.bold }),
-			token_field(token),
-			status_line(),
+			gap = theme.size.space_20,
+			opacity = dimmed(),
+			pointer_events = function()
+				return not locked()
+			end,
+			ui.column {
+				label("EMAIL OR PHONE NUMBER"),
+				text_field {
+					value = login,
+					error = function()
+						return false
+					end,
+					on_commit = submit,
+				},
+			},
+			ui.column {
+				label("PASSWORD"),
+				text_field { value = secret, secure = true, error = failed, on_commit = submit },
+				error_line(email_problem, function()
+					return if problem() ~= "" or state.login.error:get() then theme.color.red_1 else theme.color.text_4
+				end),
+				ui.row {
+					mt = theme.size.space_8,
+					link("Forgot your password?", actions.login_web_open),
+				},
+			},
 		},
-		button {
-			text = function()
-				return if state.login.checking:get() then "Checking token..." else "Paste token"
-			end,
-			primary = true,
-			disabled = function()
-				return locked() or state.login.checking:get()
-			end,
-			on_click = function()
-				actions.login_submit(token:get())
-			end,
+		ui.div {
+			mt = theme.size.space_20,
+			opacity = dimmed(),
+			primary {
+				text = function()
+					return if busy() then "Logging in..." else "Log In"
+				end,
+				disabled = function()
+					return busy() or state.login.checking:get()
+				end,
+				on_click = submit,
+			},
 		},
-		ui.show(
-			state.login.unsaved,
-			button {
-				text = "Continue for this session only",
-				primary = false,
-				disabled = function()
-					return false
-				end,
-				on_click = actions.login_continue,
-			}
-		),
-		ui.show(
-			state.login.adding,
-			button {
-				text = "Back to your account",
-				primary = false,
-				disabled = function()
-					return state.login.checking:get()
-				end,
-				on_click = actions.login_cancel_add,
-			}
-		),
-		ui.column {
+		ui.row {
+			mt = theme.size.space_12,
 			gap = theme.size.space_8,
-			button {
+			opacity = dimmed(),
+			secondary {
+				text = "Sign in with a token",
+				glyph = "key",
+				disabled = function()
+					return locked() or busy()
+				end,
+				on_click = function()
+					actions.login_mode("token")
+				end,
+			},
+			secondary {
 				text = "Sign in on discord.com",
-				primary = false,
+				glyph = "globe",
 				disabled = function()
-					return locked() or state.login.checking:get()
+					return locked() or busy() or state.login.checking:get()
 				end,
 				on_click = actions.login_web_open,
 			},
+		},
+		web_line(),
+		back_to_account(),
+		note(),
+	}
+end
+
+local function token_form()
+	local token = ui.state("login_token", "")
+	local revealed = ui.state("login_token_revealed", false)
+	local function submit()
+		if not locked() and not state.login.checking:get() then
+			actions.login_submit(token:get())
+		end
+	end
+	local function failed(): boolean
+		return state.login.error:get() and state.login.message:get() ~= ""
+	end
+	local function field(secure: boolean)
+		return text_field { value = token, secure = secure, error = failed, on_commit = submit, reveal = true }
+	end
+	return ui.column {
+		grow = 1,
+		min_w = 0,
+		heading("Sign in with your account token."),
+		ui.column {
+			opacity = dimmed(),
+			label("TOKEN"),
+			ui.div {
+				relative = true,
+				w_full = true,
+				ui.show(revealed, field(false), field(true)),
+				ui.button {
+					absolute = true,
+					right = theme.number(theme.size.space_4),
+					top = theme.number(theme.size.space_4),
+					w = theme.size.button_size,
+					h = theme.size.button_size,
+					p = 0,
+					rounded = theme.size.radius_sm,
+					bg = "#00000000",
+					border = 0,
+					focus = { border = 0 },
+					justify = "center",
+					items = "center",
+					cursor = "pointer",
+					color = theme.color.text_4,
+					hover = { color = theme.color.text_3 },
+					on_click = function()
+						revealed:set(not revealed:get())
+					end,
+					icon { name = "eye", size = theme.size.icon_size_md :: any },
+				},
+			},
+			error_line(function()
+				return if state.login.checking:get() then "" else state.login.message:get()
+			end, function()
+				return if state.login.error:get() then theme.color.red_1 else theme.color.text_4
+			end),
+		},
+		ui.div {
+			mt = theme.size.space_20,
+			opacity = dimmed(),
+			primary {
+				text = function()
+					return if state.login.checking:get() then "Checking token..." else "Paste token"
+				end,
+				disabled = function()
+					return state.login.checking:get()
+				end,
+				on_click = submit,
+			},
+		},
+		centered_link("Back to email login", function()
+			actions.login_mode("email")
+		end, theme.size.space_12),
+		back_to_account(),
+		note(),
+	}
+end
+
+local function handover_step()
+	return ui.column {
+		grow = 1,
+		min_w = 0,
+		heading("We're so excited to see you again!"),
+		ui.row {
+			gap = theme.size.space_12,
+			p = theme.size.space_16,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.background_feedback_info,
+			border = theme.size.border_thickness,
+			border_color = theme.color.blue_2,
+			ui.div { color = theme.color.blue_1, icon { name = "shield_alert", size = theme.size.icon_size_md :: any } },
+			ui.column {
+				grow = 1,
+				min_w = 0,
+				line(
+					password_field("title"),
+					theme.size.font_size_md,
+					theme.size.line_height_label,
+					theme.weight.semibold,
+					theme.color.text_2,
+					{ literal = true }
+				),
+				line(
+					password_field("message"),
+					theme.size.font_size_sm,
+					theme.size.line_height_sm,
+					theme.weight.regular,
+					theme.color.text_3,
+					{ literal = true, wrap = true, mt = theme.size.space_4 }
+				),
+			},
+		},
+		ui.div {
+			mt = theme.size.space_20,
+			primary {
+				text = "Continue on discord.com",
+				glyph = "globe",
+				disabled = function()
+					return state.login.checking:get()
+				end,
+				on_click = actions.login_web_open,
+			},
+		},
+		web_line(),
+		centered_link("Go back to login", actions.login_password_back, theme.size.space_12),
+		note(),
+	}
+end
+
+local function badge(glyph: string, color: any)
+	return ui.row {
+		w = theme.size.login_badge_size,
+		h = theme.size.login_badge_size,
+		rounded = theme.size.login_badge_size,
+		bg = theme.color.bg_3,
+		color = color,
+		items = "center",
+		justify = "center",
+		icon { name = glyph, size = theme.size.space_40 :: any },
+	}
+end
+
+local function step_heading(glyph: string, color: any, title: any, subtitle: any)
+	return ui.column {
+		w_full = true,
+		items = "center",
+		badge(glyph, color),
+		line(title, theme.size.font_size_xl, theme.size.line_height_xl, theme.weight.semibold, theme.color.text_2, {
+			mt = theme.size.space_16,
+			align = "center",
+		}),
+		line(subtitle, theme.size.font_size_md, theme.size.line_height_label, theme.weight.regular, theme.color.text_4, {
+			mt = theme.size.space_8,
+			align = "center",
+			wrap = true,
+			w_full = true,
+			literal = true,
+		}),
+	}
+end
+
+local function mfa_subtitle(): string
+	local method = password_field("method")() or "totp"
+	if method == "backup" then
+		return "Enter one of your 8-character backup codes."
+	elseif method == "sms" then
+		if password_field("awaits_text")() then
+			return "Discord will text a code to the phone number on your account."
+		end
+		local phone = password_field("phone")() or ""
+		return if phone ~= "" then `Enter the 6-digit code sent to {phone}.` else "Enter the 6-digit code sent to your phone."
+	end
+	return "Enter the 6-digit code from your authenticator app."
+end
+
+local function mfa_step()
+	local code = ui.state("login_code", "")
+	ui.effect(function()
+		if not table.find(MFA_STAGES, password_stage()) then
+			code:set("")
+		end
+	end)
+	local function awaits_text(): boolean
+		return password_field("awaits_text")() == true
+	end
+	local function act()
+		if busy() then
+			return
+		end
+		if awaits_text() then
+			actions.login_mfa_method("sms")
+		else
+			actions.login_mfa_verify(code:get())
+		end
+	end
+	local function others(): { string }
+		return password_field("others")() or {}
+	end
+	local function other(method: string)
+		return ui.show(function()
+			return table.find(others(), method) ~= nil
+		end, link(OTHER_METHODS[method], function()
+			if not busy() then
+				actions.login_mfa_method(method)
+			end
+		end))
+	end
+	return ui.column {
+		grow = 1,
+		min_w = 0,
+		step_heading("lock", theme.color.text_3, "Multi-Factor Authentication", mfa_subtitle),
+		ui.column {
+			w_full = true,
+			mt = theme.size.space_20,
 			ui.show(
 				function()
-					return web_message() ~= ""
+					return not awaits_text()
 				end,
-				label(web_message, theme.size.font_sm, function()
-					local web = state.login.web:get()
-					return if web and web.error then theme.color.red_1 else theme.color.text_4
-				end, { literal = true, wrap = true })
+				ui.column {
+					w_full = true,
+					ui.row {
+						mb = theme.size.space_8,
+						line(function()
+							return if password_field("method")() == "backup" then "ENTER A BACKUP CODE" else "ENTER DISCORD AUTH CODE"
+						end, theme.size.font_size_xs, theme.size.line_height_xs, theme.weight.bold, theme.color.text_4),
+						line(" *", theme.size.font_size_xs, theme.size.line_height_xs, theme.weight.bold, theme.color.red_2),
+					},
+					text_field {
+						value = code,
+						error = function()
+							return problem() ~= ""
+						end,
+						on_commit = act,
+					},
+				}
 			),
+			error_line(problem),
+			ui.div {
+				mt = theme.size.space_20,
+				primary {
+					text = function()
+						local stage = password_stage()
+						if stage == "texting" then
+							return "Sending code..."
+						elseif stage == "verifying" then
+							return "Logging in..."
+						end
+						return if awaits_text() then "Send code" else "Log In"
+					end,
+					disabled = busy,
+					on_click = act,
+				},
+			},
+			ui.column {
+				mt = theme.size.space_16,
+				gap = theme.size.space_8,
+				items = "start",
+				other("backup"),
+				other("totp"),
+				other("sms"),
+				link("Go back to login", function()
+					if not busy() then
+						actions.login_password_back()
+					end
+				end),
+			},
+		},
+	}
+end
+
+local function unsaved_step()
+	return ui.column {
+		grow = 1,
+		min_w = 0,
+		step_heading("warning_fill", theme.color.yellow_1, "Your token couldn't be saved", function()
+			return `You're signed in as {state.login.unsaved_name:get()}, but Windows Credential Manager refused to store your token.`
+		end),
+		ui.column {
+			w_full = true,
+			mt = theme.size.space_20,
+			line(
+				"If you continue, Kyoko keeps the token in memory only. You'll need to sign in again the next time you open Kyoko.",
+				theme.size.font_size_sm,
+				theme.size.line_height_sm,
+				theme.weight.regular,
+				theme.color.text_3,
+				{ wrap = true, w_full = true }
+			),
+			ui.div {
+				mt = theme.size.space_20,
+				primary {
+					text = "Continue for this session only",
+					disabled = function()
+						return false
+					end,
+					on_click = actions.login_continue,
+				},
+			},
+			centered_link("Back to login", actions.login_discard_unsaved, theme.size.space_16),
 		},
 	}
 end
@@ -278,7 +698,7 @@ local function checkbox()
 	return ui.button {
 		direction = "row",
 		items = "center",
-		gap = theme.size.space_8,
+		gap = theme.size.space_10,
 		p = 0,
 		bg = "#00000000",
 		border = 0,
@@ -292,73 +712,93 @@ local function checkbox()
 			end
 		end,
 		ui.row {
-			relative = true,
-			w = CHECKBOX,
-			h = CHECKBOX,
+			w = theme.size.checkbox_size,
+			h = theme.size.checkbox_size,
+			rounded = theme.size.radius_xs,
+			bg = function()
+				return if locked() then theme.color.bg_2 else theme.color.accent_2
+			end,
+			border = theme.size.border_thickness,
+			border_color = function()
+				return if locked() then theme.color.border else theme.color.button_border
+			end,
 			items = "center",
 			justify = "center",
-			layer {
-				rounded = theme.size.radius_sm,
-				bg = function()
-					return if locked() then theme.color.interactive_muted else theme.color.brand
-				end,
-				opacity = function()
-					return if locked() then 0.3 else 0.5
-				end,
-			},
-			layer {
-				rounded = theme.size.radius_sm,
-				border = 1,
-				border_color = function()
-					return if locked() then theme.color.interactive_muted else theme.color.brand
-				end,
-				opacity = function()
-					return if locked() then 1 else 0.5
-				end,
-			},
-			ui.show(
-				state.login.acknowledged,
-				ui.div { opacity = 0.5, icon { name = "check", size = 12, color = theme.color.text_on_brand } }
-			),
+			color = theme.color.text_0,
+			ui.show(state.login.acknowledged, icon { name = "check", size = theme.size.icon_size_xs :: any }),
 		},
-		label("I understand", theme.size.font_sm, function()
-			return if locked() then theme.color.text_normal else theme.color.text_muted
-		end),
+		line("I understand", theme.size.font_size_md, theme.size.line_height_label, theme.weight.medium, theme.color.text_2),
 	}
 end
 
 local function notice()
 	return ui.column {
-		relative = true,
 		w = theme.size.login_card_width,
-		p = theme.size.space_16,
 		gap = theme.size.space_12,
-		layer { rounded = theme.size.radius_md, bg = theme.color.warning, opacity = 0.1 },
-		layer { rounded = theme.size.radius_md, border = 1, border_color = theme.color.warning, opacity = 0.5 },
+		px = theme.size.space_20,
+		py = theme.size.space_16,
+		rounded = theme.size.radius_lg,
+		bg = theme.color.background_feedback_warning,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_feedback_warning,
 		ui.row {
-			items = "start",
 			gap = theme.size.space_12,
-			icon { name = "warning", size = theme.size.icon_lg :: any, color = theme.color.warning },
-			label(NOTICE, theme.size.font_sm, theme.color.text_normal, { grow = 1, min_w = 0, wrap = true }),
+			ui.div { color = theme.color.yellow_1, icon { name = "warning_fill", size = theme.size.icon_size_md :: any } },
+			line(NOTICE, theme.size.font_size_sm, theme.size.line_height_sm, theme.weight.regular, theme.color.text_3, {
+				grow = 1,
+				min_w = 0,
+				wrap = true,
+			}),
 		},
-		checkbox(),
+		ui.row {
+			gap = theme.size.space_12,
+			ui.div { w = theme.size.icon_size_md, shrink = 0 },
+			checkbox(),
+		},
+	}
+end
+
+local function card()
+	return ui.row {
+		w = function()
+			return if narrow() then theme.size.login_card_narrow else theme.size.login_card_width
+		end,
+		items = "center",
+		gap = theme.size.login_card_gap,
+		p = theme.size.space_32,
+		rounded = theme.size.radius_lg,
+		bg = theme.color.bg_4,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		ui.switch(view, {
+			email = email_form(),
+			token = token_form(),
+			handover = handover_step(),
+			mfa = mfa_step(),
+			unsaved = unsaved_step(),
+		}, ui.div {}),
+		ui.show(function()
+			return not narrow()
+		end, qr_column()),
 	}
 end
 
 return function()
-	local token = ui.state("login_token", "")
+	local secrets = { ui.state("login_token", ""), ui.state("login_password", ""), ui.state("login_code", "") }
 	ui.effect(function()
 		if state.login.screen:get() == "main" then
-			token:set("")
+			for _, secret in secrets do
+				secret:set("")
+			end
 		end
 	end)
 	return ui.column {
 		relative = true,
 		w_full = true,
 		h_full = true,
-		bg = theme.color.background_tertiary,
-		color = theme.color.text_normal,
-		text_size = theme.size.font_md,
+		bg = theme.color.bg_3,
+		color = theme.color.text_3,
+		text_size = theme.size.font_size_md,
 		font = theme.font.ui,
 		title_bar(),
 		ui.column {
@@ -366,17 +806,12 @@ return function()
 			min_h = 0,
 			items = "center",
 			justify = "center",
-			gap = theme.size.space_16,
-			ui.row {
-				w = theme.size.login_card_width,
-				p = theme.size.space_32,
-				gap = theme.size.space_32,
-				rounded = theme.size.radius_md,
-				bg = theme.color.background_secondary,
-				token_column(token),
-				qr_column(),
-			},
-			notice(),
+			gap = theme.size.gap,
+			p = theme.size.gap,
+			card(),
+			ui.show(function()
+				return view() ~= "unsaved"
+			end, notice()),
 		},
 		web_window(),
 	}

@@ -16,6 +16,7 @@ mod media;
 mod members;
 mod message;
 mod message_logger;
+mod password_login;
 mod popouts;
 mod profile;
 mod qr_login;

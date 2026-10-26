@@ -40,6 +40,16 @@ export type LoginWeb = {
 	message: string,
 	error: boolean,
 }
+export type LoginPassword = {
+	stage: string,
+	problem: string,
+	method: string?,
+	phone: string?,
+	awaits_text: boolean?,
+	others: { string }?,
+	title: string?,
+	message: string?,
+}
 export type VoiceMember = {
 	key: string,
 	id: string,
@@ -286,6 +296,9 @@ M.login = {
 	adding = ui.shared("login.adding", false),
 	qr = ui.shared("login.qr", nil :: LoginQr?),
 	web = ui.shared("login.web", nil :: LoginWeb?),
+	password = ui.shared("login.password", nil :: LoginPassword?),
+	mode = ui.shared("login.mode", "email"),
+	unsaved_name = ui.shared("login.unsaved_name", ""),
 }
 
 M.rail = {

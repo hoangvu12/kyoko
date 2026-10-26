@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use bridge::themes::parse_color;
 use bridge::{
-	Arrival, Checked, Failure, Flow, Handover, Inbox, QrEvent, QrEvents, QrSignIn, QrStage, Scanner, Screen,
+	Arrival, Checked, Failure, Flow, Handover, Inbox, MfaMethod, MfaView, PasswordProblem, PasswordReply,
+	PasswordSignIn, PasswordStage, PasswordWork, QrEvent, QrEvents, QrSignIn, QrStage, Scanner, Screen,
 	Status, WebPage, WebSignIn, WebStage,
 };
 use media::ImageName;
@@ -14,11 +15,15 @@ use state::{Changes, SecretStorage, State};
 use tokio::runtime::Handle;
 use zgx_script::{ScriptHost, Shared, Value};
 
-use super::{Link, Slot, qr_code, text};
+use super::{Link, Slot, field, qr_code, text};
 use crate::web_page::{Bounds, PageEvent, PageHost};
 use crate::{capture, theme};
 
 const QR_IMAGE: &str = "login-qr";
+const EMAIL_MODE: &str = "email";
+const TOKEN_MODE: &str = "token";
+const CAPTURE_TOKEN: &str = "kyoko-capture-token";
+const CAPTURE_PASSWORD: &str = "kyoko-capture-password";
 
 pub struct SignIn {
 	pub flow: Flow,
@@ -38,6 +43,8 @@ enum Event {
 	Web(PageEvent),
 	WebPlaced,
 	WebChecked(Box<Checked>),
+	Password(Box<PasswordReply>),
+	PasswordChecked(Box<Checked>),
 }
 
 pub(super) struct Account {
@@ -64,6 +71,11 @@ pub(super) struct Account {
 	web_slot: Cell<Option<Slot>>,
 	web_page: RefCell<Option<WebPage>>,
 	web_host: RefCell<Option<PageHost>>,
+	password: RefCell<PasswordSignIn>,
+	password_view: Shared,
+	mode: Shared,
+	unsaved_name: Shared,
+	capture_code: RefCell<Option<String>>,
 }
 
 impl Account {
@@ -98,6 +110,11 @@ impl Account {
 			web_slot: Cell::new(None),
 			web_page: RefCell::new(None),
 			web_host: RefCell::new(None),
+			password: RefCell::new(PasswordSignIn::new()),
+			password_view: host.shared("login.password", Value::Nil),
+			mode: host.shared("login.mode", EMAIL_MODE),
+			unsaved_name: host.shared("login.unsaved_name", ""),
+			capture_code: RefCell::new(None),
 		}
 	}
 }
@@ -149,6 +166,58 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
+		host.action("login.password_submit", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				let typed = |key: &str| {
+					field(&argument, key)
+						.and_then(text)
+						.unwrap_or_default()
+						.to_owned()
+				};
+				link.submit_password(typed("login"), typed("password"));
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.mfa_verify", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				let code = text(&argument).unwrap_or_default().to_owned();
+				let work = link.account.password.borrow_mut().verify(code);
+				link.run_password(work);
+				link.publish_password();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.mfa_method", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				let method = text(&argument).and_then(method_named);
+				let work = method.and_then(|method| link.account.password.borrow_mut().choose(method));
+				link.run_password(work);
+				link.publish_password();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.password_back", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.account.password.borrow_mut().back();
+				link.publish_password();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.mode", move |argument| {
+			if let Some(link) = actions.upgrade()
+				&& let Some(mode) = text(&argument)
+			{
+				link.set_mode(mode);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("login.discard_unsaved", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.flow.borrow_mut().discard_unsaved();
+				link.after_flow_change();
+			}
+		});
+		let actions = Rc::downgrade(link);
 		host.action("login.cancel_add", move |_| {
 			if let Some(link) = actions.upgrade() {
 				link.flow.borrow_mut().cancel_add();
@@ -180,6 +249,11 @@ impl Link {
 						let failure = self.flow.borrow_mut().redeemed(*checked);
 						self.account.web.borrow_mut().signed_in(failure);
 					}
+					Event::Password(reply) => self.on_password(*reply),
+					Event::PasswordChecked(checked) => {
+						let failure = self.flow.borrow_mut().redeemed(*checked);
+						self.account.password.borrow_mut().signed_in(failure);
+					}
 				}
 				self.after_flow_change();
 			}
@@ -206,8 +280,32 @@ impl Link {
 		if screen != capture::Screen::LoginTos {
 			self.acknowledge();
 		}
-		if screen == capture::Screen::LoginWeb {
-			self.open_web();
+		match screen {
+			capture::Screen::LoginWeb => self.open_web(),
+			capture::Screen::LoginToken => {
+				self.set_mode(TOKEN_MODE);
+				self.submit(CAPTURE_TOKEN.to_owned());
+			}
+			capture::Screen::LoginEmail => {
+				self.submit_password(mockcord::PASSWORD_LOGIN.to_owned(), CAPTURE_PASSWORD.to_owned());
+			}
+			capture::Screen::Login2fa => {
+				*self.account.capture_code.borrow_mut() = Some(mockcord::LIMITED_CODE.to_owned());
+				self.submit_password(mockcord::MFA_LOGIN.to_owned(), mockcord::MOCK_PASSWORD.to_owned());
+			}
+			capture::Screen::LoginCaptcha => {
+				self.submit_password(
+					mockcord::CAPTCHA_LOGIN.to_owned(),
+					mockcord::MOCK_PASSWORD.to_owned(),
+				);
+			}
+			capture::Screen::LoginUnsaved => {
+				self.submit_password(
+					mockcord::PASSWORD_LOGIN.to_owned(),
+					mockcord::MOCK_PASSWORD.to_owned(),
+				);
+			}
+			_ => {}
 		}
 	}
 
@@ -216,6 +314,83 @@ impl Link {
 		matches!(flow.screen(), Screen::Login(_))
 			&& (screen == capture::Screen::LoginTos || flow.gate().acknowledged())
 			&& self.qr_settled(screen)
+	}
+
+	fn set_mode(&self, mode: &str) {
+		if matches!(mode, EMAIL_MODE | TOKEN_MODE) {
+			self.account.mode.set(mode.into());
+		}
+	}
+
+	fn submit_password(&self, login: String, password: String) {
+		let work = self
+			.account
+			.password
+			.borrow_mut()
+			.submit(&self.flow.borrow(), login, password);
+		self.run_password(work);
+		self.publish_password();
+	}
+
+	fn run_password(&self, work: Option<PasswordWork>) {
+		if let Some(work) = work {
+			let events = self.account.events.clone();
+			self.account
+				.runtime
+				.spawn(async move { events.push(Event::Password(Box::new(work.await))) });
+		}
+	}
+
+	fn on_password(&self, reply: PasswordReply) {
+		let token = self.account.password.borrow_mut().apply(reply);
+		if let Some(token) = token {
+			tracing::info!("signing in with the email form's token");
+			let check = self.flow.borrow_mut().redeem(token);
+			match check {
+				Some(check) => {
+					let events = self.account.events.clone();
+					self.account
+						.runtime
+						.spawn(async move { events.push(Event::PasswordChecked(Box::new(check.await))) });
+				}
+				None => self
+					.account
+					.password
+					.borrow_mut()
+					.signed_in(Some(Failure::Rejected)),
+			}
+		}
+		let waiting = matches!(self.account.password.borrow().stage(), PasswordStage::Mfa(_));
+		let code = self.account.capture_code.borrow_mut().take_if(|_| waiting);
+		if let Some(code) = code {
+			let work = self.account.password.borrow_mut().verify(code);
+			self.run_password(work);
+		}
+	}
+
+	fn publish_password(&self) {
+		let password = self.account.password.borrow();
+		let mut view = match password.stage() {
+			PasswordStage::Form => serde_json::json!({ "stage": "form" }),
+			PasswordStage::LoggingIn => serde_json::json!({ "stage": "logging_in" }),
+			PasswordStage::Mfa(view) => mfa_view("mfa", view),
+			PasswordStage::Texting(view) => mfa_view("texting", view),
+			PasswordStage::Verifying(view) => mfa_view("verifying", view),
+			PasswordStage::SigningIn => serde_json::json!({ "stage": "signing_in" }),
+			PasswordStage::HandedOver(handover) => serde_json::json!({
+				"stage": "handover",
+				"title": handover.title(),
+				"message": handover.message(),
+			}),
+		};
+		view["problem"] = password
+			.problem()
+			.map(PasswordProblem::message)
+			.unwrap_or_default()
+			.into();
+		if let Some(value) = Value::from_json(&view.to_string()) {
+			self.account.password_view.set(value);
+		}
 	}
 
 	fn acknowledge(&self) {
@@ -347,6 +522,7 @@ impl Link {
 		}
 		self.follow_qr();
 		self.sync_web();
+		self.account.password.borrow_mut().follow(&self.flow.borrow());
 		self.publish_sign_in();
 	}
 
@@ -480,10 +656,28 @@ impl Link {
 
 	pub(super) fn qr_settled(&self, wanted: capture::Screen) -> bool {
 		let qr = self.account.qr.borrow();
+		let password = self.account.password.borrow();
+		let code_shown =
+			matches!(qr.stage(), QrStage::Code { .. }) && self.account.qr_image.borrow().is_some();
 		match (wanted, qr.stage()) {
 			(capture::Screen::LoginQrScanned, QrStage::Scanned(_)) => self.account.scanner_ready.get(),
 			(capture::Screen::LoginQrExpired, QrStage::Ended(_)) => true,
-			(capture::Screen::LoginToken, QrStage::Code { .. }) => self.account.qr_image.borrow().is_some(),
+			(capture::Screen::LoginToken, _) => {
+				code_shown && *self.flow.borrow().screen() == Screen::Login(Status::Failed(Failure::Rejected))
+			}
+			(capture::Screen::LoginEmail, _) => {
+				code_shown && matches!(password.problem(), Some(PasswordProblem::WrongLogin(_)))
+			}
+			(capture::Screen::LoginCaptcha, _) => {
+				code_shown && matches!(password.stage(), PasswordStage::HandedOver(_))
+			}
+			(capture::Screen::Login2fa, _) => {
+				matches!(password.stage(), PasswordStage::Mfa(_))
+					&& password.problem() == Some(&PasswordProblem::Refused)
+			}
+			(capture::Screen::LoginUnsaved, _) => {
+				matches!(self.flow.borrow().screen(), Screen::Login(Status::Unsaved(_)))
+			}
 			(capture::Screen::LoginWeb, QrStage::Code { .. }) => {
 				self.account.qr_image.borrow().is_some()
 					&& self.account.web.borrow().loaded()
@@ -605,9 +799,12 @@ impl Link {
 				.unsaved
 				.set(matches!(status, Some(Status::Unsaved(_))).into());
 			account.adding.set(flow.adding().into());
+			let unsaved = flow.unsaved_user().map(|user| user.username.as_str());
+			account.unsaved_name.set(unsaved.unwrap_or_default().into());
 		});
 		drop(flow);
 		self.publish_qr();
+		self.publish_password();
 	}
 }
 
@@ -776,6 +973,23 @@ impl Link {
 			self.account.web_view.set(value);
 		}
 	}
+}
+
+fn method_named(name: &str) -> Option<MfaMethod> {
+	[MfaMethod::Totp, MfaMethod::Sms, MfaMethod::Backup]
+		.into_iter()
+		.find(|method| method.name() == name)
+}
+
+fn mfa_view(stage: &str, view: &MfaView) -> serde_json::Value {
+	let others: Vec<&str> = view.others().into_iter().map(MfaMethod::name).collect();
+	serde_json::json!({
+		"stage": stage,
+		"method": view.method.name(),
+		"phone": view.phone.as_deref().unwrap_or_default(),
+		"awaits_text": view.awaits_text(),
+		"others": others,
+	})
 }
 
 fn clipboard_text() -> String {

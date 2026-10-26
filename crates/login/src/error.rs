@@ -14,6 +14,10 @@ pub enum LoginError {
 	Refused,
 	#[error("discord asked for a captcha")]
 	Captcha,
+	#[error("the login or password was not accepted")]
+	WrongLogin(Option<String>),
+	#[error("the two-factor code was not accepted")]
+	WrongCode(Option<String>),
 	#[error("unexpected response: {0}")]
 	Protocol(String),
 	#[error("login cancelled")]

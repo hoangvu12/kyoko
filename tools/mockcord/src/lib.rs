@@ -14,6 +14,7 @@ mod json;
 mod media;
 mod member_list;
 mod ops;
+mod password;
 mod ready;
 mod record;
 mod remote_auth;
@@ -32,6 +33,10 @@ pub use community::{COMMUNITY_INVITE, COMMUNITY_NAME, CommunityGuild};
 pub use config::MockConfig;
 pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};
+pub use password::{
+	BACKUP_CODE, CAPTCHA_LOGIN, LIMITED_CODE, MFA_LOGIN, MOCK_PASSWORD, PASSWORD_LOGIN, SECURITY_KEY_LOGIN,
+	SMS_CODE, SMS_PHONE, TOTP_CODE,
+};
 pub use ready::API_CODE_VERSION;
 pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,

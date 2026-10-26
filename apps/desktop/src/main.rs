@@ -45,7 +45,7 @@ use plugins::{HostConfig, PluginHost};
 use protocol::Token;
 use session::{Session, SessionConfig};
 use state::Changes;
-use store::{Paths, Settings, Store};
+use store::{MemoryKeyring, Paths, Settings, Store};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
@@ -247,7 +247,10 @@ fn main() -> Result<ExitCode> {
 		.thread_name("kyoko-worker")
 		.build()
 		.context("start async runtime")?;
-	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), mocked)?;
+	let refused_keyring = capture
+		.as_ref()
+		.is_some_and(|capture| capture.screen == Screen::LoginUnsaved);
+	let (store, cache_dir, scratch) = open_store(cli.data_dir.clone(), mocked, refused_keyring)?;
 	let appearance = ui::Appearance {
 		theme: store.settings.read().theme.clone(),
 	};
@@ -503,7 +506,11 @@ fn gallery(
 	Ok(gallery)
 }
 
-fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, Scratch)> {
+fn open_store(
+	data_dir: Option<PathBuf>,
+	mock: bool,
+	refused_keyring: bool,
+) -> Result<(Store, PathBuf, Scratch)> {
 	let (root, scratch) = match data_dir {
 		Some(path) => (path, Scratch::default()),
 		None if !mock => {
@@ -520,13 +527,19 @@ fn open_store(data_dir: Option<PathBuf>, mock: bool) -> Result<(Store, PathBuf, 
 	let paths = Paths::at(&root).context("prepare data directories")?;
 	if mock || scratch.is_set() {
 		let mut settings = Settings::load(&paths);
-		settings.storage.plaintext_token = true;
+		settings.storage.plaintext_token = !refused_keyring;
 		settings
 			.save(&paths)
 			.context("keep the store's secrets out of Credential Manager")?;
 	}
 	let cache_dir = paths.cache_dir().to_path_buf();
-	let store = Store::open(paths).context("open store")?;
+	let store = if refused_keyring {
+		let keyring = MemoryKeyring::new();
+		keyring.set_failing_writes(true);
+		Store::open_with(paths, Arc::new(keyring)).context("open store")?
+	} else {
+		Store::open(paths).context("open store")?
+	};
 	Ok((store, cache_dir, scratch))
 }
 

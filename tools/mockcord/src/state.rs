@@ -14,6 +14,7 @@ use crate::fixtures::Fixtures;
 use crate::hub::Hub;
 use crate::ids::snowflake_at;
 use crate::ops::UploadedFile;
+use crate::password::PasswordAuth;
 use crate::record::Recorder;
 use crate::remote_auth::RemoteAuth;
 use crate::scenario::Scenario;
@@ -220,6 +221,7 @@ pub struct Shared {
 	pub recorder: Recorder,
 	pub scenario: Scenario,
 	pub remote_auth: RemoteAuth,
+	pub password: PasswordAuth,
 	token: Mutex<String>,
 	windows: Mutex<HashMap<String, Window>>,
 }
@@ -239,6 +241,7 @@ impl Shared {
 			recorder,
 			scenario: Scenario::default(),
 			remote_auth: RemoteAuth::default(),
+			password: PasswordAuth::default(),
 			token,
 			windows: Mutex::new(HashMap::new()),
 		}

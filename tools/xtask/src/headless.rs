@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};
-use login::{QrConfig, QrEvent, QrLogin};
+use login::{LoginStep, MfaMethod, PasswordLogin, QrConfig, QrEvent, QrLogin};
 use mockcord::{FixtureSummary, MockConfig, Server};
 use plugins::{HostConfig, PluginHost};
 use protocol::{Channel, ChannelType, Snowflake, Token};
@@ -711,6 +711,38 @@ fn quiet_direct_message(state: &State, server: &Server) -> Option<(Snowflake, u6
 		})
 }
 
+async fn password_sign_in(server: &Server, store: &Store) -> Result<()> {
+	let rest_base = Url::parse(server.rest_base_url()).context("rest url is invalid")?;
+	let login = PasswordLogin::new(rest_base, &session::client_identity(store));
+	let step = tokio::time::timeout(
+		STEP_TIMEOUT,
+		login.login(mockcord::MFA_LOGIN, mockcord::MOCK_PASSWORD),
+	)
+	.await
+	.context("timed out waiting for the email sign-in")?
+	.context("the email sign-in failed")?;
+	let LoginStep::Mfa(challenge) = step else {
+		bail!("the email sign-in skipped two-factor authentication");
+	};
+	ensure!(
+		challenge.methods().totp,
+		"the email sign-in offered no authenticator code"
+	);
+	let token = tokio::time::timeout(
+		STEP_TIMEOUT,
+		login.verify(&challenge, MfaMethod::Totp, mockcord::TOTP_CODE),
+	)
+	.await
+	.context("timed out waiting for the two-factor code")?
+	.context("the two-factor code was refused")?;
+	ensure!(
+		token.as_str() == server.token(),
+		"the email sign-in gave the wrong token"
+	);
+	tracing::info!("signed in with the email form and an authenticator code");
+	Ok(())
+}
+
 async fn qr_sign_in(server: &Server, store: &Store) -> Result<Token> {
 	let mut gateway_url = Url::parse(&server.remote_auth_url()).context("remote auth url is invalid")?;
 	gateway_url.query_pairs_mut().append_pair("phone", "login");
@@ -816,6 +848,7 @@ async fn scenario(
 	settings.save(&paths)?;
 	let store = Arc::new(Store::open(paths)?);
 	let plugins = plugin_host(root)?;
+	password_sign_in(server, &store).await?;
 	let token = qr_sign_in(server, &store).await?;
 	let harness = Harness::start(
 		store.clone(),

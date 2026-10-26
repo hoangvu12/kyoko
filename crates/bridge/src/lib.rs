@@ -19,6 +19,7 @@ mod inbox;
 mod lightbox;
 mod member_list;
 mod message;
+mod password_login;
 mod profile;
 mod qr_login;
 mod rail;
@@ -92,7 +93,7 @@ pub use images::{
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
-pub use login::{QrEvent, REMOTE_AUTH_URL, Scanner};
+pub use login::{MfaMethod, MfaMethods, QrEvent, REMOTE_AUTH_URL, Scanner};
 pub use member_list::{
 	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
 	MemberRowKind, OpenMembers, layout_of,
@@ -102,6 +103,10 @@ pub use message::{
 	PollSummary, Quote, ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL,
 	UNKNOWN_ROLE, UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name,
 	reaction_key, snippet, system_line, timestamp_in, timestamp_text, user_display,
+};
+pub use password_login::{
+	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,
+	PasswordWork,
 };
 pub use profile::{
 	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, MutualFriend, MutualGuild, PanelUser, ProfileBadge,

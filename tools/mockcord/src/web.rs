@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
-use axum::Json;
 use axum::extract::{Path, Query, Request, State};
 use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::{HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
-use serde_json::json;
 
-use crate::error::ApiError;
 use crate::state::Shared;
 
 pub const DEVICE_COOKIE: &str = "__dcfduid";
@@ -136,23 +133,4 @@ pub async fn login_page(State(shared): State<Arc<Shared>>, Query(query): Query<L
 		}
 	}
 	response
-}
-
-#[derive(Deserialize)]
-pub struct Login {
-	login: Option<String>,
-	password: Option<String>,
-}
-
-pub async fn auth_login(State(shared): State<Arc<Shared>>, Json(body): Json<Login>) -> Response {
-	let filled = |field: &Option<String>| field.as_deref().is_some_and(|text| !text.trim().is_empty());
-	if !filled(&body.login) || !filled(&body.password) {
-		return ApiError::invalid_body("Invalid Form Body").into_response();
-	}
-	Json(json!({
-		"user_id": shared.fixtures.current_user.id.to_string(),
-		"token": shared.current_token(),
-		"user_settings": { "locale": "en-US", "theme": "dark" },
-	}))
-	.into_response()
 }

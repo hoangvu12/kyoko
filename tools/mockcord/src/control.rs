@@ -75,6 +75,14 @@ impl Control {
 		self.shared.scenario.clear_replies();
 	}
 
+	pub fn mfa_tickets_issued(&self) -> u64 {
+		self.shared.password.tickets_issued()
+	}
+
+	pub fn mfa_texts_sent(&self) -> u64 {
+		self.shared.password.texts_sent()
+	}
+
 	pub fn close_gateway(&self, code: u16) {
 		self.shared.hub.close_all(code);
 	}

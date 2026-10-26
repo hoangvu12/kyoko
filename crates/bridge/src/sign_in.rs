@@ -103,6 +103,10 @@ impl Gate {
 		}
 	}
 
+	pub fn password_login(&self) -> login::PasswordLogin {
+		login::PasswordLogin::new(self.rest_base.clone(), &self.identity)
+	}
+
 	pub fn stored_token(&self) -> Option<Token> {
 		self.stored_sign_in().map(|(token, _)| token)
 	}
@@ -452,6 +456,16 @@ impl Flow {
 				self.screen = Screen::Login(Status::Unsaved(reason));
 			}
 			Checked::Failed(failure) => self.screen = Screen::Login(Status::Failed(failure)),
+		}
+	}
+
+	pub fn unsaved_user(&self) -> Option<&User> {
+		self.unsaved.as_ref().map(Verified::user)
+	}
+
+	pub fn discard_unsaved(&mut self) {
+		if self.unsaved.take().is_some() {
+			self.screen = Screen::Login(Status::Ready);
 		}
 	}
 

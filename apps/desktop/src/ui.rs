@@ -930,7 +930,11 @@ impl Link {
 			| capture::Screen::LoginToken
 			| capture::Screen::LoginQrScanned
 			| capture::Screen::LoginQrExpired
-			| capture::Screen::LoginWeb => {}
+			| capture::Screen::LoginWeb
+			| capture::Screen::LoginEmail
+			| capture::Screen::Login2fa
+			| capture::Screen::LoginCaptcha
+			| capture::Screen::LoginUnsaved => {}
 		}
 		self.until_capture(|link| link.display.pending() == 0).await;
 		zgx::timer::sleep(capture::SETTLE).await;

@@ -1,6 +1,6 @@
 # Signing in and out
 
-How kyoko gets from launch to the main view, what the login screen does with a pasted token, and how a rejected token or a sign-out brings the login screen back. Code: `crates/bridge/src/sign_in.rs` (the flow, UI-free and tested at the session seam in `crates/bridge/tests/bridge/sign_in.rs`), `apps/desktop/src/ui/sign_in.rs` (the window side) and `apps/desktop/ui/shell/login.luau` (the screen). Storage details are in `docs/storage.md`.
+How kyoko gets from launch to the main view, what the login screen does with a pasted token, and how a rejected token or a sign-out brings the login screen back. Code: `crates/bridge/src/sign_in.rs` (the flow, UI-free and tested at the session seam in `crates/bridge/tests/bridge/sign_in.rs`), `apps/desktop/src/ui/sign_in.rs` (the window side) and `apps/desktop/ui/shell/login.luau` (the screen). The ways in are the email form, a token, the QR code and web login on discord.com. Storage details are in `docs/storage.md`.
 
 ## The flow
 
@@ -11,7 +11,7 @@ How kyoko gets from launch to the main view, what the login screen does with a p
 | `Login(Ready)` | No account; the login screen, nothing to report. |
 | `Login(Checking)` | A pasted token is being validated. |
 | `Login(Failed(..))` | Validation failed: empty, rejected, network, or refused (captcha or rate limit). |
-| `Login(Unsaved(reason))` | The token is valid but Credential Manager refused it. The screen offers to continue for this session only. |
+| `Login(Unsaved(reason))` | The token is valid but Credential Manager refused it. The screen offers to continue for this session only, or to go back (`Flow::discard_unsaved`). |
 | `Login(Expired)` | Discord rejected the token mid-session (401 or close 4004). |
 | `Login(SignedOut)` | Back from a sign-out. |
 | `Login(Unavailable)` | The session could not start. |
@@ -26,7 +26,7 @@ One `ClientIdentity` is made per launch and shared by validation and every sessi
 
 `Flow::launch(developer_token)` starts a session straight away when it can, and otherwise leaves the login screen up:
 
-1. A developer token, if any: `KYOKO_TOKEN` against Discord, or mockcord's token with `--mock` and `--mock-server` (unless `--login` is passed, or the capture screen is `login-tos` or `login-token`). The session runs with `remember_account: false`, so the token is never stored.
+1. A developer token, if any: `KYOKO_TOKEN` against Discord, or mockcord's token with `--mock` and `--mock-server` (unless `--login` is passed, or the capture screen is one of the `login-*` screens). The session runs with `remember_account: false`, so the token is never stored.
 2. Otherwise the saved sign-in: the current account's token from `store.accounts`, then the older single session token (`login::persist::load_token`). The session runs with `remember_account: true`.
 3. Otherwise the login screen.
 
@@ -34,11 +34,19 @@ Without `--data-dir`, a run against Discord now uses the real data directory (`P
 
 ## The login screen
 
-The screen is oxidcord's: a card with the token column and the QR column, and the Terms of Service notice under it. The notice reads "Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk." Until "I understand" is ticked, the token field and both buttons are disabled and the QR column asks for the notice. Ticking it sets `settings.first_run_acknowledged`, so the notice stays acknowledged across launches and sign-outs.
+The screen follows the Midnight mockups (`login.html`, `login-email.html`, `login-token.html`, `login-2fa.html`, `login-captcha.html`, `login-unsaved.html`, with the QR states and `login-web.html`), on Midnight tokens only: a card `login_card_width` 784 wide, `space_32` padding, `login_card_gap` 64 between its columns, `radius_lg`, `bg_4` with a `border` line, and the Terms of Service notice under it in `background_feedback_warning` with a `border_feedback_warning` line, `gap` apart. The left column is one of:
 
-"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Sign in on discord.com" opens web login (below).
+- the email form (the default): "Welcome back!", the email or phone and password fields, "Forgot your password?" (opens web login, where Discord's own reset lives), Log In, then "Sign in with a token" and "Sign in on discord.com" side by side, and "Kyoko keeps your token in Windows Credential Manager.";
+- the token form, after "Sign in with a token" (`login.mode`, `token` or `email`): the masked Token field with its eye button, Paste token, and "Back to email login";
+- the captcha hand-over (below).
 
-`Flow::submit` validates with `login::TokenLogin::validate` (`GET /users/@me` with the web client's headers). Validation never retries: a 429 comes back at once (`max_retry_wait` of zero). Errors:
+The QR column (`login_qr.luau`) sits to the right of all three. The two-factor step and the unsaved token use the narrow card (`login_card_narrow` 480) without the QR column, with an 80-point badge (`login_badge_size`) above the title.
+
+The notice reads "Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk." Until "I understand" is ticked, the left column is dimmed to `disabled_opacity_control` and ignores the pointer, and the QR column asks for the notice. Ticking it sets `settings.first_run_acknowledged`, so the notice stays acknowledged across launches and sign-outs.
+
+"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Sign in on discord.com" opens web login (below). "Back to your account" shows under either form while adding an account.
+
+`Flow::submit` validates with `login::TokenLogin::validate` (`GET /users/@me` with the web client's headers). Validation never retries: a 429 comes back at once (`max_retry_wait` of zero). Errors show under the field:
 
 | Failure | Shown |
 |---|---|
@@ -47,7 +55,38 @@ The screen is oxidcord's: a card with the token column and the QR column, and th
 | Network, or any other unexpected answer | Could not reach Discord. |
 | Refused (captcha, rate limit, suspended route) | Discord refused the sign-in for now. Finish any check in the official client, then try again later. |
 
-A valid token is saved with `store.accounts.save` and made the current account. Each account has its own cache database, so signing in as another user wipes nothing and never shows the previous account's data. When the keyring fails, nothing is written to disk; the screen shows the error and a "Continue for this session only" button, which starts the session with `remember_account: false`. A new sign-in is always a new `Session`, so safety locks are read again and earlier risky-action confirmations are gone.
+A valid token is saved with `store.accounts.save` and made the current account. Each account has its own cache database, so signing in as another user wipes nothing and never shows the previous account's data. When the keyring fails, nothing is written to disk and the narrow card says "Your token couldn't be saved": "You're signed in as <username>, but Windows Credential Manager refused to store your token.", then "If you continue, Kyoko keeps the token in memory only. You'll need to sign in again the next time you open Kyoko." "Continue for this session only" starts the session with `remember_account: false`; "Back to login" (`Flow::discard_unsaved`) drops the checked token and shows the form again. A new sign-in is always a new `Session`, so safety locks are read again and earlier risky-action confirmations are gone.
+
+Other `Flow` messages (session expired, the session could not start, a missing saved sign-in) show in the same place, under the password field, or under the token field in token mode.
+
+## Email and password
+
+The email form signs in the way discord.com/login does, with Discord's documented account endpoints (docs.discord.food, Authentication, read 2026-10-26; protocol facts only). Code: `crates/login/src/password_login.rs` (`PasswordLogin`, the requests), `crates/bridge/src/password_login.rs` (`PasswordSignIn`, UI-free, tested at the session seam in `crates/bridge/tests/bridge/password_login.rs`), `apps/desktop/src/ui/sign_in.rs` and `shell/login.luau`.
+
+1. `PasswordSignIn::submit(&Flow, login, password)`, only on an idle login screen with the notice accepted, sends `POST /auth/login` with `{login, password, undelete: false, login_source: null, gift_code_sku_id: null}`. Every request of the form goes through a fresh `RestClient` on the launch identity, with the web client's REST headers, `Referer: https://discord.com/login` (`fingerprint::LOGIN_REFERER`), no `Authorization` and `token_login::without_retries()`: nothing is retried, a 429 included.
+2. An answer with a `token` goes straight to step 5. An answer with `mfa: true` and a `ticket` opens the two-factor step with the methods it allows (`totp`, `sms`, `backup`; a `webauthn` challenge is noted as `security_key`). The ticket and `login_instance_id` stay in memory only.
+3. The two-factor step starts on the authenticator code when it is allowed, then SMS, then backup codes. "Use a backup code instead", "Use your authenticator app instead" and "Receive auth code from SMS" switch method; the SMS one first sends `POST /auth/mfa/sms/send` with `{ticket}` and shows the redacted phone Discord answers with ("Enter the 6-digit code sent to +*******0085."). An account with only SMS starts on a "Send code" button. "Go back to login" drops the ticket.
+4. Log In sends `POST /auth/mfa/<totp|sms|backup>` with `{code, ticket, login_instance_id, login_source: null, gift_code_sku_id: null}`, spaces removed from the code. A wrong code keeps the step and the ticket, so the user can try again.
+5. The token goes through `Flow::redeem` and `Flow::redeemed`, as the QR column's does (validate with `GET /users/@me`, save to Credential Manager, make current), so `login.adding`, "Back to your account" and the unsaved card behave the same. A failed check comes back to the email form.
+
+The password, the code, the ticket and the token are never logged or written anywhere; the form's fields are emptied when the main view opens. Leaving the login screen (another sign-in finished) drops the step, and answers that arrive for a dropped step are ignored.
+
+| Answer | Shown |
+|---|---|
+| 400 form error on `/auth/login` | Discord's own form message, for example "Login or password is invalid.", under the password field, which turns red. Without one, "Login or password is invalid." |
+| 400 on a code | Discord's message, for example "Invalid two-factor code", under the code field. Without one, "Invalid two-factor code." |
+| Captcha, on any of the requests | The hand-over: "Discord wants a captcha" with "Kyoko can't show Discord's captcha in its own form. Finish signing in on discord.com in a Kyoko window. Kyoko won't retry the sign-in by itself.", a "Continue on discord.com" button (`login.web_open`, web login below) and "Go back to login". Kyoko never shows, solves or retries a captcha. |
+| Only a security key | The same hand-over, "Discord wants your security key": "Kyoko's form can't use a security key. Finish signing in on discord.com in a Kyoko window." |
+| Rate limit, 403 or a suspended route | Discord refused the sign-in for now. Finish any check in the official client, then try again later. |
+| Network, or an answer kyoko can't read | Could not reach Discord. |
+| Token rejected by the check | Discord rejected this sign-in. Try again. |
+| Empty fields | Enter your email or phone number and your password. / Enter the code first. |
+
+Discord's form messages are shown as plain text, without control characters and at most 300 characters. A new-location check (Discord's emailed or texted login verification) arrives as such a form message; finishing it is the user's, in their email or in the official client.
+
+Not done: the WebAuthn security-key step itself, the `undelete` prompt for disabled accounts and the `required_actions` after a sign-in (`update_password`). The first hands over to discord.com, the second shows Discord's message, the last is ignored.
+
+Under `--mock` the routes are mockcord's (`docs/testing.md`): `mock@kyoko.invalid` signs in at once, `mfa@kyoko.invalid` asks for a code, `captcha@kyoko.invalid` answers with a captcha, all with `mock-password`.
 
 ## QR login
 
@@ -113,7 +152,7 @@ Whenever the window leaves the main view it collapses the timeline slot, so a Ru
 
 ## Several accounts
 
-Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with "Paste token", the QR code or web login is saved there, with its token in Credential Manager under `account-<user id>`.
+Switch Accounts in the status menu opens the accounts view (`docs/ui.md`). Accounts are the entries of `store.accounts`: every account signed in with the email form, "Paste token", the QR code or web login is saved there, with its token in Credential Manager under `account-<user id>`.
 
 - Switching: `Flow::switch(user_id)` takes the running session and returns a `Handover`; the screen is `Switching`, and the window closes overlays, settings and the quick switcher's recent list, drops the gallery budget and empties every view at once, so nothing of the old account stays on screen. `Handover::finish` runs on the blocking pool: `Session::shutdown` closes the gateway normally (close 1000) and flushes the persist queue, while unsent paced writes (folder order, collapse, status) are dropped as on quit. It then reads the other account's token and makes that account current. `Flow::arrived` starts the new session with the launch's `ClientIdentity` on that account's own database. Only one session runs at a time. A new session re-reads the safety-lock setting and starts without risky-action confirmations.
 - Add an Account: `Flow::add_account` stops the session the same way and shows the login screen with "Back to your account" (`login.cancel_add`), which starts the current account again. A token that validates is saved and becomes current, so the new account starts.

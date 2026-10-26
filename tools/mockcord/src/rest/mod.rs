@@ -30,6 +30,7 @@ use crate::cdn;
 use crate::error::ApiError;
 use crate::gateway;
 use crate::media;
+use crate::password;
 use crate::record::{MediaRequest, RestRequest, header_pairs};
 use crate::remote_auth;
 use crate::state::{RateLimitSnapshot, Shared};
@@ -203,7 +204,9 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.merge(expressions::routes())
 		.route_layer(middleware::from_fn_with_state(shared.clone(), guard))
 		.route("/users/@me/remote-auth/login", post(remote_auth::exchange))
-		.route("/auth/login", post(web::auth_login))
+		.route("/auth/login", post(password::login))
+		.route("/auth/mfa/sms/send", post(password::send_sms))
+		.route("/auth/mfa/{kind}", post(password::verify))
 		.layer(middleware::from_fn_with_state(shared.clone(), web::device_cookie));
 	Router::new()
 		.route("/gateway", get(gateway::upgrade))

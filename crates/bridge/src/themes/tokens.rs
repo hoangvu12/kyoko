@@ -446,6 +446,8 @@ pub const SIZES: &[(&str, f32)] = &[
 	("window_controls_width", 106.),
 	("window_controls_top", 21.),
 	("window_controls_right", 13.),
+	("login_card_gap", 64.),
+	("login_badge_size", 80.),
 	("disabled_opacity", 0.3),
 	("offline_opacity", 0.3),
 	("locked_opacity", 0.5),
@@ -751,4 +753,6 @@ pub const DERIVED_SIZES: &[(&str, SizeTerms, f32)] = &[
 		&[("gap", 1.), ("border_thickness", 1.)],
 		0.,
 	),
+	("login_card_gap", &[("space_32", 2.)], 0.),
+	("login_badge_size", &[("space_56", 1.), ("space_24", 1.)], 0.),
 ];

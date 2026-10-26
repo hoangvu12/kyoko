@@ -49,6 +49,10 @@ pub enum Screen {
 	LoginQrScanned,
 	LoginQrExpired,
 	LoginWeb,
+	LoginEmail,
+	Login2fa,
+	LoginCaptcha,
+	LoginUnsaved,
 	SidebarCollapsed,
 	NewestImage,
 	Showcase(&'static str),
@@ -120,6 +124,10 @@ impl Screen {
 			"login-qr-scanned" => Some(Screen::LoginQrScanned),
 			"login-qr-expired" => Some(Screen::LoginQrExpired),
 			"login-web" => Some(Screen::LoginWeb),
+			"login-email" => Some(Screen::LoginEmail),
+			"login-2fa" => Some(Screen::Login2fa),
+			"login-captcha" => Some(Screen::LoginCaptcha),
+			"login-unsaved" => Some(Screen::LoginUnsaved),
 			"channel-sidebar-collapsed" => Some(Screen::SidebarCollapsed),
 			"timeline-media" => Some(Screen::NewestImage),
 			"dm-sidebar" => Some(Screen::DmSidebar),
@@ -228,7 +236,11 @@ impl Screen {
 			| Screen::LoginToken
 			| Screen::LoginQrScanned
 			| Screen::LoginQrExpired
-			| Screen::LoginWeb => None,
+			| Screen::LoginWeb
+			| Screen::LoginEmail
+			| Screen::Login2fa
+			| Screen::LoginCaptcha
+			| Screen::LoginUnsaved => None,
 		}
 	}
 
@@ -240,6 +252,10 @@ impl Screen {
 				| Screen::LoginQrScanned
 				| Screen::LoginQrExpired
 				| Screen::LoginWeb
+				| Screen::LoginEmail
+				| Screen::Login2fa
+				| Screen::LoginCaptcha
+				| Screen::LoginUnsaved
 		)
 	}
 

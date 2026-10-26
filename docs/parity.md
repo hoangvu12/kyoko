@@ -86,6 +86,10 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `login-qr-scanned` | `login-qr-scanned.html` |
 | `login-qr-expired` | `login-qr-expired.html` |
 | `login-web` | `login-web.html` |
+| `login-email` | `login-email.html` |
+| `login-2fa` | `login-2fa.html` |
+| `login-captcha` | `login-captcha.html` |
+| `login-unsaved` | `login-unsaved.html` |
 | `server-rail` | `midnight-discord.html` |
 | `server-rail-folder` | `midnight-discord.html` |
 | `channel-sidebar` | `midnight-discord.html` |
@@ -150,7 +154,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `login-2fa`, `login-captcha`, `login-email`, `login-unsaved`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -169,7 +173,7 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `login-tos` | 21 | Start without a token on a fresh data directory: the login screen with the unacknowledged Terms of Service notice. | yes |
-| `login-token` | 21 | As `login-tos`, then acknowledge the notice. Kyoko's QR column shows a live code from mockcord's remote-auth gateway (ticket 42); oxidcord's shows its failed state, because it has no mock remote-auth gateway. | yes |
+| `login-token` | 21 | As `login-tos`, then acknowledge the notice. Kyoko then switches to "Sign in with a token" and submits a token mockcord rejects, so the form shows "That token was rejected." as `login-token.html` does; its QR column shows a live code from mockcord's remote-auth gateway (ticket 42). Oxidcord's side only acknowledges the notice and its QR column shows its failed state, because it has no mock remote-auth gateway. | yes |
 
 ### 42 QR login
 
@@ -177,8 +181,8 @@ Mockup only: oxidcord has no mock remote-auth gateway, so `parity capture` skips
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `login-qr-scanned` | 42 | As `login-token`; the phone scans the code at once (`phone=scan`), so the column shows the scanning user's avatar and name and asks to confirm on the phone. Settles once the avatar has loaded. | yes |
-| `login-qr-expired` | 42 | As `login-token`; the phone lets the code expire at once (`phone=expire`, close 4003), so the column shows the dimmed code and Refresh. | yes |
+| `login-qr-scanned` | 42 | As `login-tos`, then acknowledge the notice; the phone scans the code at once (`phone=scan`), so the column shows the scanning user's avatar and name and asks to confirm on the phone. Settles once the avatar has loaded. | yes |
+| `login-qr-expired` | 42 | As `login-tos`, then acknowledge the notice; the phone lets the code expire at once (`phone=expire`, close 4003), so the column shows the dimmed code and Refresh. | yes |
 
 ### 43 Web login
 
@@ -186,7 +190,18 @@ Mockup only, like the QR screens: oxidcord's web login opens Discord itself, whi
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `login-web` | 43 | As `login-token`, then "Sign in on discord.com": the web login window over the login screen, its page being mockcord's `/login` (the allowed origin under mock). Settles once the page has loaded and the QR code is drawn. | yes |
+| `login-web` | 43 | As `login-tos`, acknowledge the notice, then "Sign in on discord.com": the web login window over the login screen, its page being mockcord's `/login` (the allowed origin under mock). Settles once the page has loaded and the QR code is drawn. | yes |
+
+### 44 Email and password login
+
+Mockup only: oxidcord has no email form. Kyoko drives the form in-process with mockcord's accounts (`docs/testing.md`); the typed text lives in Luau, so the fields show empty where the mockups show an address and a code.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `login-email` | 44 | As `login-tos`, acknowledge the notice, then log in as `mock@kyoko.invalid` with a wrong password: "Login or password is invalid." under the password field. Settles once the QR code is drawn. | yes |
+| `login-2fa` | 44 | As `login-tos`, acknowledge the notice, then log in as `mfa@kyoko.invalid`, and send the code `000000`, which mockcord answers with a rate limit: the narrow two-factor card with the "Discord refused the sign-in for now..." line. | yes |
+| `login-captcha` | 44 | As `login-tos`, acknowledge the notice, then log in as `captcha@kyoko.invalid`, which mockcord answers with a captcha: the hand-over to discord.com beside the QR code. | yes |
+| `login-unsaved` | 44 | Opens the store on an in-memory keyring that refuses writes, with plain-text storage off; acknowledge the notice and log in as `mock@kyoko.invalid`: the narrow "Your token couldn't be saved" card. | yes |
 
 ### 22 Server rail and folders
 
