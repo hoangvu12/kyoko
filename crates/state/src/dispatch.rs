@@ -3,8 +3,8 @@ use std::time::Instant;
 
 use protocol::{
 	Channel, DispatchEvent, GuildMemberListUpdate, GuildMembersChunk, GuildRoleChange, Member,
-	MemberListGroup, Message, MessageAck, MessageUpdate, Presence, Snowflake, ThreadDelete, ThreadListSync,
-	TypingStart, UnavailableGuild, UserGuildSettings, VoiceState,
+	MemberListGroup, Message, MessageAck, MessagePollVote, MessageUpdate, Presence, Snowflake, ThreadDelete,
+	ThreadListSync, TypingStart, UnavailableGuild, UserGuildSettings, VoiceState,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -13,7 +13,7 @@ use serde_json::value::RawValue;
 use crate::changes::Changes;
 use crate::guild::{is_thread, stripped_member};
 use crate::member_list::MemberSlot;
-use crate::messages::{Reacted, add_reaction, apply_update, remove_emoji, remove_reaction};
+use crate::messages::{Reacted, add_reaction, apply_update, poll_vote, remove_emoji, remove_reaction};
 use crate::state::{ConnectionStatus, State, intern_user};
 
 #[derive(Deserialize, Default)]
@@ -30,6 +30,13 @@ struct RawListPresence {
 }
 
 impl State {
+	fn poll_voted(&mut self, vote: &MessagePollVote, delta: i64) -> Changes {
+		let mine = Some(vote.user_id) == self.current_user_id();
+		self.edit_message(vote.channel_id, vote.message_id, |message| {
+			poll_vote(message, vote.answer_id, mine, delta)
+		})
+	}
+
 	pub(crate) fn apply_dispatch(&mut self, event: &DispatchEvent) -> Changes {
 		match event {
 			DispatchEvent::Ready(ready) => self.apply_ready(ready),
@@ -75,6 +82,8 @@ impl State {
 					remove_emoji(message, &remove.emoji)
 				})
 			}
+			DispatchEvent::MessagePollVoteAdd(vote) => self.poll_voted(vote, 1),
+			DispatchEvent::MessagePollVoteRemove(vote) => self.poll_voted(vote, -1),
 			DispatchEvent::MessageAck(ack) => self.message_ack(ack),
 			DispatchEvent::ChannelCreate(channel) if channel.guild_id.is_none() => Changes {
 				private_channels: self.add_late_private_channels(std::slice::from_ref(&**channel)),

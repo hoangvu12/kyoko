@@ -498,12 +498,12 @@ pub async fn vote(
 		.as_array()
 		.map(|ids| ids.iter().filter_map(Value::as_i64).collect())
 		.unwrap_or_default();
-	shared.vote_poll(id, message_id, &answers, false)?;
+	shared.vote_poll(id, message_id, &answers)?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn expire_poll(State(shared): Mock, Path((id, message_id)): Path<(u64, u64)>) -> ApiResult {
-	shared.vote_poll(id, message_id, &[], true).map(Json)
+	shared.expire_poll(id, message_id).map(Json)
 }
 
 pub async fn reactions(

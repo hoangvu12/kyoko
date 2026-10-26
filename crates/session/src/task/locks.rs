@@ -24,6 +24,7 @@ impl Core {
 			Command::SendMessage { channel_id, .. }
 			| Command::SendSticker { channel_id, .. }
 			| Command::SendGif { channel_id, .. }
+			| Command::SendPoll { channel_id, .. }
 			| Command::CreateForumPost { channel_id, .. }
 			| Command::CreateThread { channel_id, .. }
 			| Command::AddReaction { channel_id, .. }

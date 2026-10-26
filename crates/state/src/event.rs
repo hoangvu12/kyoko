@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use protocol::{
-	ApplicationCommandIndex, DispatchEvent, InteractionModal, Message, Nonce, Ready, ReadySupplemental,
+	ApplicationCommandIndex, DispatchEvent, InteractionModal, Message, Nonce, Poll, Ready, ReadySupplemental,
 	Snowflake, StickerItem, User,
 };
 
@@ -31,6 +31,7 @@ pub enum LocalEvent {
 		nonce: Nonce,
 		content: String,
 		stickers: Vec<StickerItem>,
+		poll: Option<Box<Poll>>,
 		author: Box<User>,
 		by_plugin: Option<String>,
 		files: Vec<PendingFile>,

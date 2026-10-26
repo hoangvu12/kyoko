@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use protocol::{Message, MessageUpdate, Nonce, PartialEmoji, Reaction, Snowflake};
+use protocol::{
+	Message, MessageUpdate, Nonce, PartialEmoji, PollAnswerCount, PollResults, Reaction, Snowflake,
+};
 
 use crate::caps::CacheLimits;
 use crate::event::LoadDirection;
@@ -774,4 +776,33 @@ pub fn remove_emoji(message: &mut Message, emoji: &PartialEmoji) {
 	message
 		.reactions
 		.retain(|reaction| !same_emoji(&reaction.emoji, emoji));
+}
+
+pub fn poll_vote(message: &mut Message, answer_id: i64, mine: bool, delta: i64) {
+	let Some(poll) = message.poll.as_mut() else {
+		return;
+	};
+	let results = poll.results.get_or_insert_with(PollResults::default);
+	if results.is_finalized {
+		return;
+	}
+	let index = match results
+		.answer_counts
+		.iter()
+		.position(|count| count.id == answer_id)
+	{
+		Some(index) => index,
+		None => {
+			results.answer_counts.push(PollAnswerCount {
+				id: answer_id,
+				..PollAnswerCount::default()
+			});
+			results.answer_counts.len() - 1
+		}
+	};
+	let count = &mut results.answer_counts[index];
+	count.count = (count.count + delta).max(0);
+	if mine {
+		count.me_voted = delta > 0;
+	}
 }

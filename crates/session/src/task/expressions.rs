@@ -124,6 +124,7 @@ impl Core {
 					ping_reply: true,
 					files: Vec::new(),
 					stickers: Vec::new(),
+					poll: None,
 				});
 			}
 			Command::SendSticker {
@@ -149,6 +150,7 @@ impl Core {
 					ping_reply: true,
 					files: Vec::new(),
 					stickers: vec![item],
+					poll: None,
 				});
 			}
 			command @ (Command::CreateSticker { .. } | Command::CreateEmoji { .. }) => {

@@ -7,6 +7,7 @@ mod identity;
 pub mod login;
 mod notifier;
 mod persist;
+mod poll;
 mod search;
 mod session;
 mod task;
@@ -22,6 +23,10 @@ pub use display::{
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{EmojiRankRequest, RankedEmoji, Rewrite, SessionHooks};
 pub use identity::{client_identity, client_identity_with_clock, discord_build_source};
+pub use poll::{
+	POLL_ANSWER_MAX, POLL_ANSWERS_MAX, POLL_DEFAULT_HOURS, POLL_DURATIONS, POLL_QUESTION_MAX, PollDraft,
+	PollDraftAnswer, poll_length,
+};
 pub use rest::{Release, RestTuning, UploadFile};
 pub use search::{SearchFailure, SearchResults, SearchStatus};
 pub use session::{Commander, Session};

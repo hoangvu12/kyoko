@@ -107,6 +107,7 @@ impl Core {
 			Command::SetGifFavorite { gif, favorite } => self.set_gif_favorite(gif, favorite),
 			Command::SetEmojiFavorite { entry, favorite } => self.set_emoji_favorite(entry, favorite),
 			Command::CountCommandUse { key } => self.count_command_use(key),
+			Command::SendPoll { channel_id, poll } => self.send_poll(channel_id, poll),
 			Command::SuppressEmbeds {
 				channel_id,
 				message_id,

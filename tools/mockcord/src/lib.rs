@@ -17,6 +17,7 @@ mod media;
 mod member_list;
 mod ops;
 mod password;
+mod polls;
 mod reactions;
 mod ready;
 mod record;

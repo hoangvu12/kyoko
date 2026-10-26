@@ -8,6 +8,8 @@ use rest::api::SearchQuery;
 use serde_json::Value;
 use state::{EmojiCandidate, RiskyReason, RiskyTarget, Viewport};
 
+use crate::poll::PollDraft;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModalAnswer {
 	pub custom_id: String,
@@ -532,6 +534,10 @@ pub enum Command {
 		message_id: Snowflake,
 		to_channel_id: Snowflake,
 	},
+	SendPoll {
+		channel_id: Snowflake,
+		poll: PollDraft,
+	},
 	VotePoll {
 		channel_id: Snowflake,
 		message_id: Snowflake,
@@ -649,6 +655,7 @@ impl Command {
 			| Command::LoadReactionUsers { channel_id, .. }
 			| Command::SendSticker { channel_id, .. }
 			| Command::SendGif { channel_id, .. }
+			| Command::SendPoll { channel_id, .. }
 			| Command::Search {
 				channel_id: Some(channel_id),
 				..

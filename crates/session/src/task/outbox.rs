@@ -2,9 +2,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use chrono::Utc;
 use protocol::rest::{AllowedMentions, AttachmentDescriptor};
 use protocol::{
-	Channel, CreateMessage, Message, MessageReference, MessageReferenceKind, Nonce, Snowflake, StickerItem,
+	Channel, CreateMessage, Message, MessageReference, MessageReferenceKind, Nonce, Permissions, Snowflake,
+	StickerItem,
 };
 use rest::api::UploadSlotRequest;
 use rest::{RestClient, RestError, UploadFile};
@@ -14,6 +16,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::AbortHandle;
 
 use crate::hooks::{Hooks, Rewrite, guarded_blocking};
+use crate::poll::PollDraft;
 
 use super::actions::failure_reason;
 use super::{Core, Internal, failures};
@@ -30,6 +33,7 @@ pub(crate) struct Outgoing {
 	pub(crate) ping_reply: bool,
 	pub(crate) files: Vec<UploadFile>,
 	pub(crate) stickers: Vec<StickerItem>,
+	pub(crate) poll: Option<PollDraft>,
 }
 
 #[derive(Debug, Clone)]
@@ -99,6 +103,7 @@ fn create_body(nonce: &Nonce, outgoing: &Outgoing) -> CreateMessage {
 			..AllowedMentions::default()
 		}),
 		sticker_ids: outgoing.stickers.iter().map(|sticker| sticker.id).collect(),
+		poll: outgoing.poll.as_ref().map(PollDraft::body),
 		..CreateMessage::default()
 	}
 }
@@ -221,7 +226,11 @@ impl Core {
 			tracing::warn!("message not sent, no signed in user");
 			return;
 		};
-		if outgoing.content.trim().is_empty() && outgoing.files.is_empty() && outgoing.stickers.is_empty() {
+		if outgoing.content.trim().is_empty()
+			&& outgoing.files.is_empty()
+			&& outgoing.stickers.is_empty()
+			&& outgoing.poll.is_none()
+		{
 			return;
 		}
 		let limit = self.state.read().upload_limit(outgoing.channel_id);
@@ -237,6 +246,10 @@ impl Core {
 			nonce: nonce.clone(),
 			content: outgoing.content.clone(),
 			stickers: outgoing.stickers.clone(),
+			poll: outgoing
+				.poll
+				.as_ref()
+				.map(|poll| Box::new(poll.preview(Utc::now()))),
 			author: Box::new(author),
 			by_plugin: None,
 			files: outgoing
@@ -323,6 +336,31 @@ impl Core {
 		}
 	}
 
+	pub(super) fn send_poll(&mut self, channel_id: Snowflake, poll: PollDraft) {
+		if let Some(problem) = poll.problem() {
+			self.reject(problem);
+			return;
+		}
+		let allowed = self
+			.state
+			.read()
+			.my_permissions(channel_id)
+			.contains(Permissions::SEND_MESSAGES | Permissions::SEND_POLLS);
+		if !allowed {
+			self.reject("You can't create polls in this channel");
+			return;
+		}
+		self.send_message(Outgoing {
+			channel_id,
+			content: String::new(),
+			reply_to: None,
+			ping_reply: true,
+			files: Vec::new(),
+			stickers: Vec::new(),
+			poll: Some(poll),
+		});
+	}
+
 	pub(super) fn post_forum(&mut self, post: ForumPost) {
 		if post.name.trim().is_empty() || (post.content.trim().is_empty() && post.files.is_empty()) {
 			self.reject("A post needs a title and a message");
@@ -400,12 +438,20 @@ impl Core {
 				ping_reply: true,
 				files: Vec::new(),
 				stickers: pending.message.sticker_items.to_vec(),
+				poll: None,
 			})
 		});
 		let Some(outgoing) = outgoing else {
 			return;
 		};
 		self.apply_local(LocalEvent::PendingDiscarded { nonce });
+		if let Some(poll) = outgoing.poll {
+			self.on_command(crate::Command::SendPoll {
+				channel_id: outgoing.channel_id,
+				poll,
+			});
+			return;
+		}
 		if let Some(sticker) = outgoing.stickers.first() {
 			self.on_command(crate::Command::SendSticker {
 				channel_id: outgoing.channel_id,

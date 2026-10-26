@@ -400,6 +400,7 @@ impl State {
 				nonce,
 				content,
 				stickers,
+				poll,
 				author,
 				by_plugin,
 				files,
@@ -411,6 +412,7 @@ impl State {
 					author: (**author).clone(),
 					content: content.clone(),
 					sticker_items: stickers.clone().into(),
+					poll: poll.as_deref().cloned(),
 					timestamp: Some(Utc::now()),
 					nonce: Some(nonce.clone()),
 					..Message::default()

@@ -588,6 +588,9 @@ impl Core {
 			DispatchEvent::MessageReactionRemoveEmoji(reaction) => {
 				self.persist_cached_message(reaction.channel_id, reaction.message_id);
 			}
+			DispatchEvent::MessagePollVoteAdd(vote) | DispatchEvent::MessagePollVoteRemove(vote) => {
+				self.persist_cached_message(vote.channel_id, vote.message_id);
+			}
 			DispatchEvent::MessageAck(ack) => {
 				self.keep_own_ack(&ack);
 				self.persist_read_state(ack.channel_id);
@@ -822,6 +825,7 @@ impl Core {
 				ping_reply,
 				files,
 				stickers: Vec::new(),
+				poll: None,
 			}),
 			Command::RetryMessage { channel_id, nonce } => self.retry_message(channel_id, nonce),
 			Command::DiscardMessage { channel_id, nonce } => self.discard_message(channel_id, nonce),

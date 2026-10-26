@@ -179,6 +179,19 @@ impl Control {
 		self.shared.react(react, false).is_ok()
 	}
 
+	pub fn poll_vote_as(
+		&self,
+		channel_id: u64,
+		message_id: u64,
+		user_id: u64,
+		answer: i64,
+		added: bool,
+	) -> bool {
+		self.shared
+			.poll_vote_as(channel_id, message_id, user_id, answer, added)
+			.is_ok()
+	}
+
 	pub fn bulk_delete(&self, channel_id: u64, ids: &[u64]) -> bool {
 		self.shared.bulk_delete(channel_id, ids).is_ok()
 	}

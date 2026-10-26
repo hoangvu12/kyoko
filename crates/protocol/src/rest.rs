@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::message::{MessageFlags, MessageReference};
+use crate::message::{MessageFlags, MessageReference, PollLayout};
 use crate::snowflake::Snowflake;
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -56,6 +56,41 @@ pub struct CreateMessage {
 	pub sticker_ids: Vec<Snowflake>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub attachments: Vec<AttachmentDescriptor>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub poll: Option<PollCreate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PollCreate {
+	pub question: PollCreateMedia,
+	pub answers: Vec<PollCreateAnswer>,
+	pub allow_multiselect: bool,
+	pub duration: u32,
+	pub layout_type: PollLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PollCreateAnswer {
+	pub poll_media: PollCreateMedia,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PollCreateMedia {
+	pub text: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub emoji: Option<PollEmoji>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PollEmoji {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<Snowflake>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

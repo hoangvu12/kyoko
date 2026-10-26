@@ -25,6 +25,7 @@ mod layout;
 mod locks;
 mod members;
 mod moderation;
+mod polls;
 mod reactions;
 mod reads;
 mod safety;

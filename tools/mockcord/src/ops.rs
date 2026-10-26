@@ -2,7 +2,7 @@ use chrono::{SecondsFormat, Utc};
 use protocol::{
 	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, Embed, EmbedKind, EmbedMedia,
 	EmbedProvider, LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind, MessageType,
-	Nonce, ReadState, ReadStateKind, Snowflake, StickerFormat, StickerItem, User,
+	Nonce, PollCreate, ReadState, ReadStateKind, Snowflake, StickerFormat, StickerItem, User,
 };
 use serde_json::{Value, json};
 
@@ -29,6 +29,7 @@ pub struct Draft {
 	pub reference: Option<MessageReference>,
 	pub flags: MessageFlags,
 	pub sticker_ids: Vec<Snowflake>,
+	pub poll: Option<PollCreate>,
 	pub descriptors: Vec<AttachmentDescriptor>,
 	pub files: Vec<UploadedFile>,
 	pub hosted: Option<Signature>,
@@ -54,6 +55,7 @@ impl Draft {
 			reference: create.message_reference,
 			flags: create.flags.unwrap_or_default(),
 			sticker_ids: create.sticker_ids,
+			poll: create.poll,
 			descriptors: create.attachments,
 			files,
 			hosted: None,
@@ -220,11 +222,13 @@ impl Shared {
 			&& draft.components.is_empty()
 			&& draft.files.is_empty()
 			&& draft.sticker_ids.is_empty()
+			&& draft.poll.is_none()
 			&& !forward
 			&& !loading
 		{
 			return Err(ApiError::empty_message());
 		}
+		let poll = draft.poll.as_ref().map(crate::polls::created).transpose()?;
 		let mut store = self.store.lock();
 		let guild_id = Self::guild_of(&store, channel_id)?;
 		let id = draft.id.unwrap_or_else(|| store.next_snowflake());
@@ -274,6 +278,7 @@ impl Shared {
 					})
 					.collect::<Vec<_>>(),
 			),
+			poll,
 			..Message::default()
 		};
 		if let Some(reference) = draft.reference

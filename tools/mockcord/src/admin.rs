@@ -1295,57 +1295,6 @@ impl Shared {
 		Ok(())
 	}
 
-	pub fn vote_poll(
-		&self,
-		channel_id: u64,
-		message_id: u64,
-		answers: &[i64],
-		finalize: bool,
-	) -> Result<Value, ApiError> {
-		let mut store = self.store.lock();
-		let message = store
-			.message_mut(channel_id, message_id)
-			.ok_or_else(ApiError::unknown_message)?;
-		if message["poll"].is_null() {
-			return Err(ApiError::invalid_body("This message has no poll"));
-		}
-		let results = &mut message["poll"]["results"];
-		if !results.is_object() {
-			*results = json!({ "is_finalized": false, "answer_counts": [] });
-		}
-		if finalize {
-			results["is_finalized"] = json!(true);
-		} else {
-			let counts = results["answer_counts"]
-				.as_array_mut()
-				.ok_or_else(ApiError::unknown_message)?;
-			for count in counts
-				.iter_mut()
-				.filter(|count| count["me_voted"].as_bool() == Some(true))
-			{
-				count["count"] = json!(count["count"].as_i64().unwrap_or(1) - 1);
-				count["me_voted"] = json!(false);
-			}
-			for answer in answers {
-				match counts
-					.iter_mut()
-					.find(|count| count["id"].as_i64() == Some(*answer))
-				{
-					Some(count) => {
-						count["count"] = json!(count["count"].as_i64().unwrap_or(0) + 1);
-						count["me_voted"] = json!(true);
-					}
-					None => counts.push(json!({ "id": answer, "count": 1, "me_voted": true })),
-				}
-			}
-		}
-		let value = message.clone();
-		let gateway = self.gateway_message(&store, &value);
-		drop(store);
-		self.hub.broadcast("MESSAGE_UPDATE", &gateway);
-		Ok(value)
-	}
-
 	pub fn patch_current_user(&self, body: &Value) -> Value {
 		let mut store = self.store.lock();
 		if let Some(name) = body["global_name"].as_str() {
