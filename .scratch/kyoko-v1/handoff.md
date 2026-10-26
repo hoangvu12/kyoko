@@ -1,5 +1,39 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: fifth orchestrator hands off (main `07233b8` + this note)
+
+Written by the fifth orchestrator (roboco chat `051e1203`, "kyoko orchestrator 5", same machine) when the user asked to hand off before implementing Midnight 19. Everything below still applies unless this section says otherwise; the "Decisions during the fifth orchestrator" list right under this section is part of it.
+
+### State
+
+- Resolved this session: v1 53, 42, 52, 43, 55, 44, 65 (new: stale timeline node panic); Midnight 03, 26 (new: drop the member search field), 05, 24, 07, 08, 21, 06, 16. Added: Midnight 25 (Discord theme variables on the Midnight tokens), 26, v1 65; `PRODUCT.md` at the repo root (for `/impeccable` design work).
+- Open v1: 39, 49, 54, 56, 58, 62 (plus 63 in flight). Open Midnight: 10–15, 17, 18, 19, 22, 23, 25 (plus 09 and 20 in flight). Count with the `Status:` lines. Midnight 08 is resolved except its box 2 (the live GIF-provider check, waiting on the user).
+- In flight (completion notices go to `051e1203`, not to you: send each a short message so its next turn reports to you, or poll with `get_chat`/`read_chat`):
+
+| Ticket | Lane | Worker | State |
+|---|---|---|---|
+| Midnight 09 emoji autocomplete | A | `84567cc5` | Running on `7f5df55`: shared lock rule in the bridge, a mockcord `--autocomplete-emoji` flag, the new container in `composer.luau`, capture and `MOCKUPS` mapping; it was at the parity capture. |
+| v1 63 friend confirmations | B | `057760c9` | **Done, reported, not verified.** Commit `ffe1eb2` on `df38291`: `friend_dialog.rs` root layer (added the 61 way), `Link::ask_remove_friend`/`ask_block`, actions `friends.ask_remove`/`ask_block` (`friends.block` removed), the profile's Block sends `profile::Request::Block`, an in-process test (Cancel sends 0 requests, Confirm exactly 1), kyoko-only captures `friend-remove-dialog` and `friend-block-dialog`. Wording only partly confirmed from public sources ("permanently" and the Block explanation need a live check). To do: rebase onto main, verify in lane B, merge, write the Answer from its report (`read_chat 057760c9`). |
+| Midnight 20 profiles and status | C | `5cf90259` | **Done, reported, not verified.** Commit `7bb36eb` on `df38291`: popout, full profile (900×640), the status menu as Discord's account popout with status and accounts submenus (v1 41's switcher still works), the custom status dialog; `ProfileCard` gained `GuildTag`, `ProfileConnection`, `guild_name`; 13 derived tokens; mockcord gives users whose id is a multiple of 3 a "RUST" tag; Log Out removed from the status menu (it lives in settings only). Parity: popout 20.1%, full-profile 27.7%, status-menu 18.2%, custom-status 13.1%. Load flake it saw: `favourites::a_favourited_emoji_is_read_then_written_to_the_frecency_proto_and_unfavouriting_removes_it` (passed alone; add it to rules.md's list). To do: rebase, verify in lane C, merge, Answer from its report. |
+
+- Next, suggested: **Midnight 19 settings dialog** on the first free lane. The user just shaped it with `/impeccable shape`; the confirmed design brief is at the end of the ticket, follow it (Activity Privacy added, Voice & Video listed greyed, Billing/Nitro/Clips/Registered Games/Game Overlay left out, today's "managed in the web app" note pages kept, one "Kyoko" group, search finds pages and settings, production-ready). Then M10 command picker (after M09: anchor to the `composer` slot, option bar in `joined_bars`), M22 threads/forums/inbox/search, M23 server settings, M17 polls, M15 apps launcher, M18 voice message playback, M11–M14 command follow-ups, M25 theme mapping, v1 49/54/56 plugins, v1 62, 39 translations late, 58 last (releases need the user).
+
+### Decisions the user made this session
+
+- Design-first: where a Midnight mockup differs from a v1 behaviour, follow the mockup (M26 dropped the member search field). Don't ask about such cases.
+- Live markdown in the composer: accept partial for now (zgx's textarea only draws range backgrounds; what zgx would need is in Midnight 16's Answer and `docs/ui.md`). No upstream report.
+- PRODUCT.md (register product; users: the maintainer, then Discord users wanting a lighter native client; personality from the Midnight design; WCAG AA as now).
+- Midnight 19's brief as above.
+- Still waiting on the user (asked, no answer yet): the live GIF-provider check for Midnight 08 (does the web client send `provider=` on `/gifs/search`, a `limit` on `/gifs/trending-gifs`, which media hosts); whether web login keeps the Chrome user agent despite WebView2's Edge client hints (kept as the ticket says, recorded in v1 43's Answer); a one-time real-Discord check of web login's `localStorage.token` (only with the user's go-ahead: it needs a real sign-in).
+
+### Things to know
+
+- Verification: `C:\Users\HP MEDIA\Desktop\nguyenvu\.orchestrator\verify.sh <lane path>` runs fmt, clippy, `build --locked`, `test --workspace --locked`, `xtask test`, `headless-run --mock`, `deny`, `cargo tree -i luau0-src` into `<lane>/target/orch-verify.log` with `=== exit N for <cmd>` lines. Run it from Bash in the background, then grep `^=== (exit|done)|\.\.\. FAILED`; append a `cargo xtask parity mockup --port <lane port> --screens ...` for UI tickets. Check the log has one exit line per step (a stopped run keeps writing; see the gotcha below).
+- Queue verifications one after another when two lanes finish together (a Bash `until grep -aq ...; do sleep 30; done` wait on the first log), and rebase a lane onto main before verifying if main moved under it. Conflicts so far were all list unions in `capture.rs`, `docs/parity.md`, `docs/ui.md`: keep both sides (for the unmapped-mockups list, apply both sides' removals).
+- sccache dropouts ("failed to execute compile") still happen under load; rerun the step. New load flakes: `safety::a_rejected_token_stops_every_request_and_signs_out` (in rules.md) and M20's favourites test above.
+- Disk: clean an idle lane whose target passes ~60 GB; lanes reach 55–76 GB after two or three tickets even with `CARGO_INCREMENTAL=0` (every prompt sets it). C: had ~290 GB free at this note; lane A was cleaned before M16, B before M21, C before M06.
+- Prompts that worked: point at `rules.md`; ticket path; worktree, branch and base commit; `CARGO_BUILD_JOBS=3` and `CARGO_INCREMENTAL=0`; the lane port; the Answers it builds on with their key facts; the mockups and the `parity mockup` mapping; overlap warnings about the other two lanes; the done-means list. Send one "main moved to X (what landed, what it touches)" message per merge to each running worker.
+
 ## Decisions during the fifth orchestrator (chat `051e1203`)
 
 - The Midnight design is the authority: where a mockup differs from a v1 behaviour, follow the mockup (user, 2026-10-26). M03's member search field is dropped (M26).
