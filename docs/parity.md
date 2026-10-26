@@ -163,6 +163,8 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `reactions` | `reactions.html` |
 | `reactions-list` | `reactions-list.html` |
 
+`inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
+
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
@@ -293,7 +295,7 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `quick-switcher` | 31 | Default selection, then open the quick switcher with no query. Kyoko's field shows its caret, being focused. | yes |
+| `quick-switcher` | 31 | Default selection, then open the quick switcher and type "gen" (kyoko, as `quick-switcher.html` has; oxidcord opens it with no query). Kyoko's field shows its caret, being focused. | yes |
 | `search` | 31 | Default selection, then search the guild for "the" and show the results panel. Kyoko runs it through the top bar's `search.run`. | yes |
 
 ### 32 Lightbox and pickers
@@ -311,11 +313,11 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 |---|---|---|---|
 | `threads-list` | 33 | Default selection, then open the channel's thread list from the top bar at (871, 46). | yes |
 | `thread-panel` | 33 | Default selection, then open the channel's first thread beside it and wait for its history. | yes |
-| `thread-create` | 33 | Default selection, then open the create-thread dialog for the channel. | yes |
+| `thread-create` | 33 | Default selection, then start a thread from the channel's newest message (kyoko: the New Thread side panel with its starter message; oxidcord: its create-thread dialog). | yes |
 | `pins` | 33 | Default selection, then open the pinned messages from the top bar at (958, 46). | yes |
 | `forum` | 33 | Open the first guild's forum channel. | yes |
 | `forum-post` | 33 | As `forum`, then open its first post and wait for its history. | yes |
-| `forum-post-create` | 33 | As `forum`, then open the new-post dialog. | yes |
+| `forum-post-create` | 33 | As `forum`, then open the new-post form (kyoko: inline at the top of the forum; oxidcord: its dialog). | yes |
 
 ### 34 Friends
 
