@@ -177,7 +177,8 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 						confirm.label,
 						Some(if confirm.danger { "danger" } else { "brand" }),
 						move || this.send(action.command()),
-					),
+					)
+					.id("moderation-confirm"),
 				));
 			(confirm.title.clone(), body, WIDTH)
 		}
@@ -217,6 +218,7 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 	};
 	let close = act.clone();
 	crate::kit::dialog(motion::modal(title.clone(), open))
+		.id("moderation-dialog")
 		.w(width)
 		.autofocus(!matches!(
 			dialog.as_ref(),

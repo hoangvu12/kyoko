@@ -182,6 +182,175 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 	}
 }
 
+type DialogParts = (Rc<ModerationLayer>, Rc<ToastLayer>);
+
+fn on_top(app: &mut TestApp, id: &str) -> bool {
+	let Some(node) = app.find(id) else {
+		return false;
+	};
+	let bounds = app.bounds(id);
+	let scene = app.ui.scene.borrow();
+	scene
+		.hit_test(bounds.x + bounds.width / 2., bounds.y + bounds.height / 2.)
+		.is_some_and(|hit| hit == node || scene.ancestors(hit).any(|above| above == node))
+}
+
+fn newest_toast(app: &mut TestApp) -> Option<String> {
+	(0..32)
+		.rev()
+		.map(|id| format!("toast-{id}"))
+		.find(|name| app.find(name).is_some())
+}
+
+fn settings_open_with(app: &mut TestApp, screen: &str, marker: &str, values: &[(&str, serde_json::Value)]) {
+	shows(app, screen, marker, values);
+	app.frames(30);
+}
+
+fn rust_overlays_show_over(
+	app: &mut TestApp,
+	parts: &DialogParts,
+	requests: &Rc<RefCell<Vec<String>>>,
+	dialog: &str,
+) {
+	use crate::moderation::{Confirm, ConfirmAction, MemberMenu};
+	let (moderation, toasts) = parts;
+	let (guild_id, user_id) = (protocol::Snowflake(10), protocol::Snowflake(30));
+	moderation.confirm(Confirm {
+		title: "Delete emoji?".to_owned(),
+		body: ":pepe_ok: will be removed from this server.".to_owned(),
+		label: "Delete",
+		danger: true,
+		action: ConfirmAction::DeleteEmoji {
+			guild_id,
+			emoji_id: protocol::Snowflake(33),
+		},
+	});
+	app.frames(30);
+	assert!(
+		on_top(app, "moderation-confirm"),
+		"a confirmation opened from {dialog} draws over it"
+	);
+	app.click("moderation-confirm");
+	app.frames(2);
+	assert!(
+		requests
+			.borrow()
+			.iter()
+			.any(|request| request.contains("DeleteEmoji")),
+		"the confirmation over {dialog} takes the click: {:?}",
+		requests.borrow()
+	);
+	moderation.kick(guild_id, user_id, "Brave Ember");
+	app.frames(30);
+	assert!(
+		on_top(app, "moderation-dialog"),
+		"the kick dialog draws over {dialog}"
+	);
+	app.key(zgx::input::Key::Escape);
+	app.frames(30);
+	assert!(
+		!on_top(app, "moderation-dialog"),
+		"Escape closes the kick dialog first"
+	);
+	assert!(
+		on_top(app, &format!("{dialog}_dialog")),
+		"{dialog} stays open under it"
+	);
+	moderation.open_menu(
+		MemberMenu {
+			guild_id,
+			user_id,
+			name: "Brave Ember".to_owned(),
+			nick: String::new(),
+			head: false,
+			developer: false,
+			items: vec![bridge::ModerationItem::Kick, bridge::ModerationItem::Ban],
+		},
+		(700., 300.),
+	);
+	app.frames(10);
+	assert!(
+		on_top(app, "moderation-member-menu"),
+		"the member menu draws over {dialog}"
+	);
+	moderation.close_menu();
+	app.frames(10);
+	toasts.push(bridge::ToastKind::Error, "You are being rate limited.");
+	app.frames(30);
+	let toast = newest_toast(app).expect("a toast shows");
+	assert!(
+		on_top(app, &toast),
+		"a toast shown while {dialog} is open draws over it"
+	);
+	toasts.push(bridge::ToastKind::Success, "Saved");
+	app.frames(30);
+	let toast = newest_toast(app).expect("a second toast shows");
+	assert!(
+		on_top(app, &toast),
+		"a second toast shown over {dialog} draws over it too"
+	);
+}
+
+#[test]
+fn rust_dialogs_menus_and_toasts_open_above_the_settings_dialogs() {
+	let parts: Rc<RefCell<Option<DialogParts>>> = Rc::default();
+	let requests: Rc<RefCell<Vec<String>>> = Rc::default();
+	let (made, used, heard) = (parts.clone(), parts.clone(), requests.clone());
+	let mut app = TestApp::wrapped(
+		move |runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "dark");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			let moderation = ModerationLayer::new(runtime);
+			moderation.set_window(WIDE.0, WIDE.1);
+			let heard = heard.clone();
+			moderation.on_request(move |request| heard.borrow_mut().push(format!("{request:?}")));
+			let toasts = ToastLayer::new(runtime);
+			toasts.set_window(WIDE.0, WIDE.1);
+			*made.borrow_mut() = Some((moderation, toasts));
+			host
+		},
+		move |luau| {
+			let (moderation, toasts) = used.borrow().clone().expect("the dialog parts");
+			layered(luau, [moderation.view(), toasts.view()])
+		},
+	);
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let parts = parts.borrow().clone().expect("the dialog parts");
+	settings_open_with(
+		&mut app,
+		"server settings",
+		"Server Ban List",
+		&[
+			("login.screen", json!("main")),
+			("server.guild", super::scripts::server_guild()),
+			(
+				"server.bans",
+				json!({ "loaded": true, "has_more": false, "rows": [] }),
+			),
+			("server.page", json!("bans")),
+		],
+	);
+	rust_overlays_show_over(&mut app, &parts, &requests, "server");
+	settings_open_with(
+		&mut app,
+		"closed server settings",
+		"Find or start a conversation",
+		&[("server.page", json!(""))],
+	);
+	settings_open_with(
+		&mut app,
+		"user settings",
+		"Edit Profiles",
+		&[("settings.page", json!("themes"))],
+	);
+	rust_overlays_show_over(&mut app, &parts, &requests, "settings");
+}
+
 const TOAST_SLOT: Slot = Slot {
 	x: 400.,
 	y: 80.,

@@ -1,10 +1,11 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 use bridge::{ToastKind, Toasts};
 use zgx::compose::prelude::*;
-use zgx::compose::{TaskRunner, Tasks};
+use zgx::compose::{ModalPlacement, PlacementEdge, TaskRunner, Tasks, modal};
 use zgx::input::InputEvent;
 use zgx::reactive::{Runtime, Signal};
 
@@ -65,6 +66,8 @@ pub struct ToastLayer {
 	area: Signal<Option<Area>>,
 	tasks: RefCell<Option<Tasks>>,
 	timer: Cell<u64>,
+	raised: Signal<u64>,
+	entered: RefCell<HashSet<u64>>,
 }
 
 impl ToastLayer {
@@ -76,6 +79,8 @@ impl ToastLayer {
 			area: runtime.signal(None),
 			tasks: RefCell::new(None),
 			timer: Cell::new(0),
+			raised: runtime.signal(0),
+			entered: RefCell::default(),
 		})
 	}
 
@@ -111,6 +116,8 @@ impl ToastLayer {
 		}
 		self.toasts.borrow_mut().push(kind, text, Instant::now());
 		self.changed();
+		let next = self.raised.with_untracked(|raised| raised + 1);
+		self.raised.set(next);
 	}
 
 	pub fn new_rejection(&self, state: &state::State) -> Option<String> {
@@ -171,6 +178,9 @@ impl ToastLayer {
 				leaving: toast.leaving,
 			})
 			.collect();
+		self.entered
+			.borrow_mut()
+			.retain(|id| shown.iter().any(|toast| toast.id == *id));
 		if self.shown.with_untracked(|current| *current != shown) {
 			self.shown.set(shown);
 		}
@@ -198,6 +208,30 @@ impl ToastLayer {
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
+		let (this, raised) = (self.clone(), self.raised.clone());
+		div().child_when(
+			move || Some(raised.get()),
+			move |_, cx| {
+				modal("Notifications", cx.runtime().signal(true))
+					.layer()
+					.autofocus(false)
+					.modal_placement(ModalPlacement {
+						x: PlacementEdge::Start,
+						y: PlacementEdge::Start,
+						insets: [0.; 4],
+					})
+					.w(0.)
+					.h(0.)
+					.p(0.)
+					.bg(zgx::scene::Color(0, 0, 0, 0))
+					.border(0.)
+					.shadow_none()
+					.child(this.stack())
+			},
+		)
+	}
+
+	fn stack(self: &Rc<Self>) -> View {
 		let this = self.clone();
 		component(move |cx| {
 			if cx.try_service::<TaskRunner>().is_some() {
@@ -242,8 +276,11 @@ impl ToastLayer {
 		else {
 			return div();
 		};
-		let tween = Tween::new(cx, 0.);
-		tween.run(0., 1., motion::TOAST_ENTER);
+		let entering = self.entered.borrow_mut().insert(id);
+		let tween = Tween::new(cx, if entering { 0. } else { 1. });
+		if entering {
+			tween.run(0., 1., motion::TOAST_ENTER);
+		}
 		let (leaving, fading) = (self.shown.clone(), tween.clone());
 		let mut left = false;
 		let effect = cx.runtime().effect(move || {

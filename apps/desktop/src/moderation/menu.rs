@@ -83,6 +83,7 @@ pub fn view(
 			offset: 0.,
 		}),
 	)
+	.id("moderation-member-menu")
 	.children(items)
 }
 

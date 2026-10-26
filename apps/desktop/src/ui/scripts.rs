@@ -387,7 +387,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	);
 }
 
-fn server_guild() -> serde_json::Value {
+pub(super) fn server_guild() -> serde_json::Value {
 	let page = |key: &str, title: &str, icon: &str| json!({ "key": key, "title": title, "icon": icon });
 	json!({
 		"id": "10",
