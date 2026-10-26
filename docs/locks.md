@@ -35,6 +35,8 @@ Missing or malformed fields never lock: an absent `is_spam`, `pending`, `flags`,
 
 A channel lock holds `SendMessage`, `SendSticker`, `SendGif`, `CreateForumPost`, `CreateThread`, `AddReaction` and `Typing` in that channel, and `ForwardMessage` into it. A user lock (`stranger_dm`) holds `OpenDm`, which would otherwise create the DM channel. A held command publishes a `CommandRejected` with the lock's explanation (`State::last_rejection`), except `Typing`, which is dropped silently. Pending messages are not created for held sends.
 
+Server writes are not in the set: creating an emoji or sticker (server settings, ExpressionCloner) is held only by the permission and slot checks and the per-server write queue (`docs/rest.md`), since no lock reason applies to a server's expressions.
+
 ## State
 
 - `State::channel_lock(channel_id, now) -> Option<RiskyLock>`: the lock on the composer and message actions of a channel. Pass `Utc::now()`.

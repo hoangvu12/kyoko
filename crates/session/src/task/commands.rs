@@ -92,6 +92,7 @@ impl Core {
 			| Command::LoadStickerPacks
 			| Command::LoadGuildStickers { .. }
 			| Command::CreateSticker { .. }
+			| Command::CreateEmoji { .. }
 			| Command::EditSticker { .. }
 			| Command::DeleteSticker { .. }
 			| Command::EditEmoji { .. }) => self.on_expression_command(command),

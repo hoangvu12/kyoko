@@ -60,6 +60,7 @@ mod status;
 mod storage;
 mod subscriptions;
 mod themes;
+mod uploads;
 
 const PAGE_SIZE: u8 = 50;
 const TYPING_THROTTLE: Duration = Duration::from_secs(9);

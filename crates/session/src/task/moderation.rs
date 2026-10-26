@@ -182,23 +182,6 @@ impl Core {
 					self.queue_guild_write(guild_id, Write::new("channel permissions", call));
 				}
 			}
-			Command::CreateEmoji {
-				guild_id,
-				name,
-				image_png,
-			} => {
-				if self.guild_allows(
-					guild_id,
-					Permissions::CREATE_GUILD_EXPRESSIONS,
-					"Create Expressions",
-				) {
-					let image = image_data_uri(PNG, &image_png);
-					self.queue_guild_write(
-						guild_id,
-						Write::new("create emoji", Call::CreateEmoji { name, image }),
-					);
-				}
-			}
 			Command::DeleteEmoji { guild_id, emoji_id } => {
 				if self.guild_allows(
 					guild_id,

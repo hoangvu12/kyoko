@@ -705,6 +705,9 @@ impl Shared {
 			.as_str()
 			.filter(|name| !name.is_empty())
 			.ok_or_else(|| ApiError::invalid_body("name is required"))?;
+		let animated = body["image"]
+			.as_str()
+			.is_some_and(|image| image.starts_with("data:image/gif"));
 		let mut store = self.store.lock();
 		self.live_guild(&store, guild_id)?;
 		let id = store.next_snowflake();
@@ -714,7 +717,7 @@ impl Shared {
 			user: Some(store.current_user.clone()),
 			require_colons: Some(true),
 			managed: Some(false),
-			animated: Some(false),
+			animated: Some(animated),
 			available: Some(true),
 			..Emoji::default()
 		};

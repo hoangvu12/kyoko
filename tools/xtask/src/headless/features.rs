@@ -17,7 +17,6 @@ const GIF_QUERY: &str = "cat";
 const STICKER_PACKS: usize = 3;
 const UNICODE_CATEGORIES: usize = 8;
 const STICKER_NAME: &str = "headless_sticker";
-const STICKER_FILE: &str = "headless.png";
 const STICKER_PNG: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 pub(super) struct TextOutcome {
@@ -410,8 +409,7 @@ impl Harness {
 			name: STICKER_NAME.to_owned(),
 			description: String::new(),
 			tags: STICKER_NAME.to_owned(),
-			file_png_or_apng: STICKER_PNG.to_vec(),
-			filename: STICKER_FILE.to_owned(),
+			file: STICKER_PNG.to_vec(),
 		});
 		self.until("the new sticker to appear", |state| {
 			count(state) == Some(before + 1)

@@ -24,6 +24,7 @@ mod rows;
 mod settings;
 mod state;
 mod threads;
+mod uploads;
 mod versions;
 mod views;
 mod voice;
@@ -60,6 +61,11 @@ pub use state::{
 	TYPING_TIMEOUT,
 };
 pub use threads::ForumPost;
+pub use uploads::{
+	EMOJI_MAX_BYTES, EMOJI_NAME_MAX, EMOJI_NAME_MIN, Expression, ExpressionKind, STICKER_DESCRIPTION_MAX,
+	STICKER_MAX_BYTES, STICKER_NAME_MAX, STICKER_NAME_MIN, STICKER_TAGS_MAX, Slots, emoji_name_from,
+	emoji_name_problem, slot_limit, sticker_name_from, sticker_problem,
+};
 pub use versions::CacheVersions;
 pub use views::{
 	ChannelRow, ChannelTreeNode, DmRow, GuildSummary, MemberListRow, MemberRow, MessageRow, MessageView,

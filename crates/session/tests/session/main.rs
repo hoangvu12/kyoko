@@ -27,5 +27,6 @@ mod status;
 mod storage;
 mod theme_links;
 mod threads;
+mod uploads;
 mod versions;
 mod wire;

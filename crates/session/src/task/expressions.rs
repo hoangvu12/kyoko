@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use protocol::{Gif, Permissions, Snowflake, Sticker, StickerItem, unicode_emoji_list};
-use rest::UploadFile;
 use serde::Serialize;
 use state::{EmojiRef, Loaded, RECENT_CAP};
 
@@ -11,7 +10,6 @@ use crate::persist::{self, Job};
 
 const GIF_MEDIA_FORMAT: &str = "mp4";
 const GIF_SUGGESTIONS: u8 = 5;
-const STICKER_CONTENT_TYPE: &str = "image/png";
 const RECENT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn promote<T>(list: &mut Vec<T>, item: T, is_same: impl Fn(&T, &T) -> bool) {
@@ -143,32 +141,8 @@ impl Core {
 					stickers: vec![item],
 				});
 			}
-			Command::CreateSticker {
-				guild_id,
-				name,
-				description,
-				tags,
-				file_png_or_apng,
-				filename,
-			} => {
-				if self.guild_allows(
-					guild_id,
-					Permissions::CREATE_GUILD_EXPRESSIONS,
-					"Create Expressions",
-				) {
-					let file = UploadFile {
-						name: filename,
-						bytes: file_png_or_apng.into(),
-						content_type: STICKER_CONTENT_TYPE.to_owned(),
-					};
-					let call = Call::CreateSticker {
-						name,
-						description,
-						tags,
-						file,
-					};
-					self.queue_guild_write(guild_id, Write::new("create sticker", call));
-				}
+			command @ (Command::CreateSticker { .. } | Command::CreateEmoji { .. }) => {
+				self.on_upload_command(command)
 			}
 			Command::EditSticker {
 				guild_id,

@@ -27,8 +27,6 @@ const EMOJI_SIDE: u32 = 128;
 const STICKER_SIDE: u32 = 320;
 const EMOJI_POINTS: f64 = 48.;
 const STICKER_POINTS: f64 = 104.;
-const EMOJI_SLOTS: usize = 50;
-const STICKER_SLOTS: usize = 5;
 const EXPRESSION_NAME_MAX: usize = 32;
 const ICON_POINTS: f64 = 96.;
 const TINT_ALPHA: u32 = 0x2e;
@@ -627,16 +625,15 @@ impl Link {
 		match page {
 			Some(ServerPage::Stickers) => self.send(Command::CreateSticker {
 				guild_id,
-				filename: format!("{name}.png"),
 				name,
 				description: text_of("description"),
 				tags: text_of("tags"),
-				file_png_or_apng: upload.png,
+				file: upload.png,
 			}),
 			_ => self.send(Command::CreateEmoji {
 				guild_id,
 				name,
-				image_png: upload.png,
+				image: upload.png,
 			}),
 		}
 		self.republish_server();
@@ -1169,7 +1166,14 @@ impl Link {
 		self.server.emoji.set(record([
 			("still", Value::Num((guild.emojis.len() - animated) as f64)),
 			("animated", Value::Num(animated as f64)),
-			("slots", Value::Num(EMOJI_SLOTS as f64)),
+			(
+				"slots",
+				Value::Num(state::slot_limit(
+					guild.premium_tier,
+					&guild.features,
+					state::ExpressionKind::Emoji,
+				) as f64),
+			),
 			("rows", Value::List(rows.into())),
 			("upload", self.upload_value()),
 		]));
@@ -1201,7 +1205,14 @@ impl Link {
 			.collect();
 		self.server.stickers.set(record([
 			("count", Value::Num(stickers.len() as f64)),
-			("slots", Value::Num(STICKER_SLOTS as f64)),
+			(
+				"slots",
+				Value::Num(
+					state
+						.expression_slots(guild_id, state::ExpressionKind::Sticker)
+						.map_or(0, |slots| slots.max) as f64,
+				),
+			),
 			("rows", Value::List(rows.into())),
 			("upload", self.upload_value()),
 		]));

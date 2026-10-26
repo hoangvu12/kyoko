@@ -316,7 +316,7 @@ pub enum Command {
 	CreateEmoji {
 		guild_id: Snowflake,
 		name: String,
-		image_png: Vec<u8>,
+		image: Vec<u8>,
 	},
 	DeleteEmoji {
 		guild_id: Snowflake,
@@ -512,8 +512,7 @@ pub enum Command {
 		name: String,
 		description: String,
 		tags: String,
-		file_png_or_apng: Vec<u8>,
-		filename: String,
+		file: Vec<u8>,
 	},
 	EditSticker {
 		guild_id: Snowflake,
