@@ -1,6 +1,8 @@
 mod dialogs;
 pub(crate) mod kit;
 mod menu;
+#[cfg(test)]
+mod tests;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -320,6 +322,17 @@ impl ModerationLayer {
 			open: self.runtime.signal(true),
 		}));
 		true
+	}
+
+	pub fn roles_trigger(&self) -> Option<(f32, f32)> {
+		self.menu
+			.with_untracked(|shown| {
+				shown
+					.as_ref()
+					.filter(|shown| shown.open.with_untracked(|open| *open))
+					.cloned()
+			})
+			.and_then(|shown| menu::roles_center(&shown.menu, shown.at))
 	}
 
 	pub fn close_menu(&self) {

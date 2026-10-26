@@ -1,6 +1,6 @@
 use bridge::{
-	AuditTone, GuildAccess, MemberSort, ModerationItem, ServerPage, audit_rows, member_rows,
-	moderation_items, role_move_to, role_rows,
+	AuditTone, ChannelKind, GuildAccess, MemberSort, ModerationItem, OpenChannel, ServerPage, audit_rows,
+	first_channel, member_rows, moderation_items, replacement_channel, role_move_to, role_rows,
 };
 use chrono::Utc;
 use protocol::{Permissions, Snowflake};
@@ -233,5 +233,51 @@ async fn the_audit_log_reads_as_sentences_with_reasons() {
 	);
 	let joined: String = banned.parts.iter().map(|(text, _)| text.as_str()).collect();
 	assert_eq!(joined, banned.sentence, "the parts read as the sentence");
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn deleting_the_open_channel_moves_the_view_to_the_servers_first_channel() {
+	let mut running = Running::start("admin-delete-open").await;
+	let open = first_channel(&running.session().state().read()).expect("a channel to open");
+	let guild_id = open.guild_id.expect("a server channel");
+	if let Some(command) = running.select_guild(guild_id) {
+		running.session().send(command);
+	}
+	let command = running.open_channel(open.channel_id).expect("the channel opens");
+	running.session().send(command);
+	assert_eq!(
+		replacement_channel(&running.session().state().read(), open),
+		None,
+		"a channel that is still there stays open"
+	);
+	running.session().send(Command::DeleteChannel {
+		channel_id: open.channel_id,
+	});
+	running
+		.until("the deleted channel to leave the sidebar", |view| {
+			view.sidebar.channel(open.channel_id).is_none()
+		})
+		.await;
+	assert_eq!(running.view.timeline.open(), None, "the timeline closes");
+	let first = running
+		.view
+		.sidebar
+		.channels()
+		.find(|channel| {
+			!channel.locked && matches!(channel.kind, ChannelKind::Text | ChannelKind::Announcement)
+		})
+		.map(|channel| channel.id)
+		.expect("another text channel");
+	let replacement = replacement_channel(&running.session().state().read(), open);
+	assert_eq!(
+		replacement,
+		Some(OpenChannel {
+			guild_id: Some(guild_id),
+			channel_id: first,
+		}),
+		"the server's first text channel in sidebar order replaces it"
+	);
+	assert!(running.open_channel(first).is_some(), "the replacement opens");
 	running.stop().await;
 }

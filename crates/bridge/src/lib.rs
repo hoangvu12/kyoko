@@ -169,7 +169,7 @@ pub use threads::{
 };
 pub use timeline::{
 	Delta, Highlight, InteractionLine, MessageEntry, NO_RESPONSE, OpenChannel, ReplyState, Row, RowKey,
-	Timeline, TimelineRow, busiest_channel, detached_entry, first_channel,
+	Timeline, TimelineRow, busiest_channel, detached_entry, first_channel, replacement_channel,
 };
 pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};
 pub use web_login::{

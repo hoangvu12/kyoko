@@ -517,3 +517,59 @@ async fn bans_load_page_after_the_last_id_and_an_unban_leaves_the_list() {
 	assert_eq!(running.session().state().read().bans(guild.id).len(), total - 1);
 	running.stop().await;
 }
+
+fn holds(state: &State, guild: &Guild, user_id: Snowflake) -> bool {
+	state
+		.guild(guild.id)
+		.and_then(|found| found.members.get(&user_id))
+		.is_some_and(|member| member.roles.contains(&guild.role))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn choosing_a_held_role_sends_one_delete_and_the_member_loses_it() {
+	let (running, guild) = start("moderation-role-remove").await;
+	let target = guild.targets[0];
+	let role_path = format!("{}/roles/{}", member_path(&guild, target), guild.role);
+	if !holds(&running.session().state().read(), &guild, target) {
+		running.session().send(Command::AddMemberRole {
+			guild_id: guild.id,
+			user_id: target,
+			role_id: guild.role,
+		});
+		running
+			.until_wire("the role grant", |recording| {
+				requests(recording, "PUT", &role_path).pop()
+			})
+			.await;
+	}
+	running
+		.until("the member to hold the role", |state: &State| {
+			holds(state, &guild, target)
+		})
+		.await;
+	running.session().send(Command::RemoveMemberRole {
+		guild_id: guild.id,
+		user_id: target,
+		role_id: guild.role,
+	});
+	let (body, reason, _) = running
+		.until_wire("the role removal", |recording| {
+			requests(recording, "DELETE", &role_path).pop()
+		})
+		.await;
+	assert_eq!(body, None);
+	assert_eq!(reason, None);
+	running
+		.until("the member without the role", |state: &State| {
+			!holds(state, &guild, target)
+		})
+		.await;
+	quiet().await;
+	let recording = running.mock().recording();
+	assert_eq!(requests(&recording, "DELETE", &role_path).len(), 1);
+	assert!(
+		requests(&recording, "PATCH", &member_path(&guild, target)).is_empty(),
+		"a role change goes to the member's role route, not a member edit"
+	);
+	running.stop().await;
+}

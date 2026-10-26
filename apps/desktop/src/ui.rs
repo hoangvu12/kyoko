@@ -820,7 +820,9 @@ impl Link {
 			observer(changes);
 		}
 		self.watch_session(changes);
+		let shown = self.top_channel(self.timeline.borrow().open());
 		let opened = self.publish(changes);
+		self.replace_removed(shown);
 		self.community_apply(changes);
 		if let Some(shared) = self.state() {
 			self.cloner_apply(&shared.read(), changes);
@@ -956,6 +958,7 @@ impl Link {
 				self.open_server_settings(bridge::ServerPage::named(page));
 				self.until_capture(|link| link.server_settled()).await;
 			}
+			capture::Screen::Moderation("roles-submenu") => self.drive_roles_submenu(&capture).await,
 			capture::Screen::Moderation(kind) => {
 				if let Some(author) = self.newest_other_author() {
 					self.open_moderation_dialog(author, kind);
@@ -1162,6 +1165,17 @@ impl Link {
 			Opening::First => bridge::first_channel(&state),
 		};
 		open.map(|open| (opening, open))
+	}
+
+	fn replace_removed(&self, shown: Option<OpenChannel>) {
+		let replacement = shown.zip(self.state()).and_then(|(shown, shared)| {
+			let state = shared.read();
+			bridge::replacement_channel(&state, shown)
+		});
+		if let Some(replacement) = replacement {
+			tracing::info!("the open channel was deleted, opening the server's first channel");
+			self.select_channel(replacement.channel_id);
+		}
 	}
 
 	fn open_guild(&self) -> Option<Snowflake> {

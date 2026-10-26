@@ -663,6 +663,18 @@ pub fn first_channel(state: &State) -> Option<OpenChannel> {
 	})
 }
 
+pub fn replacement_channel(state: &State, open: OpenChannel) -> Option<OpenChannel> {
+	let guild_id = open.guild_id?;
+	if state.channel(open.channel_id).is_some() || state.guild(guild_id).is_none() {
+		return None;
+	}
+	let channel_id = openable_channels(state, guild_id).next()?;
+	Some(OpenChannel {
+		guild_id: Some(guild_id),
+		channel_id,
+	})
+}
+
 fn openable_channels(state: &State, guild_id: Snowflake) -> impl Iterator<Item = Snowflake> {
 	state
 		.guild_channel_tree(guild_id)

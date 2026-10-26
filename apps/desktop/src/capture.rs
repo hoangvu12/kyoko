@@ -405,6 +405,7 @@ fn moderation_dialog(name: &str) -> Option<&'static str> {
 		"timeout" => Some("timeout"),
 		"kick" => Some("kick"),
 		"ban" => Some("ban"),
+		"roles-submenu" => Some("roles-submenu"),
 		_ => None,
 	}
 }

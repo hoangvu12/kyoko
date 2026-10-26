@@ -2,7 +2,7 @@ use zgx::compose::prelude::*;
 use zgx::compose::{ModalPlacement, PlacementEdge};
 use zgx::input::{InputEvent, Key};
 use zgx::reactive::Signal;
-use zgx::scene::Color;
+use zgx::scene::{Color, Direction};
 use zgx::theme::Themed;
 
 use crate::timeline::{icon, tok};
@@ -60,6 +60,7 @@ pub fn menu_row(label: String, glyph: View, color: &str) -> View {
 		.child(
 			row()
 				.w_full()
+				.direction(Direction::Ltr)
 				.items_center()
 				.gap(tok("space_8"))
 				.child(

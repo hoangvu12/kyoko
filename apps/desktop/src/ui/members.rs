@@ -1,8 +1,12 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use bridge::{MemberListEntry, OpenChannel, OpenMembers};
+use bridge::{MemberListEntry, ModerationItem, OpenChannel, OpenMembers, moderation_items};
+use chrono::Utc;
 use protocol::Snowflake;
+use zgx::input::{InputEvent, PointerButton};
+use zgx::scene::{NodeKind, Rect};
+use zgx::widgets::WeakUi;
 
 use super::Link;
 use crate::capture;
@@ -84,6 +88,67 @@ impl Link {
 
 	pub(crate) fn open_member_profile(&self, user_id: Snowflake, at: (f32, f32)) {
 		self.open_profile(user_id, at, Anchor::TopRight);
+	}
+
+	fn member_with_roles(&self) -> Option<String> {
+		let shared = self.state()?;
+		let state = shared.read();
+		let guild_id = self.open_guild()?;
+		let panel = self.members.panel();
+		let found = panel.members().find(|member| {
+			moderation_items(&state, guild_id, member.user_id, Utc::now())
+				.iter()
+				.any(|item| matches!(item, ModerationItem::Roles(_)))
+		});
+		found.map(|member| member.name.clone())
+	}
+
+	fn rightmost_text(&self, wanted: &str) -> Option<Rect> {
+		let ui = self.ui.borrow().as_ref().and_then(WeakUi::upgrade)?;
+		let scene = ui.scene.borrow();
+		let mut stack = vec![scene.root()];
+		let mut found: Option<Rect> = None;
+		while let Some(node) = stack.pop() {
+			if let NodeKind::Text { text, .. } = scene.kind(node)
+				&& text.as_ref() == wanted
+			{
+				let bounds = scene.bounds(node);
+				if found.is_none_or(|best| bounds.x > best.x) {
+					found = Some(bounds);
+				}
+			}
+			stack.extend(scene.children(node).iter().copied());
+		}
+		found
+	}
+
+	pub(super) async fn drive_roles_submenu(&self, capture: &capture::Capture) {
+		self.until_members(capture).await;
+		let Some(name) = self.member_with_roles() else {
+			tracing::warn!("no member whose roles the current user can change");
+			return;
+		};
+		let Some(row) = self.rightmost_text(&name) else {
+			tracing::warn!("the member row is not on screen");
+			return;
+		};
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
+			return;
+		};
+		let (x, y) = (row.x + row.width / 2., row.y + row.height / 2.);
+		let button = PointerButton::Secondary;
+		ui.dispatch(InputEvent::PointerMove { x, y });
+		zgx::timer::sleep(capture::POLL).await;
+		ui.dispatch(InputEvent::PointerDown { x, y, button });
+		ui.dispatch(InputEvent::PointerUp { x, y, button });
+		self.until_capture(|link| link.moderation.roles_trigger().is_some())
+			.await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		let Some((x, y)) = self.moderation.roles_trigger() else {
+			tracing::warn!("the member menu has no Roles item");
+			return;
+		};
+		ui.dispatch(InputEvent::PointerMove { x, y });
 	}
 
 	fn members_settled(&self) -> bool {

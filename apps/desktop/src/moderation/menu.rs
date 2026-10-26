@@ -5,6 +5,7 @@ use session::Command;
 use zgx::compose::prelude::*;
 use zgx::compose::{Placement, PlacementEdge, PlacementSide};
 use zgx::reactive::Signal;
+use zgx::scene::Direction;
 
 use super::kit::{menu_panel, separator};
 use super::{MemberMenu, ModerationLayer, Request};
@@ -13,33 +14,77 @@ use crate::kit::{self, menu_icon, menu_row};
 const HEAD_ITEMS: usize = 3;
 const ROLE_LIMIT: usize = 30;
 
-pub fn size(menu: &MemberMenu) -> (f32, f32) {
-	let (mut rows, mut separators) = (0, 0);
+#[derive(Debug, Clone, Copy, Default)]
+struct Count {
+	rows: usize,
+	separators: usize,
+}
+
+impl Count {
+	fn add(&mut self, item: &ModerationItem) {
+		match item {
+			ModerationItem::Separator => self.separators += 1,
+			_ => self.rows += 1,
+		}
+	}
+
+	fn offset(self) -> f32 {
+		self.rows as f32 * kit::MENU_ITEM
+			+ self.separators as f32 * kit::SEPARATOR
+			+ (self.rows + self.separators) as f32 * kit::MENU_GAP
+	}
+}
+
+fn head(menu: &MemberMenu) -> Count {
+	let mut count = Count::default();
 	if menu.head {
-		rows += HEAD_ITEMS;
+		count.rows += HEAD_ITEMS;
 		if menu.developer {
-			rows += 1;
-			separators += 1;
+			count.rows += 1;
+			count.separators += 1;
 		}
 		if !menu.items.is_empty() {
-			separators += 1;
+			count.separators += 1;
 		}
 	}
+	count
+}
+
+pub fn size(menu: &MemberMenu) -> (f32, f32) {
+	let mut count = head(menu);
 	for item in &menu.items {
-		match item {
-			ModerationItem::Separator => separators += 1,
-			_ => rows += 1,
-		}
+		count.add(item);
 	}
-	(kit::MENU_WIDTH, kit::menu_height(rows, separators, 0.))
+	(
+		kit::MENU_WIDTH,
+		kit::menu_height(count.rows, count.separators, 0.),
+	)
+}
+
+pub fn roles_center(menu: &MemberMenu, (x, y): (f32, f32)) -> Option<(f32, f32)> {
+	let mut count = head(menu);
+	for item in &menu.items {
+		if matches!(item, ModerationItem::Roles(_)) {
+			let top = y + kit::MENU_BORDER + kit::MENU_PADDING + count.offset();
+			return Some((x + kit::MENU_WIDTH / 2., top + kit::MENU_ITEM / 2.));
+		}
+		count.add(item);
+	}
+	None
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Room {
+	left: bool,
+	below: f32,
 }
 
 fn entry(name: &str, glyph: &'static str, color: &'static str) -> View {
 	menu_row(name.to_owned(), menu_icon(glyph, color == "danger"), color)
 }
 
-fn choice(name: &str, checked: bool) -> View {
-	menu_row(name.to_owned(), div(), "text_3").menu_checked(checked)
+fn choice(name: &str, mark: View, checked: bool) -> View {
+	menu_row(name.to_owned(), mark, "text_3").menu_checked(checked)
 }
 
 pub fn view(
@@ -49,6 +94,9 @@ pub fn view(
 	open: Signal<bool>,
 ) -> View {
 	let spot = div().absolute().left(x).top(y).w(0.).h(0.);
+	let (width, height) = layer.window.with_untracked(|window| *window);
+	let left = x + 2. * kit::MENU_WIDTH > width - kit::MENU_MARGIN;
+	let first = y + kit::MENU_BORDER + kit::MENU_PADDING;
 	let mut items = Vec::new();
 	if menu.head {
 		let (profile, message) = (layer.clone(), layer.clone());
@@ -73,8 +121,14 @@ pub fn view(
 			items.push(separator());
 		}
 	}
+	let mut count = head(menu);
 	for item in &menu.items {
-		items.push(moderation_item(layer, menu, item));
+		let room = Room {
+			left,
+			below: height - kit::MENU_MARGIN - first - count.offset(),
+		};
+		items.push(moderation_item(layer, menu, item, room));
+		count.add(item);
 	}
 	menu_panel(
 		zgx::compose::menu("Member menu", open, spot).placement(Placement {
@@ -87,7 +141,12 @@ pub fn view(
 	.children(items)
 }
 
-fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &ModerationItem) -> View {
+fn moderation_item(
+	layer: &Rc<ModerationLayer>,
+	menu: &Rc<MemberMenu>,
+	item: &ModerationItem,
+	room: Room,
+) -> View {
 	let color = if item.is_danger() { "danger" } else { "text_3" };
 	let (guild_id, user_id) = (menu.guild_id, menu.user_id);
 	match item {
@@ -98,32 +157,41 @@ fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &Mo
 				.take(ROLE_LIMIT)
 				.map(|role| {
 					let (toggle, held, role_id) = (layer.clone(), role.held, role.id);
-					choice(&role.name, held).on_click(move || {
-						let command = if held {
-							Command::RemoveMemberRole {
-								guild_id,
-								user_id,
-								role_id,
-							}
-						} else {
-							Command::AddMemberRole {
-								guild_id,
-								user_id,
-								role_id,
-							}
-						};
-						toggle.request(Request::Command(command));
-					})
+					choice(&role.name, kit::checkbox(move || held), held)
+						.id(format!("moderation-role-{role_id}"))
+						.on_click(move || {
+							let command = if held {
+								Command::RemoveMemberRole {
+									guild_id,
+									user_id,
+									role_id,
+								}
+							} else {
+								Command::AddMemberRole {
+									guild_id,
+									user_id,
+									role_id,
+								}
+							};
+							toggle.request(Request::Command(command));
+						})
 				})
 				.collect();
-			submenu_of(layer, item, color, choices)
+			submenu_of(layer, item, color, choices, room)
+				.id("moderation-roles-menu")
+				.trigger_id("moderation-roles")
 		}
 		ModerationItem::MoveTo(channels) => {
 			let mut choices: Vec<View> = channels
 				.iter()
 				.map(|channel| {
 					let (mover, channel_id) = (layer.clone(), channel.id);
-					choice(&channel.name, channel.current).on_click(move || {
+					let mark = if channel.current {
+						menu_icon("check", false)
+					} else {
+						div()
+					};
+					choice(&channel.name, mark, channel.current).on_click(move || {
 						mover.request(Request::Command(Command::MoveMember {
 							guild_id,
 							user_id,
@@ -141,7 +209,7 @@ fn moderation_item(layer: &Rc<ModerationLayer>, menu: &Rc<MemberMenu>, item: &Mo
 					channel_id: None,
 				}));
 			}));
-			submenu_of(layer, item, color, choices)
+			submenu_of(layer, item, color, choices, room)
 		}
 		_ => {
 			let (this, menu, item_value) = (layer.clone(), menu.clone(), item.clone());
@@ -155,13 +223,12 @@ fn submenu_of(
 	item: &ModerationItem,
 	color: &'static str,
 	choices: Vec<View>,
+	room: Room,
 ) -> View {
-	menu_panel(
-		submenu(item.label(), layer.runtime.signal(false)).trigger(menu_row(
-			item.label().to_owned(),
-			menu_icon("chevron_right", false),
-			color,
-		)),
-	)
-	.children(choices)
+	let trigger = menu_row(item.label().to_owned(), menu_icon("chevron_right", false), color);
+	let direction = if room.left { Direction::Rtl } else { Direction::Ltr };
+	menu_panel(submenu(item.label(), layer.runtime.signal(false)).trigger(trigger.direction(direction)))
+		.direction(Direction::Ltr)
+		.max_h(room.below)
+		.children(choices)
 }

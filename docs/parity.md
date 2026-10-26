@@ -552,3 +552,11 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The messages are the `-# showca
 | `connection-offline` | 38 | Default selection, then mark the timeline disconnected. Oxidcord sets its timeline disconnected; kyoko pins the connection banner to its reconnecting state (`Link::drive_disconnected`). The real path, a drop, an offline period and the reconnect against mockcord, is covered by `crates/bridge/tests/bridge/connection.rs`. | yes |
 
 Tickets 39 (translations) and 40 (tray and desktop integration) have no screens of their own. Translations are checked by running any row with another locale once ticket 39 adds a locale option to capture mode.
+
+### 62 Moderation menu follow-ups
+
+Kyoko only (`--apps kyoko`): oxidcord's member menu has no Roles submenu to compare. No Midnight mockup, check it by eye.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `moderation-roles-submenu` | 62 | As `member-list`, then right-click, through `Ui::dispatch`, the name of the first member whose roles the current user can change (at the window's right edge), and hover the menu's Roles item: the submenu opens to the left of the member menu, inside the window, with a checked box on the roles the member holds. | yes |
