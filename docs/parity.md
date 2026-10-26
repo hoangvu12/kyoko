@@ -187,12 +187,16 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `poll-in-messages` | `poll-in-messages.html` |
 | `poll-in-messages-ended` | `poll-in-messages-ended.html` |
 | `apps-launcher` | `apps-launcher.html` |
+| `command-picker-built-in` | `command-picker-built-in.html` |
+| `built-in-gif` | `built-in-gif.html` |
+| `built-in-sticker` | `built-in-sticker.html` |
+| `built-in-thread` | `built-in-thread.html` |
 
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`.
+Every mockup page now has a kyoko screen.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -521,6 +525,17 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The component messages are Mock
 | `message-components-v2` | 13 | Open `#showcase` with "did the release post go out" on top: Mockbot's Components V2 container below it (text, a section with a thumbnail, a separator, a three-image gallery and a section with the Changelog link button). | yes |
 | `app-modal` | 13 | Default selection, run `/bug`, then type "Reaction tooltip wraps to three lines" into Title: the app modal over the window. | yes |
 | `app-modal-error` | 13 | As `app-modal`, with What happened? filled in too and Submit pressed while Mockbot fails modals: "Something went wrong. Try again." above the footer. | yes |
+
+### Midnight 14 Built-in commands
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). Steps as `command-options`, picking a built-in. Mockcord's GIF search lists the matching GIFs first, then the rest; its pack stickers `hello` and `bye` carry the tag `wave`.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `command-picker-built-in` | 14 | `/` in the field, then the rail's Built-In section and `/gif` selected: the Built-In rows with `/gif` and its `query` chip. | yes |
+| `built-in-gif` | 14 | Pick `/gif` with `query` set to cat, once the search has answered: the strip of GIFs above the composer, the first selected. | yes |
+| `built-in-sticker` | 14 | Pick `/sticker` with `query` set to wave, once the stickers have loaded: the strip of matching stickers, the first selected. | yes |
+| `built-in-thread` | 14 | Pick `/thread` with `name` set to picker polish and `message` to notes from testing, `name` focused: the two chips and the hint bar. | yes |
 
 ### 55 ShowHiddenChannels and ShowHiddenThings
 

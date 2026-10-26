@@ -479,6 +479,10 @@ return function(scope: any?)
 		return commanding() and shared.command:get().wants_file == true
 	end
 
+	local function results_open(): boolean
+		return commanding() and (shared.command:get().results or {}).open == true
+	end
+
 	local function joined(): boolean
 		return notice_kind() ~= "" or has_reply() or has_edit() or has_files() or commanding()
 	end
@@ -649,7 +653,7 @@ return function(scope: any?)
 			border = 1,
 			border_sides = { 1, 1, 0, 1 },
 			border_color = theme.color.border,
-			ui.show(commanding, command_picker.hint(shared, area)),
+			ui.show(results_open, command_picker.results(shared, area), ui.show(commanding, command_picker.hint(shared, area))),
 			notice(),
 			reply_bar(),
 			edit_bar(),

@@ -39,7 +39,7 @@ impl Core {
 				to_channel_id: channel_id,
 				..
 			} => state.channel_lock(*channel_id, now),
-			Command::OpenDm { user_id } => state.dm_lock(*user_id),
+			Command::OpenDm { user_id } | Command::MessageUser { user_id, .. } => state.dm_lock(*user_id),
 			_ => None,
 		}
 	}

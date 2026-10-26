@@ -918,4 +918,79 @@ function M.dropbox(shared: any, area: string)
 	}
 end
 
+local function result_tile(item: any, shared: any, area: string)
+	local height = theme.number(theme.size.command_result_height)()
+	local sticker = item.kind == "sticker"
+	local width = if sticker then height else height * (item.ratio or 1)
+	local inner = if sticker then height * 0.84 else width
+	local function selected(): boolean
+		local results = shared.command:get().results or {}
+		return results.selected == item.index
+	end
+	return ui.row {
+		id = area .. "_command_result_" .. item.index,
+		w = width,
+		h = height,
+		shrink = 0,
+		items = "center",
+		justify = "center",
+		overflow = "hidden",
+		rounded = theme.size.radius_sm,
+		cursor = "pointer",
+		bg = if sticker then "#00000000" else theme.color.bg_2,
+		border = function()
+			return if selected() then 2 else 0
+		end,
+		border_color = theme.color.accent_2,
+		hover = { border = 2 },
+		on_click = function()
+			actions.composer_choose_result(item.index, area)
+		end,
+		ui.show(
+			(item.image or "") ~= "",
+			ui.image {
+				src = item.image or "",
+				w = inner,
+				h = if sticker then inner else height,
+				fit = if sticker then "contain" else "cover",
+			}
+		),
+	}
+end
+
+function M.results(shared: any, area: string)
+	local function rows()
+		return (shared.command:get().results or {}).items or {}
+	end
+	local function empty(): boolean
+		return #rows() == 0
+	end
+	return ui.row {
+		id = area .. "_command_results",
+		w_full = true,
+		h = function()
+			return theme.number(theme.size.command_result_height)() + theme.number(theme.size.space_8)() * 2
+		end,
+		shrink = 0,
+		p = theme.size.space_8,
+		items = "center",
+		overflow = "hidden",
+		justify = function()
+			return if empty() then "center" else "start"
+		end,
+		ui.show(empty, ui.text {
+			function()
+				return (shared.command:get().results or {}).status or ""
+			end,
+			literal = true,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			color = theme.color.text_4,
+		}),
+		ui.each(ui.computed(rows), function(item: any)
+			return result_tile(item, shared, area)
+		end, { key = by_key, gap = theme.size.space_8, items = "center" }),
+	}
+end
+
 return M

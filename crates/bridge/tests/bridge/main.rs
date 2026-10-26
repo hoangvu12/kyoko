@@ -1,5 +1,6 @@
 mod actions;
 mod apps;
+mod built_ins;
 mod cloner;
 mod composer;
 mod connection;

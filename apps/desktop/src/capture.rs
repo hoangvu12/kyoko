@@ -175,6 +175,10 @@ pub enum ComposerShot {
 	CommandFile,
 	CommandFilePicked,
 	CommandReplies,
+	CommandBuiltIn,
+	BuiltInGif,
+	BuiltInSticker,
+	BuiltInThread,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,6 +280,10 @@ impl Screen {
 			"command-attachment-option" => Some(Screen::ComposerShot(ComposerShot::CommandFile)),
 			"command-attachment-option-picked" => Some(Screen::ComposerShot(ComposerShot::CommandFilePicked)),
 			"command-response-states" => Some(Screen::ComposerShot(ComposerShot::CommandReplies)),
+			"command-picker-built-in" => Some(Screen::ComposerShot(ComposerShot::CommandBuiltIn)),
+			"built-in-gif" => Some(Screen::ComposerShot(ComposerShot::BuiltInGif)),
+			"built-in-sticker" => Some(Screen::ComposerShot(ComposerShot::BuiltInSticker)),
+			"built-in-thread" => Some(Screen::ComposerShot(ComposerShot::BuiltInThread)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),

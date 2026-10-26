@@ -127,6 +127,10 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("poll-in-messages-ended", "poll-in-messages-ended"),
 	("apps-launcher", "apps-launcher"),
 	("inbox", "inbox"),
+	("command-picker-built-in", "command-picker-built-in"),
+	("built-in-gif", "built-in-gif"),
+	("built-in-sticker", "built-in-sticker"),
+	("built-in-thread", "built-in-thread"),
 ];
 
 pub struct Pairing {

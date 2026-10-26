@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bridge::{
-	ActiveCommand, ChoiceList, CommandApp, CommandPicker, Composer, FileEdit, Inbox, Mark, Notice,
-	OpenChannel, OptionChoices, OptionFile, Outcome, Suggestion, Visual,
+	ActiveCommand, ChoiceList, CommandApp, CommandPicker, CommandResult, CommandResults, Composer, FileEdit,
+	Inbox, Mark, Notice, OpenChannel, OptionChoices, OptionFile, Outcome, Suggestion, Visual,
 };
 use chrono::Utc;
 use protocol::{Nonce, Snowflake};
@@ -27,6 +27,9 @@ const SUGGESTION_POINTS: f64 = 24.;
 const APP_ICON_POINTS: f64 = 32.;
 const HEADER_ICON_POINTS: f64 = 16.;
 const COMMAND_ICON_POINTS: f64 = 24.;
+const RESULT_POINTS: f64 = 120.;
+const MIN_RATIO: f64 = 0.5;
+const MAX_RATIO: f64 = 2.;
 const THUMBNAIL_PIXELS: u32 = 400;
 const WAITING: &str = "Waiting for connection...";
 type Handler = fn(&Link, Pane);
@@ -37,6 +40,9 @@ const CAPTURE_OPTION_TEXT: &str = "hello";
 const CAPTURE_ROLL_SIDES: i64 = 20;
 type ReplyStep = (u64, &'static str, fn(&bridge::MessageEntry) -> bool);
 const CAPTURE_FILE_NAME: &str = "cat.png";
+const CAPTURE_GIF_QUERY: &str = "cat";
+const CAPTURE_STICKER_QUERY: &str = "wave";
+const CAPTURE_THREAD: [&str; 2] = ["picker polish", "notes from testing"];
 
 pub(super) use crate::composer_layer::Pane;
 
@@ -153,6 +159,7 @@ pub(super) struct Names {
 	add_optional: &'static str,
 	cancel_command: &'static str,
 	choose_option: &'static str,
+	choose_result: &'static str,
 	retry_choices: &'static str,
 	option_files: &'static str,
 	remove_option_file: &'static str,
@@ -202,6 +209,7 @@ pub(super) const MAIN: Names = Names {
 	add_optional: "composer.add_optional",
 	cancel_command: "composer.cancel_command",
 	choose_option: "composer.choose_option",
+	choose_result: "composer.choose_result",
 	retry_choices: "composer.retry_choices",
 	option_files: "composer.option_files",
 	remove_option_file: "composer.remove_option_file",
@@ -251,6 +259,7 @@ pub(super) const THREAD: Names = Names {
 	add_optional: "thread_composer.add_optional",
 	cancel_command: "thread_composer.cancel_command",
 	choose_option: "thread_composer.choose_option",
+	choose_result: "thread_composer.choose_result",
 	retry_choices: "thread_composer.retry_choices",
 	option_files: "thread_composer.option_files",
 	remove_option_file: "thread_composer.remove_option_file",
@@ -859,6 +868,12 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
+		host.action(names.choose_result, move |argument| {
+			if let Some(link) = actions.upgrade() {
+				link.choose_result(pane, position(&argument));
+			}
+		});
+		let actions = Rc::downgrade(link);
 		host.action(names.retry_choices, move |_| {
 			if let Some(link) = actions.upgrade() {
 				link.ask_autocomplete(pane, true);
@@ -896,6 +911,67 @@ impl Link {
 			.borrow_mut()
 			.autocomplete_request(retry);
 		self.composer_send(request.into_iter().collect());
+		self.ask_strip(pane);
+	}
+
+	fn ask_strip(&self, pane: Pane) -> bool {
+		let Some(shared) = self.state() else {
+			return false;
+		};
+		let (commands, due) = {
+			let mut composer = self.pane_composer(pane).composer.borrow_mut();
+			let commands = composer.strip_requests(&shared.read(), Instant::now());
+			(commands, composer.strip_due())
+		};
+		if let Some(due) = due {
+			self.wake_gif_search(due);
+		}
+		let asked = !commands.is_empty();
+		self.composer_send(commands);
+		asked
+	}
+
+	pub(super) fn poll_strips(&self) {
+		for pane in [Pane::Main, Pane::Thread] {
+			if self.ask_strip(pane) {
+				self.publish_composer_all(pane);
+			}
+		}
+	}
+
+	fn choose_result(&self, pane: Pane, index: Option<usize>) {
+		let Some(shared) = self.state() else {
+			return;
+		};
+		let outcome =
+			self.pane_composer(pane)
+				.composer
+				.borrow_mut()
+				.choose_result(&shared.read(), index, Utc::now());
+		self.composer_outcome(pane, outcome);
+		self.request_focus(pane);
+	}
+
+	fn gif_usage(&self, pane: Pane, commands: &mut Vec<session::Command>) {
+		if !self.settings.settings().advanced.share_gif_usage {
+			return;
+		}
+		let Some(query) = self
+			.pane_composer(pane)
+			.composer
+			.borrow()
+			.result_query()
+			.map(str::to_owned)
+		else {
+			return;
+		};
+		let sent = commands.iter().find_map(|command| match command {
+			session::Command::SendGif { gif, .. } => Some(gif.id.clone()),
+			_ => None,
+		});
+		if let Some(id) = sent {
+			commands.insert(0, session::Command::SelectGif { id, query });
+		}
 	}
 
 	fn choose_option(&self, pane: Pane, index: Option<usize>) {
@@ -967,8 +1043,16 @@ impl Link {
 			.borrow()
 			.option_choices(&shared.read())
 			.is_some_and(|choices| choices.count() > 0);
+		let showing = view
+			.composer
+			.borrow()
+			.results(&shared.read())
+			.is_some_and(|results| !results.items.is_empty());
 		let mut composer = view.composer.borrow_mut();
 		let handled = match key {
+			"ArrowDown" | "ArrowUp" if showing && !optional_open => {
+				composer.move_result(&shared.read(), if key == "ArrowDown" { 1 } else { -1 })
+			}
 			"ArrowDown" | "ArrowUp" if optional_open => {
 				composer.move_selection(if key == "ArrowDown" { 1 } else { -1 });
 				true
@@ -1169,6 +1253,15 @@ impl Link {
 				self.publish_composer_suggestions(pane, state);
 			}
 		}
+		let stripping = view
+			.composer
+			.borrow()
+			.command()
+			.and_then(|command| command.entry.built_in())
+			.is_some_and(bridge::BuiltIn::shows_results);
+		if stripping && (!changes.loaded.is_empty() || changes.guild_list) {
+			self.publish_composer_suggestions(pane, state);
+		}
 		if changes.messages.contains(channel_id)
 			|| changes.locks
 			|| changes.rejected
@@ -1269,12 +1362,25 @@ impl Link {
 	}
 
 	fn composer_outcome(&self, pane: Pane, outcome: Outcome) {
-		let cleared = outcome.replace.as_ref().is_some_and(|(text, _)| text.is_empty());
+		let Outcome {
+			mut commands,
+			replace,
+			moderate,
+			thread_message,
+		} = outcome;
+		let cleared = replace.as_ref().is_some_and(|(text, _)| text.is_empty());
 		if cleared {
 			self.pane_composer(pane).draft_due.set(None);
 		}
-		self.replace_text(pane, outcome.replace);
-		self.composer_send(outcome.commands);
+		if let Some((parent, content)) = thread_message {
+			self.await_first_message(parent, content);
+		}
+		self.gif_usage(pane, &mut commands);
+		self.replace_text(pane, replace);
+		self.composer_send(commands);
+		if let Some(ask) = moderate {
+			self.moderation.ask(&ask);
+		}
 		self.publish_composer_all(pane);
 	}
 
@@ -1741,7 +1847,7 @@ impl Link {
 			for index in section.first..section.first + section.count {
 				let entry = &picker.rows[index];
 				let chips: Vec<Value> = entry
-					.required()
+					.chips()
 					.map(|option| {
 						record([
 							("key", option.name.as_str().into()),
@@ -1807,6 +1913,61 @@ impl Link {
 		])
 	}
 
+	fn result_image(&self, result: &CommandResult, ratio: f64, images: &mut Vec<String>) -> String {
+		let scale = self.scale_factor();
+		let request = match result {
+			CommandResult::Gif(gif) => {
+				bridge::gif_still_request(gif, (RESULT_POINTS * ratio, RESULT_POINTS), scale)
+			}
+			CommandResult::Sticker(cell) => bridge::sticker_request(&cell.item(), RESULT_POINTS, scale),
+		};
+		let Some(mut request) = request else {
+			return String::new();
+		};
+		request.url = bridge::local_media(&request.url, self.images.mock_origin.as_deref());
+		let name = self.images.gallery.request(request).to_string();
+		images.push(name.clone());
+		format!("host:{name}")
+	}
+
+	fn results_record(&self, results: Option<CommandResults>, images: &mut Vec<String>) -> Value {
+		let Some(results) = results else {
+			return record([("open", false.into())]);
+		};
+		let items: Vec<Value> = results
+			.items
+			.iter()
+			.enumerate()
+			.map(|(index, result)| {
+				let (kind, key, ratio) = match result {
+					CommandResult::Gif(gif) => {
+						let ratio = if gif.width > 0 && gif.height > 0 {
+							(f64::from(gif.width) / f64::from(gif.height)).clamp(MIN_RATIO, MAX_RATIO)
+						} else {
+							1.
+						};
+						("gif", gif.id.clone(), ratio)
+					}
+					CommandResult::Sticker(cell) => ("sticker", cell.sticker.id.to_string(), 1.),
+				};
+				let image = self.result_image(result, ratio, images);
+				record([
+					("key", format!("{kind}:{key}").as_str().into()),
+					("index", ((index + 1) as f64).into()),
+					("kind", kind.into()),
+					("ratio", ratio.into()),
+					("image", image.as_str().into()),
+				])
+			})
+			.collect();
+		record([
+			("open", true.into()),
+			("selected", ((results.selected + 1) as f64).into()),
+			("status", results.status.unwrap_or_default().into()),
+			("items", Value::List(items.into())),
+		])
+	}
+
 	fn choices_record(choices: Option<OptionChoices>) -> Value {
 		let Some(choices) = choices else {
 			return record([("open", false.into())]);
@@ -1841,7 +2002,7 @@ impl Link {
 		&self,
 		view: &ComposerView,
 		command: &ActiveCommand,
-		choices: Option<OptionChoices>,
+		(choices, results): (Option<OptionChoices>, Option<CommandResults>),
 		images: &mut Vec<String>,
 	) -> Value {
 		let fields: Vec<Value> = command
@@ -1902,6 +2063,7 @@ impl Link {
 			),
 			("optional", Value::List(optional.into())),
 			("choices", Self::choices_record(choices)),
+			("results", self.results_record(results, images)),
 			("wants_file", command.wants_file().into()),
 		])
 	}
@@ -1917,7 +2079,8 @@ impl Link {
 		let command = match composer.command() {
 			Some(command) => {
 				let choices = command.choices(state.autocomplete());
-				self.command_record(view, command, choices, &mut images)
+				let results = composer.results(state);
+				self.command_record(view, command, (choices, results), &mut images)
 			}
 			None => record([("active", false.into())]),
 		};
@@ -2019,6 +2182,10 @@ impl Link {
 			| capture::ComposerShot::CommandFile
 			| capture::ComposerShot::CommandFilePicked => self.drive_command(shot).await,
 			capture::ComposerShot::CommandReplies => self.drive_command_replies().await,
+			capture::ComposerShot::CommandBuiltIn
+			| capture::ComposerShot::BuiltInGif
+			| capture::ComposerShot::BuiltInSticker
+			| capture::ComposerShot::BuiltInThread => self.drive_built_in(shot).await,
 			capture::ComposerShot::Drop => self.files_hovering(true),
 			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
 			capture::ComposerShot::PlusMenu => {
@@ -2103,6 +2270,83 @@ impl Link {
 		}
 		self.until_capture(move |link| link.command_shot_ready(shot))
 			.await;
+	}
+
+	async fn drive_built_in(&self, shot: capture::ComposerShot) {
+		let Some(channel_id) = self.composer.composer.borrow().channel() else {
+			return;
+		};
+		self.send(session::Command::LoadApplicationCommands { channel_id });
+		self.replace_text(Pane::Main, Some(("/".to_owned(), 1)));
+		self.request_focus(Pane::Main);
+		self.until_capture(|link| {
+			link.composer
+				.composer
+				.borrow()
+				.picker()
+				.is_some_and(|picker| picker.rows.iter().any(|row| row.app.name == "Remindy"))
+		})
+		.await;
+		let (name, values): (&str, &[&str]) = match shot {
+			capture::ComposerShot::BuiltInGif => ("gif", &[CAPTURE_GIF_QUERY]),
+			capture::ComposerShot::BuiltInSticker => ("sticker", &[CAPTURE_STICKER_QUERY]),
+			capture::ComposerShot::BuiltInThread => ("thread", &CAPTURE_THREAD),
+			_ => {
+				zgx::timer::sleep(capture::SETTLE).await;
+				let found = self.composer.composer.borrow().picker().and_then(|picker| {
+					let gif = picker
+						.rows
+						.iter()
+						.position(|row| row.built_in() == Some(bridge::BuiltIn::Gif))?;
+					let section = picker
+						.sections
+						.iter()
+						.position(|section| (section.first..section.first + section.count).contains(&gif))?;
+					Some((section, gif - picker.sections[section].first))
+				});
+				let Some((section, offset)) = found else {
+					return;
+				};
+				self.composer.composer.borrow_mut().choose_section(section);
+				self.publish_composer_all(Pane::Main);
+				zgx::timer::sleep(capture::SETTLE).await;
+				self.composer.composer.borrow_mut().move_selection(offset as i32);
+				self.publish_composer_all(Pane::Main);
+				return;
+			}
+		};
+		{
+			let mut composer = self.composer.composer.borrow_mut();
+			let index = composer.picker().and_then(|picker| {
+				picker
+					.rows
+					.iter()
+					.position(|row| row.built_in().is_some() && row.name() == name)
+			});
+			composer.choose("", index);
+			for (field, value) in values.iter().enumerate() {
+				composer.edit_option(field, value);
+			}
+			composer.focus_option(0);
+		}
+		self.focus_command(Pane::Main);
+		self.ask_autocomplete(Pane::Main, false);
+		self.replace_text(Pane::Main, Some((String::new(), 0)));
+		self.publish_composer_all(Pane::Main);
+		if shot == capture::ComposerShot::BuiltInThread {
+			return;
+		}
+		self.until_capture(|link| {
+			link.state().is_some_and(|shared| {
+				link.composer
+					.composer
+					.borrow()
+					.results(&shared.read())
+					.is_some_and(|results| results.items.len() > 1)
+			})
+		})
+		.await;
+		self.publish_composer_all(Pane::Main);
 	}
 
 	async fn drive_command_replies(&self) {

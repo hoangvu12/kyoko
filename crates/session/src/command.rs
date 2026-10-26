@@ -180,6 +180,10 @@ pub enum Command {
 	OpenDm {
 		user_id: Snowflake,
 	},
+	MessageUser {
+		user_id: Snowflake,
+		content: String,
+	},
 	ConfirmRisky {
 		target: RiskyTarget,
 		reason: RiskyReason,

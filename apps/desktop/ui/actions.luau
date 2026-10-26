@@ -485,4 +485,8 @@ function M.open_full_profile(id: string)
 	ui.invoke("dms.full_profile", id)
 end
 
+function M.composer_choose_result(index: number, area: string?)
+	ui.invoke(area_of(area) .. ".choose_result", index)
+end
+
 return M

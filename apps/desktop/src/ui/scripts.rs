@@ -2201,3 +2201,72 @@ fn the_dm_columns_show_the_profile_and_the_group_members() {
 	);
 	shows(&mut app, "a group member's activity", "Playing Chess", &[]);
 }
+
+fn result_state(name: &str, kind: &str, status: &str, count: usize) -> serde_json::Value {
+	let items: Vec<serde_json::Value> = (1..=count)
+		.map(|index| json!({ "key": format!("{kind}:{index}"), "index": index, "kind": kind, "ratio": 1.33, "image": "" }))
+		.collect();
+	json!({
+		"active": true,
+		"serial": 1,
+		"app": { "kind": "built_in" },
+		"name": name,
+		"focused": 1,
+		"fields": [{ "key": "query", "index": 1, "name": "query", "value": "cat", "focused": true, "invalid": false, "takes_file": false, "file": { "name": "", "image": "" } }],
+		"hint": { "name": "query", "description": "Search for a GIF", "error": false },
+		"optional_count": 0,
+		"optional_open": false,
+		"optional_selected": 1,
+		"optional": [],
+		"choices": { "open": false },
+		"results": { "open": true, "selected": 1, "status": status, "items": items },
+		"wants_file": false,
+	})
+}
+
+#[test]
+fn the_built_in_result_strips_load() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "dark");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"a gif search on its way",
+		"Searching...",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("10")),
+			("sidebar.guild_name", json!("Kyoko")),
+			("sidebar.rows", sidebar_rows()),
+			("timeline.channel_id", json!("20")),
+			("timeline.channel_name", json!("general")),
+			("composer.open", json!(true)),
+			("composer.command", result_state("/gif", "gif", "Searching...", 0)),
+		],
+	);
+	assert!(!app.texts().iter().any(|text| text == "Search for a GIF"));
+	shows(
+		&mut app,
+		"no stickers found",
+		"No stickers found.",
+		&[(
+			"composer.command",
+			result_state("/sticker", "sticker", "No stickers found.", 0),
+		)],
+	);
+	shows(
+		&mut app,
+		"a strip of gifs",
+		"/gif",
+		&[("composer.command", result_state("/gif", "gif", "", 7))],
+	);
+	assert!(!app.texts().iter().any(|text| text == "No stickers found."));
+}

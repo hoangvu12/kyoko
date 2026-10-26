@@ -75,6 +75,7 @@ const PACKS: [(&str, &str); 3] = [
 	("Mock Critters", "Small animals of the mock server"),
 ];
 const PACK_STICKERS: [&str; 4] = ["hello", "thanks", "oops", "bye"];
+const PACK_STICKER_TAGS: [&str; 4] = ["hello,wave", "thanks", "oops", "bye,wave"];
 const GUILD_STICKERS: [(&str, &str); 2] = [("crab_wave", "crab,wave"), ("ship_it", "ship,release")];
 const PACK_EPOCH_MS: i64 = 1_641_000_000_000;
 const PACK_STICKER_EPOCH_MS: i64 = 1_642_000_000_000;
@@ -141,12 +142,9 @@ fn gif(base: &str, index: usize) -> Value {
 
 fn gifs_matching(base: &str, query: &str, limit: Option<usize>) -> Vec<Value> {
 	let needle = query.to_lowercase().replace(' ', "-");
-	let mut indexes: Vec<usize> = (0..GIF_NAMES.len())
-		.filter(|&index| GIF_NAMES[index].contains(&needle))
-		.collect();
-	if indexes.is_empty() {
-		indexes = (0..GIF_NAMES.len()).collect();
-	}
+	let (mut indexes, related): (Vec<usize>, Vec<usize>) =
+		(0..GIF_NAMES.len()).partition(|&index| GIF_NAMES[index].contains(&needle));
+	indexes.extend(related);
 	indexes
 		.into_iter()
 		.take(limit.unwrap_or(DEFAULT_GIF_LIMIT).clamp(1, MAX_GIF_LIMIT))
@@ -206,7 +204,7 @@ fn pack_sticker(pack_index: usize, index: usize, pack_id: Snowflake) -> Sticker 
 		pack_id: Some(pack_id),
 		name: PACK_STICKERS[index].to_owned(),
 		description: Some(format!("{} says {}", PACKS[pack_index].0, PACK_STICKERS[index])),
-		tags: Some(PACK_STICKERS[index].to_owned()),
+		tags: Some(PACK_STICKER_TAGS[index].to_owned()),
 		kind: Some(StickerKind::Standard),
 		format_type: Some(StickerFormat::Png),
 		available: Some(true),

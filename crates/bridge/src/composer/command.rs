@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use protocol::{
-	ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, CommandChoice, CommandOption,
-	CommandOptionType, InteractionOption, Permissions, Snowflake,
+	ApplicationCommand, ApplicationCommandIndex, ApplicationCommandType, ChannelType, CommandChoice,
+	CommandOption, CommandOptionType, InteractionOption, Permissions, Snowflake,
 };
 use rest::UploadFile;
 use serde_json::{Number, Value};
@@ -30,7 +30,6 @@ pub enum BuiltIn {
 	Me,
 	Msg,
 	Nick,
-	Schedule,
 	Shrug,
 	Spoiler,
 	Sticker,
@@ -40,122 +39,238 @@ pub enum BuiltIn {
 	Unflip,
 }
 
+#[derive(Clone, Copy)]
+struct BuiltInOption {
+	name: &'static str,
+	description: &'static str,
+	kind: CommandOptionType,
+	required: bool,
+	max_length: Option<i64>,
+	choices: &'static [(&'static str, i64)],
+}
+
+const fn text_option(name: &'static str, description: &'static str, required: bool) -> BuiltInOption {
+	BuiltInOption {
+		name,
+		description,
+		kind: CommandOptionType::String,
+		required,
+		max_length: None,
+		choices: &[],
+	}
+}
+
+const fn limited(option: BuiltInOption, max_length: i64) -> BuiltInOption {
+	BuiltInOption {
+		max_length: Some(max_length),
+		..option
+	}
+}
+
+const fn user_option(description: &'static str) -> BuiltInOption {
+	BuiltInOption {
+		name: "user",
+		description,
+		kind: CommandOptionType::User,
+		required: true,
+		max_length: None,
+		choices: &[],
+	}
+}
+
+const fn choice_option(
+	name: &'static str,
+	description: &'static str,
+	choices: &'static [(&'static str, i64)],
+) -> BuiltInOption {
+	BuiltInOption {
+		name,
+		description,
+		kind: CommandOptionType::Integer,
+		required: true,
+		max_length: None,
+		choices,
+	}
+}
+
 struct BuiltInSpec {
 	kind: BuiltIn,
 	key: &'static str,
 	name: &'static str,
 	description: &'static str,
-	option: Option<(&'static str, &'static str, bool)>,
+	options: &'static [BuiltInOption],
 }
 
-const BUILT_INS: [BuiltInSpec; 14] = [
+const NICK_LIMIT: i64 = 32;
+const THREAD_NAME_LIMIT: i64 = 100;
+
+pub const DELETE_MESSAGES: [(&str, i64); 7] = [
+	("Don't Delete Any", 0),
+	("Previous Hour", 3600),
+	("Previous 6 Hours", 21_600),
+	("Previous 12 Hours", 43_200),
+	("Previous 24 Hours", 86_400),
+	("Previous 3 Days", 259_200),
+	("Previous 7 Days", 604_800),
+];
+
+pub const TIMEOUT_DURATIONS: [(&str, i64); 6] = [
+	("60 secs", 60),
+	("5 mins", 300),
+	("10 mins", 600),
+	("1 hour", 3600),
+	("1 day", 86_400),
+	("1 week", 604_800),
+];
+
+const BUILT_INS: [BuiltInSpec; 13] = [
 	BuiltInSpec {
 		kind: BuiltIn::Ban,
 		key: "-12",
 		name: "ban",
 		description: "Ban user",
-		option: None,
+		options: &[
+			user_option("The user to ban"),
+			choice_option(
+				"delete_messages",
+				"How much of their recent message history to delete",
+				&DELETE_MESSAGES,
+			),
+			text_option("reason", "The reason for banning, if any", false),
+		],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Gif,
-		key: "-4",
+		key: "-16",
 		name: "gif",
 		description: "Search Animated GIFs on the Web",
-		option: Some(("query", "What to search for", true)),
+		options: &[text_option("query", "Search for a GIF", true)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Kick,
 		key: "-11",
 		name: "kick",
 		description: "Kick user",
-		option: None,
+		options: &[
+			user_option("The user to kick"),
+			text_option("reason", "The reason for kicking, if any", false),
+		],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Me,
-		key: "-6",
+		key: "-5",
 		name: "me",
 		description: "Displays text with emphasis.",
-		option: Some(("message", "The text to emphasise", false)),
+		options: &[text_option("message", "Your message", true)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Msg,
-		key: "-15",
+		key: "-14",
 		name: "msg",
 		description: "Message user",
-		option: None,
+		options: &[
+			user_option("The user to message"),
+			text_option("message", "Message to send", true),
+		],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Nick,
-		key: "-8",
+		key: "-7",
 		name: "nick",
 		description: "Change nickname on this server.",
-		option: None,
-	},
-	BuiltInSpec {
-		kind: BuiltIn::Schedule,
-		key: "-16",
-		name: "schedule",
-		description: "Schedule a message to send later",
-		option: None,
+		options: &[limited(
+			text_option("new_nick", "New nickname", false),
+			NICK_LIMIT,
+		)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Shrug,
 		key: "-1",
 		name: "shrug",
 		description: "Appends ¯\\_(ツ)_/¯ to your message.",
-		option: Some(("message", "Your message", false)),
+		options: &[text_option("message", "Your message", false)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Spoiler,
-		key: "-7",
+		key: "-6",
 		name: "spoiler",
 		description: "Marks your message as a spoiler.",
-		option: Some(("message", "The text to hide", false)),
+		options: &[text_option("message", "Your message", true)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Sticker,
-		key: "-14",
+		key: "-17",
 		name: "sticker",
 		description: "Search your stickers",
-		option: None,
+		options: &[text_option("query", "Search for a sticker", true)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Tableflip,
 		key: "-2",
 		name: "tableflip",
 		description: "Appends (╯°□°)╯︵ ┻━┻ to your message.",
-		option: Some(("message", "Your message", false)),
+		options: &[text_option("message", "Your message", false)],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Thread,
 		key: "-10",
 		name: "thread",
 		description: "Start new thread",
-		option: None,
+		options: &[
+			limited(
+				text_option("name", "Type a name for your thread", true),
+				THREAD_NAME_LIMIT,
+			),
+			text_option("message", "Type the first message in your thread", true),
+		],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Timeout,
 		key: "-13",
 		name: "timeout",
 		description: "Timeout user",
-		option: None,
+		options: &[
+			user_option("The user to timeout"),
+			choice_option(
+				"duration",
+				"How long they should be timed out for",
+				&TIMEOUT_DURATIONS,
+			),
+			text_option("reason", "The reason for timing them out, if any", false),
+		],
 	},
 	BuiltInSpec {
 		kind: BuiltIn::Unflip,
 		key: "-3",
 		name: "unflip",
-		description: "Appends ┬─┬ノ( º _ ºノ) to your message.",
-		option: Some(("message", "Your message", false)),
+		description: "Appends ┬─┬ ノ( ゜-゜ノ) to your message.",
+		options: &[text_option("message", "Your message", false)],
 	},
 ];
 
+struct Place {
+	channel_kind: Option<ChannelType>,
+	channel_permissions: Permissions,
+}
+
 impl BuiltIn {
-	fn allowed(self, access: Option<&GuildAccess>) -> bool {
+	fn allowed(self, access: Option<&GuildAccess>, place: &Place) -> bool {
+		let has = |permission| access.is_some_and(|access| access.has(permission));
+		let threadable = matches!(
+			place.channel_kind,
+			Some(ChannelType::GuildText | ChannelType::GuildAnnouncement)
+		);
 		match self {
-			BuiltIn::Ban => access.is_some_and(|access| access.has(Permissions::BAN_MEMBERS)),
-			BuiltIn::Kick => access.is_some_and(|access| access.has(Permissions::KICK_MEMBERS)),
-			BuiltIn::Timeout => access.is_some_and(|access| access.has(Permissions::MODERATE_MEMBERS)),
-			BuiltIn::Nick | BuiltIn::Thread => access.is_some(),
+			BuiltIn::Ban => has(Permissions::BAN_MEMBERS),
+			BuiltIn::Kick => has(Permissions::KICK_MEMBERS),
+			BuiltIn::Timeout => has(Permissions::MODERATE_MEMBERS),
+			BuiltIn::Nick => has(Permissions::CHANGE_NICKNAME) || has(Permissions::MANAGE_NICKNAMES),
+			BuiltIn::Thread => {
+				access.is_some()
+					&& threadable && place
+					.channel_permissions
+					.contains(Permissions::CREATE_PUBLIC_THREADS | Permissions::READ_MESSAGE_HISTORY)
+			}
 			_ => true,
 		}
 	}
@@ -163,7 +278,7 @@ impl BuiltIn {
 	pub fn message(self, text: &str) -> Option<String> {
 		let text = text.trim();
 		match self {
-			BuiltIn::Shrug => Some(appended(text, "¯\\\\\\_(ツ)\\_/¯")),
+			BuiltIn::Shrug => Some(appended(text, "¯\\_(ツ)_/¯")),
 			BuiltIn::Tableflip => Some(appended(text, "(╯°□°)╯︵ ┻━┻")),
 			BuiltIn::Unflip => Some(appended(text, "┬─┬ノ( º _ ºノ)")),
 			BuiltIn::Me if !text.is_empty() => Some(format!("_{text}_")),
@@ -172,8 +287,8 @@ impl BuiltIn {
 		}
 	}
 
-	fn needs_text(self) -> bool {
-		matches!(self, BuiltIn::Me | BuiltIn::Spoiler)
+	pub fn shows_results(self) -> bool {
+		matches!(self, BuiltIn::Gif | BuiltIn::Sticker)
 	}
 }
 
@@ -225,6 +340,18 @@ impl CommandEntry {
 
 	pub fn required(&self) -> impl Iterator<Item = &CommandOption> {
 		self.options.iter().filter(|option| option.is_required())
+	}
+
+	pub fn built_in(&self) -> Option<BuiltIn> {
+		match self.source {
+			CommandSource::BuiltIn(kind) => Some(kind),
+			CommandSource::Application { .. } => None,
+		}
+	}
+
+	pub fn chips(&self) -> impl Iterator<Item = &CommandOption> {
+		let listed = self.built_in().is_none_or(|kind| kind == BuiltIn::Gif);
+		self.required().filter(move |_| listed)
 	}
 }
 
@@ -358,17 +485,27 @@ fn collect_leaves(
 	}
 }
 
-fn built_in_option(name: &str, description: &str, required: bool) -> CommandOption {
+fn built_in_option(option: &BuiltInOption) -> CommandOption {
 	CommandOption {
-		kind: CommandOptionType::String,
-		name: name.to_owned(),
-		description: Some(description.to_owned()),
-		required: Some(required),
+		kind: option.kind,
+		name: option.name.to_owned(),
+		description: Some(option.description.to_owned()),
+		required: Some(option.required),
+		max_length: option.max_length,
+		choices: option
+			.choices
+			.iter()
+			.map(|(name, value)| CommandChoice {
+				name: (*name).to_owned(),
+				value: Value::from(*value),
+			})
+			.collect::<Vec<_>>()
+			.into(),
 		..CommandOption::default()
 	}
 }
 
-fn built_in_entries(access: Option<&GuildAccess>, hue: usize) -> Vec<CommandEntry> {
+fn built_in_entries(access: Option<&GuildAccess>, place: &Place, hue: usize) -> Vec<CommandEntry> {
 	let app = CommandApp {
 		id: None,
 		name: BUILT_IN.to_owned(),
@@ -377,18 +514,14 @@ fn built_in_entries(access: Option<&GuildAccess>, hue: usize) -> Vec<CommandEntr
 	};
 	BUILT_INS
 		.iter()
-		.filter(|spec| spec.kind.allowed(access))
+		.filter(|spec| spec.kind.allowed(access, place))
 		.map(|spec| CommandEntry {
 			key: spec.key.to_owned(),
 			source: CommandSource::BuiltIn(spec.kind),
 			app: app.clone(),
 			path: vec![spec.name.to_owned()],
 			description: spec.description.to_owned(),
-			options: spec
-				.option
-				.map(|(name, description, required)| built_in_option(name, description, required))
-				.into_iter()
-				.collect(),
+			options: spec.options.iter().map(built_in_option).collect(),
 		})
 		.collect()
 }
@@ -402,7 +535,11 @@ pub fn command_catalog(
 	let mut entries = index.map(|index| application_entries(index)).unwrap_or_default();
 	let hue = index.map_or(0, |index| index.applications.len());
 	let access = guild_id.map(|guild_id| GuildAccess::of(state, guild_id));
-	entries.extend(built_in_entries(access.as_ref(), hue));
+	let place = Place {
+		channel_kind: state.channel(channel_id).map(|channel| channel.kind),
+		channel_permissions: state.my_permissions(channel_id),
+	};
+	entries.extend(built_in_entries(access.as_ref(), &place, hue));
 	entries
 }
 
@@ -850,6 +987,9 @@ impl ActiveCommand {
 		}
 		field.value = value.to_owned();
 		field.check();
+		if self.entry.built_in().is_some() && field.option.kind == CommandOptionType::User {
+			field.error = None;
+		}
 		self.refusal = None;
 		self.focused = index;
 		self.choice_selected = 0;
@@ -1124,22 +1264,6 @@ impl ActiveCommand {
 				Ok(value) => values.push((field.option.clone(), value)),
 				Err(reason) => return self.fail(index, reason),
 			}
-		}
-		if let CommandSource::BuiltIn(kind) = self.entry.source
-			&& kind.needs_text()
-			&& values.is_empty()
-		{
-			let index = self
-				.fields
-				.iter()
-				.position(|field| field.option.name == "message");
-			return match index {
-				Some(index) => self.fail(index, REQUIRED.to_owned()),
-				None => {
-					self.refusal = Some("Add a message first".to_owned());
-					Prepared::Invalid
-				}
-			};
 		}
 		Prepared::Run(values)
 	}

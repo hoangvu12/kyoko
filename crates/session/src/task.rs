@@ -104,6 +104,10 @@ pub(crate) enum Internal {
 		outcome: search::Outcome,
 	},
 	DmOpened(Box<Channel>),
+	DmMessage {
+		channel: Box<Channel>,
+		content: String,
+	},
 	ThreadOpened(Box<Channel>),
 	Loaded(Loaded),
 	Rejected(String),
@@ -688,6 +692,18 @@ impl Core {
 				self.apply_dispatch(&DispatchEvent::ChannelCreate(channel));
 				self.select_channel(None, channel_id);
 			}
+			Internal::DmMessage { channel, content } => {
+				let channel_id = channel.id;
+				self.apply_dispatch(&DispatchEvent::ChannelCreate(channel));
+				self.select_channel(None, channel_id);
+				self.on_command(Command::SendMessage {
+					channel_id,
+					content,
+					reply_to: None,
+					ping_reply: true,
+					files: Vec::new(),
+				});
+			}
 			Internal::ThreadOpened(thread) => self.on_thread_opened(thread),
 			Internal::Loaded(loaded) => self.on_loaded(loaded),
 			Internal::Rejected(reason) => self.reject(reason),
@@ -925,6 +941,7 @@ impl Core {
 			}
 			Command::RequestMembers { guild_id, user_ids } => self.request_members(guild_id, user_ids),
 			Command::OpenDm { user_id } => self.open_dm(user_id),
+			Command::MessageUser { user_id, content } => self.message_user(user_id, content),
 			Command::Search {
 				guild_id,
 				channel_id,
@@ -1366,6 +1383,24 @@ impl Core {
 				}
 				Err(error) => tracing::warn!(%error, "could not open the conversation"),
 			}
+		});
+	}
+
+	fn message_user(&self, user_id: Snowflake, content: String) {
+		let rest = self.rest.clone();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			let message = match rest.create_dm(user_id).await {
+				Ok(channel) => Internal::DmMessage {
+					channel: Box::new(channel),
+					content,
+				},
+				Err(error) => {
+					tracing::warn!(%error, "could not open the conversation");
+					Internal::Rejected(actions::failure_reason("Message", &error))
+				}
+			};
+			let _ = internal.send(message);
 		});
 	}
 }

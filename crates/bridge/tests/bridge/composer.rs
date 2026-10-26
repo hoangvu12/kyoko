@@ -289,7 +289,6 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 		"gif",
 		"me",
 		"msg",
-		"schedule",
 		"shrug",
 		"spoiler",
 		"sticker",
@@ -301,6 +300,10 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 			"/{name} is built in: {built_in:?}"
 		);
 	}
+	assert!(
+		!built_in.iter().any(|row| row == "schedule"),
+		"/schedule is left out"
+	);
 	let mut sorted = built_in.clone();
 	sorted.sort();
 	assert_eq!(*built_in, sorted, "built-ins are alphabetical");
@@ -619,18 +622,14 @@ async fn required_options_are_checked_before_sending_and_the_reason_shows_in_the
 	assert!(matches!(
 		outcome.commands.as_slice(),
 		[Command::SendMessage { content, .. }, Command::CountCommandUse { key }, ..]
-			if content == "¯\\\\\\_(ツ)\\_/¯" && key == "-1"
+			if content == "¯\\_(ツ)_/¯" && key == "-1"
 	));
 
 	picked(&mut composer, &running, "/stick", "sticker");
 	assert!(submitted(&mut composer, &running, "").commands.is_empty());
 	assert_eq!(
 		hint(&composer),
-		(
-			"/sticker".to_owned(),
-			"kyoko can't run /sticker yet".to_owned(),
-			true
-		)
+		("query".to_owned(), "This option is required".to_owned(), true)
 	);
 	assert_eq!(composer.leave_command(), Some(("/sticker".to_owned(), 8)));
 	running.stop().await;

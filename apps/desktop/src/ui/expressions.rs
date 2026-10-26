@@ -260,7 +260,12 @@ impl Link {
 			for command in commands {
 				self.send(command);
 			}
+			self.poll_strips();
 		}
+	}
+
+	pub(super) fn wake_gif_search(&self, due: Instant) {
+		self.expressions.due.push(due);
 	}
 
 	pub(super) fn expressions_apply(&self, state: &State, changes: &Changes) {

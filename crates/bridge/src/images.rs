@@ -248,6 +248,18 @@ pub fn embed_icon_request(url: &str, points: f64, scale: f64) -> ImageRequest {
 	ImageRequest::new(url, Variant::new(SizeHint::square(pixels), Shape::Circle))
 }
 
+pub fn gif_still_request(gif: &protocol::Gif, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
+	let still = crate::gif_picker::gif_still(gif);
+	if still.is_empty() || crate::gif_picker::is_video_url(still) {
+		return None;
+	}
+	let hint = SizeHint::new(
+		cdn::device_pixels(box_points.0, scale),
+		cdn::device_pixels(box_points.1, scale),
+	);
+	Some(ImageRequest::new(still, Variant::new(hint, Shape::Square)))
+}
+
 pub fn sticker_request(sticker: &StickerItem, points: f64, scale: f64) -> Option<ImageRequest> {
 	let format = StickerFormat::from(i64::from(sticker.format_type?));
 	let url = cdn::sticker_url(sticker.id.0, format)?;

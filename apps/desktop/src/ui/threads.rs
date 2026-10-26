@@ -910,6 +910,10 @@ impl Link {
 		self.refresh_visible();
 	}
 
+	pub(super) fn await_first_message(&self, parent: Snowflake, content: String) {
+		*self.threads.first_message.borrow_mut() = Some((parent, content));
+	}
+
 	fn send_first_message(&self, thread_id: Snowflake, parent: Option<Snowflake>) {
 		let waiting = self
 			.threads

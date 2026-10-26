@@ -7,7 +7,7 @@ mod tests;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use bridge::{DEFAULT_TIMEOUT, ModerationItem};
+use bridge::{BAN_HISTORY_CHOICES, DEFAULT_TIMEOUT, ModerationItem, TIMEOUT_CHOICES};
 use protocol::{ChannelType, Snowflake};
 use session::Command;
 use zgx::compose::prelude::*;
@@ -260,6 +260,41 @@ impl ModerationLayer {
 			name: name.to_owned(),
 			history: self.runtime.signal(0),
 			reason: self.runtime.signal(String::new()),
+		});
+	}
+
+	pub fn ask(&self, ask: &bridge::ModerationAsk) {
+		let (guild_id, user_id, name) = (ask.guild_id, ask.user_id, ask.name.clone());
+		let reason = self.runtime.signal(ask.reason.clone().unwrap_or_default());
+		let history = BAN_HISTORY_CHOICES
+			.iter()
+			.position(|(_, seconds)| Some(i64::from(*seconds)) == ask.seconds)
+			.unwrap_or(0);
+		let choice = TIMEOUT_CHOICES
+			.iter()
+			.position(|(_, seconds)| Some(*seconds) == ask.seconds)
+			.unwrap_or(DEFAULT_TIMEOUT);
+		self.open(match ask.action {
+			bridge::Moderation::Ban => Dialog::Ban {
+				guild_id,
+				user_id,
+				name,
+				history: self.runtime.signal(history),
+				reason,
+			},
+			bridge::Moderation::Kick => Dialog::Kick {
+				guild_id,
+				user_id,
+				name,
+				reason,
+			},
+			bridge::Moderation::Timeout => Dialog::Timeout {
+				guild_id,
+				user_id,
+				name,
+				choice: self.runtime.signal(choice),
+				reason,
+			},
 		});
 	}
 

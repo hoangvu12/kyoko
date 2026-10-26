@@ -1,4 +1,5 @@
 mod apps;
+mod built_ins;
 mod command;
 mod marks;
 mod suggest;
@@ -6,15 +7,21 @@ mod suggest;
 use std::time::Instant;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use protocol::{Gif, Nonce, Snowflake};
+use protocol::{ChannelType, CommandOption, CommandOptionType, Gif, Nonce, Snowflake};
 use rest::UploadFile;
+use serde_json::Value;
 use session::Command;
 use state::{MAX_ATTACHMENTS, RiskyLock, SendFailure, State};
 
 use crate::emoji_picker::EmojiCell;
-use crate::sticker_picker::StickerCell;
+use crate::gif_picker::GifSearch;
+use crate::guild_admin::{NICKNAME_LIMIT, REASON_LIMIT, trimmed};
+use crate::sticker_picker::{StickerCell, StickerPicker};
+use crate::threads::trimmed_name;
+use built_ins::{gif_results, resolve_user, sticker_results};
 
 pub use apps::{AppSearch, AppsLauncher, LauncherApp, RECENT_TILES, apps_launcher, search_apps};
+pub use built_ins::{CommandResult, CommandResults, Moderation, ModerationAsk};
 pub use command::{
 	ActiveCommand, BuiltIn, ChoiceList, CommandApp, CommandEntry, CommandHint, CommandPicker, CommandSection,
 	CommandSource, OptionChoices, OptionField, OptionFile, Prepared, command_catalog, command_picker,
@@ -29,6 +36,29 @@ pub use suggest::{
 const MIB: f64 = 1024.0 * 1024.0;
 const MEMBER_QUERY: usize = 2;
 const REJECTION_WINDOW: TimeDelta = TimeDelta::seconds(15);
+const REQUIRED: &str = "This option is required";
+const UNKNOWN_USER: &str = "Pick a user by mention, name or ID";
+const SERVER_ONLY: &str = "This command only works in a server";
+const SIGNED_OUT: &str = "You are signed out.";
+const NO_THREADS: &str = "Threads can't be started in this channel";
+const NOTHING_FOUND: &str = "Nothing to send yet";
+const THREAD_ARCHIVE_MINUTES: u32 = 4320;
+
+#[derive(Default)]
+struct Run {
+	command: Option<Command>,
+	moderate: Option<ModerationAsk>,
+	thread_message: Option<(Snowflake, String)>,
+}
+
+impl Run {
+	fn command(command: Command) -> Run {
+		Run {
+			command: Some(command),
+			..Run::default()
+		}
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
@@ -55,6 +85,8 @@ pub enum Notice {
 pub struct Outcome {
 	pub commands: Vec<Command>,
 	pub replace: Option<(String, usize)>,
+	pub moderate: Option<ModerationAsk>,
+	pub thread_message: Option<(Snowflake, String)>,
 }
 
 impl Outcome {
@@ -62,6 +94,7 @@ impl Outcome {
 		Outcome {
 			commands: vec![command],
 			replace: None,
+			..Outcome::default()
 		}
 	}
 
@@ -69,6 +102,7 @@ impl Outcome {
 		Outcome {
 			commands,
 			replace: Some((String::new(), 0)),
+			..Outcome::default()
 		}
 	}
 }
@@ -94,6 +128,10 @@ pub struct Composer {
 	picker: Option<CommandPicker>,
 	command: Option<ActiveCommand>,
 	app_filter: Option<Snowflake>,
+	strip_gifs: GifSearch,
+	stickers_asked: bool,
+	result_selected: usize,
+	held_thread: Option<(Snowflake, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -228,6 +266,9 @@ impl Composer {
 
 	fn activate(&mut self, entry: CommandEntry) {
 		self.command = Some(ActiveCommand::new(entry));
+		self.strip_gifs = GifSearch::default();
+		self.stickers_asked = false;
+		self.result_selected = 0;
 		self.picker = None;
 		self.app_filter = None;
 		self.query = None;
@@ -268,9 +309,14 @@ impl Composer {
 	}
 
 	pub fn edit_option(&mut self, index: usize, value: &str) -> bool {
-		self.command
+		let edited = self
+			.command
 			.as_mut()
-			.is_some_and(|command| command.edit(index, value))
+			.is_some_and(|command| command.edit(index, value));
+		if edited {
+			self.result_selected = 0;
+		}
+		edited
 	}
 
 	pub fn focus_option(&mut self, index: usize) -> bool {
@@ -408,6 +454,7 @@ impl Composer {
 		Outcome {
 			commands: Vec::new(),
 			replace: Some((draft, caret)),
+			..Outcome::default()
 		}
 	}
 
@@ -799,6 +846,7 @@ impl Composer {
 				Outcome {
 					commands,
 					replace: None,
+					..Outcome::default()
 				}
 			}
 			Some(held) => {
@@ -810,11 +858,14 @@ impl Composer {
 				}
 				self.reply = None;
 				self.files.clear();
-				Outcome::cleared(commands)
+				let mut outcome = Outcome::cleared(commands);
+				outcome.thread_message = self.held_thread.take();
+				outcome
 			}
 			None => Outcome {
 				commands,
 				replace: None,
+				..Outcome::default()
 			},
 		}
 	}
@@ -890,6 +941,15 @@ impl Composer {
 	}
 
 	fn submit_command(&mut self, state: &State, channel_id: Snowflake, now: DateTime<Utc>) -> Outcome {
+		let Some(entry) = self.command.as_ref().map(|active| active.entry.clone()) else {
+			return Outcome::default();
+		};
+		if entry.built_in().is_some_and(BuiltIn::shows_results) {
+			return self.submit_result(state, now);
+		}
+		if !self.resolve_users(state) {
+			return Outcome::default();
+		}
 		let Some(active) = self.command.as_mut() else {
 			return Outcome::default();
 		};
@@ -897,34 +957,268 @@ impl Composer {
 			Prepared::Run(values) => values,
 			Prepared::Invalid => return Outcome::default(),
 		};
-		let command = match &active.entry.source {
-			CommandSource::Application { command_id, .. } => Command::RunApplicationCommand {
-				channel_id,
-				command_id: *command_id,
-				options: interaction_options(&active.entry, values),
-				files: active.files(),
-			},
-			CommandSource::BuiltIn(kind) => {
-				let text = values
-					.iter()
-					.find(|(option, _)| option.name == "message")
-					.and_then(|(_, value)| value.as_str())
-					.unwrap_or_default();
-				match kind.message(text) {
-					Some(content) => Command::SendMessage {
+		let files = active.files();
+		let run = match &entry.source {
+			CommandSource::Application { command_id, .. } => {
+				Ok(Run::command(Command::RunApplicationCommand {
+					channel_id,
+					command_id: *command_id,
+					options: interaction_options(&entry, values),
+					files,
+				}))
+			}
+			CommandSource::BuiltIn(kind) => self.built_in_run(state, channel_id, *kind, &values),
+		};
+		let run = match run {
+			Ok(run) => run,
+			Err(reason) => {
+				if let Some(active) = self.command.as_mut() {
+					active.refusal = Some(reason);
+				}
+				return Outcome::default();
+			}
+		};
+		if run.command.is_some() && self.lock(state, now).is_some() {
+			self.held = run.command;
+			self.held_thread = run.thread_message;
+			return Outcome::default();
+		}
+		let key = self
+			.command
+			.take()
+			.map(|active| active.entry.key)
+			.unwrap_or_default();
+		self.dirty = false;
+		let mut commands: Vec<Command> = run.command.into_iter().collect();
+		commands.push(Command::CountCommandUse { key });
+		commands.push(Command::SetDraft {
+			channel_id,
+			content: String::new(),
+		});
+		let mut outcome = Outcome::cleared(commands);
+		outcome.moderate = run.moderate;
+		outcome.thread_message = run.thread_message;
+		outcome
+	}
+
+	fn resolve_users(&mut self, state: &State) -> bool {
+		let guild_id = self.guild_id;
+		let Some(active) = self
+			.command
+			.as_mut()
+			.filter(|active| active.entry.built_in().is_some())
+		else {
+			return true;
+		};
+		for index in 0..active.fields.len() {
+			let field = &mut active.fields[index];
+			if field.option.kind != CommandOptionType::User || field.value.trim().is_empty() {
+				continue;
+			}
+			match resolve_user(state, guild_id, &field.value) {
+				Some(user_id) => field.value = user_id.to_string(),
+				None => {
+					field.error = Some(UNKNOWN_USER.to_owned());
+					active.focused = index;
+					active.optional_open = false;
+					return false;
+				}
+			}
+		}
+		true
+	}
+
+	fn built_in_run(
+		&self,
+		state: &State,
+		channel_id: Snowflake,
+		kind: BuiltIn,
+		values: &[(CommandOption, Value)],
+	) -> Result<Run, String> {
+		let text = |name: &str| {
+			values
+				.iter()
+				.find(|(option, _)| option.name == name)
+				.and_then(|(_, value)| value.as_str())
+				.map(str::trim)
+				.unwrap_or_default()
+				.to_owned()
+		};
+		let user = || {
+			values
+				.iter()
+				.find(|(option, _)| option.kind == CommandOptionType::User)
+				.and_then(|(_, value)| value.as_str())
+				.and_then(|id| id.parse::<u64>().ok())
+				.map(Snowflake)
+				.ok_or_else(|| UNKNOWN_USER.to_owned())
+		};
+		let guild = || self.guild_id.ok_or_else(|| SERVER_ONLY.to_owned());
+		match kind {
+			BuiltIn::Msg => Ok(Run::command(Command::MessageUser {
+				user_id: user()?,
+				content: text("message"),
+			})),
+			BuiltIn::Nick => Ok(Run::command(Command::SetNickname {
+				guild_id: guild()?,
+				user_id: state.current_user_id().ok_or_else(|| SIGNED_OUT.to_owned())?,
+				nick: trimmed(&text("new_nick"), NICKNAME_LIMIT),
+			})),
+			BuiltIn::Thread => {
+				let Some(channel) = state.channel(channel_id).filter(|channel| {
+					matches!(
+						channel.kind,
+						ChannelType::GuildText | ChannelType::GuildAnnouncement
+					)
+				}) else {
+					return Err(NO_THREADS.to_owned());
+				};
+				let auto_archive_minutes = channel
+					.default_auto_archive_duration
+					.and_then(|minutes| u32::try_from(minutes).ok())
+					.unwrap_or(THREAD_ARCHIVE_MINUTES);
+				let message = text("message");
+				Ok(Run {
+					command: Some(Command::CreateThread {
+						channel_id,
+						message_id: None,
+						name: trimmed_name(&text("name")),
+						auto_archive_minutes,
+						private: false,
+					}),
+					thread_message: (!message.is_empty()).then_some((channel_id, message)),
+					..Run::default()
+				})
+			}
+			BuiltIn::Ban | BuiltIn::Kick | BuiltIn::Timeout => {
+				let guild_id = guild()?;
+				let user_id = user()?;
+				let action = match kind {
+					BuiltIn::Ban => Moderation::Ban,
+					BuiltIn::Kick => Moderation::Kick,
+					_ => Moderation::Timeout,
+				};
+				Ok(Run {
+					moderate: Some(ModerationAsk {
+						action,
+						guild_id,
+						user_id,
+						name: state.display_name(Some(guild_id), user_id),
+						seconds: values
+							.iter()
+							.find(|(option, _)| option.kind == CommandOptionType::Integer)
+							.and_then(|(_, value)| value.as_i64()),
+						reason: trimmed(&text("reason"), REASON_LIMIT),
+					}),
+					..Run::default()
+				})
+			}
+			_ => kind
+				.message(&text("message"))
+				.map(|content| {
+					Run::command(Command::SendMessage {
 						channel_id,
 						content,
 						reply_to: None,
 						ping_reply: true,
 						files: Vec::new(),
-					},
-					None => {
-						active.refusal = Some(format!("kyoko can't run /{} yet", active.entry.name()));
-						return Outcome::default();
-					}
-				}
+					})
+				})
+				.ok_or_else(|| format!("kyoko can't run /{} yet", self.command_name())),
+		}
+	}
+
+	fn command_name(&self) -> String {
+		self.command
+			.as_ref()
+			.map(|active| active.entry.name())
+			.unwrap_or_default()
+	}
+
+	fn strip(&self) -> Option<(BuiltIn, String)> {
+		let active = self.command.as_ref()?;
+		let kind = active.entry.built_in().filter(|kind| kind.shows_results())?;
+		let query = active
+			.fields
+			.first()
+			.map(|field| field.value.clone())
+			.unwrap_or_default();
+		Some((kind, query))
+	}
+
+	pub fn strip_requests(&mut self, state: &State, now: Instant) -> Vec<Command> {
+		match self.strip() {
+			Some((BuiltIn::Gif, query)) => {
+				let mut commands = self.strip_gifs.typed(state, &query, now);
+				commands.extend(self.strip_gifs.poll(state, now));
+				commands
 			}
+			Some((BuiltIn::Sticker, _)) if !self.stickers_asked => {
+				self.stickers_asked = true;
+				StickerPicker::needs(state, self.guild_id)
+			}
+			_ => Vec::new(),
+		}
+	}
+
+	pub fn strip_due(&self) -> Option<Instant> {
+		match self.strip() {
+			Some((BuiltIn::Gif, _)) => self.strip_gifs.due_at(),
+			_ => None,
+		}
+	}
+
+	pub fn result_query(&self) -> Option<&str> {
+		self.strip_gifs.active()
+	}
+
+	pub fn results(&self, state: &State) -> Option<CommandResults> {
+		let (kind, query) = self.strip()?;
+		match kind {
+			BuiltIn::Gif => gif_results(state, self.strip_gifs.active()?, self.result_selected),
+			_ => Some(sticker_results(
+				state,
+				self.guild_id,
+				self.channel_id?,
+				&query,
+				self.result_selected,
+			)),
+		}
+	}
+
+	pub fn move_result(&mut self, state: &State, delta: i32) -> bool {
+		let Some(results) = self.results(state).filter(|results| !results.items.is_empty()) else {
+			return false;
 		};
+		let count = results.items.len();
+		let step = delta.unsigned_abs() as usize % count;
+		self.result_selected = if delta < 0 {
+			(results.selected + count - step) % count
+		} else {
+			(results.selected + step) % count
+		};
+		true
+	}
+
+	pub fn choose_result(&mut self, state: &State, index: Option<usize>, now: DateTime<Utc>) -> Outcome {
+		let Some(channel_id) = self.channel_id else {
+			return Outcome::default();
+		};
+		let Some(results) = self.results(state) else {
+			return Outcome::default();
+		};
+		let Some(item) = results.items.get(index.unwrap_or(results.selected)).cloned() else {
+			return Outcome::default();
+		};
+		let command = match item {
+			CommandResult::Gif(gif) => Command::SendGif { channel_id, gif },
+			CommandResult::Sticker(cell) => Command::SendSticker {
+				channel_id,
+				sticker_id: cell.sticker.id,
+			},
+		};
+		self.refusal = None;
+		self.acted_at = Some(now);
 		if self.lock(state, now).is_some() {
 			self.held = Some(command);
 			return Outcome::default();
@@ -943,6 +1237,33 @@ impl Composer {
 				content: String::new(),
 			},
 		])
+	}
+
+	fn submit_result(&mut self, state: &State, now: DateTime<Utc>) -> Outcome {
+		let Some((kind, query)) = self.strip() else {
+			return Outcome::default();
+		};
+		let typed = !query.trim().is_empty();
+		if typed
+			&& self
+				.results(state)
+				.is_some_and(|results| results.selected_item().is_some())
+		{
+			return self.choose_result(state, None, now);
+		}
+		if kind == BuiltIn::Gif && typed {
+			return Outcome {
+				commands: self.strip_gifs.submit(state, &query),
+				..Outcome::default()
+			};
+		}
+		if let Some(active) = self.command.as_mut() {
+			match active.fields.first_mut() {
+				Some(field) if !typed => field.error = Some(REQUIRED.to_owned()),
+				_ => active.refusal = Some(NOTHING_FOUND.to_owned()),
+			}
+		}
+		Outcome::default()
 	}
 
 	pub fn pick_emoji(&mut self, text: &str, caret: usize, cell: &EmojiCell) -> Option<(String, usize)> {
