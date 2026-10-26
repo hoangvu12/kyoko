@@ -4,7 +4,7 @@
 
 **Blocked by:** 03; v1 27
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/command-picker.html`, `docs/design/mockups/command-options.html`, `docs/design/mockups/command-options-optional.html`, `docs/design/mockups/command-options-remind.html`, `docs/design/mockups/command-choices-invalid.html`
 
