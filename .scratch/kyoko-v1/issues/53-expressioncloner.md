@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 28 (Message actions and context menus)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A context-menu item slot exists
 - [ ] Cloning is offered only where the user has permission
