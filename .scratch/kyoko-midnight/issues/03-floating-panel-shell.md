@@ -4,7 +4,7 @@
 
 **Blocked by:** 01; v1 20, 22, 23, 24, 29, 30
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/midnight-discord.html`, `docs/design/mockups/dm.html`, `docs/design/mockups/group-dm.html`
 

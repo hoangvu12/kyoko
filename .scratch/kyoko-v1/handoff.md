@@ -8,6 +8,7 @@
   - Scheduling: Midnight foundation now. Free lanes take M01 (tokens and Inter; after 57 lands, both touch the theme code) and M02 (mockup capture tooling), then M03 (floating-panel shell) and M04 (Twemoji). The third lane keeps doing v1 behaviour tickets. Restyles M05 and later come after the shell lands.
   - Look target: v1 UI tickets that haven't started (42, 43, 44, 62, 63, the slot-based plugins 49/52/54/56, 39) match the Midnight mockup where one exists, checked with M02's tooling, once M01–M03 have landed. Until then v1 tickets with UI wait or build behaviour only. Tickets in flight (41, 47, 57) finish to oxidcord's look.
 - User decision (2026-10-26): nobody uses kyoko yet, so no backward compatibility, migrations or shims; change formats and defaults directly (also in `rules.md`).
+- Disk: on 2026-10-26 C: filled to 0 bytes; lane targets had grown to 90–124 GB each (incremental dirs, test binaries, PDBs, captures that build an older commit in the lane). Check `Get-PSDrive C` before launching a worker; `cargo clean` an idle lane whose `target` passes about 60 GB (sccache makes the rebuild cheap). Never clean a lane while its worker is building.
 - 57 was told its CSS import must recognise Midnight's variable names (one mapping table) so M01 can make the mapping one-to-one.
 
 ## Latest: third orchestrator hands off (main `85cd454` + this note)
