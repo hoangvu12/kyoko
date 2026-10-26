@@ -66,6 +66,7 @@ pub enum MessageAction {
 	DeleteSelected,
 	Delete,
 	Report,
+	RemoveEmbeds,
 }
 
 impl MessageAction {
@@ -87,6 +88,7 @@ impl MessageAction {
 			Self::DeleteSelected => format!("Delete {selected} Selected"),
 			Self::Delete => "Delete Message".to_owned(),
 			Self::Report => "Report Message".to_owned(),
+			Self::RemoveEmbeds => "Remove all embeds".to_owned(),
 		}
 	}
 
@@ -105,6 +107,7 @@ impl MessageAction {
 			Self::Select | Self::Deselect => "check",
 			Self::DeleteSelected | Self::Delete => "trash",
 			Self::Report => "flag",
+			Self::RemoveEmbeds => "close",
 		}
 	}
 
@@ -137,6 +140,15 @@ pub fn can_delete(entry: &MessageEntry, access: &Access) -> bool {
 
 pub fn can_edit(entry: &MessageEntry) -> bool {
 	has_actions(entry) && !entry.deleted && entry.mine
+}
+
+pub fn can_remove_embeds(entry: &MessageEntry) -> bool {
+	can_edit(entry)
+		&& !entry.message.embeds.is_empty()
+		&& !entry
+			.message
+			.flags
+			.contains(protocol::MessageFlags::SUPPRESS_EMBEDS)
 }
 
 pub fn can_reply(entry: &MessageEntry, access: &Access) -> bool {
@@ -215,6 +227,9 @@ pub fn message_menu(entry: &MessageEntry, access: &Access, context: MenuContext)
 
 pub fn toolbar_actions(entry: &MessageEntry, access: &Access) -> Vec<MessageAction> {
 	let mut actions = Vec::new();
+	if can_remove_embeds(entry) {
+		actions.push(MessageAction::RemoveEmbeds);
+	}
 	if can_add_reaction(entry, access) {
 		actions.push(MessageAction::React);
 	}

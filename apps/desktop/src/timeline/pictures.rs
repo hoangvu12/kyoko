@@ -283,7 +283,7 @@ impl Pictures {
 		if matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv)) {
 			if let Some(media) = bare_media(embed) {
 				names.extend(
-					self.embed_media(media, bridge::fit_box(media.width, media.height, ATTACHMENT_BOX)),
+					self.embed_media(media, bridge::fit_box(media.width, media.height, bare_box(embed))),
 				);
 			}
 			return;
@@ -303,6 +303,24 @@ impl Pictures {
 			names.extend(self.embed_media(thumbnail, (EMBED_THUMBNAIL, EMBED_THUMBNAIL)));
 		}
 	}
+}
+
+pub fn bare_box(embed: &Embed) -> (f32, f32) {
+	if embed.kind == Some(EmbedKind::Gifv) {
+		EMBED_MEDIA_BOX
+	} else {
+		ATTACHMENT_BOX
+	}
+}
+
+pub fn only_link(entry: &MessageEntry) -> bool {
+	let content = entry.content.trim();
+	!content.is_empty()
+		&& !entry.message.flags.contains(MessageFlags::SUPPRESS_EMBEDS)
+		&& entry.message.embeds.iter().any(|embed| {
+			matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv))
+				&& embed.url.as_deref() == Some(content)
+		})
 }
 
 pub fn bare_media(embed: &Embed) -> Option<&EmbedMedia> {

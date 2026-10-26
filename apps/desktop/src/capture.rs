@@ -25,6 +25,10 @@ pub const TOAST: &str = "You are sending messages too quickly.";
 pub const PLUGINS_VARIABLE: &str = "KYOKO_CAPTURE_PLUGINS";
 pub const KEPT_DELETED: &str = "spoiler alert: the ship sinks at the end";
 pub const KEPT_EDITS: [&str; 3] = ["See you at 6", "See you at 7", "See you at 7:30, sorry!"];
+pub const GIF_LINK: &str = "https://klipy.com/gifs/cat-dance";
+pub const LINK_PREVIEW: &str = "docs are up https://github.com/refact0r/midnight-discord";
+pub const FAVOURITE_EMOJI: &str = "\u{1f64f}";
+pub const JUMBO_EMOJI: &str = "\u{1f62d}";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -82,6 +86,15 @@ pub enum Screen {
 	CloneDialog,
 	KeptDeleted,
 	KeptEdits,
+	Expressions(ExpressionShot),
+	LinkPreview,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpressionShot {
+	CustomEmoji,
+	UnicodeEmoji,
+	Sticker,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +159,10 @@ impl Screen {
 			"clone-dialog" => Some(Screen::CloneDialog),
 			"message-logger-deleted" => Some(Screen::KeptDeleted),
 			"message-logger-edits" => Some(Screen::KeptEdits),
+			"expressions-in-messages" => Some(Screen::Expressions(ExpressionShot::CustomEmoji)),
+			"expressions-in-messages-emoji-popout" => Some(Screen::Expressions(ExpressionShot::UnicodeEmoji)),
+			"expressions-in-messages-sticker-popout" => Some(Screen::Expressions(ExpressionShot::Sticker)),
+			"link-preview-while-typing" => Some(Screen::LinkPreview),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -198,7 +215,9 @@ impl Screen {
 			| Screen::CloneMenu
 			| Screen::CloneDialog
 			| Screen::KeptDeleted
-			| Screen::KeptEdits => Some(Opening::First),
+			| Screen::KeptEdits
+			| Screen::Expressions(_)
+			| Screen::LinkPreview => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

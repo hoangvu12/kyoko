@@ -46,6 +46,7 @@ pub struct MessageEntry {
 	pub deleted: bool,
 	pub bot: bool,
 	pub mine: bool,
+	pub highlight: Highlight,
 	pub message: Arc<Message>,
 	pub rendered: Option<Arc<RenderedMessage>>,
 	pub body: Arc<Body>,
@@ -54,6 +55,33 @@ pub struct MessageEntry {
 	pub system: Option<SystemLine>,
 	pub look: Option<MessageLook>,
 	pub history: Arc<[Document]>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Highlight {
+	#[default]
+	None,
+	Mention,
+	ReplyToYou,
+}
+
+fn highlight(state: &State, guild_id: Option<Snowflake>, message: &Message) -> Highlight {
+	let me = state.current_user_id();
+	if me.is_none() || Some(message.author.id) == me {
+		return Highlight::None;
+	}
+	if state.mentions_me(message, guild_id) {
+		return Highlight::Mention;
+	}
+	let replied_to_me = message
+		.referenced_message
+		.as_ref()
+		.is_some_and(|original| Some(original.author.id) == me);
+	if replied_to_me {
+		Highlight::ReplyToYou
+	} else {
+		Highlight::None
+	}
 }
 
 impl PartialEq for MessageEntry {
@@ -72,6 +100,7 @@ impl PartialEq for MessageEntry {
 			&& self.deleted == other.deleted
 			&& self.bot == other.bot
 			&& self.mine == other.mine
+			&& self.highlight == other.highlight
 			&& (Arc::ptr_eq(&self.message, &other.message) || self.message == other.message)
 			&& same_rendered(&self.rendered, &other.rendered)
 			&& (Arc::ptr_eq(&self.body, &other.body) || self.body == other.body)
@@ -510,6 +539,7 @@ fn entry(
 		deleted: view.deleted.is_some(),
 		bot: message.author.bot == Some(true),
 		mine: state.current_user_id() == Some(message.author.id),
+		highlight: highlight(state, guild_id, &message),
 		rendered: view.rendered,
 		message,
 	}

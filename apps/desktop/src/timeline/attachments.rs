@@ -1,20 +1,30 @@
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, STICKER_SIDE};
 use media::ImageName;
-use protocol::{Attachment, Embed, EmbedKind, EmbedMedia};
+use protocol::{Attachment, Embed, EmbedKind, EmbedMedia, FavoriteGif};
+use session::Command;
 use zgx::compose::prelude::*;
 use zgx::image::ImageData;
+use zgx::input::{EventPhase, InputEvent, PointerButton};
 use zgx::reactive::Signal;
 
 use super::actions::aimed;
 use super::body::{self, Look};
 use super::icons::icon;
-use super::pictures::{EMBED_ICON, Pictures, bare_media, large_media, side_thumbnail};
+use super::pictures::{EMBED_ICON, Pictures, bare_box, bare_media, large_media, side_thumbnail};
+use super::popout;
 use super::rows::{RowEnv, TypeSize, tok};
 
-const EMBED_WIDTH: f32 = 520.;
+const EMBED_WIDTH: f32 = 432.;
+const EMBED_ACCENT: f32 = 4.;
+const EMBED_PADDING: f32 = 15.;
+const EMBED_IMAGE_GAP: f32 = 12.;
+const OVERLAY_INSET: f32 = 6.;
+const STAR_BUTTON: f32 = 28.;
+const STAR_ICON: f32 = 20.;
 const FIELD_WIDTH: f32 = 242.;
 const FILE_CARD_WIDTH: f32 = 432.;
 const PLAY_DISC: f32 = 48.;
@@ -62,17 +72,156 @@ fn image_attachment(entry: &MessageEntry, attachment: &Attachment, env: &Rc<RowE
 		.pictures
 		.attachment(attachment, entry.message.channel_id, entry.message.id);
 	let target = bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.message.id);
-	div()
+	let frame = div()
 		.mt(4.)
 		.size(width, height)
 		.rounded(tok("radius_md"))
 		.overflow_hidden()
-		.when_some(target, |frame, target| opens(frame, target, env))
 		.child(picture(
 			&env.pictures,
-			name,
+			name.clone(),
 			attachment.placeholder.as_deref(),
 			ObjectFit::Cover,
+		));
+	match bridge::favorite_gif_attachment(attachment) {
+		Some(favorite) => gif(frame, name, favorite, target, env),
+		None => frame.when_some(target, |frame, target| opens(frame, target, env)),
+	}
+}
+
+fn gif(
+	frame: View,
+	name: Option<ImageName>,
+	favorite: FavoriteGif,
+	target: Option<bridge::LightboxImage>,
+	env: &Rc<RowEnv>,
+) -> View {
+	let hovered = env.pictures.runtime().signal(false);
+	let starred = Rc::new(Cell::new(false));
+	let (tracker, pictures, watcher, pressed) = (
+		hovered.clone(),
+		env.pictures.clone(),
+		env.clone(),
+		starred.clone(),
+	);
+	let frames = env.clone();
+	let mut frame = frame
+		.relative()
+		.cursor(Cursor::Pointer)
+		.on_mount(move |node| {
+			let mut known = frames.gif_frames.borrow_mut();
+			known.retain(|handle| {
+				handle
+					.scene()
+					.is_some_and(|scene| scene.borrow().contains(handle.node()))
+			});
+			known.push(node);
+		})
+		.on_event(move |event| match event.event {
+			InputEvent::PointerEnter => {
+				tracker.set(true);
+				pictures.hover(name.as_ref());
+				watcher.want_favorites();
+			}
+			InputEvent::PointerLeave => {
+				tracker.set(false);
+				pictures.hover(None);
+			}
+			InputEvent::PointerDown { .. } if event.phase == EventPhase::Capture => pressed.set(false),
+			_ => {}
+		});
+	if let Some(target) = target {
+		let (lightbox, starred) = (env.lightbox.clone(), starred.clone());
+		frame = frame.on_click(move || {
+			if !starred.replace(false) {
+				lightbox.open(target.clone());
+			}
+		});
+	}
+	if !env.prefs.get().gif_autoplay {
+		let shown = hovered.clone();
+		frame = frame.child_when(move || (!shown.get()).then_some(()), |(), _| gif_pill());
+	}
+	let env = env.clone();
+	frame.child_when(
+		move || hovered.get().then_some(()),
+		move |(), _| star(&favorite, &starred, &env),
+	)
+}
+
+fn gif_pill() -> View {
+	div()
+		.absolute()
+		.left(0.)
+		.top(0.)
+		.w_full()
+		.h_full()
+		.bg(tok("overlay_button_background"))
+		.child(
+			div()
+				.absolute()
+				.left(OVERLAY_INSET)
+				.top(OVERLAY_INSET)
+				.h(tok("tag_height"))
+				.px(OVERLAY_INSET)
+				.rounded(tok("radius_xs"))
+				.bg(tok("overlay_button_background"))
+				.child(
+					text("GIF")
+						.text_size(tok("font_size_tag"))
+						.line_height(16.)
+						.font_weight(700)
+						.text_color(tok("overlay_text")),
+				),
+		)
+}
+
+fn star(favorite: &FavoriteGif, starred: &Rc<Cell<bool>>, env: &Rc<RowEnv>) -> View {
+	let favorites = env.favorite_gifs.clone();
+	let (marked, marked_url) = (favorites.clone(), favorite.url.clone());
+	let (url, gif, sender, pressed) = (
+		favorite.url.clone(),
+		favorite.clone(),
+		env.clone(),
+		starred.clone(),
+	);
+	div()
+		.id(format!("gif-favorite-{}", favorite.url))
+		.absolute()
+		.right(OVERLAY_INSET)
+		.top(OVERLAY_INSET)
+		.size(STAR_BUTTON, STAR_BUTTON)
+		.rounded(tok("radius_xs"))
+		.bg(tok("overlay_button_background"))
+		.items_center()
+		.justify_center()
+		.cursor(Cursor::Pointer)
+		.on_event(move |event| {
+			if event.phase != EventPhase::Capture
+				&& let InputEvent::PointerDown {
+					button: PointerButton::Primary,
+					..
+				} = event.event
+			{
+				pressed.set(true);
+			}
+		})
+		.on_click(move || {
+			let favorite = !favorites.with_untracked(|set| set.contains(&url));
+			sender.send(Command::SetGifFavorite {
+				gif: gif.clone(),
+				favorite,
+			});
+		})
+		.child(switch(
+			move || marked.with(|set| set.contains(&marked_url)),
+			|starred: bool, _| {
+				icon(
+					if starred { "star_filled" } else { "star" },
+					STAR_ICON,
+					"overlay_text",
+				)
+			},
 		))
 }
 
@@ -103,10 +252,10 @@ fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
 		.max_w_percent(100.)
 		.p(12.)
 		.rounded(tok("radius_md"))
-		.border(1.)
-		.border_color(tok("code_border"))
-		.bg(tok("background_secondary"))
-		.child(icon(glyph, 32., "interactive_normal"))
+		.border(tok("border_thickness"))
+		.border_color(tok("border"))
+		.bg(tok("bg_3"))
+		.child(icon(glyph, 32., "text_4"))
 		.child(
 			column()
 				.grow()
@@ -148,7 +297,14 @@ pub fn stickers(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 				None,
 				ObjectFit::Contain,
 			));
-			Some(aimed(view, &env.actions, bridge::sticker_expression(sticker)))
+			let target = bridge::sticker_expression(sticker);
+			let view = match target.clone() {
+				Some(target) => {
+					popout::opens(view, bridge::PopoutSubject::Custom(target), &env.actions.popout)
+				}
+				None => view,
+			};
+			Some(aimed(view, &env.actions, target))
 		})
 		.collect()
 }
@@ -167,26 +323,32 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 		.collect()
 }
 
-fn bare(media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
-	let (width, height) = bridge::fit_box(media.width, media.height, ATTACHMENT_BOX);
+fn bare(embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
+	let (width, height) = bridge::fit_box(media.width, media.height, bare_box(embed));
 	let name = env.pictures.embed_media(media, (width, height));
 	let target = bridge::LightboxImage::embed(media);
-	div()
+	let frame = div()
 		.mt(4.)
 		.size(width, height)
 		.rounded(tok("radius_md"))
 		.overflow_hidden()
-		.when_some(target, |frame, target| opens(frame, target, env))
 		.child(picture(
 			&env.pictures,
-			name,
+			name.clone(),
 			media.placeholder.as_deref(),
 			ObjectFit::Cover,
-		))
+		));
+	match bridge::favorite_gif(embed) {
+		Some(favorite) => gif(frame, name, favorite, target, env),
+		None => frame.when_some(target, |frame, target| opens(frame, target, env)),
+	}
 }
 
 fn link_label(label: String, url: Option<String>, env: &Rc<RowEnv>) -> View {
-	let label = text(label).type_size("font_md").font_weight(600);
+	let label = text(label)
+		.text_size(tok("font_size_md"))
+		.line_height(tok("line_height_label"))
+		.font_weight(600);
 	match url {
 		Some(url) => {
 			let links = env.links.clone();
@@ -195,7 +357,7 @@ fn link_label(label: String, url: Option<String>, env: &Rc<RowEnv>) -> View {
 				.cursor(Cursor::Pointer)
 				.on_click(move || links.open(&url))
 		}
-		None => label.text_color(tok("header_primary")),
+		None => label.text_color(tok("text_2")),
 	}
 }
 
@@ -207,12 +369,12 @@ fn embed_card(
 	bump: &Signal<u32>,
 ) -> Option<View> {
 	if matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv)) {
-		return bare_media(embed).map(|media| bare(media, env));
+		return bare_media(embed).map(|media| bare(embed, media, env));
 	}
 	let accent = embed
 		.color
 		.and_then(|color| u32::try_from(color).ok())
-		.map_or(zgx::theme::Themed::Token(tok("divider")), |color| {
+		.map_or(zgx::theme::Themed::Token(tok("border")), |color| {
 			zgx::theme::Themed::Value(rgb(color))
 		});
 	let texts = entry.body.embeds.get(index);
@@ -220,8 +382,9 @@ fn embed_card(
 	if let Some(provider) = embed.provider.as_ref().and_then(|provider| provider.name.clone()) {
 		column = column.child(
 			text(provider)
-				.type_size("font_tiny")
-				.text_color(tok("text_muted")),
+				.text_size(tok("font_size_xs"))
+				.line_height(16.)
+				.text_color(tok("text_4")),
 		);
 	}
 	if let Some(author) = &embed.author {
@@ -283,7 +446,12 @@ fn embed_card(
 			.flatten()
 			.collect::<Vec<_>>()
 			.join(" \u{2022} ");
-		column = column.child(text(line).type_size("font_tiny").text_color(tok("text_muted")));
+		column = column.child(
+			text(line)
+				.text_size(tok("font_size_xs"))
+				.line_height(16.)
+				.text_color(tok("text_4")),
+		);
 	}
 	let thumbnail = side_thumbnail(embed).map(|media| {
 		let name = env
@@ -303,29 +471,30 @@ fn embed_card(
 	});
 	Some(
 		row()
-			.mt(4.)
+			.relative()
+			.my(2.)
 			.w(EMBED_WIDTH)
 			.max_w_percent(100.)
-			.rounded_corners(Corners {
-				top_left: 0.,
-				top_right: 4.,
-				bottom_right: 4.,
-				bottom_left: 0.,
-			})
-			.border_edges(zgx::scene::Insets {
-				left: 4.,
-				..Default::default()
-			})
-			.border_color(accent)
-			.bg(tok("background_secondary"))
+			.rounded(tok("radius_md"))
+			.overflow_hidden()
+			.border(tok("border_thickness"))
+			.border_color(tok("border"))
+			.bg(tok("bg_3"))
+			.child(
+				div()
+					.absolute()
+					.left(0.)
+					.top(0.)
+					.bottom(0.)
+					.w(EMBED_ACCENT)
+					.bg(accent),
+			)
 			.child(
 				row()
 					.grow()
 					.min_w(0.)
 					.gap(16.)
-					.py(8.)
-					.pl(12.)
-					.pr(16.)
+					.p(EMBED_PADDING)
 					.child(column)
 					.when_some(thumbnail, |row, thumbnail| row.child(thumbnail)),
 			),
@@ -385,7 +554,7 @@ fn large(media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
 	let target_image = bridge::LightboxImage::embed(media).filter(|_| !playable);
 	div()
 		.relative()
-		.mt(4.)
+		.mt(EMBED_IMAGE_GAP)
 		.size(width, height)
 		.rounded(tok("radius_sm"))
 		.overflow_hidden()

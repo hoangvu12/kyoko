@@ -362,7 +362,7 @@ fn decode_gifs(bytes: &[u8]) -> Vec<FavoriteGif> {
 			gifs.push(gif);
 		}
 	}
-	gifs.sort_by(|left, right| right.order.cmp(&left.order));
+	gifs.sort_by_key(|gif| std::cmp::Reverse(gif.order));
 	gifs
 }
 

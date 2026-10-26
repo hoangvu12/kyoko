@@ -9,6 +9,7 @@ mod deep_link;
 mod display;
 mod dm_list;
 mod emoji_picker;
+mod expression_popout;
 mod friends;
 mod gif_picker;
 mod guild_admin;
@@ -34,8 +35,8 @@ mod web_login;
 
 pub use actions::{
 	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle, can_delete,
-	can_edit, can_reply, has_actions, message_link, message_menu, reaction_allowed, reaction_toggle,
-	toolbar_actions,
+	can_edit, can_remove_embeds, can_reply, has_actions, message_link, message_menu, reaction_allowed,
+	reaction_toggle, toolbar_actions,
 };
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
@@ -62,6 +63,10 @@ pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, PickerSection, RailEntry, RailIcon, TONE_SAMPLE, TONES,
 	category_title, custom_markup, toned,
+};
+pub use expression_popout::{
+	Area, DEFAULT_EMOJI_NOTE, ExpressionDetails, PopoutServer, PopoutSubject, expression_details,
+	members_label, place_popout,
 };
 pub use friends::{FriendEntry, FriendKind, FriendSection, FriendsTab, FriendsView, status_label};
 pub use gif_picker::{
@@ -133,8 +138,8 @@ pub use threads::{
 	replies_label, starter_preview, thread_header, thread_list, thread_parent, trimmed_name,
 };
 pub use timeline::{
-	Delta, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel, detached_entry,
-	first_channel,
+	Delta, Highlight, MessageEntry, OpenChannel, Row, RowKey, Timeline, TimelineRow, busiest_channel,
+	detached_entry, first_channel,
 };
 pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};
 pub use web_login::{

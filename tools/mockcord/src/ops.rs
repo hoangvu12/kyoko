@@ -1,9 +1,9 @@
 use chrono::{SecondsFormat, Utc};
 use protocol::capability::DEBOUNCE_MESSAGE_REACTIONS;
 use protocol::{
-	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, Embed, EmbedKind, EmbedProvider,
-	LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind, MessageType, Nonce, ReadState,
-	ReadStateKind, Snowflake, StickerFormat, StickerItem, User,
+	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, Embed, EmbedKind, EmbedMedia,
+	EmbedProvider, LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind, MessageType,
+	Nonce, ReadState, ReadStateKind, Snowflake, StickerFormat, StickerItem, User,
 };
 use serde_json::{Value, json};
 
@@ -90,6 +90,9 @@ fn scan_mentions(content: &str) -> (Vec<u64>, Vec<u64>) {
 	(users, roles)
 }
 
+const GIF_WIDTH: i64 = 498;
+const GIF_HEIGHT: i64 = 280;
+
 fn unfurled(content: &str) -> Vec<Embed> {
 	content
 		.split_whitespace()
@@ -107,6 +110,9 @@ fn unfurled(content: &str) -> Vec<Embed> {
 				.unwrap_or_default()
 				.trim_matches('/')
 				.to_owned();
+			if let Some(provider) = gif_provider(&host) {
+				return Some(gif_embed(link, provider, &title));
+			}
 			Some(Embed {
 				kind: Some(EmbedKind::Link),
 				url: Some(link.to_owned()),
@@ -121,6 +127,36 @@ fn unfurled(content: &str) -> Vec<Embed> {
 		})
 		.take(1)
 		.collect()
+}
+
+fn gif_provider(host: &str) -> Option<&'static str> {
+	match host {
+		"klipy.com" => Some("Klipy"),
+		"tenor.com" => Some("Tenor"),
+		_ => None,
+	}
+}
+
+fn gif_embed(link: &str, provider: &str, path: &str) -> Embed {
+	let slug = path.rsplit('/').next().unwrap_or(path);
+	let host = provider.to_lowercase();
+	let media = |extension: &str| EmbedMedia {
+		url: Some(format!("https://static.{host}.com/{slug}.{extension}")),
+		width: Some(GIF_WIDTH),
+		height: Some(GIF_HEIGHT),
+		..EmbedMedia::default()
+	};
+	Embed {
+		kind: Some(EmbedKind::Gifv),
+		url: Some(link.to_owned()),
+		provider: Some(EmbedProvider {
+			name: Some(provider.to_owned()),
+			url: None,
+		}),
+		thumbnail: Some(media("png")),
+		video: Some(media("mp4")),
+		..Embed::default()
+	}
 }
 
 fn sanitized_filename(name: &str) -> String {

@@ -3,6 +3,7 @@ mod community;
 mod composer;
 mod connection;
 mod display;
+mod expression_shots;
 mod expressions;
 mod friends;
 mod home;
@@ -851,6 +852,8 @@ impl Link {
 			capture::Screen::KeptDeleted | capture::Screen::KeptEdits => {
 				self.drive_kept(capture.screen).await
 			}
+			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
+			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::CloneDialog => {
 				self.drive_clone_dialog().await;
 				self.until_capture(|link| link.community_settled()).await;

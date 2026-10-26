@@ -15,8 +15,10 @@ mod kept_tests;
 mod lightbox;
 mod links;
 pub(crate) mod pictures;
+mod popout;
 mod rows;
 mod scroll;
+mod unread;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -113,6 +115,7 @@ pub struct TimelineView {
 	lightbox: Rc<Lightbox>,
 	pending_jump: Cell<Option<Snowflake>>,
 	pending_action: Cell<Option<MessageAction>>,
+	unread: Signal<Option<unread::Unread>>,
 }
 
 impl TimelineView {
@@ -128,11 +131,13 @@ impl TimelineView {
 		pictures.set_quality(setup.prefs.quality);
 		let commands: Rc<Sender> = Rc::default();
 		let links = Rc::new(Links::new(runtime, setup.store));
+		let popout = Rc::new(popout::ExpressionPopout::new(runtime, pictures.clone()));
 		let actions = Rc::new(MessageActions::new(
 			runtime,
 			Wiring {
 				dialogs: Rc::new(Dialogs::new(runtime, commands.clone())),
 				picker: ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction),
+				popout,
 				links: links.clone(),
 				commands: commands.clone(),
 				developer_mode: setup.developer_mode,
@@ -160,6 +165,9 @@ impl TimelineView {
 				actions: actions.clone(),
 				lightbox: lightbox.clone(),
 				display: setup.display,
+				favorite_gifs: runtime.signal(Rc::default()),
+				favorites_asked: Cell::new(false),
+				gif_frames: RefCell::default(),
 			}),
 			ends: Cell::new(Ends {
 				has_older: false,
@@ -181,6 +189,7 @@ impl TimelineView {
 			lightbox,
 			pending_jump: Cell::new(None),
 			pending_action: Cell::new(None),
+			unread: runtime.signal(None),
 		});
 		let jumper = Rc::downgrade(&view);
 		view.actions.on_jump(move |message_id| {
@@ -190,6 +199,12 @@ impl TimelineView {
 		});
 		let images = Rc::downgrade(&view);
 		view.actions.picker.on_images_changed(move || {
+			if let Some(view) = images.upgrade() {
+				view.images_changed();
+			}
+		});
+		let images = Rc::downgrade(&view);
+		view.actions.popout.on_images_changed(move || {
 			if let Some(view) = images.upgrade() {
 				view.images_changed();
 			}
@@ -239,6 +254,13 @@ impl TimelineView {
 
 	pub fn on_create_thread(&self, create: impl Fn((Snowflake, Snowflake)) + 'static) {
 		self.actions.on_create_thread(create);
+	}
+
+	pub fn on_expression_details(
+		&self,
+		source: impl Fn(&bridge::PopoutSubject) -> Option<bridge::ExpressionDetails> + 'static,
+	) {
+		self.actions.popout.on_details(source);
 	}
 
 	pub fn on_emoji_catalog(&self, source: impl Fn() -> Option<EmojiPicker> + 'static) {
@@ -359,6 +381,7 @@ impl TimelineView {
 			scroll::resized(&Measured(&self.heights), offset, before, after)
 		});
 		self.size.set((width, height));
+		self.actions.popout.set_bounds(width, height);
 		if decision == Resize::FollowEnd {
 			self.pinned.set(Some(height));
 			self.offset.set(f32::MAX);
@@ -385,6 +408,31 @@ impl TimelineView {
 			}
 		});
 		*self.layout_watcher.borrow_mut() = Some(effect);
+	}
+
+	pub fn newest_gif(&self) -> Option<zgx::scene::Rect> {
+		self.env.gif_frames.borrow().iter().rev().find_map(|handle| {
+			let scene = handle.scene()?;
+			let scene = scene.borrow();
+			scene.contains(handle.node()).then(|| scene.bounds(handle.node()))
+		})
+	}
+
+	pub fn popout_anchor(
+		&self,
+		wanted: impl Fn(&bridge::PopoutSubject) -> bool,
+	) -> Option<(bridge::PopoutSubject, zgx::scene::Rect)> {
+		self.actions.popout.anchor(wanted)
+	}
+
+	pub fn open_popout(&self, subject: bridge::PopoutSubject, at: zgx::scene::Rect) {
+		self.actions.popout.open(subject, at);
+	}
+
+	pub fn set_favorite_gifs(&self, urls: HashSet<String>) {
+		if self.env.favorite_gifs.with_untracked(|shown| **shown != urls) {
+			self.env.favorite_gifs.set(Rc::new(urls));
+		}
 	}
 
 	pub fn set_developer_mode(&self, enabled: bool) {
@@ -428,6 +476,7 @@ impl TimelineView {
 		let mut names = self.visible_images.borrow().clone();
 		names.extend(self.actions.picker.images());
 		names.extend(self.lightbox.images());
+		names.extend(self.actions.popout.images());
 		names
 	}
 
@@ -482,26 +531,55 @@ impl TimelineView {
 				.h_full()
 				.on_event(move |event| {
 					if event.phase == EventPhase::Capture {
+						if let InputEvent::PointerDown { x, y, .. } = event.event {
+							actions.popout.pressed(x, y);
+						}
 						return;
 					}
 					if let InputEvent::KeyDown { key: Key::Escape, .. } = event.event
-						&& actions.clear_selection()
+						&& (actions.popout.close() || actions.clear_selection())
 					{
 						event.stop_propagation();
 					}
 				})
 				.child(list)
+				.child(this.new_messages_bar())
 				.child(this.actions.footer())
 				.child(this.actions.context_menu())
 				.child(this.actions.picker.view())
 				.child(this.env.links.view())
 				.child(this.actions.dialogs.view())
+				.child(this.actions.popout.view())
 				.on_mount(move |node| {
 					if let Some(view) = mounted.upgrade() {
+						view.actions.popout.set_root(node.clone());
 						view.follow_layout(&node);
 					}
 				})
 		})
+	}
+
+	fn new_messages_bar(self: &Rc<Self>) -> View {
+		let (shown, size) = (self.unread.clone(), self.size.clone());
+		let (jumper, reader) = (Rc::downgrade(self), Rc::downgrade(self));
+		let actions = unread::Bar {
+			jump: Rc::new(move || {
+				if let Some(view) = jumper.upgrade() {
+					view.scroll_to(&RowKey::Unread);
+				}
+			}),
+			mark_read: Rc::new(move || {
+				if let Some(view) = reader.upgrade()
+					&& let Some(channel_id) = view.channel.get()
+				{
+					view.send(Command::MarkChannelRead { channel_id });
+				}
+			}),
+		};
+		div().child_when(
+			move || shown.get(),
+			move |unread: unread::Unread, _| unread::bar(&unread, size.clone(), &actions),
+		)
 	}
 
 	fn row(&self, key: &RowKey, cx: &mut Context) -> View {
@@ -590,6 +668,10 @@ impl TimelineView {
 		});
 		let (width, viewport) = self.viewport();
 		let rows = timeline.rows();
+		let unread = unread::Unread::of(rows, timeline.is_detached());
+		if self.unread.with_untracked(|shown| *shown != unread) {
+			self.unread.set(unread);
+		}
 		let keys: Vec<RowKey> = rows.iter().map(|row| row.key.clone()).collect();
 		let (anchor, heights) = self.runtime.untracked(|| {
 			let old = self.keys.borrow();

@@ -74,8 +74,21 @@ The web client keeps favourite emoji in the frecency settings protobuf (settings
 - kyoko reads it the first time the composer asks for an emoji ranking (the `:` autocomplete with two letters or more; `Command::RankEmoji`), once per session (`crates/session/src/task/emoji_rank.rs`). A failed read is retried at most once a minute, on the next emoji query; it never shows an error. It is read whether or not a plugin ranks emoji.
 - `protocol::decode_favorite_emojis` takes field 5 (`favorite_emojis`) and its repeated string `emojis` (field 1): a custom emoji's id, or a Unicode emoji's name (`skull_crossbones`). Duplicates, empty and non-UTF-8 entries are dropped, at most 512 are kept, and every other field is ignored. `State::favorite_position(id, glyph)` matches a custom emoji by id and a Unicode emoji through any of its shortcodes or its own characters, with or without U+FE0F.
 - USER_SETTINGS_PROTO_UPDATE with `type` 2 replaces the favourites (a partial update without field 5 leaves them), so favouriting on another device shows at once. Each change bumps `State::favorites_generation`.
-- Read-only for now: writing favourites (the picker's star, Midnight 08) is a `PATCH /users/@me/settings-proto/2` with `{"settings":"<base64>"}`; `protocol::encode_favorite_emojis` writes field 5 only, and mockcord already stores such a write and echoes the update.
+- Favourite emoji are still read-only: writing them (the picker's star, Midnight 08) is a `PATCH /users/@me/settings-proto/2` with `{"settings":"<base64>"}`; `protocol::encode_favorite_emojis` writes field 5 only, and mockcord already stores such a write and echoes the update.
 - To confirm on real traffic: exactly when the web client first loads type 2 (it is documented as lazy; the picker and the autocomplete are its users) and whether a partial type 2 update ever arrives.
+
+## Favourite GIFs
+
+Favourite GIFs live in the same frecency settings protobuf, field 2 (`favorite_gifs`): a map from the GIF's page URL to `{format, src, width, height, order}` (`format` 1 image, 2 video). `protocol::decode_favorite_gifs` keeps at most 512, drops entries without a URL and sorts them newest (highest `order`) first; `encode_favorite_gifs` writes field 2 only.
+
+- `Command::SetGifFavorite { gif, favorite }` (the star on a GIF in the timeline) changes `State::favorite_gifs` at once and hands the write to one writer (`crates/session/src/task/gif_favorites.rs`). A new favourite gets the highest `order` plus one. When the frecency proto has not been read yet, the change waits for that read (`GET /users/@me/settings-proto/2`, asked at once), so the write never drops favourites made elsewhere.
+- The write is `PATCH /users/@me/settings-proto/2` with `{"settings":"<base64>"}` carrying the whole field 2, after `settings_delay` of quiet, one request in flight, through the mutation lane. A failure with nothing newer waiting puts the last saved favourites back and reports a rejection.
+- `Command::LoadFavorites` asks for the frecency proto if it is not loaded (the GIF picker opening, the first hover on a GIF star). USER_SETTINGS_PROTO_UPDATE with `type` 2 replaces favourite GIFs when it carries field 2 and leaves them otherwise when partial, as for emoji.
+- The picker's Favorites tile lists them (`bridge::favorite_gifs`). A video favourite's `src` is an MP4, which the gallery does not decode, so such a tile shows its colour only, as category tiles do.
+
+## Removing embeds
+
+`Command::SuppressEmbeds { channel_id, message_id }` (Remove all embeds on the hover bar) is `PATCH /channels/{channel_id}/messages/{message_id}` with only `{"flags": <the message's flags with SUPPRESS_EMBEDS>}`, as the web client sends it, through the usual REST safety layer. The session sends it only for your own cached message whose flag is not set yet, and refuses anything else with "You can only remove embeds from your own messages". Discord keeps the embeds, sets the flag and does not mark the message edited; the MESSAGE_UPDATE that follows hides them. (Discord also lets Manage Messages remove others' embeds; kyoko does not offer that.)
 
 ## Collapsed categories
 

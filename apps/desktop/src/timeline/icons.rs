@@ -84,6 +84,9 @@ icon_files!(
 	"circle_check",
 	"info",
 	"warning",
+	"star",
+	"star_filled",
+	"mark_read",
 );
 
 const PLUGIN_ICONS: usize = 64;

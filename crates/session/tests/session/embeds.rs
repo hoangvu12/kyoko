@@ -124,13 +124,11 @@ async fn removing_embeds_sets_the_suppress_flag_on_your_own_message_only() {
 		0,
 		"someone else's message never reaches REST"
 	);
-	let state = running.session().state().read();
-	let kept = message(&state, channel_id, mine).expect("the message");
+	let kept = message(&running.session().state().read(), channel_id, mine).expect("the message");
 	assert!(
 		!kept.embeds.is_empty(),
 		"Discord keeps the embeds and sets the flag"
 	);
 	assert!(kept.edited_timestamp.is_none(), "removing embeds is not an edit");
-	drop(state);
 	running.stop().await;
 }

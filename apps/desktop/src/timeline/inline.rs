@@ -10,6 +10,7 @@ use zgx::svg::SvgData;
 
 use super::actions::{MessageActions, aimed};
 use super::pictures::Pictures;
+use super::popout::opens;
 
 pub enum Art {
 	Image(ImageName),
@@ -20,6 +21,7 @@ pub struct Placed {
 	pub range: Range<usize>,
 	pub art: Art,
 	pub target: Option<state::Expression>,
+	pub subject: Option<bridge::PopoutSubject>,
 }
 
 const COPY_TEXT_SIZE: f32 = 1.;
@@ -57,6 +59,10 @@ pub fn paragraph(paragraph: Paragraph, pictures: &Rc<Pictures>, actions: &Rc<Mes
 			None => Styles::new().invisible(),
 		};
 		let frame = aimed(div().absolute().size(side, side), actions, item.target);
+		let frame = match item.subject {
+			Some(subject) => opens(frame, subject, &actions.popout),
+			None => frame,
+		};
 		match item.art {
 			Art::Image(name) => {
 				let picture = pictures.picture(&name);

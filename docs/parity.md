@@ -141,12 +141,16 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `settings-plugins` | `settings-plugins.html` |
 | `toast` | `toast-rate-limited.html` |
 | `connection-offline` | `connection-lost.html` |
+| `expressions-in-messages` | `expressions-in-messages.html` |
+| `expressions-in-messages-emoji-popout` | `expressions-in-messages-emoji-popout.html` |
+| `expressions-in-messages-sticker-popout` | `expressions-in-messages-sticker-popout.html` |
+| `link-preview-while-typing` | `link-preview-while-typing.html` |
 
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `expressions-in-messages`, `expressions-in-messages-emoji-popout`, `expressions-in-messages-sticker-popout`, `gif-picker-results`, `inbox`, `link-preview-while-typing`, `login-2fa`, `login-captcha`, `login-email`, `login-unsaved`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `delete-message-dialog`, `emoji-autocomplete`, `emoji-picker-no-nitro`, `emoji-picker-search`, `gif-picker-results`, `inbox`, `login-2fa`, `login-captcha`, `login-email`, `login-unsaved`, `message-components`, `message-components-multi-select`, `message-components-v2`, `message-menu-own`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -379,6 +383,17 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 |---|---|---|---|
 | `message-logger-deleted` | 52 | With `KYOKO_CAPTURE_PLUGINS=message-logger`. Default selection; kyoko waits for the plugin to turn deleted messages on, sends "spoiler alert: the ship sinks at the end", which mockcord's moderator deletes 400 ms later (`mockcord::MODERATED_PHRASE`), and waits for the row to show in red with "(deleted)" and "Remove from log". Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
 | `message-logger-edits` | 52 | With `KYOKO_CAPTURE_PLUGINS=message-logger`. Default selection; kyoko sends "See you at 6" and edits it twice through `Command::EditMessage`, so the two earlier versions show dimmed above "See you at 7:30, sorry!". Kyoko only, `--apps kyoko`. | yes |
+
+### Midnight 05 Timeline restyle
+
+Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no such states. The messages are sent through the composer's own commands into the default channel; mockcord unfurls a `klipy.com` link as a GIF from the GIF provider and any other link as a link embed, as Discord does.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `expressions-in-messages` | 05 | Default selection, then send a Klipy GIF link, a PNG sticker of the server, a line with a custom emoji of the server and 🙏, and a jumbo line (💀, the custom emoji, 😭). Hover the GIF (its favourite star shows) through `Ui::dispatch`, then open the custom emoji's popout as a press on it does. | yes |
+| `expressions-in-messages-emoji-popout` | 05 | As `expressions-in-messages`, then the popout of the jumbo 😭 (a default emoji). | yes |
+| `expressions-in-messages-sticker-popout` | 05 | As `expressions-in-messages`, then the sticker's popout. | yes |
+| `link-preview-while-typing` | 05 | Default selection, then send `docs are up https://github.com/refact0r/midnight-discord` and hover it at (640, 690): its link embed and the hover bar with Remove all embeds. | yes |
 
 ### 38 Toasts, transitions and connection status
 

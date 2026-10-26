@@ -15,6 +15,7 @@ mod media;
 mod members;
 mod message;
 mod message_logger;
+mod popouts;
 mod profile;
 mod qr_login;
 mod rail;

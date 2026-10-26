@@ -245,10 +245,12 @@ impl Link {
 					.set_reduced_motion(self.settings.reduced_motion());
 				self.motion.set_reduced(self.settings.reduced_motion());
 			}
-			SettingKey::Animation => self
-				.images
-				.gallery
-				.set_playback(bridge::media_playback(&settings)),
+			SettingKey::Animation => {
+				self.images
+					.gallery
+					.set_playback(bridge::media_playback(&settings));
+				self.refresh_timeline_prefs(&settings);
+			}
 			SettingKey::MemoryMb => self
 				.images
 				.gallery

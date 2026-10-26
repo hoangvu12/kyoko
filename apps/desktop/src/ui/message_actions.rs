@@ -28,6 +28,11 @@ impl Link {
 			let guild_id = link.timeline.borrow().open()?.guild_id;
 			Some(EmojiPicker::of(&shared.read(), guild_id))
 		});
+		let actions = Rc::downgrade(link);
+		link.timeline_view.on_expression_details(move |subject| {
+			let shared = actions.upgrade()?.state()?;
+			Some(bridge::expression_details(&shared.read(), subject))
+		});
 	}
 
 	pub(super) fn place_actions(&self, slot: Slot) {
@@ -50,6 +55,10 @@ impl Link {
 			.map(|open| Access::of(state, open.guild_id, open.channel_id, Utc::now()))
 			.unwrap_or_default();
 		self.timeline_view.set_access(access);
+		if changes.favorite_gifs {
+			self.timeline_view
+				.set_favorite_gifs(state.favorite_gifs().iter().map(|gif| gif.url.clone()).collect());
+		}
 		if changes.deletions
 			&& let Some(open) = open
 		{

@@ -2,11 +2,16 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon};
+use std::f32::consts::FRAC_PI_2;
+
+use bridge::{
+	ATTACHMENT_BOX, EMBED_MEDIA_BOX, Highlight, MessageEntry, ReplyPreview, Row, STICKER_SIDE, SystemIcon,
+};
 use chrono::NaiveDate;
 use media::cdn::Quality;
 use protocol::{MessageFlags, MessageType, Snowflake};
 use session::Command;
+use zgx::canvas::GradientStop;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 use zgx::scene::Color;
@@ -24,12 +29,26 @@ use super::pictures::{AVATAR, Pictures, REPLY_AVATAR};
 
 const GUTTER: f32 = 72.;
 const RIGHT: f32 = 48.;
+const ROW_INSET_RIGHT: f32 = 8.;
 const LINE: f32 = 22.;
 const BODY: f32 = 16.;
-const HEADER_GAP: f32 = 16.;
-const REPLY_HEIGHT: f32 = 22.;
+const HEADER_GAP: f32 = 17.;
+const REPLY_LINE: f32 = 18.;
+const REPLY_GAP: f32 = 4.;
+const REPLY_HEIGHT: f32 = REPLY_LINE + REPLY_GAP;
+const AVATAR_LEFT: f32 = 16.;
+const AVATAR_TOP: f32 = 4.;
+const SPINE: f32 = 2.;
+const HIGHLIGHT_LEFT: f32 = 4.;
+const HIGHLIGHT_INSET: f32 = 8.;
+const HIGHLIGHT_BAR: f32 = 4.;
+const CLOCK_WIDTH: f32 = 56.;
 const DAY_HEIGHT: f32 = 32.;
-const UNREAD_HEIGHT: f32 = 29.;
+const UNREAD_HEIGHT: f32 = 10.;
+const UNREAD_TOP: f32 = 6.;
+const UNREAD_LEFT: f32 = 12.;
+const UNREAD_RIGHT: f32 = 10.;
+const WASH_STOP: f32 = 0.4;
 const START_HEIGHT: f32 = 202.;
 const SKELETON_HEIGHT: f32 = 240.;
 const SKELETON_ROWS: usize = 4;
@@ -78,6 +97,7 @@ pub struct Prefs {
 	pub show_reactions: bool,
 	pub quality: Quality,
 	pub link_warning: bool,
+	pub gif_autoplay: bool,
 }
 
 impl Prefs {
@@ -88,6 +108,7 @@ impl Prefs {
 			show_reactions: settings.chat.show_reactions,
 			quality: bridge::media_quality(settings),
 			link_warning: settings.chat.link_warning,
+			gif_autoplay: settings.media.animation == store::AnimationPlayback::Always,
 		}
 	}
 }
@@ -100,6 +121,7 @@ impl Default for Prefs {
 			show_reactions: true,
 			quality: Quality::Fitted,
 			link_warning: true,
+			gif_autoplay: true,
 		}
 	}
 }
@@ -119,9 +141,18 @@ pub struct RowEnv {
 	pub actions: Rc<MessageActions>,
 	pub lightbox: Rc<super::lightbox::Lightbox>,
 	pub display: bridge::Display,
+	pub favorite_gifs: Signal<Rc<HashSet<String>>>,
+	pub favorites_asked: Cell<bool>,
+	pub gif_frames: RefCell<Vec<zgx::compose::NodeHandle>>,
 }
 
 impl RowEnv {
+	pub fn want_favorites(&self) {
+		if !self.favorites_asked.replace(true) {
+			self.send(Command::LoadFavorites);
+		}
+	}
+
 	pub fn send(&self, command: Command) {
 		if let Some(send) = self.commands.borrow().as_ref() {
 			send(command);
@@ -135,10 +166,16 @@ pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal
 		Row::Start => welcome(env),
 		Row::Day(day) => day_separator(*day),
 		Row::Unread => unread_marker(),
-		Row::Message(entry) if entry.is_plain() && entry.grouped => follow_up(entry, env, hovered, bump),
-		Row::Message(entry) if entry.is_plain() => first_of_group(entry, env, hovered, bump),
-		Row::Message(entry) => system_row(entry, env),
+		Row::Message(entry) if entry.is_plain() && entry.grouped => {
+			inset(follow_up(entry, env, hovered, bump))
+		}
+		Row::Message(entry) if entry.is_plain() => inset(first_of_group(entry, env, hovered, bump)),
+		Row::Message(entry) => inset(system_row(entry, env)),
 	}
+}
+
+fn inset(row: View) -> View {
+	div().w_full().pr(ROW_INSET_RIGHT).child(row)
 }
 
 pub fn estimate(row: &Row, width: f32) -> f32 {
@@ -211,30 +248,73 @@ fn body_lines(content: &str, width: f32) -> f32 {
 		.sum()
 }
 
+fn wash(env: &RowEnv, name: &str) -> Vec<GradientStop> {
+	let color = zgx::theme::Themes::of(env.pictures.runtime())
+		.get(tok(name))
+		.color()
+		.unwrap_or(Color(0, 0, 0, 0));
+	let Color(red, green, blue, _) = color;
+	vec![
+		GradientStop { offset: 0., color },
+		GradientStop {
+			offset: WASH_STOP,
+			color,
+		},
+		GradientStop {
+			offset: 1.,
+			color: Color(red, green, blue, 0),
+		},
+	]
+}
+
+fn highlight_tokens(highlight: Highlight) -> Option<(&'static str, &'static str, &'static str)> {
+	match highlight {
+		Highlight::Mention => Some(("mention", "mention_hover", "accent_2")),
+		Highlight::ReplyToYou => Some(("reply", "reply_hover", "text_2")),
+		Highlight::None => None,
+	}
+}
+
 fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>) -> View {
 	let actions = env.actions.clone();
 	let id = entry.id;
 	let tinted = kept::tinted(entry);
+	let highlight = highlight_tokens(entry.highlight);
+	let (washed, over) = (env.clone(), hovered.clone());
 	let frame = column()
 		.relative()
 		.w_full()
 		.pl(GUTTER)
 		.pr(RIGHT)
 		.py(2.)
-		.when(tinted, |row| row.bg(tok("background_feedback_critical")))
-		.hover(move |style| {
-			style.bg(tok(if tinted {
-				"background_feedback_critical"
-			} else {
-				"message_hover"
-			}))
-		})
+		.rounded(tok("radius_md"))
 		.reactive_style(move || {
+			let hovered = over.get();
 			if actions.is_selected(id) {
-				Styles::new().bg(tok("message_selected"))
-			} else {
-				Styles::new()
+				return Styles::new().bg(tok("message_selected"));
 			}
+			if tinted {
+				return Styles::new().bg(tok("background_feedback_critical"));
+			}
+			match highlight {
+				Some((rest, lit, _)) => {
+					Styles::new().bg_gradient(FRAC_PI_2, wash(&washed, if hovered { lit } else { rest }))
+				}
+				None if hovered => Styles::new().bg(tok("message_hover")),
+				None => Styles::new(),
+			}
+		})
+		.when_some(highlight, |frame, (_, _, bar)| {
+			frame.child(
+				div()
+					.absolute()
+					.left(HIGHLIGHT_LEFT)
+					.top(HIGHLIGHT_INSET)
+					.bottom(HIGHLIGHT_INSET)
+					.w(HIGHLIGHT_BAR)
+					.rounded(HIGHLIGHT_BAR)
+					.bg(tok(bar)),
+			)
 		})
 		.when(entry.pending, |row| row.opacity(0.5));
 	if !bridge::has_actions(entry) || entry.deleted {
@@ -252,7 +332,7 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 
 fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<View> {
 	let mut out = kept::history(entry, env, bump, BODY);
-	if !entry.content.is_empty() {
+	if !entry.content.is_empty() && !super::pictures::only_link(entry) {
 		let look = Look {
 			size: BODY,
 			color: kept::text_color(entry),
@@ -267,8 +347,8 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<Vi
 	} else if entry.deleted {
 		out.push(
 			text("(deleted)")
-				.text_size(tok("font_sm"))
-				.text_color(tok("danger")),
+				.text_size(tok("font_size_sm"))
+				.text_color(tok("red_2")),
 		);
 	}
 	out.extend(attachments::attachments(entry, env));
@@ -285,18 +365,19 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<Vi
 
 fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 	let reply = entry.reply.as_ref()?;
+	let avatar_middle = AVATAR_LEFT + AVATAR as f32 / 2.;
 	let curve = div()
 		.absolute()
-		.left(-36.)
-		.top(10.)
-		.w(32.)
-		.h(10.)
+		.left(avatar_middle - SPINE / 2. - GUTTER)
+		.top(REPLY_LINE / 2.)
+		.w(GUTTER - REPLY_GAP - avatar_middle + SPINE / 2.)
+		.h(REPLY_LINE / 2. + 2.)
 		.border_edges(zgx::scene::Insets {
-			left: 2.,
-			top: 2.,
+			left: SPINE,
+			top: SPINE,
 			..Default::default()
 		})
-		.border_color(tok("interactive_muted"))
+		.border_color(tok("text_5"))
 		.rounded_corners(Corners {
 			top_left: 6.,
 			top_right: 0.,
@@ -305,9 +386,9 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 		});
 	let muted = |label: &str| {
 		text(label.to_owned())
-			.text_size(tok("font_sm"))
+			.text_size(tok("font_size_sm"))
 			.italic(true)
-			.text_color(tok("text_muted"))
+			.text_color(tok("text_4"))
 	};
 	let inner = match reply {
 		ReplyPreview::Unavailable => muted("Original message was deleted"),
@@ -338,17 +419,19 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 				.child(
 					text(format!("@{}", quote.name))
 						.shrink_0()
-						.text_size(tok("font_sm"))
-						.font_weight(600)
-						.text_color(tok("header_secondary")),
+						.text_size(tok("font_size_sm"))
+						.line_height(REPLY_LINE)
+						.font_weight(500)
+						.text_color(tok("text_2")),
 				)
 				.child(
 					text(snippet)
 						.grow()
 						.min_w(0.)
 						.truncate()
-						.text_size(tok("font_sm"))
-						.text_color(tok(if deleted { "danger" } else { "text_muted" })),
+						.text_size(tok("font_size_sm"))
+						.line_height(REPLY_LINE)
+						.text_color(tok(if deleted { "red_2" } else { "text_3" })),
 				)
 		}
 	};
@@ -357,8 +440,8 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 			.relative()
 			.items_center()
 			.gap(4.)
-			.h(20.)
-			.mb(2.)
+			.h(REPLY_LINE)
+			.mb(REPLY_GAP)
 			.child(curve)
 			.child(inner),
 	)
@@ -371,18 +454,23 @@ fn first_of_group(
 	bump: &Signal<u32>,
 ) -> View {
 	let time = bridge::message_time(entry.sent_at, bridge::today());
-	let name_color = color_or(entry.author_color, "header_primary");
+	let name_color = color_or(entry.author_color, "text_2");
 	let reply = reply_header(entry, env);
-	let avatar_top = if reply.is_some() { 24. } else { 4. };
+	let avatar_top = if reply.is_some() {
+		AVATAR_TOP + REPLY_HEIGHT
+	} else {
+		AVATAR_TOP
+	};
 	let header = row()
 		.items_center()
-		.gap(8.)
+		.gap(4.)
 		.h(LINE)
 		.child({
 			let (actions, author) = (env.actions.clone(), entry.message.author.id);
 			text(entry.author.as_str())
-				.text_size(tok("font_md"))
-				.font_weight(600)
+				.text_size(tok("font_size_md"))
+				.line_height(LINE)
+				.font_weight(500)
 				.text_color(name_color)
 				.cursor(Cursor::Pointer)
 				.on_click(move || actions.profile(author))
@@ -390,16 +478,18 @@ fn first_of_group(
 		.when_some(entry.author_extra.clone(), |header, extra| {
 			header.child(
 				text(extra)
-					.text_size(tok("font_md"))
+					.text_size(tok("font_size_md"))
+					.line_height(LINE)
 					.font_weight(500)
-					.text_color(tok("text_muted")),
+					.text_color(tok("text_4")),
 			)
 		})
 		.when(entry.bot, |header| header.child(bot_tag()))
 		.child(
 			text(time)
-				.text_size(tok("font_tiny"))
-				.text_color(tok("text_muted")),
+				.text_size(tok("font_size_xs"))
+				.font_weight(500)
+				.text_color(tok("text_5")),
 		);
 	message_frame(entry, env, hovered)
 		.mt(HEADER_GAP)
@@ -408,7 +498,7 @@ fn first_of_group(
 			let (actions, author) = (env.actions.clone(), entry.message.author.id);
 			avatar(entry, env)
 				.absolute()
-				.left(16.)
+				.left(AVATAR_LEFT)
 				.top(avatar_top)
 				.cursor(Cursor::Pointer)
 				.on_click(move || actions.profile(author))
@@ -423,14 +513,15 @@ fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bum
 		.absolute()
 		.left(0.)
 		.top(2.)
-		.w(GUTTER)
+		.w(CLOCK_WIDTH)
 		.h(LINE)
 		.items_center()
-		.justify_center()
+		.justify_end()
 		.child(
 			text(bridge::clock_text(entry.sent_at))
-				.text_size(11.)
-				.text_color(tok("text_muted")),
+				.text_size(tok("font_size_timestamp_alt"))
+				.line_height(LINE)
+				.text_color(tok("text_5")),
 		)
 		.reactive_style(move || {
 			if shown.get() {
@@ -481,8 +572,9 @@ fn system_row(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
 		.gap(8.)
 		.pl(GUTTER)
 		.pr(RIGHT)
-		.mt(17.)
+		.mt(HEADER_GAP)
 		.py(2.)
+		.rounded(tok("radius_md"))
 		.hover(|style| style.bg(tok("message_hover")))
 		.child(
 			row()
@@ -496,27 +588,33 @@ fn system_row(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
 		.child(
 			text(line.text.as_str())
 				.min_w(0.)
-				.text_size(tok("font_md"))
+				.text_size(tok("font_size_md"))
 				.line_height(LINE)
-				.text_color(tok("text_muted"))
+				.text_color(tok("text_4"))
 				.text_wrap(true),
 		)
 		.child(
 			text(bridge::message_time(entry.sent_at, bridge::today()))
 				.shrink_0()
-				.text_size(tok("font_tiny"))
-				.text_color(tok("text_muted")),
+				.text_size(tok("font_size_xs"))
+				.font_weight(500)
+				.text_color(tok("text_5")),
 		)
 }
 
 fn bot_tag() -> View {
-	div().px(5.).rounded(tok("radius_sm")).bg(tok("brand")).child(
-		text("BOT")
-			.text_size(10.)
-			.line_height(15.)
-			.font_weight(700)
-			.text_color(tok("text_on_brand")),
-	)
+	div()
+		.h(tok("bot_tag_height"))
+		.px(4.)
+		.rounded(tok("radius_xs"))
+		.bg(tok("accent_2"))
+		.child(
+			text("BOT")
+				.text_size(tok("font_size_tag"))
+				.line_height(15.)
+				.font_weight(600)
+				.text_color(tok("text_0")),
+		)
 }
 
 fn initial_of(name: &str) -> String {
@@ -608,39 +706,49 @@ fn day_separator(day: NaiveDate) -> View {
 		.w_full()
 		.items_center()
 		.gap(8.)
-		.px(16.)
+		.pl(UNREAD_LEFT)
+		.pr(UNREAD_RIGHT)
 		.mt(16.)
-		.child(rule("divider"))
+		.child(rule("border"))
 		.child(
 			text(bridge::day_label(day))
-				.text_size(tok("font_tiny"))
+				.text_size(tok("font_size_xs"))
 				.line_height(16.)
 				.font_weight(600)
-				.text_color(tok("text_muted")),
+				.text_color(tok("text_4")),
 		)
-		.child(rule("divider"))
+		.child(rule("border"))
 }
 
 fn unread_marker() -> View {
 	row()
 		.w_full()
-		.items_center()
-		.px(16.)
-		.my(8.)
-		.h(13.)
-		.child(rule("danger"))
+		.h(UNREAD_HEIGHT)
+		.pt(UNREAD_TOP)
+		.pl(UNREAD_LEFT)
+		.pr(UNREAD_RIGHT)
 		.child(
 			div()
+				.relative()
+				.grow()
+				.h(tok("divider_thickness"))
+				.rounded(tok("divider_thickness"))
+				.bg(tok("accent_new")),
+		)
+		.child(
+			div()
+				.shrink_0()
+				.mt(-4.5)
+				.h(tok("unread_pill_height"))
 				.px(4.)
-				.h(13.)
-				.rounded(tok("radius_sm"))
-				.bg(tok("danger"))
+				.rounded(tok("radius_xs"))
+				.bg(tok("accent_new"))
 				.child(
 					text("NEW")
-						.text_size(10.)
+						.text_size(tok("font_size_tag"))
 						.line_height(13.)
 						.font_weight(700)
-						.text_color(tok("text_on_brand")),
+						.text_color(tok("text_0")),
 				),
 		)
 }

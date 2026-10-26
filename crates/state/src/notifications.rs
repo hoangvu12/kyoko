@@ -217,7 +217,7 @@ impl State {
 		status
 	}
 
-	pub(crate) fn mentions_me(&self, message: &Message, guild_id: Option<Snowflake>) -> bool {
+	pub fn mentions_me(&self, message: &Message, guild_id: Option<Snowflake>) -> bool {
 		let Some(me) = self.current_user_id() else {
 			return false;
 		};

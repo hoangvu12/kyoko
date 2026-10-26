@@ -117,7 +117,10 @@ async fn gif_search_waits_for_typing_to_pause() {
 	let shared = running.session().state().clone();
 	let mut search = GifSearch::default();
 	let opened = search.open(&shared.read());
-	assert!(matches!(opened.as_slice(), [Command::LoadGifTrending]));
+	assert!(matches!(
+		opened.as_slice(),
+		[Command::LoadGifTrending, Command::LoadFavorites]
+	));
 	let start = Instant::now();
 	assert!(
 		search.typed(&shared.read(), "w", start).is_empty(),

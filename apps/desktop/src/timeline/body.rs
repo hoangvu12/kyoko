@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use bridge::PopoutSubject;
 use chrono::Utc;
 use markdown::highlight::{TokenKind, highlight};
 use markdown::{Document, Node};
@@ -20,6 +21,8 @@ use crate::emoji;
 const LINE_RATIO: f32 = 1.375;
 const JUMBO_TEXT: f32 = 40.;
 const CODE_LINE: f32 = 18.;
+const CODE_PADDING: f32 = 7.;
+const CODE_WIDTH: f32 = 90.;
 const SUBTEXT_LINE: f32 = 16.;
 const LIST_INDENT: f32 = 16.;
 const QUOTE_BAR: f32 = 4.;
@@ -254,10 +257,16 @@ impl Body<'_> {
 		let start = inline.length;
 		inline.length += copied.len();
 		if let Some(art) = art.filter(|_| !conceals(style)) {
+			let subject = match (&target, &art) {
+				(Some(target), _) => Some(PopoutSubject::Custom(target.clone())),
+				(None, Art::Svg(_)) => Some(PopoutSubject::Unicode(copied.to_owned())),
+				(None, Art::Image(_)) => None,
+			};
 			inline.placed.push(Placed {
 				range: start..inline.length,
 				art,
 				target,
+				subject,
 			});
 		}
 		let span = self.span(copied, style);
@@ -357,7 +366,7 @@ impl Body<'_> {
 			}
 			Node::Code(code) => {
 				let next = Style {
-					background: Some(Themed::Token(tok("code_background"))),
+					background: Some(Themed::Token(tok("bg_3"))),
 					mono: true,
 					..style.clone()
 				};
@@ -490,18 +499,17 @@ impl Body<'_> {
 			spans.push(text_span(code[covered..].to_owned()));
 		}
 		div()
-			.w_full()
-			.mt(4.)
-			.px(12.)
-			.py(8.)
-			.rounded(tok("radius_sm"))
-			.bg(tok("code_background"))
-			.border(1.)
-			.border_color(tok("code_border"))
+			.max_w_percent(CODE_WIDTH)
+			.mt(6.)
+			.p(CODE_PADDING)
+			.rounded(tok("radius_md"))
+			.bg(tok("bg_3"))
+			.border(tok("border_thickness"))
+			.border_color(tok("border"))
 			.font_family(tok("code_font"))
-			.text_size(tok("font_sm"))
+			.text_size(tok("font_size_sm"))
 			.line_height(CODE_LINE)
-			.text_color(tok("text_normal"))
+			.text_color(tok("text_3"))
 			.child(View::from(rich_text().children(spans)).w_full().text_wrap(true))
 	}
 }

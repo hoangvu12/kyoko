@@ -17,6 +17,7 @@ use zgx::reactive::{Runtime, Signal};
 use super::dialogs::{Confirm, Dialogs};
 use super::icons::{glyph, icon};
 use super::links::Links;
+use super::popout::ExpressionPopout;
 use super::rows::{Sender, tok};
 use crate::pickers::{ExpressionPicker, Tab};
 use crate::plugin_menu::{PluginMenu, Shown};
@@ -29,10 +30,10 @@ const MENU_MARGIN: f32 = 7.;
 const MENU_PADDING: f32 = 4.;
 const MENU_BORDER: f32 = 1.;
 const SEPARATOR: f32 = 7.;
-const TOOLBAR_HEIGHT: f32 = 32.;
-const TOOLBAR_BUTTON: f32 = 28.;
-const TOOLBAR_ICON: f32 = 18.;
-const MORE_BUTTON: f32 = 23.;
+const TOOLBAR_RIGHT: f32 = 12.;
+const TOOLBAR_RISE: f32 = 16.;
+const TOOLBAR_BUTTON: f32 = 32.;
+const TOOLBAR_ICON: f32 = 20.;
 const REJECTION_WINDOW: Duration = Duration::from_secs(15);
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
@@ -85,6 +86,7 @@ pub struct MessageActions {
 	menus: Cell<u64>,
 	pub dialogs: Rc<Dialogs>,
 	pub picker: Rc<ExpressionPicker>,
+	pub popout: Rc<ExpressionPopout>,
 	developer_mode: Cell<bool>,
 	links: Rc<Links>,
 	commands: Rc<Sender>,
@@ -107,6 +109,7 @@ pub struct MessageActions {
 pub struct Wiring {
 	pub dialogs: Rc<Dialogs>,
 	pub picker: Rc<ExpressionPicker>,
+	pub popout: Rc<ExpressionPopout>,
 	pub links: Rc<Links>,
 	pub commands: Rc<Sender>,
 	pub developer_mode: bool,
@@ -128,6 +131,7 @@ impl MessageActions {
 			menus: Cell::new(0),
 			dialogs: wiring.dialogs,
 			picker: wiring.picker,
+			popout: wiring.popout,
 			developer_mode: Cell::new(wiring.developer_mode),
 			links: wiring.links,
 			commands: wiring.commands,
@@ -310,6 +314,7 @@ impl MessageActions {
 		self.notice.set(None);
 		self.context.set(None);
 		self.picker.close();
+		self.popout.close();
 	}
 
 	pub fn delete_selected(&self) {
@@ -427,6 +432,10 @@ impl MessageActions {
 				});
 			}
 			MessageAction::Report => self.links.download(bridge::REPORT_URL),
+			MessageAction::RemoveEmbeds => self.send(Command::SuppressEmbeds {
+				channel_id,
+				message_id,
+			}),
 		}
 	}
 
@@ -625,27 +634,28 @@ impl MessageActions {
 		let buttons = bridge::toolbar_actions(entry, &access).into_iter().map(|action| {
 			let (this, entry) = (self.clone(), entry.clone());
 			let hovered = self.runtime.signal(false);
-			toolbar_button(action.icon(), "interactive_normal", hovered)
+			toolbar_button(action.icon(), hovered)
+				.id(format!(
+					"message-action-{}",
+					action.label(0).to_lowercase().replace(' ', "-")
+				))
 				.on_click_with(move |modifiers| this.run(action, &entry, modifiers))
 				.tooltip(action.label(0))
 		});
 		let toggle = more_open.clone();
 		let hovered = self.runtime.signal(false);
-		let more = toolbar_button("more", "interactive_active", hovered)
-			.w(MORE_BUTTON)
+		let more = toolbar_button("more", hovered)
 			.on_click(move || flip(&toggle))
 			.tooltip("More");
 		row()
 			.absolute()
-			.right(16.)
-			.top(-2.)
-			.h(TOOLBAR_HEIGHT)
-			.px(2.)
+			.right(TOOLBAR_RIGHT)
+			.top(-TOOLBAR_RISE)
 			.items_center()
 			.rounded(tok("radius_sm"))
-			.border(1.)
-			.border_color(tok("divider"))
-			.bg(tok("background_primary"))
+			.border(tok("border_thickness"))
+			.border_color(tok("border"))
+			.bg(tok("bg_3"))
 			.children(buttons)
 			.child(menu_panel(menu("More", more_open, more)).children(self.menu_items(entry, access)))
 	}
@@ -838,16 +848,16 @@ fn separator() -> View {
 	div().h(1.).my((SEPARATOR - 1.) / 2.).bg(tok("divider"))
 }
 
-fn toolbar_button(name: &'static str, color: &'static str, hovered: Signal<bool>) -> View {
+fn toolbar_button(name: &'static str, hovered: Signal<bool>) -> View {
 	let tracker = hovered.clone();
 	div()
 		.size(TOOLBAR_BUTTON, TOOLBAR_BUTTON)
 		.shrink_0()
 		.items_center()
 		.justify_center()
-		.rounded(tok("radius_sm"))
+		.rounded(tok("radius_xs"))
 		.cursor(Cursor::Pointer)
-		.hover(|style| style.bg(tok("modifier_hover")))
+		.hover(|style| style.bg(tok("hover")))
 		.on_event(move |event| match event.event {
 			InputEvent::PointerEnter => {
 				tracker.set(true);
@@ -858,7 +868,7 @@ fn toolbar_button(name: &'static str, color: &'static str, hovered: Signal<bool>
 			_ => {}
 		})
 		.child(glyph(name, TOOLBAR_ICON).reactive_style(move || {
-			Styles::new().text_color(tok(if hovered.get() { "interactive_hover" } else { color }))
+			Styles::new().text_color(tok(if hovered.get() { "text_2" } else { "text_4" }))
 		}))
 }
 

@@ -68,6 +68,16 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("settings-plugins", "settings-plugins"),
 	("toast", "toast-rate-limited"),
 	("connection-offline", "connection-lost"),
+	("expressions-in-messages", "expressions-in-messages"),
+	(
+		"expressions-in-messages-emoji-popout",
+		"expressions-in-messages-emoji-popout",
+	),
+	(
+		"expressions-in-messages-sticker-popout",
+		"expressions-in-messages-sticker-popout",
+	),
+	("link-preview-while-typing", "link-preview-while-typing"),
 ];
 
 pub struct Pairing {

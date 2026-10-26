@@ -10,8 +10,8 @@ use super::rows::{RowEnv, tok};
 use crate::plugin_menu::AccessoryClick;
 
 const HISTORY_SPOILERS: usize = 10_000;
-const DELETED: (&str, &str) = ("(deleted)", "danger");
-const EDITED: (&str, &str) = ("(edited)", "text_muted");
+const DELETED: (&str, &str) = ("(deleted)", "red_2");
+const EDITED: (&str, &str) = ("(edited)", "text_5");
 
 fn deleted_look(entry: &MessageEntry) -> Option<DeletedLook> {
 	entry
@@ -27,15 +27,15 @@ pub fn tinted(entry: &MessageEntry) -> bool {
 
 pub fn text_color(entry: &MessageEntry) -> &'static str {
 	if entry.failed {
-		return "danger";
+		return "red_2";
 	}
 	if !entry.deleted {
-		return "text_normal";
+		return "text_3";
 	}
 	match deleted_look(entry) {
-		Some(DeletedLook::Text) => "danger",
-		Some(DeletedLook::Tint) => "text_normal",
-		_ => "text_muted",
+		Some(DeletedLook::Text) => "red_2",
+		Some(DeletedLook::Tint) => "text_3",
+		_ => "text_5",
 	}
 }
 
@@ -88,7 +88,7 @@ pub fn history(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>, size:
 		.map(|(index, document)| {
 			let look = Look {
 				size,
-				color: "text_muted",
+				color: "text_5",
 				jumbo: false,
 				trailer: Some(EDITED),
 				on_trailer: None,
@@ -108,9 +108,9 @@ pub fn accessories(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.iter()
 		.map(|accessory| {
 			let line = text(accessory.text.clone())
-				.text_size(tok("font_tiny"))
+				.text_size(tok("font_size_xs"))
 				.line_height(16.)
-				.text_color(tok("text_muted"));
+				.text_color(tok("text_5"));
 			let (Some(key), Some(menu)) = (accessory.action.clone(), env.actions.plugin_menu()) else {
 				return line;
 			};
@@ -123,7 +123,7 @@ pub fn accessories(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 			let pressing = menu.clone();
 			line.id(format!("accessory-{}-{}", accessory.plugin, entry.id))
 				.cursor(Cursor::Pointer)
-				.hover(|style| style.text_color(tok("text_normal")))
+				.hover(|style| style.text_color(tok("text_3")))
 				.on_event(move |event| {
 					if event.phase != zgx::input::EventPhase::Capture
 						&& matches!(event.event, zgx::input::InputEvent::PointerDown { .. })

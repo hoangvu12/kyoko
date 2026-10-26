@@ -364,12 +364,15 @@ impl State {
 				&& cache.deleted(message.id).is_none()
 				&& last_read.is_some_and(|read| message.id > read)
 				&& Some(message.author.id) != me;
-			if !marker_placed && is_unread && (previous.is_some() || cache.reached_start) {
+			let marked = !marker_placed && is_unread && (previous.is_some() || cache.reached_start);
+			if marked {
 				rows.push(MessageRow::UnreadMarker);
 				marker_placed = true;
 			}
-			let grouped = previous
-				.is_some_and(|(earlier, earlier_day)| earlier_day == day && groups_with(earlier, message));
+			let grouped = !marked
+				&& previous.is_some_and(|(earlier, earlier_day)| {
+					earlier_day == day && groups_with(earlier, message)
+				});
 			rows.push(MessageRow::Message(Box::new(
 				self.message_view(guild, cache, message, grouped, pending),
 			)));
