@@ -8546,6 +8546,7 @@ dependencies = [
  "hex",
  "image",
  "kyoko-bridge",
+ "kyoko-media",
  "kyoko-plugins",
  "kyoko-protocol",
  "kyoko-session",

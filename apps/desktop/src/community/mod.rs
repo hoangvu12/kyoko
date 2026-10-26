@@ -1,4 +1,5 @@
 mod add_server;
+mod clone;
 mod forward;
 mod invite;
 mod leave;
@@ -12,7 +13,7 @@ use std::rc::Rc;
 use media::ImageName;
 use protocol::Snowflake;
 use session::Command;
-use state::{SharedState, State};
+use state::{Expression, SharedState, State};
 use zgx::compose::prelude::*;
 use zgx::compose::{ModalPlacement, PlacementEdge};
 use zgx::reactive::{Effect, Runtime, Signal};
@@ -30,6 +31,12 @@ type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 pub enum Request {
 	Command(Command),
 	Copy(String),
+	Clone {
+		expression: Expression,
+		guild_id: Snowflake,
+		server: String,
+		name: String,
+	},
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +55,7 @@ pub enum Dialog {
 	},
 	Onboarding(Snowflake),
 	Screening(Snowflake),
+	Clone(Expression),
 }
 
 pub struct CommunityLayer {
@@ -146,7 +154,10 @@ impl CommunityLayer {
 		let serial = self.serials.get() + 1;
 		self.serials.set(serial);
 		self.invite.reset();
-		let typing = matches!(dialog, Dialog::AddServer | Dialog::Forward { .. });
+		let typing = matches!(
+			dialog,
+			Dialog::AddServer | Dialog::Forward { .. } | Dialog::Clone(_)
+		);
 		self.runtime.batch(|| {
 			self.dialog.set(Some((serial, dialog)));
 			self.open.set(true);
@@ -267,6 +278,7 @@ impl CommunityLayer {
 			Dialog::Leave { guild_id, name } => leave::view(self, guild_id, &name),
 			Dialog::Onboarding(guild_id) => onboarding::view(self, guild_id),
 			Dialog::Screening(guild_id) => onboarding::screening(self, guild_id),
+			Dialog::Clone(expression) => clone::view(self, expression),
 		}
 	}
 }

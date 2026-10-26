@@ -73,6 +73,8 @@ pub enum Screen {
 	Toast,
 	Disconnected,
 	Friends(FriendsTab),
+	CloneMenu,
+	CloneDialog,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +132,8 @@ impl Screen {
 			"friends-pending" => Some(Screen::Friends(FriendsTab::Pending)),
 			"friends-blocked" => Some(Screen::Friends(FriendsTab::Blocked)),
 			"friends-add" => Some(Screen::Friends(FriendsTab::Add)),
+			"message-menu-clone" => Some(Screen::CloneMenu),
+			"clone-dialog" => Some(Screen::CloneDialog),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -178,7 +182,9 @@ impl Screen {
 			| Screen::Moderation(_)
 			| Screen::Toast
 			| Screen::Disconnected
-			| Screen::Friends(_) => Some(Opening::First),
+			| Screen::Friends(_)
+			| Screen::CloneMenu
+			| Screen::CloneDialog => Some(Opening::First),
 			Screen::LoginTos | Screen::LoginToken => None,
 		}
 	}

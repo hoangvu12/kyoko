@@ -132,6 +132,23 @@ pub fn emoji_url(cdn: &str, id: u64, animated: bool, size: u32) -> String {
 	)
 }
 
+pub fn emoji_source_url(cdn: &str, id: u64, animated: bool) -> String {
+	let extension = if animated { "gif" } else { "png" };
+	format!(
+		"{}/emojis/{id}.{extension}?quality=lossless",
+		cdn.trim_end_matches('/')
+	)
+}
+
+pub fn sticker_source_url(id: u64, format: StickerFormat) -> Option<String> {
+	match format {
+		StickerFormat::Png => Some(format!("{CDN}/stickers/{id}.png")),
+		StickerFormat::Apng => Some(format!("{CDN}/stickers/{id}.png?passthrough=true")),
+		StickerFormat::Gif => Some(format!("{MEDIA_PROXY}/stickers/{id}.gif")),
+		StickerFormat::Lottie | StickerFormat::Unknown(_) => None,
+	}
+}
+
 pub fn sticker_url(id: u64, format: StickerFormat) -> Option<String> {
 	match format {
 		StickerFormat::Png | StickerFormat::Apng => {

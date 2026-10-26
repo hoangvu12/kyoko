@@ -133,7 +133,7 @@ impl Action {
 	}
 
 	pub fn available(self) -> bool {
-		matches!(self, Action::MarkRead)
+		matches!(self, Action::MarkRead | Action::UploadExpression)
 	}
 }
 
@@ -149,8 +149,16 @@ impl Slot {
 	pub fn available(self) -> bool {
 		matches!(
 			self,
-			Slot::ComposerButtons | Slot::PanelButtons | Slot::RailButtons
+			Slot::ComposerButtons | Slot::PanelButtons | Slot::RailButtons | Slot::MessageMenu
 		)
+	}
+
+	pub fn is_menu(self) -> bool {
+		self == Slot::MessageMenu
+	}
+
+	pub fn parse(name: &str) -> Option<Slot> {
+		lookup(&SLOTS, name)
 	}
 }
 
@@ -186,6 +194,9 @@ impl Permission {
 			Permission::Storage => "Keep its own data on this computer.".to_owned(),
 			Permission::Network(host) => format!("Contact {host}."),
 			Permission::Ui(Slot::Settings) => "Add its own controls to its settings page.".to_owned(),
+			Permission::Ui(Slot::MessageMenu) => {
+				"Add items to the menu of messages, emoji and stickers.".to_owned()
+			}
 			Permission::Ui(slot) => format!("Add to the interface at {}.", slot.name()),
 			Permission::Read(Scope::Messages) => "Read messages in your servers, as they arrive.".to_owned(),
 			Permission::Read(Scope::DirectMessages) => {
@@ -219,7 +230,7 @@ impl Permission {
 				"Mark channels as read when you click its button.".to_owned()
 			}
 			Permission::Action(Action::UploadExpression) => {
-				"Upload emoji and stickers to a server when you click its button.".to_owned()
+				"Upload an emoji or sticker to a server you pick, when you choose its menu item.".to_owned()
 			}
 			Permission::Action(Action::Activity) => {
 				"Change whether your activity is shared when you click its button.".to_owned()

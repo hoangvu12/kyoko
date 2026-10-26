@@ -1,3 +1,4 @@
+mod cloner;
 mod community;
 mod composer;
 mod connection;
@@ -188,6 +189,8 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_post_files());
 			cx.tasks.spawn(link.clone().tick_composer());
 			cx.tasks.spawn(link.clone().follow_plugins());
+			cx.tasks.spawn(link.clone().follow_plugin_requests());
+			cx.tasks.spawn(link.clone().follow_clones());
 			cx.tasks.spawn(link.clone().follow_theme_folder());
 			cx.tasks.spawn(link.clone().follow_display());
 			cx.tasks.spawn(link.clone().follow_gif_search());
@@ -392,6 +395,7 @@ pub(crate) struct Link {
 	timeline_view: Rc<TimelineView>,
 	profile: Rc<ProfileLayer>,
 	community: Rc<CommunityLayer>,
+	cloner: cloner::Cloner,
 	toasts: Rc<ToastLayer>,
 	toast_window: RefCell<Option<Effect>>,
 	motion: Motion,
@@ -519,6 +523,7 @@ impl Link {
 			timeline_view,
 			profile,
 			community,
+			cloner: cloner::Cloner::new(),
 			toasts,
 			toast_window: RefCell::new(None),
 			motion,
@@ -572,6 +577,7 @@ impl Link {
 		Link::install_server_settings(host, &link);
 		Link::install_settings(host, &link);
 		Link::install_plugins(host, &link);
+		Link::install_cloner(&link);
 		Link::install_themes(host, &link);
 		Link::install_profiles(host, &link);
 		Link::install_search(host, &link);
@@ -774,6 +780,9 @@ impl Link {
 		self.watch_session(changes);
 		let opened = self.publish(changes);
 		self.community_apply(changes);
+		if let Some(shared) = self.state() {
+			self.cloner_apply(&shared.read(), changes);
+		}
 		self.themes_apply(changes);
 		self.follow_friend(changes);
 		self.follow_threads();
@@ -827,6 +836,11 @@ impl Link {
 			capture::Screen::TextReplaceSettings => self.drive_text_replace().await,
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
+			capture::Screen::CloneMenu => self.drive_clone_menu().await,
+			capture::Screen::CloneDialog => {
+				self.drive_clone_dialog().await;
+				self.until_capture(|link| link.community_settled()).await;
+			}
 			capture::Screen::Settings(_) => {
 				self.drive_settings(capture.screen);
 				let started = Instant::now();

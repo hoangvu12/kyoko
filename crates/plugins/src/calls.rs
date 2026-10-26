@@ -1,5 +1,6 @@
 use protocol::{DispatchEvent, Message, Snowflake};
 use session::{Person, RankedEmoji, RelativeTime, ShownName};
+use state::Expression;
 
 use crate::permission::Scope;
 
@@ -61,6 +62,7 @@ pub(crate) enum Call {
 	Action {
 		key: String,
 		context: Vec<(String, String)>,
+		target: Option<Expression>,
 	},
 	SettingsChanged,
 }
@@ -82,6 +84,13 @@ impl Call {
 
 	pub(crate) fn is_gesture(&self) -> bool {
 		matches!(self, Call::Action { .. })
+	}
+
+	pub(crate) fn target(&self) -> Option<Expression> {
+		match self {
+			Call::Action { target, .. } => target.clone(),
+			_ => None,
+		}
 	}
 }
 

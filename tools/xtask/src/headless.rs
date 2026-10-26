@@ -52,6 +52,9 @@ const TYPING_QUIET: Duration = Duration::from_millis(500);
 const ONE_PING_PER_DM: &str = "one-ping-per-dm";
 const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
 const DONT_ROUND: &str = "dont-round-my-timestamps";
+const EXPRESSION_CLONER: &str = "expression-cloner";
+const CLONE_KEY: &str = "clone_emoji";
+const CLONE_NAME: &str = "headless_clone";
 const REDRAWS: usize = 100;
 const FAVORITE_EMOJI_FIRST: &str = "favorite-emoji-first";
 const FAVORITE_QUERY: &str = "wave";
@@ -191,6 +194,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		SHOW_ME_YOUR_NAME,
 		DONT_ROUND,
 		FAVORITE_EMOJI_FIRST,
+		EXPRESSION_CLONER,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -438,6 +442,72 @@ impl Harness {
 				== Some(&key)
 		})
 		.await
+	}
+
+	async fn clones(&self, plugins: &PluginHost, server: &Server, root: &Path) -> Result<bool> {
+		let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let sink = asked.clone();
+		plugins.on_request(move |request| {
+			if let Ok(mut asked) = sink.lock() {
+				asked.push(request);
+			}
+		});
+		let (source, target) = {
+			let state = self.state.read();
+			let source = state
+				.guilds()
+				.find_map(|guild| {
+					guild.emojis.iter().find_map(|emoji| {
+						Some(bridge::emoji_expression(
+							emoji.name.as_deref()?,
+							emoji.id?,
+							emoji.animated.unwrap_or(false),
+						))
+					})
+				})
+				.context("no custom emoji to clone")?;
+			let target = bridge::clone_targets(&state, &source)
+				.into_iter()
+				.find(|target| target.blocked.is_none())
+				.context("no server takes the clone")?;
+			(source, target)
+		};
+		let items = plugins.menu_items(plugins::Slot::MessageMenu);
+		ensure!(
+			items.iter().any(|item| item.key == CLONE_KEY),
+			"ExpressionCloner offers no Clone Emoji item"
+		);
+		plugins
+			.menu_gesture(
+				EXPRESSION_CLONER,
+				CLONE_KEY,
+				plugins::Slot::MessageMenu,
+				Some(source.clone()),
+				&[],
+			)
+			.map_err(|error| anyhow::anyhow!("the Clone Emoji click failed: {error}"))?;
+		let requested = asked.lock().map(|asked| asked.len()).unwrap_or_default();
+		ensure!(
+			requested == 1,
+			"ExpressionCloner asked {requested} times for one click"
+		);
+		let fingerprint = protocol::fingerprint::Fingerprint::web_client("en-US", 1);
+		let fetcher = bridge::media_fetcher(&fingerprint, Some(server.address().port()))?;
+		let loader = media::MediaService::new(fetcher, root.join("clone-cache"), media::Limits::default());
+		let url = bridge::clone_source(&server.cdn_url(), &source).context("the emoji has no source")?;
+		let bytes = loader.bytes(&url).await?.to_vec();
+		let command = bridge::clone_command(&self.state.read(), &source, target.guild_id, CLONE_NAME, bytes);
+		self.session.send(command);
+		self.until("the cloned emoji", |state| {
+			state.guild(target.guild_id).is_some_and(|guild| {
+				guild
+					.emojis
+					.iter()
+					.any(|emoji| emoji.name.as_deref() == Some(CLONE_NAME))
+			})
+		})
+		.await?;
+		Ok(true)
 	}
 
 	async fn stop(self) -> Result<()> {
@@ -741,6 +811,7 @@ async fn scenario(
 	let text = harness
 		.text_features(server.fixtures(), guild_id, channel_id, sent_id)
 		.await?;
+	let clone_ok = harness.clones(&plugins, server, root).await?;
 
 	sleep_until(started + Duration::from_secs(args.duration)).await;
 	harness
@@ -763,6 +834,7 @@ async fn scenario(
 			"moderation_ok": text.moderation_ok,
 			"expressions_ok": text.expressions_ok,
 			"community_ok": text.community_ok,
+			"clone_ok": clone_ok,
 			"display_calls": display_calls,
 			"plugins": plugins
 				.snapshot()

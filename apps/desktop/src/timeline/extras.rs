@@ -7,6 +7,7 @@ use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 
+use super::actions::aimed;
 use super::attachments::picture;
 use super::icons::icon;
 use super::pictures::REACTION_EMOJI;
@@ -55,7 +56,7 @@ fn chip(entry: &Rc<MessageEntry>, reaction: &Reaction, env: &Rc<RowEnv>) -> View
 			"interactive_normal",
 		)
 	};
-	row()
+	let chip = row()
 		.items_center()
 		.gap(6.)
 		.h(CHIP_HEIGHT)
@@ -80,7 +81,8 @@ fn chip(entry: &Rc<MessageEntry>, reaction: &Reaction, env: &Rc<RowEnv>) -> View
 			chip.on_click(move || actions.toggle_reaction(&entry, &key))
 		})
 		.child(glyph)
-		.child(text(reaction.count.to_string()))
+		.child(text(reaction.count.to_string()));
+	aimed(chip, &env.actions, bridge::reaction_expression(&reaction.emoji))
 }
 
 pub fn thread_chip(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {

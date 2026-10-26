@@ -1,6 +1,8 @@
 mod actions;
 mod attachments;
 mod body;
+#[cfg(test)]
+mod clone_tests;
 mod dialogs;
 #[cfg(test)]
 mod emoji_tests;
@@ -34,9 +36,10 @@ use zgx::platform::PlatformService;
 use zgx::reactive::{Effect, Runtime, Signal};
 
 pub use self::actions::Compose;
+pub(crate) use self::actions::{MENU_ICON, menu_panel, menu_row};
 use self::actions::{MessageActions, Wiring};
 use self::dialogs::Dialogs;
-pub(crate) use self::icons::icon;
+pub(crate) use self::icons::{icon, plugin_icon};
 use self::lightbox::Lightbox;
 use self::links::Links;
 pub(crate) use self::pictures::Pictures;
@@ -285,6 +288,14 @@ impl TimelineView {
 
 	pub fn on_reveal(&self, reveal: impl Fn((Snowflake, MessageAction)) + 'static) {
 		self.actions.on_reveal(reveal);
+	}
+
+	pub fn aim(&self, target: state::Expression, at: (f32, f32)) {
+		self.actions.aim(target, at);
+	}
+
+	pub fn set_plugin_menu(&self, menu: Rc<crate::plugin_menu::PluginMenu>) {
+		self.actions.set_plugin_menu(menu);
 	}
 
 	pub fn open_menu_at(&self, entry: &MessageEntry, access: Access, at: (f32, f32)) -> bool {

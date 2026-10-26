@@ -7,7 +7,7 @@ use parking_lot::{Mutex, RwLock};
 use protocol::Snowflake;
 use serde_json::{Map, Value as Json, json};
 use session::{Commander, EmojiRankRequest, Person, RankedEmoji, RelativeTime, ShownName};
-use state::SharedState;
+use state::{Expression, SharedState};
 
 use crate::bundled;
 use crate::calls::{Call, Fault, Reply};
@@ -15,7 +15,8 @@ use crate::context::{ActionLog, Attachment, Link, Settings};
 use crate::limits::Limits;
 use crate::manifest::{SettingKind, SettingSpec};
 use crate::package::{Origin, Package, Stamp, package_dirs};
-use crate::permission::{Hook, Permission};
+use crate::permission::{Hook, Permission, Slot};
+use crate::requests::{PluginRequest, RequestSink};
 use crate::worker::{Setup, Worker};
 
 const STATE_FILE: &str = "plugins.json";
@@ -90,6 +91,15 @@ pub struct PluginInfo {
 	pub ui_entry: Option<PathBuf>,
 	pub grants: Vec<Permission>,
 	pub generation: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuItem {
+	pub plugin: String,
+	pub key: String,
+	pub label: String,
+	pub icon: Option<String>,
+	pub when: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -205,12 +215,14 @@ struct Registry {
 }
 
 type Listener = Arc<dyn Fn() + Send + Sync>;
+type RequestListener = Arc<dyn Fn(PluginRequest) + Send + Sync>;
 
 struct Inner {
 	config: HostConfig,
 	registry: Mutex<Registry>,
 	link: Link,
 	listeners: Mutex<Vec<Listener>>,
+	requests: Mutex<Vec<RequestListener>>,
 	notices: Mutex<Vec<Notice>>,
 }
 
@@ -237,6 +249,7 @@ impl PluginHost {
 				}),
 				link: Arc::new(RwLock::new(None)),
 				listeners: Mutex::new(Vec::new()),
+				requests: Mutex::new(Vec::new()),
 				notices: Mutex::new(Vec::new()),
 			}),
 		};
@@ -262,6 +275,39 @@ impl PluginHost {
 
 	pub fn on_change(&self, listener: impl Fn() + Send + Sync + 'static) {
 		self.inner.listeners.lock().push(Arc::new(listener));
+	}
+
+	pub fn on_request(&self, listener: impl Fn(PluginRequest) + Send + Sync + 'static) {
+		self.inner.requests.lock().push(Arc::new(listener));
+	}
+
+	pub fn menu_items(&self, slot: Slot) -> Vec<MenuItem> {
+		let registry = self.inner.registry.lock();
+		registry
+			.entries
+			.values()
+			.filter(|entry| {
+				entry.status() == Status::Running && entry.grants().contains(&Permission::Ui(slot))
+			})
+			.flat_map(|entry| {
+				entry
+					.package
+					.manifest
+					.menu
+					.iter()
+					.filter(move |item| item.slot == slot)
+					.map(|item| MenuItem {
+						plugin: entry.package.id().to_owned(),
+						key: item.key.clone(),
+						label: item.label.clone(),
+						icon: item
+							.icon
+							.as_deref()
+							.and_then(|name| entry.package.read_icon(name)),
+						when: item.when.clone(),
+					})
+			})
+			.collect()
 	}
 
 	pub fn take_notices(&self) -> Vec<Notice> {
@@ -436,6 +482,43 @@ impl PluginHost {
 	}
 
 	pub fn gesture(&self, id: &str, key: &str, context: &[(String, String)]) -> Result<(), String> {
+		self.act(id, key, context, None)
+	}
+
+	pub fn menu_gesture(
+		&self,
+		id: &str,
+		key: &str,
+		slot: Slot,
+		target: Option<Expression>,
+		context: &[(String, String)],
+	) -> Result<(), String> {
+		let offered = {
+			let registry = self.inner.registry.lock();
+			registry.entries.get(id).is_some_and(|entry| {
+				entry.grants().contains(&Permission::Ui(slot))
+					&& entry.package.manifest.menu_item(slot, key).is_some()
+			})
+		};
+		if !offered {
+			return Err(format!("the plugin offers no {key} item in {}", slot.name()));
+		}
+		let mut details = vec![
+			("source".to_owned(), "menu".to_owned()),
+			("slot".to_owned(), slot.name().to_owned()),
+		];
+		details.extend(target.iter().flat_map(target_details));
+		details.extend(context.iter().cloned());
+		self.act(id, key, &details, target)
+	}
+
+	fn act(
+		&self,
+		id: &str,
+		key: &str,
+		context: &[(String, String)],
+		target: Option<Expression>,
+	) -> Result<(), String> {
 		if key.is_empty() || key.len() > ACTION_KEY_LIMIT {
 			return Err("the action key is not valid".to_owned());
 		}
@@ -458,6 +541,7 @@ impl PluginHost {
 		let call = Call::Action {
 			key: key.to_owned(),
 			context,
+			target,
 		};
 		match worker.call(call, self.inner.config.limits.action_deadline) {
 			Ok(_) => Ok(()),
@@ -690,6 +774,13 @@ impl Inner {
 		}
 	}
 
+	fn request(&self, request: PluginRequest) {
+		let listeners: Vec<RequestListener> = self.requests.lock().clone();
+		for listener in listeners {
+			listener(request.clone());
+		}
+	}
+
 	fn targets(self: &Arc<Self>, hook: Hook, name: &str, revive: bool) -> Vec<Target> {
 		let mut registry = self.registry.lock();
 		let now = Instant::now();
@@ -757,6 +848,12 @@ impl Inner {
 		let id = entry.package.id().to_owned();
 		let weak: Weak<Inner> = Arc::downgrade(self);
 		let faulted = id.clone();
+		let asking = weak.clone();
+		let requests: RequestSink = Arc::new(move |request| {
+			if let Some(inner) = asking.upgrade() {
+				inner.request(request);
+			}
+		});
 		let setup = Setup {
 			package: entry.package.clone(),
 			grants: entry.grants(),
@@ -774,6 +871,7 @@ impl Inner {
 					inner.strike(&faulted, fault);
 				}
 			}),
+			requests,
 		};
 		match Worker::start(setup) {
 			Ok(worker) => {
@@ -1007,6 +1105,24 @@ impl Inner {
 		}
 		changed
 	}
+}
+
+fn target_details(target: &Expression) -> Vec<(String, String)> {
+	let mut details = vec![
+		("id".to_owned(), target.id().to_string()),
+		("name".to_owned(), target.name().to_owned()),
+	];
+	match target {
+		Expression::Emoji { animated, .. } => {
+			details.push(("target".to_owned(), "custom_emoji".to_owned()));
+			details.push(("animated".to_owned(), animated.to_string()));
+		}
+		Expression::Sticker { format, .. } => {
+			details.push(("target".to_owned(), "sticker".to_owned()));
+			details.push(("format".to_owned(), i64::from(*format).to_string()));
+		}
+	}
+	details
 }
 
 fn settings_for(specs: &[SettingSpec], saved: &Json) -> Map<String, Json> {

@@ -14,6 +14,7 @@ mod moderation;
 mod motion;
 mod notify;
 mod pickers;
+mod plugin_menu;
 mod profile;
 mod rail;
 mod sidebar;

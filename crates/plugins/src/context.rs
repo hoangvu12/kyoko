@@ -6,10 +6,11 @@ use std::time::Instant;
 use parking_lot::{Mutex, RwLock};
 use serde_json::{Map, Value as Json};
 use session::Commander;
-use state::SharedState;
+use state::{Expression, SharedState};
 
 use crate::limits::Limits;
 use crate::permission::Permission;
+use crate::requests::RequestSink;
 use crate::storage::Storage;
 
 #[derive(Clone)]
@@ -35,6 +36,8 @@ pub(crate) struct Context {
 	pub overran: Cell<bool>,
 	pub gesture: Cell<bool>,
 	pub gesture_actions: Cell<usize>,
+	pub gesture_target: RefCell<Option<Expression>>,
+	pub requests: RequestSink,
 }
 
 impl Context {

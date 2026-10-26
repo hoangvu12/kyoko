@@ -346,6 +346,13 @@ The voice and video and updates pages are left out, as ticket 37 says; ticket 45
 |---|---|---|---|
 | `composer-silent-typing` | 47 | Default selection, then type a one-line draft into the composer, as `composer`. Kyoko first turns SilentTyping on (the Allow button's `PluginHost::approve`), waits for its button to mount in the composer, and clicks it twice through the window (off, then on again). Oxidcord has no SilentTyping and takes `composer`'s steps, so the share is the button. | yes |
 
+### 53 ExpressionCloner
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `message-menu-clone` | 53 | With `KYOKO_CAPTURE_PLUGINS=expression-cloner`. Default selection; kyoko waits for the plugin's menu items, marks a custom emoji of the open server as under the pointer (`TimelineView::aim`, what a press on an inline emoji does) and right-clicks the last message as `message-context-menu`, so the menu ends with Clone Emoji. Oxidcord has no plugins: capture it with `--apps kyoko` and check it by eye. | yes |
+| `clone-dialog` | 53 | With `KYOKO_CAPTURE_PLUGINS=expression-cloner`. Default selection, then the Clone Emoji dialog for a custom emoji of the open server (`Dialog::Clone`). Kyoko only, `--apps kyoko`. | yes |
+
 ### 38 Toasts, transitions and connection status
 
 | Screen | Ticket | Steps | Kyoko |

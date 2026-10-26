@@ -7,7 +7,7 @@ The runtime is `crates/plugins` (`PluginHost`). It has no UI dependency and buil
 ## The two halves
 
 - **Logic half** (`logic.luau`): data hooks, events, storage and actions. Each enabled plugin gets its own sandboxed Luau VM on a worker thread of its own, with a call deadline on every hook, so a per-message hook never runs on the UI thread or blocks the session for long. This half is built.
-- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code. See "UI slots".
+- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code, and so are `message.menu` items. See "UI slots".
 
 ## Where plugins come from
 
@@ -52,6 +52,7 @@ default = true
 | `permissions` | | names from the table below; duplicates are dropped, at most 32 |
 | `logic`, `ui` | | entry files, default `logic.luau` and `ui.luau` |
 | `[[settings]]` | | the settings schema, below |
+| `[[menu]]` | | context-menu items, below ("Menu items") |
 
 Decoding is lenient, as everything else from disk: a bad setting is left out, an unknown permission is listed as unknown and never granted, unknown fields are ignored. A manifest without a valid id does not load.
 
@@ -114,10 +115,11 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `hook:emoji_rank` | `rank_emoji`: reorder the emoji autocomplete, seeing the query and your favourite emoji | yes |
 | `hook:message_render` | message render access to kept deleted and edited versions | reserved for 52 |
 | `action:mark_read` | `kyoko.actions.mark_all_read`, `mark_guild_read` | yes |
-| `action:upload_expression` | emoji and sticker upload | reserved for 53 |
+| `action:upload_expression` | `kyoko.actions.clone_expression`: offer to copy the emoji or sticker the user chose from a menu into a server | yes |
 | `action:activity` | the activity-sharing toggle | reserved for 56 |
 | `ui:composer.buttons`, `ui:panel.buttons`, `ui:rail.buttons` | show its UI half in that slot | yes |
-| `ui:settings`, `ui:user.decoration`, `ui:member.decoration`, `ui:message.accessory`, `ui:message.menu` | contribute to that UI slot | reserved (see UI slots) |
+| `ui:message.menu` | add its `[[menu]]` items to the message menu and the expression menus | yes |
+| `ui:settings`, `ui:user.decoration`, `ui:member.decoration`, `ui:message.accessory` | contribute to that UI slot | reserved (see UI slots) |
 | `network:<host>` | contact that host | reserved; v1 has no network API at all |
 
 Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:edit`, `hook:notify`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
@@ -159,7 +161,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `format_relative(time)` | `hook:timestamp` | off the UI thread, once per distinct span, then cached | `{ seconds, past, unit, value, text }`: whole seconds between now and the time, whether it is in the past, the largest unit that fits (`second`, `minute`, `hour`, `day`, `month` of 30 days, `year` of 365 days), the exact count of that unit (`2.96`), and kyoko's own text (`3 days ago`) | a string to show instead, or `nil` | 50 ms |
 | `rank_emoji(request)` | `hook:emoji_rank` | after typing pauses on a `:` query (below) | `{ query, guild_id?, emojis }` | an array of keys to put first, or `nil` | 100 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
-| `on_action(key, context)` | none | when the user clicks the plugin's `action` setting or one of its slot buttons | the key, and `{ source = "settings" }` or `{ source = "slot", slot = "composer.buttons" }` | nothing | 500 ms |
+| `on_action(key, context)` | none | when the user clicks the plugin's `action` setting, one of its slot buttons or one of its menu items | the key, and `{ source = "settings" }`, `{ source = "slot", slot = "composer.buttons" }` or `{ source = "menu", slot = "message.menu", target?, id?, name?, animated?, format?, channel_id?, message_id? }` ("Menu items") | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
 
 - Text hooks chain in plugin id order: each sees the previous plugin's output. A replacement that is empty, longer than 4000 characters or equal to the input counts as no change. A rewritten send or edit is recorded as altered by the last plugin that changed it (`State::altered_by`); an edit no plugin changed clears the mark. There is no "cancel" in v1: the spec asks for rewriting only.
@@ -210,6 +212,7 @@ Events queue per plugin (at most 256; more are dropped and logged) and are deliv
 | `kyoko.state.channel(id)` | `read:guilds` for server channels, `read:dms` for DMs and group DMs (either one to call it) | `{ id, guild_id?, name, type, parent_id? }` or `nil`; `nil` too for a channel the plugin may not read |
 | `kyoko.state.read_state(channel_id)` | `read:read_state` | `{ channel_id, last_message_id?, mention_count }` or `nil` |
 | `kyoko.actions.mark_all_read()`, `mark_guild_read(guild_id)` | `action:mark_read` | nothing; raises if refused |
+| `kyoko.actions.clone_expression()` | `action:upload_expression` | nothing; raises if refused. Only inside `on_action` for a menu item chosen on a custom emoji or an image sticker: kyoko opens its clone dialog for exactly that expression |
 | `require("./name")` | | a module file of the same package, loaded once |
 
 State queries read the session's `State` snapshot under its read lock and copy what they return, so shared Discord data is read-only to plugins. There is no API to write app state, fake client features, change the identity, reach REST or the gateway, or bypass a permission check. `print` is removed; the Luau standard library is the sandboxed one (`string`, `table`, `math`, `utf8`, `bit32`, `buffer`, `coroutine`, `os.time`/`clock`/`date`).
@@ -234,9 +237,9 @@ A Discord action runs only inside a user gesture:
 1. The gesture starts in the app, never in a plugin: a click or key press on the plugin's button in kyoko's interface. The window records each pointer-down and key-down; `plugins.action` and a UI half's `plugin.<id>.action` and `plugin.<id>.set` are refused unless one happened in the last second, and consume it, so a script calling them in a loop or on a timer gets nothing.
 2. The host calls `on_action(key, context)`; only during that call is `kyoko.actions.*` allowed, and only once per gesture. From any other hook or event it raises `kyoko: ... was refused: actions only run from your click or command`.
 3. Each plugin may run at most 5 actions per 10 seconds (`Limits::actions`, `action_window`), across gestures and restarts.
-4. An allowed action is a session `Command` (`MarkAllRead`, `MarkGuildRead`) sent through the same `Commander` as the user's own clicks, so it goes through the same locks, pacing and REST safety layer (`docs/locks.md`, `docs/rest.md`). Plugins never reach around them.
+4. An allowed action is a session `Command` (`MarkAllRead`, `MarkGuildRead`) sent through the same `Commander` as the user's own clicks, so it goes through the same locks, pacing and REST safety layer (`docs/locks.md`, `docs/rest.md`). Plugins never reach around them. `clone_expression` sends no command at all: it asks the window (`PluginHost::on_request`, `PluginRequest::Clone`) to open kyoko's clone dialog, and the upload is the user's own click on a server there, a `CreateEmoji` or `CreateSticker` through the same `Commander` as server settings' uploads. A plugin names no expression: it can only clone the one the user right-clicked, which the host keeps for the length of the call.
 
-`PluginHost::gesture(id, key, context)` is the entry point; the desktop calls it only after the activation check above. The spec's other gesture, a command, will call the same entry point once plugins can register commands.
+`PluginHost::gesture(id, key, context)` is the entry point; `PluginHost::menu_gesture(id, key, slot, target, context)` is the same for a menu item (it checks the item is one the plugin declared and was granted, and adds `source`, `slot` and the target's fields to the context). The desktop calls either only after the activation check above. The spec's other gesture, a command, will call the same entry point once plugins can register commands.
 
 ## Deadlines, failures and the disable policy
 
@@ -273,8 +276,30 @@ A Discord action runs only inside a user gesture:
 | `panel.buttons` | the user panel, between the user area and mute | placed, empty until 56 |
 | `rail.buttons` | the server rail, under Home | placed, empty until 54 |
 | `user.decoration`, `member.decoration` | beside names in the timeline, member list and profiles | reserved for 49 |
-| `message.menu` | items appended to the message context menu (`bridge::message_menu` and `MessageActions::menu_items`, which draws the timeline menu, the hover bar's More menu and search results) | reserved for 53 |
+| `message.menu` | items appended to the message context menu (`bridge::append_plugin_entries` after `bridge::message_menu`, drawn by `MessageActions` for the timeline, the thread pane, the hover bar's More menu and search results), and the menu of a custom emoji or sticker cell in the expression pickers | placed (53), from the manifest's `[[menu]]` |
 | `message.accessory` | under a message | reserved for 52 |
+
+### Menu items
+
+`message.menu` is drawn by Rust (the timeline sits above the Luau tree), so a plugin declares its items in the manifest instead of a UI half, and asks for `ui:message.menu`:
+
+```toml
+permissions = ["ui:message.menu", "action:upload_expression"]
+
+[[menu]]
+slot = "message.menu"
+key = "clone_emoji"
+label = "Clone Emoji"
+icon = "copy_plus.svg"
+when = ["custom_emoji", "can_create_expressions"]
+```
+
+- `key` (as a setting key), `label` (at most 64 characters) and `slot` (only `message.menu`) are required; an item without them is left out. At most 8 items per plugin, keys unique.
+- `icon` is an SVG file of the plugin's own folder (at most 64 KiB), drawn at 12 points in the item's text colour (`currentColor`); without one the item keeps an empty icon box.
+- `when` lists conditions that must all hold. Kyoko evaluates them from its own data each time a menu opens (`bridge::MenuFacts`), never by calling the plugin: `custom_emoji` (the pointer was on a custom emoji: inline in a message, a reaction, or a picker cell), `image_sticker` (on a PNG, APNG or GIF sticker, in a message or the picker), `can_create_expressions` (the user has Create Expressions or Manage Expressions in at least one server). An unknown condition never holds, so its item never shows. Without `when` an item shows in every message menu.
+- Items follow kyoko's own, after a separator, in plugin id order. A picker cell's menu shows only items whose conditions match its expression.
+- Choosing one runs `on_action(key, context)` through `PluginHost::menu_gesture`, a user gesture: `source = "menu"`, `slot`, and for an expression `target` (`"custom_emoji"` or `"sticker"`), `id`, `name` and `animated` (`"true"`/`"false"`) or `format` (Discord's sticker format number), plus `channel_id` and `message_id` in a message's menu.
+- Where the pointer was: inline emoji, reaction chips and stickers in the timeline mark themselves on a secondary press (`timeline::actions::aimed`) and the row's own press opens the menu, so the menu knows its target without a hit test of its own.
 
 ### Contributing to a slot
 
@@ -371,6 +396,16 @@ Vencord's ShowMeYourName is the behaviour reference for the modes; no code is sh
 
 `plugins/favorite-emoji-first/` (`hook:emoji_rank`, ships disabled). Its `rank_emoji` puts every suggested emoji that is one of your favourites first, in the order you favourited them, and leaves the rest in kyoko's order. Favourites are Discord's own, read from the frecency settings the web client uses, so favourites set in the official client count, and favouriting on another device reorders the next suggestions. It changes only the composer's `:` suggestions; the expression picker's search keeps kyoko's order until the picker gains a Favorites section (Midnight 08). Vencord's FavoriteEmojiFirst is the behaviour reference; no code is shared.
 
+## ExpressionCloner
+
+`plugins/expression-cloner/` (`ui:message.menu`, `action:upload_expression`, ships disabled). Right-clicking a custom emoji (inline in a message, a reaction, or a cell of the emoji picker) offers "Clone Emoji", and a PNG, APNG or GIF sticker (in a message or the sticker picker) "Clone Sticker", while the user may add expressions to some server; a Unicode emoji and a Lottie sticker never offer it. Its `on_action` calls `kyoko.actions.clone_expression()`, which opens kyoko's clone dialog (`community/clone.rs`, a community dialog drawn above the timeline):
+
+- The preview, the name (the source's, cleaned to Discord's rules; an emoji keeps letters, digits and underscores) and the servers where the user has Create Expressions or Manage Expressions (`bridge::clone_targets`), each with its free slots of that kind. A server at its limit for that kind (still and animated emoji count apart) is dimmed with "No free emoji slots (50 of 50)" and cannot be picked. Enter in the name takes the first open server.
+- One click on a server is one clone: the dialog closes, the source image is fetched through the media pipeline (`MediaService::bytes`: the gallery's fetcher, disk cache and host allowlist; `bridge::clone_source`: an emoji's `.png` or `.gif` from the CDN with `quality=lossless`, a sticker's `.png`, `?passthrough=true` for APNG, or `.gif`), and kyoko sends `CreateEmoji` or `CreateSticker` (a sticker's tags and description come from the original when kyoko knows it, else its name). Another clone waits until the first has arrived or failed. The session checks and paces it like every server write (`docs/rest.md`); "Added :name: to Server" shows once the gateway brings it, and a refusal is the usual error toast.
+- Nothing is batch-cloned or repeated.
+
+Vencord's ExpressionCloner (GPL) is the behaviour reference only; no code is shared.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -385,6 +420,8 @@ While writing it, run `cargo run -p kyoko -- --mock --plugins-dir plugins` and e
 Behaviour tests drive a session against an in-process mockcord with the plugin host as its hooks: `crates/plugins/tests/plugins/` (it reuses the session harness, `crates/session/tests/session/harness.rs`). `support::write_plugin` writes a test plugin into a scratch development folder, `support::start` starts the host and a session, `support::approve` approves what the manifest asks for. Observe behaviour through the session seam: the echoed message text, `State`, and mockcord's recorded traffic (`recording().requests_to(...)`). A handy trick for observing a plugin's internals is a `before_send` that appends what it saw to the message.
 
 What is covered: ClearURLs on send and edit, TextReplace (the exact bodies sent and edited, rule order, the include condition, broken and runaway rules not breaking the send, nothing while off), `before_edit` only with `hook:edit`, SilentTyping (no typing request while on, typing again after the toggle or disabling, its UI half unpacked and remounted on restart), FavoriteEmojiFirst (`favorite_emoji_first.rs`: favourites first in their favourite order and after favourites change, the hook only with its permission, failing and endless rankings leaving kyoko's order beside a working one, nothing while off), OnePingPerDM (`one_ping_per_dm.rs`: three DMs notify once and stay unread, reading or viewing the DM lets the next one notify, the group/one-on-one choice, server mentions untouched unless asked, nothing while off, a failing or overrunning filter letting the notification through), the `ready` event, approval before running, re-approval when a manifest asks for more, hooks without their permission never running, `kyoko.*` refusing ungranted calls, read-only state copies, the typing veto, event scopes, the gesture rule and per-plugin rate limit, deadline overruns (including a `pcall`-wrapped loop) suspending a plugin without holding up sends, backoff and turning off, a plugin that does not load, storage and settings across reloads and a new host, and hot reload. The settings page itself is covered by `the_plugins_page_asks_before_a_plugin_is_enabled` and `the_generated_plugin_settings_build_every_field_type` (every setting type, a list included) in the Luau load check, `the_rules_editor_adds_edits_and_removes_rows` drives TextReplace's rules editor against the real host, and `cargo xtask headless-run --mock` runs ClearURLs, TextReplace (a sent and an edited typo), SilentTyping (no typing request reaches the mock), OnePingPerDM (three DMs, one notification; another once read), ShowMeYourName and DontRoundMyTimestamps (every author of the loaded channel shown through `bridge::Display`, no calls on re-projection, a relative time rounded down), FavoriteEmojiFirst (the mock's favourite ranked first) and a failing plugin against the mock. The session side of ranking (one read of the frecency proto, updates, the debounce and a failing hook) is covered in `crates/session/tests/session/favourites.rs`, and the real composer with the real plugin in the bridge test `favourites::the_emoji_autocomplete_lists_favourites_first_once_favorite_emoji_first_runs`.
+
+ExpressionCloner: `crates/plugins/tests/plugins/expression_cloner.rs` (it ships disabled; its items join the menu only once approved; a menu click asks for exactly the clicked expression, nothing for a Lottie sticker, no target, a settings click or an undeclared key; `clone_expression` is refused outside a menu gesture and past the per-plugin limit, and without `action:upload_expression`); `crates/bridge/tests/bridge/cloner.rs` with the real host and a session against mockcord (the items show only for custom emoji and image stickers and only while some server takes expressions; a full server listed with why; the animated source fetched through `MediaService` and uploaded as a GIF, a sticker too); the session seam in `crates/session/tests/session/uploads.rs` (the exact emoji body and sticker form, permission, slots, names, types and sizes refused before REST, a Discord refusal as a rejection); and `timeline::clone_tests` in the desktop (right-click on the rendered emoji, Clone Emoji, the dialog's server, the emoji arrives). `headless-run` clones an emoji through the plugin (`clone_ok`).
 
 Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
 

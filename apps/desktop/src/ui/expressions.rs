@@ -25,6 +25,10 @@ pub(super) struct Expressions {
 }
 
 impl Expressions {
+	pub(super) fn set_plugin_menu(&self, menu: Rc<crate::plugin_menu::PluginMenu>) {
+		self.picker.set_plugin_menu(menu);
+	}
+
 	pub(super) fn new(runtime: &zgx::reactive::Runtime, pictures: Rc<Pictures>) -> Self {
 		Self {
 			picker: ExpressionPicker::new(runtime, pictures, Mode::Composer),

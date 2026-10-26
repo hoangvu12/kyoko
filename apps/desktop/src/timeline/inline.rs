@@ -8,6 +8,7 @@ use zgx::compose::prelude::*;
 use zgx::scene::{Color, NodeId, NodeKind, Rect, Scene};
 use zgx::svg::SvgData;
 
+use super::actions::{MessageActions, aimed};
 use super::pictures::Pictures;
 
 pub enum Art {
@@ -18,6 +19,7 @@ pub enum Art {
 pub struct Placed {
 	pub range: Range<usize>,
 	pub art: Art,
+	pub target: Option<state::Expression>,
 }
 
 const COPY_TEXT_SIZE: f32 = 1.;
@@ -37,7 +39,7 @@ pub struct Paragraph {
 	pub side: f32,
 }
 
-pub fn paragraph(paragraph: Paragraph, pictures: &Rc<Pictures>) -> View {
+pub fn paragraph(paragraph: Paragraph, pictures: &Rc<Pictures>, actions: &Rc<MessageActions>) -> View {
 	let Paragraph { spans, placed, side } = paragraph;
 	let text = View::from(rich_text().children(spans)).w_full().text_wrap(true);
 	if placed.is_empty() {
@@ -54,7 +56,7 @@ pub fn paragraph(paragraph: Paragraph, pictures: &Rc<Pictures>) -> View {
 				.visible(),
 			None => Styles::new().invisible(),
 		};
-		let frame = div().absolute().size(side, side);
+		let frame = aimed(div().absolute().size(side, side), actions, item.target);
 		match item.art {
 			Art::Image(name) => {
 				let picture = pictures.picture(&name);

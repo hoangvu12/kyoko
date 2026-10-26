@@ -1,7 +1,7 @@
 use serde_json::Value as Json;
 use toml::Value as Toml;
 
-use crate::permission::Permission;
+use crate::permission::{Permission, Slot};
 
 pub const API_VERSION: i64 = 1;
 pub const MANIFEST_FILE: &str = "plugin.toml";
@@ -19,6 +19,9 @@ const OPTION_LIMIT: usize = 32;
 const FIELD_LIMIT: usize = 8;
 const ROWS_DEFAULT: usize = 25;
 const ROW_LIMIT: usize = 100;
+const MENU_LIMIT: usize = 8;
+const CONDITION_LIMIT: usize = 8;
+const ICON_EXTENSION: &str = ".svg";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Manifest {
@@ -30,8 +33,18 @@ pub struct Manifest {
 	pub authors: Vec<String>,
 	pub permissions: Vec<Permission>,
 	pub settings: Vec<SettingSpec>,
+	pub menu: Vec<MenuSpec>,
 	pub logic: Option<String>,
 	pub ui: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuSpec {
+	pub slot: Slot,
+	pub key: String,
+	pub label: String,
+	pub icon: Option<String>,
+	pub when: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -124,6 +137,13 @@ impl Manifest {
 				_ => tracing::warn!(plugin = %id, "a plugin setting was left out"),
 			}
 		}
+		let mut menu: Vec<MenuSpec> = Vec::new();
+		for entry in list(&root, "menu").take(MENU_LIMIT) {
+			match MenuSpec::parse(entry) {
+				Some(item) if menu.iter().all(|known| known.key != item.key) => menu.push(item),
+				_ => tracing::warn!(plugin = %id, "a plugin menu item was left out"),
+			}
+		}
 		Ok(Manifest {
 			name,
 			version: text_field(&root, "version", SHORT_TEXT).unwrap_or_else(|| "0.0.0".to_owned()),
@@ -136,6 +156,7 @@ impl Manifest {
 				.collect(),
 			permissions,
 			settings,
+			menu,
 			logic: file_field(&root, "logic"),
 			ui: file_field(&root, "ui"),
 			id,
@@ -148,6 +169,40 @@ impl Manifest {
 
 	pub fn setting(&self, key: &str) -> Option<&SettingSpec> {
 		self.settings.iter().find(|spec| spec.key == key)
+	}
+
+	pub fn menu_item(&self, slot: Slot, key: &str) -> Option<&MenuSpec> {
+		self.menu.iter().find(|item| item.slot == slot && item.key == key)
+	}
+}
+
+impl MenuSpec {
+	fn parse(entry: &Toml) -> Option<MenuSpec> {
+		let table = entry.as_table()?;
+		let slot = Slot::parse(table.get("slot").and_then(Toml::as_str)?).filter(|slot| slot.is_menu())?;
+		let key = table
+			.get("key")
+			.and_then(Toml::as_str)
+			.filter(|key| is_key(key))?;
+		let label = text_field(table, "label", SHORT_TEXT)?;
+		let icon = table
+			.get("icon")
+			.and_then(Toml::as_str)
+			.filter(|name| is_icon(name))
+			.map(str::to_owned);
+		let when = list(table, "when")
+			.filter_map(Toml::as_str)
+			.filter(|condition| is_key(condition))
+			.take(CONDITION_LIMIT)
+			.map(str::to_owned)
+			.collect();
+		Some(MenuSpec {
+			slot,
+			key: key.to_owned(),
+			label,
+			icon,
+			when,
+		})
 	}
 }
 
@@ -366,6 +421,16 @@ fn is_file(name: &str) -> bool {
 		&& name
 			.bytes()
 			.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+		&& !name.contains("..")
+}
+
+pub(crate) fn is_icon(name: &str) -> bool {
+	name.len() > ICON_EXTENSION.len()
+		&& name.ends_with(ICON_EXTENSION)
+		&& name
+			.bytes()
+			.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+		&& !name.starts_with('.')
 		&& !name.contains("..")
 }
 

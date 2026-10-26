@@ -110,8 +110,10 @@ impl LogicVm {
 			.map_err(|error| Fault::Error(describe(error)))?;
 		self.context.gesture.set(call.is_gesture());
 		self.context.gesture_actions.set(0);
+		*self.context.gesture_target.borrow_mut() = call.target();
 		let result = self.guarded(deadline, || function.call::<Value>(arguments));
 		self.context.gesture.set(false);
+		self.context.gesture_target.borrow_mut().take();
 		self.context.storage.borrow_mut().flush();
 		let value = result?;
 		Ok(match call {
@@ -244,7 +246,7 @@ impl LogicVm {
 				request.raw_set("emojis", list)?;
 				vec![Value::Table(request)]
 			}
-			Call::Action { key, context } => {
+			Call::Action { key, context, .. } => {
 				let details = lua.create_table()?;
 				for (name, value) in context {
 					details.raw_set(name.as_str(), value.as_str())?;

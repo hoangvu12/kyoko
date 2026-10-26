@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 session.workspace = true
 bridge.workspace = true
+media.workspace = true
 plugins.workspace = true
 mockcord.workspace = true
 store.workspace = true

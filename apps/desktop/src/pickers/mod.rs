@@ -5,19 +5,20 @@ mod sticker;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use bridge::{EmojiCell, EmojiPicker, GifView, StickerCell, StickerPicker};
+use bridge::{EmojiCell, EmojiPicker, GifView, MenuEntry, StickerCell, StickerPicker};
 use media::ImageName;
 use protocol::Gif;
 use zgx::compose::prelude::*;
 use zgx::compose::{Placement, PlacementEdge, PlacementSide};
-use zgx::input::{InputEvent, Key};
+use zgx::input::{EventPhase, InputEvent, Key, PointerButton};
 use zgx::reactive::{Effect, Runtime, Signal};
 
 use self::emoji::EmojiState;
 use self::gif::GifState;
 use self::sticker::StickerState;
 use crate::motion;
-use crate::timeline::{Pictures, tok};
+use crate::plugin_menu::PluginMenu;
+use crate::timeline::{Pictures, menu_panel, tok};
 
 const WIDTH: f32 = 456.;
 const HEIGHT: f32 = 440.;
@@ -94,6 +95,7 @@ pub struct ExpressionPicker {
 	images: RefCell<Vec<ImageName>>,
 	images_changed: RefCell<Option<Box<dyn Fn()>>>,
 	watcher: RefCell<Option<Effect>>,
+	plugin_menu: RefCell<Option<Rc<PluginMenu>>>,
 }
 
 impl ExpressionPicker {
@@ -115,6 +117,7 @@ impl ExpressionPicker {
 			images: RefCell::default(),
 			images_changed: RefCell::new(None),
 			watcher: RefCell::new(None),
+			plugin_menu: RefCell::new(None),
 		});
 		let watched = Rc::downgrade(&picker);
 		let (query, tab, open) = (picker.query.clone(), picker.tab.clone(), picker.open.clone());
@@ -130,6 +133,45 @@ impl ExpressionPicker {
 		});
 		*picker.watcher.borrow_mut() = Some(effect);
 		picker
+	}
+
+	pub fn set_plugin_menu(&self, menu: Rc<PluginMenu>) {
+		*self.plugin_menu.borrow_mut() = Some(menu);
+	}
+
+	fn expression_menu(self: &Rc<Self>, cell: View, target: Option<state::Expression>) -> View {
+		let Some(menu) = self.plugin_menu.borrow().clone() else {
+			return cell;
+		};
+		let shown = menu.shown(target);
+		if shown.facts.target.is_none() {
+			return cell;
+		}
+		let entries = shown.entries();
+		if entries.is_empty() {
+			return cell;
+		}
+		let open = self.pictures.runtime().signal(false);
+		let opener = open.clone();
+		let anchor = cell.on_event(move |event| {
+			if event.phase != EventPhase::Capture
+				&& let InputEvent::PointerDown {
+					button: PointerButton::Secondary,
+					..
+				} = event.event
+			{
+				opener.set(true);
+				event.prevent_default();
+			}
+		});
+		let items = entries.into_iter().filter_map(|entry| match entry {
+			MenuEntry::Plugin(index) => {
+				let picker = self.clone();
+				Some(menu.item(&shown, index, None, move || picker.close()))
+			}
+			_ => None,
+		});
+		menu_panel(zgx::compose::menu("Expression menu", open, anchor)).children(items)
 	}
 
 	pub fn on_images_changed(&self, changed: impl Fn() + 'static) {

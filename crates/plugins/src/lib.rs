@@ -9,14 +9,16 @@ mod limits;
 mod manifest;
 mod package;
 mod permission;
+mod requests;
 mod storage;
 mod vm;
 mod worker;
 
 pub use calls::Fault;
 pub use context::Attachment;
-pub use host::{EnableError, HostConfig, Notice, PluginHost, PluginInfo, Status};
+pub use host::{EnableError, HostConfig, MenuItem, Notice, PluginHost, PluginInfo, Status};
 pub use limits::Limits;
-pub use manifest::{API_VERSION, Choice, Manifest, ManifestError, SettingKind, SettingSpec};
+pub use manifest::{API_VERSION, Choice, Manifest, ManifestError, MenuSpec, SettingKind, SettingSpec};
 pub use package::Origin;
 pub use permission::{Action, Hook, Permission, Scope, Slot};
+pub use requests::PluginRequest;

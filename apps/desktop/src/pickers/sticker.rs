@@ -205,6 +205,7 @@ impl ExpressionPicker {
 		);
 		let (shown, id) = (cell.clone(), cell.sticker.id);
 		let hover_name = picture.as_ref().map(|(name, _)| name.clone());
+		let target = bridge::sticker_cell_expression(&cell);
 		let visual = match picture {
 			Some((_, picture)) => {
 				div()
@@ -216,7 +217,7 @@ impl ExpressionPicker {
 			}
 			None => icon("sticker", LOTTIE_ICON, "interactive_muted"),
 		};
-		div()
+		let view = div()
 			.size(CELL, CELL)
 			.shrink_0()
 			.items_center()
@@ -250,7 +251,8 @@ impl ExpressionPicker {
 				_ => {}
 			})
 			.on_click(move || chooser.chose_sticker(cell.clone()))
-			.child(visual)
+			.child(visual);
+		self.expression_menu(view, target)
 	}
 
 	fn sticker_footer(&self) -> View {

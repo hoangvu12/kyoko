@@ -78,6 +78,17 @@ impl Link {
 				match request {
 					Request::Command(command) => link.send(command),
 					Request::Copy(text) => crate::toasts::copy(&text, "Invite link copied"),
+					Request::Clone {
+						expression,
+						guild_id,
+						server,
+						name,
+					} => link.clone_expression(super::cloner::Order {
+						expression,
+						guild_id,
+						server,
+						name,
+					}),
 				}
 			}
 		});

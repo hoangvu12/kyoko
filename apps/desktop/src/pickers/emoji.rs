@@ -205,7 +205,8 @@ impl ExpressionPicker {
 				.emoji(custom.id.get(), custom.animated, f64::from(CELL_IMAGE))
 		});
 		let pictures = self.pictures.clone();
-		div()
+		let target = bridge::cell_expression(&cell);
+		let view = div()
 			.size(CELL, CELL)
 			.shrink_0()
 			.items_center()
@@ -228,7 +229,8 @@ impl ExpressionPicker {
 				_ => {}
 			})
 			.on_click(move || chosen.chose_emoji(cell.clone()))
-			.child(visual)
+			.child(visual);
+		self.expression_menu(view, target)
 	}
 
 	fn emoji_visual(&self, cell: &EmojiCell, side: f32, text_size: &str) -> View {

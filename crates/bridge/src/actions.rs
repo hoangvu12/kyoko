@@ -116,6 +116,7 @@ impl MessageAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuEntry {
 	Action(MessageAction),
+	Plugin(usize),
 	Separator,
 }
 
@@ -169,7 +170,7 @@ impl Menu {
 	}
 
 	fn separator(&mut self) {
-		if matches!(self.0.last(), Some(MenuEntry::Action(_))) {
+		if matches!(self.0.last(), Some(MenuEntry::Action(_) | MenuEntry::Plugin(_))) {
 			self.0.push(MenuEntry::Separator);
 		}
 	}

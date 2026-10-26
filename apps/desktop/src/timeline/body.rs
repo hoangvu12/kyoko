@@ -156,6 +156,7 @@ impl Body<'_> {
 				side,
 			},
 			&self.env.pictures,
+			&self.env.actions,
 		)
 	}
 
@@ -231,7 +232,14 @@ impl Body<'_> {
 		}
 	}
 
-	fn placed(&self, inline: &mut Inline, copied: &str, art: Option<Art>, style: &Style) {
+	fn placed(
+		&self,
+		inline: &mut Inline,
+		copied: &str,
+		art: Option<Art>,
+		target: Option<state::Expression>,
+		style: &Style,
+	) {
 		let side = self.emoji_side();
 		let start = inline.length;
 		inline.length += copied.len();
@@ -239,6 +247,7 @@ impl Body<'_> {
 			inline.placed.push(Placed {
 				range: start..inline.length,
 				art,
+				target,
 			});
 		}
 		let span = self.span(copied, style);
@@ -252,14 +261,15 @@ impl Body<'_> {
 		let side = self.emoji_side();
 		let art = Art::Image(self.env.pictures.emoji(id, animated, f64::from(side)));
 		let markup = bridge::custom_markup(name, Snowflake::from(id), animated);
-		self.placed(inline, &markup, Some(art), style);
+		let target = bridge::emoji_expression(name, Snowflake::from(id), animated);
+		self.placed(inline, &markup, Some(art), Some(target), style);
 	}
 
 	fn text(&self, inline: &mut Inline, text: &str, style: &Style) {
 		for piece in twemoji::split(text) {
 			match piece {
 				Piece::Emoji { text, file } => match emoji::art(file) {
-					Some(svg) => self.placed(inline, text, Some(Art::Svg(svg)), style),
+					Some(svg) => self.placed(inline, text, Some(Art::Svg(svg)), None, style),
 					None => self.push(inline, text, style),
 				},
 				Piece::Text(text) => self.push(inline, text, style),

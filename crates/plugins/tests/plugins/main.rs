@@ -6,6 +6,7 @@ mod clear_urls;
 mod deadlines;
 mod display;
 mod events;
+mod expression_cloner;
 mod favorite_emoji_first;
 mod gestures;
 mod one_ping_per_dm;

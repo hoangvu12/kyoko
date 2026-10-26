@@ -75,7 +75,7 @@ fn actions(menu: &[MenuEntry]) -> Vec<MessageAction> {
 	menu.iter()
 		.filter_map(|entry| match entry {
 			MenuEntry::Action(action) => Some(*action),
-			MenuEntry::Separator => None,
+			MenuEntry::Separator | MenuEntry::Plugin(_) => None,
 		})
 		.collect()
 }

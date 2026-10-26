@@ -86,8 +86,39 @@ icon_files!(
 	"warning",
 );
 
+const PLUGIN_ICONS: usize = 64;
+
 thread_local! {
 	static LOADED: RefCell<HashMap<&'static str, Option<Arc<SvgData>>>> = RefCell::default();
+	static PLUGIN_LOADED: RefCell<HashMap<Arc<str>, Option<Arc<SvgData>>>> = RefCell::default();
+}
+
+fn plugin_shape(source: &Arc<str>) -> Option<Arc<SvgData>> {
+	PLUGIN_LOADED.with(|loaded| {
+		let mut loaded = loaded.borrow_mut();
+		if loaded.len() >= PLUGIN_ICONS && !loaded.contains_key(source) {
+			loaded.clear();
+		}
+		loaded
+			.entry(source.clone())
+			.or_insert_with(|| {
+				SvgData::new(source.as_bytes())
+					.ok()
+					.map(|svg| Arc::new(svg.current_color()))
+			})
+			.clone()
+	})
+}
+
+pub fn plugin_icon(source: Option<&Arc<str>>, size: f32, color: &str) -> View {
+	let shape = source.and_then(plugin_shape);
+	div()
+		.size(size, size)
+		.shrink_0()
+		.text_color(tok(color))
+		.when_some(shape, |slot, shape| {
+			slot.child(svg("plugin", shape).size(size, size))
+		})
 }
 
 fn load(name: &'static str) -> Option<Arc<SvgData>> {

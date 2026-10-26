@@ -10,6 +10,7 @@ use crate::context::Context;
 use crate::convert::{to_json, to_lua};
 use crate::manifest::{API_VERSION, clip};
 use crate::permission::{Action, Permission, Scope};
+use crate::requests::PluginRequest;
 
 const LOG_LIMIT: usize = 200;
 const ACTIONS_PER_GESTURE: usize = 1;
@@ -288,7 +289,7 @@ fn state_table(lua: &Lua, context: &Rc<Context>) -> mlua::Result<Table> {
 	Ok(table)
 }
 
-fn act(context: &Context, what: &str, action: Action, command: Command) -> mlua::Result<()> {
+fn permit(context: &Context, what: &str, action: Action) -> mlua::Result<crate::context::Attachment> {
 	require(context, what, Permission::Action(action))?;
 	if !context.gesture.get() {
 		return Err(Error::runtime(format!(
@@ -300,28 +301,50 @@ fn act(context: &Context, what: &str, action: Action, command: Command) -> mlua:
 			"kyoko: {what} was refused: one action per click"
 		)));
 	}
-	let now = Instant::now();
-	{
-		let mut log = context.actions.lock();
-		while log
-			.front()
-			.is_some_and(|at| now.duration_since(*at) >= context.limits.action_window)
-		{
-			log.pop_front();
-		}
-		if log.len() >= context.limits.actions {
-			return Err(Error::runtime(format!(
-				"kyoko: {what} was refused: too many actions, try again shortly"
-			)));
-		}
-		log.push_back(now);
-	}
 	let attachment = context
 		.attachment()
 		.ok_or_else(|| Error::runtime(format!("kyoko: {what} was refused: not signed in")))?;
+	let now = Instant::now();
+	let mut log = context.actions.lock();
+	while log
+		.front()
+		.is_some_and(|at| now.duration_since(*at) >= context.limits.action_window)
+	{
+		log.pop_front();
+	}
+	if log.len() >= context.limits.actions {
+		return Err(Error::runtime(format!(
+			"kyoko: {what} was refused: too many actions, try again shortly"
+		)));
+	}
+	log.push_back(now);
 	context.gesture_actions.set(context.gesture_actions.get() + 1);
 	tracing::info!(plugin = %context.id, action = what, "plugin action from a user gesture");
-	attachment.commander.send(command);
+	Ok(attachment)
+}
+
+fn act(context: &Context, what: &str, action: Action, command: Command) -> mlua::Result<()> {
+	permit(context, what, action)?.commander.send(command);
+	Ok(())
+}
+
+fn clone_expression(context: &Context) -> mlua::Result<()> {
+	let what = "kyoko.actions.clone_expression";
+	let target = context
+		.gesture_target
+		.borrow()
+		.clone()
+		.filter(state::Expression::is_image)
+		.ok_or_else(|| {
+			Error::runtime(format!(
+				"kyoko: {what} was refused: it clones only the custom emoji or image sticker you chose from a menu"
+			))
+		})?;
+	permit(context, what, Action::UploadExpression)?;
+	(context.requests)(PluginRequest::Clone {
+		plugin: context.id.clone(),
+		expression: target,
+	});
 	Ok(())
 }
 
@@ -351,6 +374,11 @@ fn actions_table(lua: &Lua, context: &Rc<Context>) -> mlua::Result<Table> {
 				Command::MarkGuildRead { guild_id },
 			)
 		})?,
+	)?;
+	let shared = context.clone();
+	table.set(
+		"clone_expression",
+		lua.create_function(move |_, ()| clone_expression(&shared))?,
 	)?;
 	Ok(table)
 }

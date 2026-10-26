@@ -52,6 +52,10 @@ pub(super) struct ThreadPane {
 }
 
 impl ThreadPane {
+	pub(super) fn set_plugin_menu(&self, menu: Rc<crate::plugin_menu::PluginMenu>) {
+		self.view.set_plugin_menu(menu);
+	}
+
 	pub(super) fn new(
 		host: &ScriptHost,
 		runtime: &Runtime,

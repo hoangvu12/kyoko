@@ -6,6 +6,7 @@ use crate::manifest::{MANIFEST_FILE, Manifest};
 
 const FILE_LIMIT: u64 = 2 * 1024 * 1024;
 const FILES_PER_PACKAGE: usize = 64;
+const ICON_LIMIT: u64 = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
@@ -86,6 +87,27 @@ impl Package {
 				.iter()
 				.find(|(file, _)| *file == name)
 				.map(|(_, text)| (*text).to_owned()),
+		}
+	}
+
+	pub fn read_icon(&self, name: &str) -> Option<String> {
+		if !crate::manifest::is_icon(name) {
+			return None;
+		}
+		match &self.files {
+			Files::Dir(dir) => {
+				let path = dir.join(name);
+				let metadata = fs::metadata(&path).ok()?;
+				if !metadata.is_file() || metadata.len() > ICON_LIMIT {
+					return None;
+				}
+				fs::read_to_string(path).ok()
+			}
+			Files::Embedded(files) => files
+				.iter()
+				.find(|(file, _)| *file == name)
+				.map(|(_, text)| (*text).to_owned())
+				.filter(|text| text.len() as u64 <= ICON_LIMIT),
 		}
 	}
 

@@ -77,6 +77,15 @@ impl MediaService {
 			.ok_or_else(|| MediaError::Fetch(format!("{} was not loaded", redact_url(url))))
 	}
 
+	pub async fn bytes(&self, url: &str) -> Result<Bytes> {
+		if let Some(bytes) = self.cached_bytes(url).await {
+			return Ok(bytes);
+		}
+		let bytes = self.inner.fetcher.fetch(url).await?;
+		self.store_on_disk(url, bytes.clone()).await;
+		Ok(bytes)
+	}
+
 	pub async fn load_variant(&self, url: &str, variant: Variant, source: Source) -> Result<Option<Decoded>> {
 		let (bytes, from_disk) = match (self.cached_bytes(url).await, source) {
 			(Some(bytes), _) => (bytes, true),

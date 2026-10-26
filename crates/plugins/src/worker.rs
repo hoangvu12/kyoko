@@ -14,6 +14,7 @@ use crate::context::{ActionLog, Context, Link, Settings};
 use crate::limits::Limits;
 use crate::package::Package;
 use crate::permission::Permission;
+use crate::requests::RequestSink;
 use crate::storage::Storage;
 use crate::vm::LogicVm;
 
@@ -30,6 +31,7 @@ pub(crate) struct Setup {
 	pub actions: ActionLog,
 	pub storage: Option<PathBuf>,
 	pub faults: FaultSink,
+	pub requests: RequestSink,
 }
 
 struct Job {
@@ -174,6 +176,7 @@ fn run(setup: Setup, mailbox: &Mailbox, loaded: SyncSender<Result<BTreeSet<Strin
 		actions,
 		storage,
 		faults,
+		requests,
 	} = setup;
 	let context = Rc::new(Context {
 		id: package.id().to_owned(),
@@ -188,6 +191,8 @@ fn run(setup: Setup, mailbox: &Mailbox, loaded: SyncSender<Result<BTreeSet<Strin
 		overran: Cell::new(false),
 		gesture: Cell::new(false),
 		gesture_actions: Cell::new(0),
+		gesture_target: RefCell::new(None),
+		requests,
 	});
 	let vm = match catch_unwind(AssertUnwindSafe(|| LogicVm::load(&package, context))) {
 		Ok(Ok(vm)) => vm,

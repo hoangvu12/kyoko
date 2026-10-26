@@ -90,7 +90,22 @@ const FAVORITE_EMOJI_FIRST: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 7] = [
+const EXPRESSION_CLONER: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/expression-cloner/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/expression-cloner/logic.luau"),
+	),
+	(
+		"copy_plus.svg",
+		include_str!("../../../plugins/expression-cloner/copy_plus.svg"),
+	),
+];
+
+const PACKAGES: [Embedded; 8] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -98,6 +113,7 @@ const PACKAGES: [Embedded; 7] = [
 	SHOW_ME_YOUR_NAME,
 	DONT_ROUND_MY_TIMESTAMPS,
 	FAVORITE_EMOJI_FIRST,
+	EXPRESSION_CLONER,
 ];
 
 pub fn packages() -> Vec<Package> {

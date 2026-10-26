@@ -1,0 +1,21 @@
+id = "expression-cloner"
+name = "ExpressionCloner"
+version = "1.0.0"
+api = 1
+description = "Right-click a custom emoji or a sticker to copy it into a server where you can add expressions."
+authors = ["Kyoko"]
+permissions = ["ui:message.menu", "action:upload_expression"]
+
+[[menu]]
+slot = "message.menu"
+key = "clone_emoji"
+label = "Clone Emoji"
+icon = "copy_plus.svg"
+when = ["custom_emoji", "can_create_expressions"]
+
+[[menu]]
+slot = "message.menu"
+key = "clone_sticker"
+label = "Clone Sticker"
+icon = "copy_plus.svg"
+when = ["image_sticker", "can_create_expressions"]

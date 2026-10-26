@@ -8,6 +8,7 @@ use zgx::compose::prelude::*;
 use zgx::image::ImageData;
 use zgx::reactive::Signal;
 
+use super::actions::aimed;
 use super::body::{self, Look};
 use super::icons::icon;
 use super::pictures::{EMBED_ICON, Pictures, bare_media, large_media, side_thumbnail};
@@ -141,12 +142,13 @@ pub fn stickers(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.iter()
 		.filter_map(|sticker| {
 			let name = env.pictures.sticker(sticker)?;
-			Some(div().mt(4.).size(STICKER_SIDE, STICKER_SIDE).child(picture(
+			let view = div().mt(4.).size(STICKER_SIDE, STICKER_SIDE).child(picture(
 				&env.pictures,
 				Some(name),
 				None,
 				ObjectFit::Contain,
-			)))
+			));
+			Some(aimed(view, &env.actions, bridge::sticker_expression(sticker)))
 		})
 		.collect()
 }

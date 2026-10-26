@@ -1,6 +1,7 @@
 mod actions;
 mod alerts;
 mod clock;
+mod cloner;
 mod community;
 mod composer;
 mod connection;
@@ -36,6 +37,12 @@ pub use actions::{
 };
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
+pub use cloner::{
+	CAN_CREATE_EXPRESSIONS, CUSTOM_EMOJI, CloneTarget, IMAGE_STICKER, MenuFacts, PluginMenuItem,
+	append_plugin_entries, cell_expression, clone_command, clone_name, clone_name_problem, clone_source,
+	clone_targets, emoji_expression, plugin_entries, reaction_expression, shown_plugin_items,
+	sticker_cell_expression, sticker_expression,
+};
 pub use community::{
 	DEFAULT_INVITE_AGE, FORWARD_RESULTS, FORWARD_TARGETS, ForwardTarget, GuildNotifications, INVITE_AGES,
 	INVITE_USES, MUTE_WINDOWS, MemberGate, channel_notifications, forward_targets, guild_gate,

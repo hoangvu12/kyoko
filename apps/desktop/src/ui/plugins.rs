@@ -63,11 +63,15 @@ impl PluginsView {
 		&self.host
 	}
 
+	pub(super) fn runtime(&self) -> &tokio::runtime::Handle {
+		&self.runtime
+	}
+
 	pub fn activated(&self) {
 		self.activation.set(Some(Instant::now()));
 	}
 
-	fn take_activation(&self) -> bool {
+	pub(super) fn take_activation(&self) -> bool {
 		take_activation(&self.activation)
 	}
 
@@ -217,6 +221,7 @@ impl Link {
 			if self.plugins.publish() {
 				self.plugins.remount();
 			}
+			self.refresh_plugin_menu();
 		}
 	}
 

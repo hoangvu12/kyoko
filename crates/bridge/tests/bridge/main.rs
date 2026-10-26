@@ -1,4 +1,5 @@
 mod actions;
+mod cloner;
 mod composer;
 mod connection;
 mod deep_links;

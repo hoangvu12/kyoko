@@ -8,10 +8,10 @@ use bridge::{
 };
 use protocol::Snowflake;
 use session::Command;
-use state::{RiskyReason, RiskyTarget};
+use state::{Expression, RiskyReason, RiskyTarget};
 use zgx::compose::prelude::*;
 use zgx::compose::{Placement, PlacementEdge, PlacementSide};
-use zgx::input::{InputEvent, Modifiers};
+use zgx::input::{EventPhase, InputEvent, Modifiers, PointerButton};
 use zgx::reactive::{Runtime, Signal};
 
 use super::dialogs::{Confirm, Dialogs};
@@ -19,11 +19,12 @@ use super::icons::{glyph, icon};
 use super::links::Links;
 use super::rows::{Sender, tok};
 use crate::pickers::{ExpressionPicker, Tab};
+use crate::plugin_menu::{PluginMenu, Shown};
 use crate::toasts;
 
 const MENU_WIDTH: f32 = 190.;
 const MENU_ITEM: f32 = 28.;
-const MENU_ICON: f32 = 12.;
+pub const MENU_ICON: f32 = 12.;
 const MENU_MARGIN: f32 = 7.;
 const MENU_PADDING: f32 = 4.;
 const MENU_BORDER: f32 = 1.;
@@ -59,6 +60,7 @@ pub struct ContextMenu {
 	access: Access,
 	at: (f32, f32),
 	open: Signal<bool>,
+	shown: Rc<Shown>,
 }
 
 impl PartialEq for ContextMenu {
@@ -98,6 +100,8 @@ pub struct MessageActions {
 	origin: Cell<(f32, f32)>,
 	window: Cell<(f32, f32)>,
 	acted_at: Cell<Option<Instant>>,
+	plugin_menu: RefCell<Option<Rc<PluginMenu>>>,
+	aimed: RefCell<Option<(Expression, (f32, f32))>>,
 }
 
 pub struct Wiring {
@@ -139,7 +143,26 @@ impl MessageActions {
 			origin: Cell::new((0., 0.)),
 			window: Cell::new((f32::MAX, f32::MAX)),
 			acted_at: Cell::new(None),
+			plugin_menu: RefCell::new(None),
+			aimed: RefCell::new(None),
 		}
+	}
+
+	pub fn set_plugin_menu(&self, menu: Rc<PluginMenu>) {
+		self.picker.set_plugin_menu(menu.clone());
+		*self.plugin_menu.borrow_mut() = Some(menu);
+	}
+
+	pub fn aim(&self, target: Expression, at: (f32, f32)) {
+		*self.aimed.borrow_mut() = Some((target, at));
+	}
+
+	fn shown(&self, target: Option<Expression>) -> Shown {
+		self.plugin_menu
+			.borrow()
+			.as_ref()
+			.map(|menu| menu.shown(target))
+			.unwrap_or_default()
 	}
 
 	pub fn on_compose(&self, hook: impl Fn(Compose) + 'static) {
@@ -478,10 +501,17 @@ impl MessageActions {
 	}
 
 	pub fn open_menu_at(&self, entry: &MessageEntry, access: Access, (x, y): (f32, f32)) -> bool {
+		let target = self
+			.aimed
+			.borrow_mut()
+			.take()
+			.filter(|(_, aimed)| *aimed == (x, y))
+			.map(|(target, _)| target);
 		if !bridge::has_actions(entry) {
 			return false;
 		}
-		let entries = self.menu_entries(entry, &access);
+		let shown = Rc::new(self.shown(target));
+		let entries = self.menu_entries(entry, &access, &shown);
 		if entries.is_empty() {
 			return false;
 		}
@@ -499,6 +529,7 @@ impl MessageActions {
 			access,
 			at: (x - left, y - top),
 			open: self.runtime.signal(true),
+			shown,
 		}));
 		true
 	}
@@ -520,7 +551,7 @@ impl MessageActions {
 						offset: 0.,
 					}),
 				)
-				.children(this.menu_items(&menu.entry, menu.access))
+				.children(this.menu_views(&menu.entry, menu.access, &menu.shown))
 			},
 		)
 	}
@@ -533,7 +564,7 @@ impl MessageActions {
 		}
 	}
 
-	fn menu_entries(&self, entry: &MessageEntry, access: &Access) -> Vec<MenuEntry> {
+	fn menu_entries(&self, entry: &MessageEntry, access: &Access, shown: &Shown) -> Vec<MenuEntry> {
 		let context = MenuContext {
 			developer_mode: self.developer_mode.get(),
 			selected: self.is_open(access)
@@ -542,16 +573,27 @@ impl MessageActions {
 					.with_untracked(|selection| selection.contains(&entry.id)),
 			selection: self.selection_in(access),
 		};
-		bridge::message_menu(entry, access, context)
+		let mut menu = bridge::message_menu(entry, access, context);
+		bridge::append_plugin_entries(&mut menu, &shown.items, &shown.facts);
+		menu
 	}
 
 	pub fn menu_items(self: &Rc<Self>, entry: &Rc<MessageEntry>, access: Access) -> Vec<View> {
+		let shown = self.shown(None);
+		self.menu_views(entry, access, &shown)
+	}
+
+	fn menu_views(self: &Rc<Self>, entry: &Rc<MessageEntry>, access: Access, shown: &Shown) -> Vec<View> {
 		let selection = self.selection_in(&access);
-		self.menu_entries(entry, &access)
+		let menu = self.plugin_menu.borrow().clone();
+		let message = Some((entry.message.channel_id, entry.id));
+		self.menu_entries(entry, &access, shown)
 			.into_iter()
-			.map(|item| match item {
-				MenuEntry::Separator => separator(),
-				MenuEntry::Action(action) => self.menu_item(action, entry, selection, access),
+			.map(|item| match (item, menu.as_ref()) {
+				(MenuEntry::Separator, _) => separator(),
+				(MenuEntry::Action(action), _) => self.menu_item(action, entry, selection, access),
+				(MenuEntry::Plugin(index), Some(menu)) => menu.item(shown, index, message, || {}),
+				(MenuEntry::Plugin(_), None) => div(),
 			})
 			.collect()
 	}
@@ -570,18 +612,7 @@ impl MessageActions {
 			"text_normal"
 		};
 		let (this, entry) = (self.clone(), entry.clone());
-		menu_item(label.clone())
-			.h(MENU_ITEM)
-			.px(12.)
-			.py(0.)
-			.rounded(tok("radius_sm"))
-			.child(
-				row()
-					.items_center()
-					.gap(5.)
-					.child(icon(action.icon(), MENU_ICON, color))
-					.child(text(label).text_size(tok("font_sm")).text_color(tok(color))),
-			)
+		menu_row(label, icon(action.icon(), MENU_ICON, color), color)
 			.on_click_with(move |modifiers| this.act(action, &entry, modifiers, access))
 	}
 
@@ -743,7 +774,41 @@ fn needs_open_channel(action: MessageAction) -> bool {
 	)
 }
 
-fn menu_panel(panel: View) -> View {
+pub fn aimed(view: View, actions: &Rc<MessageActions>, target: Option<Expression>) -> View {
+	let Some(target) = target else {
+		return view;
+	};
+	let actions = actions.clone();
+	view.id(format!("expression-{}", target.id()))
+		.on_event(move |event| {
+			if event.phase != EventPhase::Capture
+				&& let InputEvent::PointerDown {
+					x,
+					y,
+					button: PointerButton::Secondary,
+				} = event.event
+			{
+				actions.aim(target.clone(), (x, y));
+			}
+		})
+}
+
+pub fn menu_row(label: String, glyph: View, color: &str) -> View {
+	menu_item(label.clone())
+		.h(MENU_ITEM)
+		.px(12.)
+		.py(0.)
+		.rounded(tok("radius_sm"))
+		.child(
+			row()
+				.items_center()
+				.gap(5.)
+				.child(glyph)
+				.child(text(label).text_size(tok("font_sm")).text_color(tok(color))),
+		)
+}
+
+pub fn menu_panel(panel: View) -> View {
 	panel
 		.w(MENU_WIDTH)
 		.px(0.)
@@ -758,7 +823,7 @@ fn menu_height(entries: &[MenuEntry]) -> f32 {
 	let rows: f32 = entries
 		.iter()
 		.map(|entry| match entry {
-			MenuEntry::Action(_) => MENU_ITEM,
+			MenuEntry::Action(_) | MenuEntry::Plugin(_) => MENU_ITEM,
 			MenuEntry::Separator => SEPARATOR,
 		})
 		.sum();
