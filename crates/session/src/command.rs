@@ -462,6 +462,7 @@ pub enum Command {
 		expires: Option<DateTime<Utc>>,
 	},
 	SetStatus(StatusKind),
+	SetActivitySharing(bool),
 	EditProfile {
 		global_name: Option<String>,
 		bio: Option<String>,

@@ -742,7 +742,7 @@ impl Link {
 		self.server.icon.borrow_mut().take();
 		self.server.pending_icon.borrow_mut().take();
 		self.server.upload.borrow_mut().take();
-		if self.dms.page().is_empty() && !self.settings_view().is_open() {
+		if self.dms.page().is_empty() {
 			self.window.slot.set(self.reported_slot.get());
 		}
 		self.refresh_visible();

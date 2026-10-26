@@ -4,18 +4,20 @@ use std::sync::Arc;
 
 use bridge::{AccountCard, SettingKey};
 use media::ImageName;
+use session::Command;
 use state::{Changes, State};
 use store::{Settings, Store};
+use zgx::reactive::{Runtime, Signal};
 use zgx_script::{ScriptHost, Shared, Value};
 
-use super::{Link, Slot, record, text};
+use super::{Link, record, text};
 use crate::capture;
 use crate::theme::Catalog;
 use crate::timeline::Prefs;
 
 const ACCOUNT_AVATAR: f64 = 80.;
 const WEB_APP: &str = "https://discord.com/channels/@me";
-const DEFAULT_PAGE: &str = "appearance";
+const DEFAULT_PAGE: &str = "my-account";
 const PAGE_LIMIT: usize = 64;
 
 pub type SettingHook = Box<dyn Fn(SettingKey, &Settings) -> Option<String>>;
@@ -29,6 +31,9 @@ pub struct SettingsView {
 	notes: Shared,
 	about: Shared,
 	open: Cell<bool>,
+	last_page: RefCell<String>,
+	dimmed: Signal<bool>,
+	_scrim: Rc<()>,
 	system_motion: Cell<bool>,
 	avatar: RefCell<Option<ImageName>>,
 	written: RefCell<Vec<(String, String)>>,
@@ -36,7 +41,8 @@ pub struct SettingsView {
 }
 
 impl SettingsView {
-	pub fn new(host: &ScriptHost, store: Arc<Store>, catalog: Catalog) -> Self {
+	pub fn new(host: &ScriptHost, runtime: &Runtime, store: Arc<Store>, catalog: Catalog) -> Self {
+		let dimmed = runtime.signal(false);
 		let view = Self {
 			page: host.shared("settings.page", ""),
 			values: host.shared("settings.values", Value::Nil),
@@ -44,6 +50,9 @@ impl SettingsView {
 			notes: host.shared("settings.notes", Value::Nil),
 			about: host.shared("settings.about", Value::Nil),
 			open: Cell::new(false),
+			last_page: RefCell::new(DEFAULT_PAGE.to_owned()),
+			_scrim: crate::scrim::track(&dimmed),
+			dimmed,
 			system_motion: Cell::new(false),
 			avatar: RefCell::new(None),
 			written: RefCell::new(Vec::new()),
@@ -57,6 +66,12 @@ impl SettingsView {
 				view.store.paths.data_dir().display().to_string().as_str().into(),
 			),
 			("version", env!("CARGO_PKG_VERSION").into()),
+			(
+				"platform",
+				format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
+					.as_str()
+					.into(),
+			),
 		]));
 		view.publish_values();
 		view.publish_notes();
@@ -137,6 +152,7 @@ impl SettingsView {
 			("accent", accent.as_str().into()),
 			("status", card.status.into()),
 			("avatar", avatar.into()),
+			("shares_activity", Value::Bool(card.shares_activity)),
 		]));
 	}
 }
@@ -176,6 +192,12 @@ impl Link {
 				tracing::warn!(%error, "could not open the data folder");
 			}
 		});
+		let actions = Rc::downgrade(link);
+		host.action("settings.share_activity", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				link.send(Command::SetActivitySharing(matches!(argument, Value::Bool(true))));
+			}
+		});
 		host.action("settings.open_web", move |_| {
 			if let Err(error) = platform::open::open_url(WEB_APP) {
 				tracing::warn!(%error, "could not open the web app");
@@ -188,12 +210,17 @@ impl Link {
 	}
 
 	pub(crate) fn open_settings(&self, page: &str) {
-		let page = if is_page_key(page) { page } else { DEFAULT_PAGE };
-		self.settings.page.set(page.into());
+		let page = if is_page_key(page) {
+			page.to_owned()
+		} else {
+			self.settings.last_page.borrow().clone()
+		};
+		self.settings.page.set(page.as_str().into());
+		*self.settings.last_page.borrow_mut() = page;
 		if !self.settings.open.replace(true) {
 			self.settings.publish_values();
 			self.publish_settings_account();
-			self.window.slot.set(Slot::default());
+			self.settings.dimmed.set(true);
 			self.refresh_visible();
 		}
 	}
@@ -203,10 +230,8 @@ impl Link {
 			return;
 		}
 		self.settings.page.set("".into());
+		self.settings.dimmed.set(false);
 		self.settings.avatar.borrow_mut().take();
-		if self.dms.page().is_empty() {
-			self.window.slot.set(self.reported_slot.get());
-		}
 		self.refresh_visible();
 	}
 
@@ -245,10 +270,10 @@ impl Link {
 					.set_reduced_motion(self.settings.reduced_motion());
 				self.motion.set_reduced(self.settings.reduced_motion());
 			}
-			SettingKey::Animation => {
+			SettingKey::GifAutoplay | SettingKey::AnimateEmoji | SettingKey::StickerAnimation => {
 				self.images
 					.gallery
-					.set_playback(bridge::media_playback(&settings));
+					.set_animations(bridge::media_playback(&settings));
 				self.refresh_timeline_prefs(&settings);
 			}
 			SettingKey::MemoryMb => self

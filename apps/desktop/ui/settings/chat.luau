@@ -1,17 +1,35 @@
-local widgets = require("./widgets")
-
-return function()
-	return ui.column {
-		w_full = true,
-		widgets.toggle_row("chat.inline_media", "Inline media", "Show images and videos in messages."),
-		widgets.toggle_row(
-			"media.original_resolution",
-			"Original image quality",
-			"Load images at their full resolution instead of sized to the window."
-		),
-		widgets.toggle_row("chat.link_previews", "Link previews", "Show previews for links in messages."),
-		widgets.toggle_row("chat.show_reactions", "Reactions", "Show reactions under messages."),
-		widgets.toggle_row("chat.time_24h", "24-hour time", "Show times as 14:30 instead of 2:30 PM."),
-		widgets.toggle_row("chat.emoji_autocomplete", "Emoji autocomplete", "Suggest emoji while you type."),
-	}
-end
+return {
+	headings = {
+		{
+			key = "display",
+			title = "Display",
+			rows = {
+				{
+					key = "media.original_resolution",
+					title = "Original image quality",
+					note = "Load images at their full resolution instead of sized to the window.",
+					keywords = "resolution full size pictures",
+				},
+			},
+		},
+		{
+			key = "chat-box",
+			title = "Chat Box",
+			rows = {
+				{
+					key = "chat.emoji_autocomplete",
+					title = "Emoji autocomplete",
+					note = "Suggest emoji while you type.",
+					keywords = "suggestions composer typing",
+				},
+				{
+					kind = "related",
+					page = "appearance",
+					icon = "appearance",
+					title = "Appearance",
+					note = "Choose which images, embeds and reactions show in messages",
+				},
+			},
+		},
+	},
+}

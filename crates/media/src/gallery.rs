@@ -32,6 +32,51 @@ pub enum Playback {
 	Never,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Animations {
+	pub gifs: Playback,
+	pub emoji: Playback,
+	pub stickers: Playback,
+}
+
+impl Animations {
+	pub const fn uniform(playback: Playback) -> Self {
+		Self {
+			gifs: playback,
+			emoji: playback,
+			stickers: playback,
+		}
+	}
+
+	fn of(self, kind: Kind) -> Playback {
+		match kind {
+			Kind::Emoji => self.emoji,
+			Kind::Sticker => self.stickers,
+			Kind::Other => self.gifs,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+	Emoji,
+	Sticker,
+	Other,
+}
+
+impl Kind {
+	fn of(url: &str) -> Self {
+		let path = url.split(['?', '#']).next().unwrap_or_default();
+		if path.contains("/emojis/") {
+			Self::Emoji
+		} else if path.contains("/stickers/") {
+			Self::Sticker
+		} else {
+			Self::Other
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Origin {
 	pub channel_id: u64,
@@ -190,6 +235,7 @@ enum Phase {
 struct Entry {
 	name: ImageName,
 	origin: Option<Origin>,
+	kind: Kind,
 	phase: Phase,
 	refreshed: bool,
 	frame: usize,
@@ -203,6 +249,7 @@ impl Entry {
 		Self {
 			name: ImageName::of(key),
 			origin,
+			kind: Kind::of(url),
 			phase: Phase::Loading { url: url.to_owned() },
 			refreshed: false,
 			frame: 0,
@@ -235,7 +282,7 @@ struct Inner {
 	budget: usize,
 	visible: HashSet<u64>,
 	hovered: Option<u64>,
-	playback: Playback,
+	playback: Animations,
 	reduced_motion: bool,
 	animating: HashSet<u64>,
 	dirty: Vec<u64>,
@@ -250,7 +297,7 @@ impl Inner {
 			budget,
 			visible: HashSet::new(),
 			hovered: None,
-			playback: Playback::default(),
+			playback: Animations::default(),
 			reduced_motion: false,
 			animating: HashSet::new(),
 			dirty: Vec::new(),
@@ -259,8 +306,9 @@ impl Inner {
 	}
 
 	fn moving(&self, key: u64) -> bool {
+		let kind = self.entries.peek(&key).map_or(Kind::Other, |entry| entry.kind);
 		!self.reduced_motion
-			&& match self.playback {
+			&& match self.playback.of(kind) {
 				Playback::Always => true,
 				Playback::OnHover => self.hovered == Some(key),
 				Playback::Never => false,
@@ -530,7 +578,11 @@ impl Gallery {
 	}
 
 	pub fn set_playback(&self, playback: Playback) {
-		self.shared.inner.lock().playback = playback;
+		self.set_animations(Animations::uniform(playback));
+	}
+
+	pub fn set_animations(&self, animations: Animations) {
+		self.shared.inner.lock().playback = animations;
 		self.changed();
 	}
 

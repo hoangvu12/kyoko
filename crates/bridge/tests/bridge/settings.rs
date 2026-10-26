@@ -41,7 +41,7 @@ fn unknown_keys_and_bad_values_change_nothing() {
 		None
 	);
 	assert_eq!(
-		change_setting(&mut settings, "media.animation", &json!("sometimes")),
+		change_setting(&mut settings, "media.sticker_animation", &json!("sometimes")),
 		None
 	);
 	assert_eq!(change_setting(&mut settings, "theme", &json!("../../evil")), None);

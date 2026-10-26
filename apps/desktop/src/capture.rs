@@ -340,7 +340,6 @@ fn settings_page(name: &str) -> Option<&'static str> {
 		"settings-privacy" => Some("privacy"),
 		"settings-devices" => Some("devices"),
 		"settings-connections" => Some("connections"),
-		"settings-clips" => Some("clips"),
 		"settings-friend-requests" => Some("friend-requests"),
 		"settings-appearance" => Some("appearance"),
 		"settings-accessibility" => Some("accessibility"),
@@ -352,6 +351,10 @@ fn settings_page(name: &str) -> Option<&'static str> {
 		"settings-advanced" => Some("advanced"),
 		"settings-plugins" => Some("plugins"),
 		"settings-themes" => Some("themes"),
+		"settings-safety" => Some("safety"),
+		"settings-storage" => Some("storage"),
+		"settings-voice" => Some("voice"),
+		"settings-system" => Some("system"),
 		_ => None,
 	}
 }

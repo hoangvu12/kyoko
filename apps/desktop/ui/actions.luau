@@ -271,6 +271,10 @@ function M.settings_action(name: string)
 	ui.invoke("settings." .. name)
 end
 
+function M.share_activity(on: boolean)
+	ui.invoke("settings.share_activity", on)
+end
+
 function M.run_search(query: string)
 	ui.invoke("search.run", query)
 end

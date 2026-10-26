@@ -145,7 +145,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(
 		&mut app,
 		"the settings view",
-		"Edit User Profile",
+		"Edit Profiles",
 		&[
 			("settings.values", setting_values(true)),
 			("settings.account", settings_account()),
@@ -494,30 +494,33 @@ fn server_pages() -> [(&'static str, &'static str, &'static str, serde_json::Val
 	]
 }
 
-const SETTINGS_PAGES: [(&str, &str); 17] = [
-	("my-account", "Edit User Profile"),
+const SETTINGS_PAGES: [(&str, &str); 20] = [
+	("my-account", "Multi-Factor Authentication"),
 	("profiles", "Your profile is edited in Discord's web app for now."),
-	("privacy", "Warn before opening links"),
+	("privacy", "Share my activity"),
+	("notifications", "Enable Desktop Notifications"),
 	("devices", "Devices are managed in Discord's web app."),
 	("connections", "Connections are managed in Discord's web app."),
-	("clips", "Clips are not supported in Kyoko."),
 	(
 		"friend-requests",
 		"Who can send you friend requests is managed in Discord's web app.",
 	),
-	("appearance", "Cozy: modern, beautiful, and easy to read."),
-	("accessibility", "Play them when hovered"),
+	("plugins", "Strips tracking parameters from the links you send."),
+	("themes", "How Kyoko reads themes"),
+	("safety", "Hold risky actions"),
+	("storage", "Data Folder"),
+	(
+		"voice",
+		"Kyoko has no voice calls, so there is nothing to set up here.",
+	),
+	("appearance", "Same as Device Theme"),
+	("accessibility", "Animate on interaction"),
 	("chat", "Original image quality"),
-	("notifications", "Enable Desktop Notifications"),
 	("keybinds", "Show or Hide Kyoko"),
+	("system", "Open Kyoko on Login"),
 	("language", "English (US)"),
 	("streamer-mode", "Hide sensitive details while you stream."),
-	("advanced", "Open Kyoko on Login"),
-	("plugins", "Strips tracking parameters from the links you send."),
-	(
-		"themes",
-		"Paste direct links to .css or theme.json files, one per line. Start a line with @light or @dark to use it only with light or dark colours.",
-	),
+	("advanced", "Developer Mode"),
 ];
 
 #[test]
@@ -677,17 +680,24 @@ fn the_themes_page_applies_toggles_and_saves_links() {
 		],
 	);
 	let texts = app.texts();
-	for shown in [
-		"APPLIED",
-		"v2.1.0 · by someone",
-		"Deep blue with a teal accent.",
-		"the server answered 404 Not Found",
-		"v1.0 · by Kyoko · dark only",
-	] {
+	for shown in ["APPLIED", "v2.1.0 · by someone", "Deep blue with a teal accent."] {
 		assert!(texts.iter().any(|text| text == shown), "{shown} is not shown");
 	}
 	app.click("theme_apply_light");
 	app.click("theme_switch_ocean.css");
+	app.click("theme_tab_online");
+	shows(
+		&mut app,
+		"the online themes",
+		"the server answered 404 Not Found",
+		&[],
+	);
+	assert!(
+		app.texts()
+			.iter()
+			.any(|text| text == "v1.0 · by Kyoko · dark only"),
+		"the online theme's byline is not shown"
+	);
 	app.type_text("theme_links", "https://a.example/one.css");
 	app.click("theme_links_save");
 	app.frames(2);
@@ -700,6 +710,142 @@ fn the_themes_page_applies_toggles_and_saves_links() {
 		last_call(&calls, "themes.set_links"),
 		Some(json!("https://a.example/one.css"))
 	);
+}
+
+#[test]
+fn settings_search_narrows_the_sidebar_marks_rows_and_clearing_restores_it() {
+	let calls: Calls = std::rc::Rc::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the accessibility page",
+		"Animate on interaction",
+		&[
+			("login.screen", json!("main")),
+			("settings.values", setting_values(true)),
+			("settings.account", settings_account()),
+			("settings.page", json!("accessibility")),
+			("plugins.list", plugin_list()),
+			("themes.list", theme_list()),
+		],
+	);
+	let every_page = sidebar_pages(&mut app);
+	assert!(
+		every_page.len() >= 20,
+		"the sidebar lists every page: {every_page:?}"
+	);
+	assert!(app.find("settings_nav_log-out").is_some());
+
+	app.type_text("settings_search", "gif");
+	assert_eq!(
+		sidebar_pages(&mut app),
+		["safety", "accessibility"],
+		"a query keeps only the pages with a matching setting"
+	);
+	assert!(app.find("settings_nav_log-out").is_none());
+	assert!(
+		app.texts().iter().any(|text| text == "Animate on interaction"),
+		"the open page stays open while searching"
+	);
+	assert!(
+		app.find("settings_match_media.gif_autoplay").is_some(),
+		"the GIF row of the open page is marked"
+	);
+	assert!(app.find("settings_match_media.animate_emoji").is_none());
+
+	app.click("settings_search_clear");
+	app.type_text("settings_search", "clearurls");
+	assert_eq!(
+		sidebar_pages(&mut app),
+		["plugins"],
+		"a plugin's name finds the Plugins page"
+	);
+
+	app.click("settings_search_clear");
+	app.type_text("settings_search", "qwertyuiop");
+	assert!(sidebar_pages(&mut app).is_empty());
+	assert!(
+		app.texts()
+			.iter()
+			.any(|text| text == "No settings match 'qwertyuiop'"),
+		"no match says so"
+	);
+
+	app.click("settings_search_clear");
+	assert_eq!(
+		sidebar_pages(&mut app),
+		every_page,
+		"clearing the search restores the sidebar"
+	);
+	assert!(app.find("settings_no_match").is_none());
+	assert!(app.texts().iter().any(|text| text == "Animate on interaction"));
+	assert!(app.find("settings_match_media.gif_autoplay").is_none());
+
+	app.type_text("settings_search", "notif");
+	app.key(zgx::input::Key::ArrowDown);
+	app.key(zgx::input::Key::Enter);
+	assert_eq!(
+		last_call(&calls, "settings.open"),
+		Some(json!("notifications")),
+		"Down from the search moves into the sidebar and Enter opens the page"
+	);
+
+	let closes = |calls: &Calls| {
+		calls
+			.borrow()
+			.iter()
+			.filter(|(name, _)| name == "settings.close")
+			.count()
+	};
+	app.click("settings_close");
+	assert_eq!(closes(&calls), 1, "the X closes settings");
+	app.host.shared("settings.page", Value::Nil).set(Value::from(""));
+	app.frames(2);
+	assert!(!app.texts().iter().any(|text| text == "Animate on interaction"));
+	shows(
+		&mut app,
+		"settings again",
+		"Animate on interaction",
+		&[("settings.page", json!("accessibility"))],
+	);
+	app.key(zgx::input::Key::Escape);
+	assert_eq!(closes(&calls), 2, "Escape closes settings");
+	app.host.shared("settings.page", Value::Nil).set(Value::from(""));
+	app.frames(2);
+	app.host
+		.shared("settings.page", Value::Nil)
+		.set(Value::from("accessibility"));
+	app.frames(2);
+	for event in [
+		zgx::input::InputEvent::PointerDown {
+			x: 20.,
+			y: 400.,
+			button: zgx::input::PointerButton::Primary,
+		},
+		zgx::input::InputEvent::PointerUp {
+			x: 20.,
+			y: 400.,
+			button: zgx::input::PointerButton::Primary,
+		},
+	] {
+		app.ui.dispatch(event);
+	}
+	app.frames(2);
+	assert_eq!(closes(&calls), 3, "a press outside the dialog closes settings");
+}
+
+fn sidebar_pages(app: &mut TestApp) -> Vec<String> {
+	let keys: Vec<String> = SETTINGS_PAGES.iter().map(|(key, _)| (*key).to_owned()).collect();
+	let mut shown: Vec<(f32, String)> = keys
+		.into_iter()
+		.filter_map(|key| {
+			let id = format!("settings_nav_{key}");
+			app.find(&id).map(|_| (app.bounds(&id).y, key))
+		})
+		.collect();
+	shown.sort_by(|left, right| left.0.total_cmp(&right.0));
+	shown.into_iter().map(|(_, key)| key).collect()
 }
 
 fn theme_entry(id: &str, source: &str, name: &str, enabled: bool) -> serde_json::Value {
@@ -1240,7 +1386,7 @@ fn plugin_list() -> serde_json::Value {
 fn settings_account() -> serde_json::Value {
 	json!({
 		"name": "Ada", "username": "ada", "email": "a•••@example.invalid", "phone": "",
-		"accent": "", "status": "online", "avatar": "",
+		"accent": "", "status": "online", "avatar": "", "shares_activity": true,
 	})
 }
 

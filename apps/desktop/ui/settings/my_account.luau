@@ -1,18 +1,11 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local avatar = require("@components/avatar")
-local widgets = require("./widgets")
-
-local RING = 4
-
-local function account(): state.SettingsAccount?
-	return state.settings.account:get()
-end
+local kit = require("./kit")
 
 local function field(name: string): () -> string
 	return function()
-		local found = account()
+		local found = state.settings.account:get()
 		return if found then (found :: any)[name] or "" else ""
 	end
 end
@@ -21,109 +14,82 @@ local function open_web()
 	actions.settings_action("open_web")
 end
 
-local function portrait()
-	return ui.row {
-		shrink = 0,
-		p = RING,
-		rounded = 999,
-		bg = theme.color.background_secondary,
-		ui.presence(function()
-			local found = account()
-			return if found then found.avatar .. "|" .. found.status else nil
-		end, function()
-			return avatar {
-				src = field("avatar")(),
-				size = theme.number(theme.size.avatar_lg)(),
-				status = field("status")(),
-			}
-		end),
+local function shown(name: string, edit: boolean)
+	return function()
+		return ui.row {
+			items = "center",
+			gap = theme.size.space_12,
+			kit.shown_value(field(name)),
+			if edit then kit.button { text = "Edit", on_click = open_web } else nil,
+		}
+	end
+end
+
+local function account_row(title: string, name: string, keywords: string, optional: boolean)
+	return {
+		kind = "block",
+		title = title,
+		keywords = keywords,
+		visible = if optional
+			then function()
+				return field(name)() ~= ""
+			end
+			else nil,
+		build = function()
+			return kit.line(title, nil, shown(name, true)())
+		end,
 	}
 end
 
-local function card()
-	return ui.column {
-		w_full = true,
-		rounded = theme.size.radius_md,
-		bg = theme.color.background_secondary,
-		overflow = "hidden",
-		ui.div {
-			w_full = true,
-			h = theme.size.profile_banner_height_lg,
-			bg = function()
-				local accent = field("accent")()
-				return if accent ~= "" then accent else theme.color.brand
-			end,
-		},
-		ui.row {
-			w_full = true,
-			items = "end",
-			gap = theme.size.space_16,
-			px = theme.size.space_16,
-			mt = function()
-				return -theme.number(theme.size.avatar_lg)() / 2
-			end,
-			portrait(),
-			ui.div {
-				grow = 1,
-				min_w = 0,
-				pb = theme.size.space_8,
-				widgets.label(field("name"), theme.size.font_xl, theme.color.header_primary, {
-					weight = theme.weight.bold,
-					literal = true,
-					truncate = true,
-				}),
+return {
+	headings = {
+		{
+			key = "account-info",
+			title = "Account Info",
+			rows = {
+				account_row("Display Name", "name", "name nickname global", false),
+				account_row("Username", "username", "handle tag", false),
+				account_row("Email", "email", "mail address", true),
+				account_row("Phone Number", "phone", "mobile sms", true),
 			},
-			ui.div {
-				pb = theme.size.space_8,
-				widgets.button {
-					text = "Edit User Profile",
-					tone = "primary",
-					on_click = function()
-						actions.open_settings("profiles")
+		},
+		{
+			key = "security",
+			title = "Password & Security",
+			rows = {
+				{
+					kind = "custom",
+					title = "Password",
+					note = "Change your password in Discord's web app.",
+					control = function()
+						return kit.button { text = "Edit", on_click = open_web }
+					end,
+				},
+				{
+					kind = "custom",
+					title = "Multi-Factor Authentication",
+					note = "Set up an authenticator app or SMS backup in Discord's web app.",
+					keywords = "2fa two-factor mfa authenticator",
+					control = function()
+						return kit.button { text = "Open Discord", on_click = open_web }
 					end,
 				},
 			},
 		},
-		ui.column {
-			m = theme.size.space_16,
-			px = theme.size.space_16,
-			rounded = theme.size.radius_md,
-			bg = theme.color.background_tertiary,
-			widgets.row("Display Name", field("name")),
-			widgets.row("Username", field("username")),
-			ui.show(function()
-				return field("email")() ~= ""
-			end, widgets.row("Email", field("email"))),
-			ui.show(function()
-				return field("phone")() ~= ""
-			end, widgets.row("Phone Number", field("phone"))),
+		{
+			key = "sign-out",
+			title = "Sign Out",
+			rows = {
+				{
+					kind = "custom",
+					title = "Log Out",
+					note = "Sign Kyoko out of this account. Your settings stay on this computer.",
+					keywords = "logout sign out account",
+					control = function()
+						return kit.button { id = "settings_log_out", text = "Log Out", tone = "critical", on_click = actions.sign_out() }
+					end,
+				},
+			},
 		},
-	}
-end
-
-return function()
-	return ui.column {
-		w_full = true,
-		gap = theme.size.space_24,
-		card(),
-		ui.column {
-			w_full = true,
-			widgets.heading("Password and Authentication"),
-			widgets.row(
-				"Password",
-				"Change these in Discord's web app.",
-				widgets.button { text = "Open Discord", small = true, on_click = open_web }
-			),
-			widgets.row(
-				"Two-Factor Authentication",
-				"Change these in Discord's web app.",
-				widgets.button { text = "Open Discord", small = true, on_click = open_web }
-			),
-		},
-		ui.column {
-			gap = theme.size.space_8,
-			widgets.heading("Sign Out"),
-			widgets.button { text = "Log Out", tone = "danger", on_click = actions.sign_out },
-		},
-	}
-end
+	},
+}

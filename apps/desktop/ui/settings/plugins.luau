@@ -3,14 +3,12 @@ local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
 local widgets = require("./widgets")
+local kit = require("./kit")
 
 local CHIP = 20
 local CHIP_FILL = 0.18
 local BANNER_FILL = 0.14
 local BANNER_EDGE = 4
-local TILE = 44
-local TILE_GLYPH = 24
-local TAB = 32
 local FIELD = 32
 local FIELD_WIDTH = 320
 local CELL_WIDTH = 200
@@ -20,6 +18,7 @@ local SAVE_DELAY = 500
 local opened = ui.state("plugins_opened", "")
 local prompt = ui.state("plugins_prompt", "")
 local prompt_open = ui.state("plugins_prompt_open", false)
+local filter = ui.state("plugins_filter", "")
 
 local function find(id: string): state.Plugin?
 	for _, plugin in state.plugins.list:get() do
@@ -113,20 +112,6 @@ local function banner(text: any, color: string)
 	}
 end
 
-local function tile()
-	return ui.row {
-		relative = true,
-		w = TILE,
-		h = TILE,
-		shrink = 0,
-		items = "center",
-		justify = "center",
-		rounded = theme.size.radius_md,
-		fill(theme.color.brand, CHIP_FILL, theme.size.radius_md),
-		icon { name = "plugins", size = TILE_GLYPH, color = theme.color.brand },
-	}
-end
-
 local function open_prompt(id: string)
 	prompt:set(id)
 	prompt_open:set(true)
@@ -142,25 +127,38 @@ local function toggle(plugin: state.Plugin, on: boolean)
 	end
 end
 
+local function settings_button(plugin: state.Plugin)
+	return ui.button {
+		id = "plugin_settings_" .. plugin.id,
+		tooltip = "Settings",
+		label = plugin.name .. " settings",
+		w = theme.size.icon_size_md,
+		h = theme.size.icon_size_md,
+		shrink = 0,
+		p = 0,
+		border = 0,
+		focus = { border = 0 },
+		bg = "#00000000",
+		cursor = "pointer",
+		justify = "center",
+		items = "center",
+		hover = { brightness = 1.3 },
+		on_click = function()
+			opened:set(plugin.id)
+		end,
+		icon { name = "settings", size = theme.size.icon_size_md :: any, color = theme.color.text_5 },
+	}
+end
+
 local function card(plugin: state.Plugin)
 	local problem = if plugin.notice ~= "" then plugin.notice else plugin.error
-	local buttons = {
-		widgets.button {
-			id = "plugin_settings_" .. plugin.id,
-			text = "Settings",
-			small = true,
-			on_click = function()
-				opened:set(plugin.id)
-			end,
-		},
-	}
+	local buttons = {}
 	if plugin.enabled and plugin.needs_approval then
 		table.insert(
 			buttons,
-			widgets.button {
+			kit.button {
 				text = "Review Permissions",
 				tone = "primary",
-				small = true,
 				on_click = function()
 					open_prompt(plugin.id)
 				end,
@@ -170,9 +168,8 @@ local function card(plugin: state.Plugin)
 	if plugin.origin ~= "bundled" then
 		table.insert(
 			buttons,
-			widgets.button {
+			kit.button {
 				text = "Reload",
-				small = true,
 				on_click = function()
 					actions.plugin_action("reload", plugin.id)
 				end,
@@ -180,34 +177,25 @@ local function card(plugin: state.Plugin)
 		)
 	end
 	return ui.column {
-		w_full = true,
-		gap = theme.size.space_12,
+		grow = 1,
+		basis = 0,
+		min_w = 0,
+		gap = theme.size.space_8,
 		p = theme.size.space_16,
-		rounded = theme.size.radius_md,
-		bg = theme.color.background_secondary,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
 		ui.row {
 			w_full = true,
-			items = "start",
+			items = "center",
 			gap = theme.size.space_12,
-			tile(),
-			ui.column {
+			kit.text(plugin.name, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_2, {
+				weight = theme.weight.semibold,
+				truncate = true,
 				grow = 1,
 				min_w = 0,
-				gap = theme.size.space_2,
-				ui.row {
-					items = "center",
-					gap = theme.size.space_8,
-					widgets.label(plugin.name, theme.size.font_md, theme.color.header_primary, {
-						literal = true,
-						weight = theme.weight.semibold,
-					}),
-					widgets.label("v" .. plugin.version, theme.size.font_sm, theme.color.text_muted, { literal = true }),
-					chip(plugin.origin_label, origin_color(plugin.origin)),
-					chip(plugin.status_label, status_color(plugin.status)),
-				},
-				widgets.hint("by " .. (if plugin.authors ~= "" then plugin.authors else "Unknown author")),
-			},
-			widgets.switch {
+			}),
+			settings_button(plugin),
+			kit.vc_switch {
 				id = "plugin_switch_" .. plugin.id,
 				label = plugin.name,
 				checked = function(): boolean
@@ -218,33 +206,19 @@ local function card(plugin: state.Plugin)
 				end,
 			},
 		},
-		if plugin.description ~= ""
-			then widgets.label(plugin.description, theme.size.font_sm, theme.color.text_normal, { literal = true, wrap = true })
-			else nil,
-		if problem ~= ""
-			then widgets.label(problem, theme.size.font_sm, theme.color.danger, { literal = true, wrap = true })
-			else nil,
-		ui.row { items = "center", gap = theme.size.space_8, wrap = true, table.unpack(buttons) },
-	}
-end
-
-local function tabs()
-	return ui.row {
-		items = "center",
-		gap = theme.size.space_4,
+		if plugin.description ~= "" then kit.hint(plugin.description) else nil,
 		ui.row {
-			h = TAB,
-			px = theme.size.space_12,
 			items = "center",
-			rounded = theme.size.radius_sm,
-			bg = theme.color.modifier_selected,
-			ui.text {
-				"Installed",
-				text_size = theme.size.font_sm,
-				weight = theme.weight.medium,
-				color = theme.color.interactive_active,
-			},
+			gap = theme.size.space_8,
+			wrap = true,
+			kit.text("v" .. plugin.version, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4),
+			chip(plugin.origin_label, origin_color(plugin.origin)),
+			chip(plugin.status_label, status_color(plugin.status)),
 		},
+		if problem ~= ""
+			then kit.text(problem, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.red_2, { wrap = true })
+			else nil,
+		if #buttons > 0 then ui.row { items = "center", gap = theme.size.space_8, wrap = true, table.unpack(buttons) } else nil,
 	}
 end
 
@@ -257,47 +231,139 @@ local function any_needing_review(): boolean
 	return false
 end
 
+local function matching(): { state.Plugin }
+	local wanted = string.lower(filter:get())
+	local found = {}
+	for _, plugin in state.plugins.list:get() do
+		local text = string.lower(plugin.name .. " " .. plugin.description .. " " .. plugin.authors)
+		if wanted == "" or string.find(text, wanted, 1, true) then
+			table.insert(found, plugin)
+		end
+	end
+	return found
+end
+
+local function pairs_of()
+	return ui.computed(function()
+		local rows = {}
+		local list = matching()
+		for index = 1, #list, 2 do
+			table.insert(rows, { first = list[index], second = list[index + 1] })
+		end
+		return rows
+	end)
+end
+
+local function grid()
+	return ui.each(pairs_of(), function(pair: any)
+		return ui.row {
+			w_full = true,
+			items = "stretch",
+			gap = theme.size.space_16,
+			card(pair.first),
+			if pair.second then card(pair.second) else ui.div { grow = 1, basis = 0 },
+		}
+	end, {
+		key = function(pair: any)
+			local function key_of(plugin: state.Plugin?): string
+				if not plugin then
+					return ""
+				end
+				return table.concat({
+					plugin.id,
+					tostring(plugin.enabled),
+					tostring(plugin.needs_approval),
+					plugin.status,
+					plugin.notice,
+					plugin.error,
+				}, "|")
+			end
+			return key_of(pair.first) .. "/" .. key_of(pair.second)
+		end,
+		w_full = true,
+		gap = theme.size.space_16,
+	})
+end
+
+local function filter_field()
+	return ui.row {
+		w_full = true,
+		h = theme.size.settings_search_height,
+		px = theme.size.space_12,
+		items = "center",
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_light,
+		ui.input {
+			id = "plugin_filter",
+			value = filter,
+			label = "Search for a plugin",
+			placeholder = "Search for a plugin...",
+			placeholder_color = theme.color.text_5,
+			grow = 1,
+			min_w = 0,
+			p = 0,
+			bg = "#00000000",
+			border = 0,
+			focus = { border = 0 },
+			text_size = theme.size.font_size_md,
+			color = theme.color.text_3,
+		},
+	}
+end
+
 local function installed()
 	return ui.column {
 		w_full = true,
-		gap = theme.size.space_16,
-		tabs(),
-		ui.show(
-			any_needing_review,
-			banner("Some plugins ask for permissions you have not reviewed yet.", theme.color.brand)
-		),
-		ui.show(function()
-			local notice = state.plugins.notice:get()
-			return notice ~= nil and notice.text ~= ""
-		end, banner(function(): string
-			local notice = state.plugins.notice:get()
-			return if notice then notice.text else ""
-		end, theme.color.danger)),
-		ui.row {
+		gap = theme.size.space_24,
+		ui.column {
 			w_full = true,
-			items = "center",
-			justify = "between",
-			gap = theme.size.space_16,
-			widgets.button {
-				text = "Open Plugins Folder",
-				tone = "primary",
-				on_click = function()
-					actions.plugin_action("open_folder")
-				end,
-			},
-			ui.column {
-				items = "end",
-				gap = theme.size.space_2,
-				shrink = 1,
-				min_w = 0,
-				widgets.label("Plugins run sandboxed", theme.size.font_sm, theme.color.text_normal, { literal = true }),
-				widgets.hint("Each one asks before it can read or change anything."),
-			},
+			gap = theme.size.space_8,
+			kit.card(
+				kit.caption("Plugin Management"),
+				kit.hint("Plugins run sandboxed, and each one asks before it can read or change anything. Press a plugin's cog for its settings and permissions."),
+				ui.row {
+					pt = theme.size.space_8,
+					kit.button {
+						text = "Open Plugins Folder",
+						icon = "folder",
+						on_click = function()
+							actions.plugin_action("open_folder")
+						end,
+					},
+				}
+			),
+			ui.show(
+				any_needing_review,
+				banner("Some plugins ask for permissions you have not reviewed yet.", theme.color.accent_2)
+			),
+			ui.show(function()
+				local notice = state.plugins.notice:get()
+				return notice ~= nil and notice.text ~= ""
+			end, banner(function(): string
+				local notice = state.plugins.notice:get()
+				return if notice then notice.text else ""
+			end, theme.color.red_2)),
 		},
-		ui.show(function()
-			return #state.plugins.list:get() == 0
-		end, widgets.hint("No plugins are installed.")),
-		ui.each(state.plugins.list, card, { w_full = true, gap = theme.size.space_16 }),
+		ui.column {
+			w_full = true,
+			gap = theme.size.space_8,
+			kit.caption("Filters"),
+			filter_field(),
+		},
+		ui.column {
+			w_full = true,
+			gap = theme.size.space_12,
+			kit.caption("Plugins"),
+			ui.show(function()
+				return #state.plugins.list:get() == 0
+			end, kit.hint("No plugins are installed.")),
+			ui.show(function()
+				return #state.plugins.list:get() > 0 and #matching() == 0
+			end, kit.hint("No plugin matches your search.")),
+			grid(),
+		},
 	}
 end
 

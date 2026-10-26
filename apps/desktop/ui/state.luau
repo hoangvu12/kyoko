@@ -153,8 +153,8 @@ export type MemberJump = {
 	serial: number,
 	offset: number,
 }
-export type SettingsAccount = { name: string, username: string, email: string, phone: string, accent: string, status: string, avatar: string }
-export type SettingsAbout = { data_dir: string, version: string }
+export type SettingsAccount = { name: string, username: string, email: string, phone: string, accent: string, status: string, avatar: string, shares_activity: boolean? }
+export type SettingsAbout = { data_dir: string, version: string, platform: string? }
 export type PluginChoice = { value: string, label: string }
 export type PluginSetting = {
 	key: string,

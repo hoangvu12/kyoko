@@ -507,7 +507,7 @@ fn gallery(
 		bridge::media_fetcher(&identity.fingerprint(), loopback_port).context("build the media fetcher")?;
 	let loader = MediaService::new(fetcher, cache_dir, Limits::default());
 	let gallery = Gallery::with_budget(loader, runtime.clone(), budget);
-	gallery.set_playback(bridge::media_playback(settings));
+	gallery.set_animations(bridge::media_playback(settings));
 	Ok(gallery)
 }
 

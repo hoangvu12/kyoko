@@ -109,7 +109,7 @@ impl Prefs {
 			show_reactions: settings.chat.show_reactions,
 			quality: bridge::media_quality(settings),
 			link_warning: settings.chat.link_warning,
-			gif_autoplay: settings.media.animation == store::AnimationPlayback::Always,
+			gif_autoplay: settings.media.gif_autoplay,
 		}
 	}
 }

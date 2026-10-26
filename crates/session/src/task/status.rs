@@ -104,6 +104,13 @@ impl Core {
 		self.change_status_settings(current, next);
 	}
 
+	pub(super) fn set_activity_sharing(&mut self, shared: bool) {
+		let current = self.state.read().status_settings().clone();
+		let mut next = current.clone();
+		next.show_current_game = Some(shared);
+		self.change_status_settings(current, next);
+	}
+
 	pub(super) fn set_custom_status(
 		&mut self,
 		text: Option<String>,

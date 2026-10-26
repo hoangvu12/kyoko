@@ -57,7 +57,7 @@ local bind_row = ui.component(function(props: { key: string, label: string })
 			gap = theme.size.space_16,
 			p = theme.size.space_12,
 			rounded = theme.size.radius_md,
-			bg = theme.color.background_secondary,
+			bg = theme.color.bg_3,
 			focusable = true,
 			on_key = function(event: any): boolean?
 				if not recording:get() then
@@ -90,7 +90,7 @@ local bind_row = ui.component(function(props: { key: string, label: string })
 				px = theme.size.space_12,
 				py = theme.size.space_4,
 				rounded = theme.size.radius_sm,
-				bg = theme.color.background_tertiary,
+				bg = theme.color.bg_2,
 				widgets.label(function()
 					if recording:get() then
 						return "Press a key..."

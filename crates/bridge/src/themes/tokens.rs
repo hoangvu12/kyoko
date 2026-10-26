@@ -480,6 +480,10 @@ pub const SIZES: &[(&str, f32)] = &[
 	("thread_popout_height", 560.),
 	("pins_popout_width", 420.),
 	("pins_popout_height", 560.),
+	("settings_search_height", 38.),
+	("settings_profile_top", 30.),
+	("settings_divider_bottom", 48.),
+	("settings_topbar_box", 49.),
 	("disabled_opacity", 0.3),
 	("offline_opacity", 0.3),
 	("locked_opacity", 0.5),
@@ -917,4 +921,20 @@ pub const DERIVED_SIZES: &[(&str, SizeTerms, f32)] = &[
 	),
 	("thread_search_width", &[("space_40", 5.)], 0.),
 	("forum_post_body_height", &[("line_height_md", 3.)], 0.),
+	(
+		"settings_search_height",
+		&[("input_height", 1.), ("space_2", -1.)],
+		0.,
+	),
+	("settings_profile_top", &[("space_24", 1.), ("space_6", 1.)], 0.),
+	(
+		"settings_divider_bottom",
+		&[("settings_divider_margin", 1.), ("space_8", -1.)],
+		0.,
+	),
+	(
+		"settings_topbar_box",
+		&[("settings_topbar_height", 1.), ("border_thickness", 1.)],
+		0.,
+	),
 ];

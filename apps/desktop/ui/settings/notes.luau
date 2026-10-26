@@ -1,26 +1,18 @@
-local theme = require("../theme")
-local actions = require("../actions")
-local widgets = require("./widgets")
+local kit = require("./kit")
 
 local M = {}
 
-function M.page(icon: string, note: string, web: boolean?)
-	return function()
-		return ui.column {
-			w_full = true,
-			gap = theme.size.space_16,
-			items = "start",
-			widgets.placeholder(icon, note),
-			if web
-				then widgets.button {
-					text = "Open Discord",
-					on_click = function()
-						actions.settings_action("open_web")
-					end,
-				}
-				else nil,
-		}
-	end
+function M.page(key: string, title: string, note: string, keywords: string)
+	return {
+		headings = {
+			{
+				key = key,
+				title = title,
+				keywords = keywords,
+				rows = { kit.web_note(note) },
+			},
+		},
+	}
 end
 
 return M

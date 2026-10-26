@@ -201,7 +201,7 @@ return function()
 				tooltip = "User Settings",
 				on = never,
 				on_click = function()
-					actions.open_settings("my-account")
+					actions.open_settings()
 				end,
 			},
 		},

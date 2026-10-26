@@ -95,7 +95,9 @@ pub enum AnimationPlayback {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MediaSettings {
-	pub animation: AnimationPlayback,
+	pub gif_autoplay: bool,
+	pub animate_emoji: bool,
+	pub sticker_animation: AnimationPlayback,
 	pub original_resolution: bool,
 	pub memory_mb: u32,
 }
@@ -103,7 +105,9 @@ pub struct MediaSettings {
 impl Default for MediaSettings {
 	fn default() -> Self {
 		Self {
-			animation: AnimationPlayback::Always,
+			gif_autoplay: true,
+			animate_emoji: true,
+			sticker_animation: AnimationPlayback::Always,
 			original_resolution: false,
 			memory_mb: 128,
 		}

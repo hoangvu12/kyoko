@@ -1,16 +1,18 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local widgets = require("./widgets")
+local kit = require("./kit")
 
-local CARD_WIDTH = 220
-local SWATCH_HEIGHT = 32
+local SWATCH_WIDTH = 72
+local SWATCH_HEIGHT = 12
 local CHIP = 20
 local CHIP_FILL = 0.18
 local LINKS_LINES = 5
 local LINE = 20
 local TEXT_INSET = 4
 local TEXT_TOP = 6
+
+local tab = ui.state("themes_tab", "local")
 
 local function of(source: string)
 	return ui.computed(function()
@@ -59,9 +61,10 @@ local function strip(entry: state.ThemeEntry)
 		table.insert(cells, ui.div { grow = 1, h_full = true, bg = if color ~= "" then color else nil })
 	end
 	return ui.row {
-		w_full = true,
+		w = SWATCH_WIDTH,
 		h = SWATCH_HEIGHT,
-		rounded = theme.size.radius_sm,
+		shrink = 0,
+		rounded = theme.size.radius_xs,
 		overflow = "hidden",
 		table.unpack(cells),
 	}
@@ -84,19 +87,17 @@ end
 local function control(entry: state.ThemeEntry): any
 	if entry.source == "builtin" then
 		if entry.enabled then
-			return chip("Applied", theme.color.success)
+			return chip("Applied", theme.color.green_2)
 		end
-		return widgets.button {
+		return kit.button {
 			id = "theme_apply_" .. entry.id,
 			text = "Apply",
-			tone = "primary",
-			small = true,
 			on_click = function()
 				actions.theme_action("apply", entry.id)
 			end,
 		}
 	elseif entry.source == "local" then
-		return widgets.switch {
+		return kit.vc_switch {
 			id = "theme_switch_" .. entry.id,
 			label = entry.name,
 			checked = function(): boolean
@@ -108,7 +109,7 @@ local function control(entry: state.ThemeEntry): any
 		}
 	end
 	if entry.enabled then
-		return chip("On", theme.color.success)
+		return chip("On", theme.color.green_2)
 	end
 	return nil
 end
@@ -116,43 +117,32 @@ end
 local function card(entry: state.ThemeEntry)
 	local line = byline(entry)
 	return ui.column {
-		w = CARD_WIDTH,
-		gap = theme.size.space_12,
+		w_full = true,
+		gap = theme.size.space_8,
 		p = theme.size.space_16,
-		rounded = theme.size.radius_md,
-		bg = theme.color.background_secondary,
-		strip(entry),
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
 		ui.row {
 			w_full = true,
 			items = "center",
-			justify = "between",
-			gap = theme.size.space_8,
-			widgets.label(entry.name, theme.size.font_md, theme.color.header_primary, {
-				literal = true,
-				weight = theme.weight.semibold,
-				truncate = true,
+			gap = theme.size.space_12,
+			ui.column {
+				grow = 1,
 				min_w = 0,
-				shrink = 1,
-			}),
+				kit.text(entry.name, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_2, {
+					weight = theme.weight.semibold,
+					truncate = true,
+				}),
+				if line ~= "" then kit.text(line, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4) else nil,
+			},
+			strip(entry),
 			control(entry),
 		},
-		if line ~= "" or entry.description ~= ""
-			then ui.column {
-				w_full = true,
-				gap = theme.size.space_2,
-				if line ~= "" then widgets.hint(line) else nil,
-				if entry.description ~= ""
-					then widgets.label(entry.description, theme.size.font_sm, theme.color.text_normal, {
-						literal = true,
-						wrap = true,
-					})
-					else nil,
-			}
-			else nil,
+		if entry.description ~= "" then kit.hint(entry.description) else nil,
 		if entry.error ~= ""
-			then widgets.label(entry.error, theme.size.font_sm, theme.color.danger, { literal = true, wrap = true })
+			then kit.text(entry.error, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.red_2, { wrap = true })
 			else nil,
-		if entry.note ~= "" then widgets.hint(entry.note) else nil,
+		if entry.note ~= "" then kit.hint(entry.note) else nil,
 	}
 end
 
@@ -179,8 +169,63 @@ local function section(title: string, ...: any)
 	return ui.column {
 		w_full = true,
 		gap = theme.size.space_8,
-		widgets.heading(title),
+		kit.caption(title),
 		...,
+	}
+end
+
+local tab_button = ui.component(function(props: { key: string, title: string })
+	local function chosen(): boolean
+		return tab:get() == props.key
+	end
+	return ui.button {
+		id = "theme_tab_" .. props.key,
+		p = 0,
+		pb = theme.size.space_8,
+		bg = "#00000000",
+		rounded = 0,
+		border = 0,
+		focus = { border = 0 },
+		border_sides = function()
+			return if chosen() then { 0, 0, 2, 0 } else { 0, 0, 0, 0 }
+		end,
+		border_color = theme.color.accent_1,
+		cursor = "pointer",
+		role = "tab",
+		checked = chosen,
+		on_click = function()
+			tab:set(props.key)
+		end,
+		ui.text {
+			props.title,
+			literal = true,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			weight = theme.weight.semibold,
+			color = function()
+				return if chosen() then theme.color.accent_1 else theme.color.text_3
+			end,
+		},
+	}
+end)
+
+local function warning()
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_8,
+		p = theme.size.space_16,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.background_feedback_warning,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_feedback_warning,
+		kit.caption("How Kyoko reads themes"),
+		kit.text(
+			"Kyoko takes a theme's colours, sizes and fonts: a theme.json, or the variable block of a .css theme. Selectors for Discord's web page are skipped, so a theme never slows the app down.",
+			theme.size.font_size_sm,
+			theme.size.line_height_sm,
+			theme.color.text_3,
+			{ wrap = true }
+		),
 	}
 end
 
@@ -189,7 +234,7 @@ local links_box = ui.component(function()
 	return ui.column {
 		w_full = true,
 		gap = theme.size.space_8,
-		widgets.hint(
+		kit.hint(
 			"Paste direct links to .css or theme.json files, one per line. Start a line with @light or @dark to use it only with light or dark colours."
 		),
 		ui.div {
@@ -197,13 +242,15 @@ local links_box = ui.component(function()
 			px = theme.size.space_8,
 			py = theme.size.space_4,
 			rounded = theme.size.radius_sm,
-			bg = theme.color.input_background,
+			bg = theme.color.bg_3,
+			border = theme.size.border_thickness,
+			border_color = theme.color.border_light,
 			ui.textarea {
 				id = "theme_links",
 				value = typed,
 				label = "Theme links",
 				placeholder = "https://example.github.io/theme/theme.css",
-				placeholder_color = theme.color.text_muted,
+				placeholder_color = theme.color.text_5,
 				wrap = true,
 				w_full = true,
 				h = LINKS_LINES * LINE + TEXT_TOP * 2,
@@ -212,14 +259,14 @@ local links_box = ui.component(function()
 				bg = "#00000000",
 				border = 0,
 				focus = { border = 0 },
-				text_size = theme.size.font_sm,
+				text_size = theme.size.font_size_sm,
 				line_height = LINE,
-				color = theme.color.text_normal,
+				color = theme.color.text_3,
 			},
 		},
 		ui.row {
 			gap = theme.size.space_8,
-			widgets.button {
+			kit.button {
 				id = "theme_links_save",
 				text = "Save Links",
 				tone = "primary",
@@ -227,7 +274,7 @@ local links_box = ui.component(function()
 					actions.theme_action("set_links", typed:get())
 				end,
 			},
-			widgets.button {
+			kit.button {
 				text = "Refresh",
 				on_click = function()
 					actions.theme_action("refresh")
@@ -237,25 +284,63 @@ local links_box = ui.component(function()
 	}
 end)
 
-return function()
+local function local_tab()
 	return ui.column {
 		w_full = true,
-		gap = theme.size.space_24,
-		ui.row {
-			widgets.button {
-				text = "Open Themes Folder",
-				small = true,
-				on_click = function()
-					actions.theme_action("open_folder")
-				end,
-			},
-		},
+		gap = theme.size.space_16,
+		warning(),
+		kit.card(
+			kit.caption("Themes Folder"),
+			kit.hint("Put a .css or theme.json file in the themes folder and it shows up below."),
+			ui.row {
+				pt = theme.size.space_8,
+				gap = theme.size.space_8,
+				kit.button {
+					text = "Open Themes Folder",
+					icon = "folder",
+					on_click = function()
+						actions.theme_action("open_folder")
+					end,
+				},
+				kit.button {
+					text = "Refresh",
+					icon = "refresh",
+					on_click = function()
+						actions.theme_action("refresh")
+					end,
+				},
+			}
+		),
 		section("Built In", cards("builtin")),
 		section(
 			"Local Themes",
-			ui.show(none("local"), widgets.hint("No themes in the themes folder. Add a .css or theme.json file and it shows up here.")),
+			ui.show(none("local"), kit.hint("No themes in the themes folder. Add a .css or theme.json file and it shows up here.")),
 			cards("local")
 		),
+	}
+end
+
+local function online_tab()
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_16,
 		section("Online Themes", links_box {}, cards("online")),
+	}
+end
+
+return function()
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_10,
+		ui.row {
+			gap = theme.size.space_56,
+			tab_button { key = "local", title = "Local Themes" },
+			tab_button { key = "online", title = "Online Themes" },
+		},
+		ui.presence(function()
+			return tab:get()
+		end, function(key: string)
+			return if key == "online" then online_tab() else local_tab()
+		end),
 	}
 end

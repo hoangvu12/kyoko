@@ -282,3 +282,48 @@ async fn a_profile_is_fetched_once_and_a_missing_one_fails_quietly() {
 	}
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn turning_off_activity_sharing_is_saved_and_a_refusal_turns_it_back_on() {
+	let running = start("status-activity").await;
+	assert!(
+		running
+			.session()
+			.state()
+			.read()
+			.status_settings()
+			.shares_activity()
+	);
+	running.session().send(Command::SetActivitySharing(false));
+	running
+		.until("sharing off at once", |state: &State| {
+			!state.status_settings().shares_activity()
+		})
+		.await;
+	let saved = running
+		.until_wire("the settings write", |recording| writes(recording).pop())
+		.await;
+	assert_eq!(saved.show_current_game, Some(false));
+	assert_eq!(saved.status, None);
+
+	running.mock().respond_once(
+		"PATCH",
+		SETTINGS,
+		Reply::json(400, json!({ "code": 50035, "message": "Invalid Form Body" })),
+	);
+	running.session().send(Command::SetActivitySharing(true));
+	running
+		.until_wire("the refused write", |recording| {
+			writes(recording).into_iter().nth(1)
+		})
+		.await;
+	running
+		.until("sharing off again, with the reason", |state: &State| {
+			!state.status_settings().shares_activity()
+				&& state
+					.last_rejection()
+					.is_some_and(|rejection| rejection.reason.contains("could not be saved"))
+		})
+		.await;
+	running.stop().await;
+}

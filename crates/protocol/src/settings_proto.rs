@@ -7,6 +7,7 @@ use crate::snowflake::Snowflake;
 const PRELOADED_STATUS: u32 = 11;
 const STATUS_VALUE: u32 = 1;
 const STATUS_CUSTOM: u32 = 2;
+const STATUS_SHOW_CURRENT_GAME: u32 = 3;
 const STATUS_EXPIRES_AT: u32 = 4;
 const CUSTOM_TEXT: u32 = 1;
 const CUSTOM_EMOJI_ID: u32 = 2;
@@ -68,8 +69,15 @@ pub struct ProtoCustomStatus {
 pub struct ProtoStatusSettings {
 	pub status: Option<String>,
 	pub custom_status: Option<ProtoCustomStatus>,
+	pub show_current_game: Option<bool>,
 	pub status_expires_at_ms: Option<u64>,
 	pub other: Vec<u8>,
+}
+
+impl ProtoStatusSettings {
+	pub fn shares_activity(&self) -> bool {
+		self.show_current_game.unwrap_or(true)
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -256,6 +264,12 @@ fn decode_status(bytes: &[u8]) -> ProtoStatusSettings {
 			(STATUS_CUSTOM, Wire::Bytes(inner)) => {
 				settings.custom_status = Some(decode_custom_status(inner));
 			}
+			(STATUS_SHOW_CURRENT_GAME, Wire::Bytes(inner)) => {
+				settings.show_current_game = match wrapped(inner) {
+					Some(Wire::Varint(value)) => Some(value != 0),
+					_ => Some(false),
+				};
+			}
 			(STATUS_EXPIRES_AT, wire) => settings.status_expires_at_ms = fixed(wire),
 			_ => settings.other.extend_from_slice(raw),
 		}
@@ -431,6 +445,9 @@ pub fn encode_status_settings(settings: &ProtoStatusSettings) -> String {
 	}
 	if let Some(custom) = &settings.custom_status {
 		inner.bytes_field(STATUS_CUSTOM, &encode_custom_status(custom));
+	}
+	if let Some(show) = settings.show_current_game {
+		inner.wrapped_varint(STATUS_SHOW_CURRENT_GAME, u64::from(show));
 	}
 	if let Some(expires) = settings.status_expires_at_ms {
 		inner.fixed_field(STATUS_EXPIRES_AT, expires);

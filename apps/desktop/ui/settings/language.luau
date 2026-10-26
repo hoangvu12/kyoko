@@ -1,19 +1,34 @@
-local theme = require("../theme")
-local widgets = require("./widgets")
-
 local LOCALES = {
 	{ label = "English (US)", value = "en-US" },
 }
 
-return function()
-	return ui.column {
-		w_full = true,
-		gap = theme.size.space_8,
-		widgets.heading("Language"),
-		widgets.setting_radios("locale", LOCALES),
-		ui.div {
-			pt = theme.size.space_8,
-			widgets.hint("More languages are coming. A change of language applies after a restart."),
+return {
+	headings = {
+		{
+			key = "language",
+			title = "Language",
+			rows = {
+				{
+					kind = "radios",
+					key = "locale",
+					title = "Language",
+					note = "More languages are coming. A change of language applies after a restart.",
+					keywords = "locale translation english",
+					options = LOCALES,
+				},
+			},
 		},
-	}
-end
+		{
+			key = "time",
+			title = "Time",
+			rows = {
+				{
+					key = "chat.time_24h",
+					title = "24-hour time",
+					note = "Show times as 14:30 instead of 2:30 PM.",
+					keywords = "clock timestamp hours",
+				},
+			},
+		},
+	},
+}

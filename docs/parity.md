@@ -154,6 +154,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `settings-appearance` | `settings-appearance.html` |
 | `settings-notifications` | `settings-notifications.html` |
 | `settings-plugins` | `settings-plugins.html` |
+| `settings-themes` | `settings-themes.html` |
 | `toast` | `toast-rate-limited.html` |
 | `connection-offline` | `connection-lost.html` |
 | `expressions-in-messages` | `expressions-in-messages.html` |
@@ -167,9 +168,9 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
-Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
+Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -360,27 +361,29 @@ Oxidcord has no rules (membership screening) or onboarding screens, so they have
 
 ### 37 Account and settings pages
 
-The voice and video and updates pages are left out, as ticket 37 says; ticket 45 adds the Plugins page. Ticket 57 adds the Themes page through the settings page registry. Kyoko has no Developer page: its developer mode switch is on Advanced.
+The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page and 57 the Themes page. Midnight 19 turns settings into Discord's dialog: the Clips note page is gone, Voice & Video is a greyed page saying Kyoko has no voice calls, the safety locks, links and GIF usage moved to the Kyoko group's Safety & Privacy page, the data folder to Storage, the startup switches to System, and Advanced is titled Developer (the `advanced` key is kept). Kyoko's screens show the dialog over the dimmed main screen; oxidcord's are its full-screen settings.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `settings-my-account` | 37 | Default selection, then open settings on My Account. | yes |
 | `settings-profiles` | 37 | As above, on Profiles. | yes |
-| `settings-privacy` | 37 | As above, on Privacy and Safety. | yes |
+| `settings-privacy` | 37 | As above, on Data & Privacy (with Activity Privacy). | yes |
 | `settings-devices` | 37 | As above, on Devices. | yes |
 | `settings-connections` | 37 | As above, on Connections. | yes |
-| `settings-clips` | 37 | As above, on Clips. | yes |
 | `settings-friend-requests` | 37 | As above, on Friend Requests. | yes |
 | `settings-appearance` | 37 | As above, on Appearance. | yes |
 | `settings-accessibility` | 37 | As above, on Accessibility. | yes |
 | `settings-chat` | 37 | As above, on Chat. | yes |
 | `settings-notifications` | 37 | As above, on Notifications. | yes |
 | `settings-keybinds` | 37 | As above, on Keybinds. | yes |
-| `settings-language` | 37 | As above, on Language. | yes |
+| `settings-language` | 37 | As above, on Language & Time. | yes |
 | `settings-streamer-mode` | 37 | As above, on Streamer Mode. | yes |
-| `settings-advanced` | 37 | As above, on Advanced. | yes |
-| `settings-themes` | 57 | As above, on Themes. Oxidcord shows Built In, an empty From Plugins and its catalog URL; kyoko shows Built In (with the two first party themes and each card's version, author and description), an empty Local Themes and the Online Themes links box. | yes |
-| `settings-developer` | 37 | As above, on Developer. | no |
+| `settings-advanced` | 37 | As above, on Developer (key `advanced`). | yes |
+| `settings-safety` | M19 | As above, on Safety & Privacy. | yes |
+| `settings-storage` | M19 | As above, on Storage. | yes |
+| `settings-voice` | M19 | As above, on the greyed Voice & Video page. | yes |
+| `settings-system` | M19 | As above, on System. | yes |
+| `settings-themes` | 57 | As above, on Themes. Oxidcord shows Built In, an empty From Plugins and its catalog URL; kyoko shows its Local Themes tab (the notice on how themes are read, the folder card, Built In with each card's version, author and description, and an empty Local Themes); the links box is on the Online Themes tab. | yes |
 
 ### 45 Plugin runtime
 

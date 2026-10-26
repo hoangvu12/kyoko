@@ -138,6 +138,7 @@ impl Core {
 			| Command::UpdateGuildSettingsRaw { .. }
 			| Command::SetCustomStatus { .. }
 			| Command::SetStatus(_)
+			| Command::SetActivitySharing(_)
 			| Command::EditProfile { .. }
 			| Command::SetGuildProfile { .. }) => self.on_social_command(command),
 			command => self.on_admin_command(command),
@@ -460,6 +461,7 @@ impl Core {
 			}
 			Command::SetCustomStatus { text, emoji, expires } => self.set_custom_status(text, emoji, expires),
 			Command::SetStatus(status) => self.set_status(status),
+			Command::SetActivitySharing(shared) => self.set_activity_sharing(shared),
 			Command::EditProfile {
 				global_name,
 				bio,

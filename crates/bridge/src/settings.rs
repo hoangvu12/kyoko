@@ -1,5 +1,5 @@
-use media::Playback;
 use media::cdn::Quality;
+use media::{Animations, Playback};
 use protocol::User;
 use serde_json::Value;
 use state::State;
@@ -33,7 +33,9 @@ pub enum SettingKey {
 	FontScale,
 	Saturation,
 	TypingAnimation,
-	Animation,
+	GifAutoplay,
+	AnimateEmoji,
+	StickerAnimation,
 	OriginalResolution,
 	MemoryMb,
 	InlineMedia,
@@ -60,7 +62,7 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
-	pub const ALL: [SettingKey; 32] = [
+	pub const ALL: [SettingKey; 34] = [
 		Self::Theme,
 		Self::Locale,
 		Self::CompactMessages,
@@ -69,7 +71,9 @@ impl SettingKey {
 		Self::FontScale,
 		Self::Saturation,
 		Self::TypingAnimation,
-		Self::Animation,
+		Self::GifAutoplay,
+		Self::AnimateEmoji,
+		Self::StickerAnimation,
 		Self::OriginalResolution,
 		Self::MemoryMb,
 		Self::InlineMedia,
@@ -105,7 +109,9 @@ impl SettingKey {
 			Self::FontScale => "accessibility.font_scale",
 			Self::Saturation => "accessibility.saturation",
 			Self::TypingAnimation => "chat.typing_animation",
-			Self::Animation => "media.animation",
+			Self::GifAutoplay => "media.gif_autoplay",
+			Self::AnimateEmoji => "media.animate_emoji",
+			Self::StickerAnimation => "media.sticker_animation",
 			Self::OriginalResolution => "media.original_resolution",
 			Self::MemoryMb => "media.memory_mb",
 			Self::InlineMedia => "chat.inline_media",
@@ -161,7 +167,9 @@ impl SettingKey {
 			Self::FontScale => Value::from(settings.accessibility.font_scale),
 			Self::Saturation => Value::from(settings.accessibility.saturation),
 			Self::TypingAnimation => Value::from(settings.chat.typing_animation),
-			Self::Animation => Value::from(playback_name(settings.media.animation)),
+			Self::GifAutoplay => Value::from(settings.media.gif_autoplay),
+			Self::AnimateEmoji => Value::from(settings.media.animate_emoji),
+			Self::StickerAnimation => Value::from(playback_name(settings.media.sticker_animation)),
 			Self::OriginalResolution => Value::from(settings.media.original_resolution),
 			Self::MemoryMb => Value::from(settings.media.memory_mb),
 			Self::InlineMedia => Value::from(settings.chat.inline_media),
@@ -198,8 +206,10 @@ impl SettingKey {
 			Self::FontScale => set_ranged(&mut settings.accessibility.font_scale, value, 0.8, 1.5),
 			Self::Saturation => set_whole(&mut settings.accessibility.saturation, value, 0, 100),
 			Self::TypingAnimation => set_flag(&mut settings.chat.typing_animation, value),
-			Self::Animation => match value.as_str().and_then(playback_named) {
-				Some(playback) => replace(&mut settings.media.animation, playback),
+			Self::GifAutoplay => set_flag(&mut settings.media.gif_autoplay, value),
+			Self::AnimateEmoji => set_flag(&mut settings.media.animate_emoji, value),
+			Self::StickerAnimation => match value.as_str().and_then(playback_named) {
+				Some(playback) => replace(&mut settings.media.sticker_animation, playback),
 				None => false,
 			},
 			Self::OriginalResolution => set_flag(&mut settings.media.original_resolution, value),
@@ -255,11 +265,22 @@ pub fn media_quality(settings: &Settings) -> Quality {
 	}
 }
 
-pub fn media_playback(settings: &Settings) -> Playback {
-	match settings.media.animation {
-		AnimationPlayback::OnHover => Playback::OnHover,
-		AnimationPlayback::Never => Playback::Never,
-		AnimationPlayback::Always | AnimationPlayback::Unknown => Playback::Always,
+pub fn media_playback(settings: &Settings) -> Animations {
+	let hovered_unless = |always: bool| {
+		if always {
+			Playback::Always
+		} else {
+			Playback::OnHover
+		}
+	};
+	Animations {
+		gifs: hovered_unless(settings.media.gif_autoplay),
+		emoji: hovered_unless(settings.media.animate_emoji),
+		stickers: match settings.media.sticker_animation {
+			AnimationPlayback::OnHover => Playback::OnHover,
+			AnimationPlayback::Never => Playback::Never,
+			AnimationPlayback::Always | AnimationPlayback::Unknown => Playback::Always,
+		},
 	}
 }
 
@@ -271,6 +292,7 @@ pub struct AccountCard {
 	pub phone: String,
 	pub accent: Option<u32>,
 	pub status: &'static str,
+	pub shares_activity: bool,
 }
 
 pub fn account_card(state: &State, settings: &Settings) -> Option<AccountCard> {
@@ -292,6 +314,7 @@ pub fn account_card(state: &State, settings: &Settings) -> Option<AccountCard> {
 			.and_then(|color| u32::try_from(color).ok())
 			.filter(|color| *color <= 0x00ff_ffff),
 		status: status.as_str(),
+		shares_activity: state.status_settings().shares_activity(),
 	})
 }
 

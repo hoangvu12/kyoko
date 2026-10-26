@@ -81,6 +81,7 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("settings-appearance", "settings-appearance"),
 	("settings-notifications", "settings-notifications"),
 	("settings-plugins", "settings-plugins"),
+	("settings-themes", "settings-themes"),
 	("toast", "toast-rate-limited"),
 	("connection-offline", "connection-lost"),
 	("expressions-in-messages", "expressions-in-messages"),

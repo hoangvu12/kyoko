@@ -473,30 +473,48 @@ async fn the_animation_and_reduced_motion_settings_hold_animations_still() {
 	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
 	let url = format!("{}/avatars/3/a_still.gif?size=32", running.server.cdn_url());
 	let name = images.ready(square(url, 32)).await;
+	let emoji_url = format!("{}/emojis/77.gif?size=32", running.server.cdn_url());
+	let emoji = images.ready(square(emoji_url, 32)).await;
 	let start = Instant::now();
 	let frame_at = |updates: &[Update]| shown(updates, &name).map(|pixels| pixels.rgba.clone());
+	let emoji_moved = |updates: &[Update]| shown(updates, &emoji).is_some();
 	let first = frame_at(&images.gallery.drain(start)).expect("the first frame shows at once");
-	images.gallery.set_visible([name.as_str()]);
+	images.gallery.set_visible([name.as_str(), emoji.as_str()]);
 	let mut settings = store::Settings::default();
-	images.gallery.set_playback(bridge::media_playback(&settings));
+	images.gallery.set_animations(bridge::media_playback(&settings));
 	images.gallery.drain(start + FRAME);
 	assert!(
 		frame_at(&images.gallery.drain(start + FRAME * 2)).is_some(),
 		"animations play by default"
 	);
 
-	let changed = bridge::change_setting(&mut settings, "media.animation", &serde_json::json!("never"));
-	assert_eq!(changed, Some(bridge::SettingKey::Animation));
+	let changed = bridge::change_setting(&mut settings, "media.gif_autoplay", &serde_json::json!(false));
+	assert_eq!(changed, Some(bridge::SettingKey::GifAutoplay));
 	assert_eq!(
 		changed.map(bridge::SettingKey::applies),
 		Some(bridge::Applies::Now)
 	);
-	images.gallery.set_playback(bridge::media_playback(&settings));
+	images.gallery.set_animations(bridge::media_playback(&settings));
 	images.gallery.drain(start + FRAME * 3);
-	assert!(images.gallery.drain(start + FRAME * 10).is_empty(), "never plays");
+	let still = images.gallery.drain(start + FRAME * 10);
+	assert!(frame_at(&still).is_none(), "a GIF waits for the pointer");
+	assert!(
+		emoji_moved(&images.gallery.drain(start + FRAME * 11)),
+		"animated emoji keep playing on their own setting"
+	);
 
-	bridge::change_setting(&mut settings, "media.animation", &serde_json::json!("always"));
-	images.gallery.set_playback(bridge::media_playback(&settings));
+	let changed = bridge::change_setting(&mut settings, "media.animate_emoji", &serde_json::json!(false));
+	assert_eq!(changed, Some(bridge::SettingKey::AnimateEmoji));
+	images.gallery.set_animations(bridge::media_playback(&settings));
+	images.gallery.drain(start + FRAME * 12);
+	assert!(
+		!emoji_moved(&images.gallery.drain(start + FRAME * 14)),
+		"animated emoji wait for the pointer too"
+	);
+	images.gallery.set_visible([name.as_str()]);
+
+	bridge::change_setting(&mut settings, "media.gif_autoplay", &serde_json::json!(true));
+	images.gallery.set_animations(bridge::media_playback(&settings));
 	let changed = bridge::change_setting(
 		&mut settings,
 		"accessibility.reduced_motion",

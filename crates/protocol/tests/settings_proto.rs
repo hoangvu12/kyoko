@@ -80,8 +80,9 @@ fn status_settings_survive_an_encode_and_decode_keeping_unknown_fields() {
 			expires_at_ms: Some(1_790_000_000_000),
 			created_at_ms: Some(1_780_000_000_000),
 		}),
+		show_current_game: Some(false),
 		status_expires_at_ms: None,
-		other: vec![0x1a, 2, 0x08, 1],
+		other: vec![0x2a, 2, 0x08, 1],
 	};
 	let encoded = encode_status_settings(&settings);
 	assert_eq!(decode_status_settings(&encoded), Some(settings));

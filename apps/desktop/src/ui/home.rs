@@ -70,7 +70,7 @@ impl Link {
 			width: slot.width,
 			height: slot.height,
 		}));
-		if self.dms.page().is_empty() && !self.settings_view().is_open() {
+		if self.dms.page().is_empty() {
 			self.window.slot.set(slot);
 		}
 	}
@@ -146,7 +146,7 @@ impl Link {
 	}
 
 	pub(super) fn leave_home_page(&self) {
-		if self.dms.set_page("") && !self.settings_view().is_open() {
+		if self.dms.set_page("") {
 			self.window.slot.set(self.reported_slot.get());
 		}
 	}

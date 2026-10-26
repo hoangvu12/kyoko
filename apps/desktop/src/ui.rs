@@ -166,7 +166,7 @@ pub fn run(
 				code_font: catalog.code_font(&theme),
 				store: capture.is_none().then(|| desktop.store.clone()),
 			};
-			let settings = settings::SettingsView::new(&host, desktop.store.clone(), catalog);
+			let settings = settings::SettingsView::new(&host, &cx.ui.runtime, desktop.store.clone(), catalog);
 			let plugins = plugins::PluginsView::new(&host, plugin_host.clone(), sign_in.runtime.clone());
 			let themes = themes::ThemesView::new(&host, desktop.store.clone(), themes);
 			let (display, display_wakes) = display::start(&plugin_host);
