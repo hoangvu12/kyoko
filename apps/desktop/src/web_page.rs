@@ -16,6 +16,9 @@ pub enum PageEvent {
 
 pub use native::PageHost;
 
+#[cfg(all(test, windows))]
+mod agent;
+
 #[cfg(windows)]
 mod native {
 	use std::num::NonZeroIsize;
@@ -58,7 +61,6 @@ mod native {
 			let (messages, loads) = (events.clone(), events);
 			let webview = WebViewBuilder::new_with_web_context(&mut context)
 				.with_url(page.url.as_str())
-				.with_user_agent(page.user_agent.as_str())
 				.with_initialization_script_for_main_only(page.script.as_str(), true)
 				.with_incognito(true)
 				.with_devtools(false)

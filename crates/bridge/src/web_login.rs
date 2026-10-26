@@ -79,7 +79,6 @@ pub struct WebPage {
 	pub url: String,
 	pub origin: String,
 	pub profile: PathBuf,
-	pub user_agent: String,
 	pub script: String,
 }
 
@@ -235,7 +234,6 @@ impl WebSignIn {
 			script: login::token_script(&origin),
 			origin,
 			profile: profile.path().to_path_buf(),
-			user_agent: flow.gate().identity().fingerprint().user_agent().to_owned(),
 		};
 		self.profile = Some(profile);
 		self.address = Some(self.config.login_url.clone());

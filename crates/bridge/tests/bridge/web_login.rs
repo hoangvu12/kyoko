@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use bridge::{Failure, PageCookie, Screen, Status, WebEnd, WebLoginConfig, WebPage, WebSignIn, WebStage};
 use mockcord::{DEVICE_COOKIE, SIGNED_DEVICE_COOKIE, VISITOR_COOKIE};
 use protocol::Snowflake;
-use protocol::fingerprint::CHROME_MAJOR;
 use url::Url;
 
 use super::sign_in::{Desk, eventually};
@@ -139,9 +138,6 @@ async fn a_token_from_the_login_page_signs_in_and_carries_its_cookies() {
 	);
 	assert!(page.profile.is_dir());
 	assert!(page.profile.starts_with(&folder));
-	let identity = desk.flow.gate().identity().fingerprint();
-	assert_eq!(page.user_agent, identity.user_agent());
-	assert!(page.user_agent.contains(&format!("Chrome/{CHROME_MAJOR}.0.0.0")));
 
 	let visit = Browser::new(&desk).sign_in(&page).await;
 	let names: Vec<&str> = visit.cookies.iter().map(|cookie| cookie.name.as_str()).collect();
