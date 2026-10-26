@@ -22,6 +22,8 @@ end
 local function status_emoji(panel: any)
 	if panel.emoji_image ~= "" then
 		return ui.image { src = panel.emoji_image, w = EMOJI, h = EMOJI, shrink = 0, fit = "contain" }
+	elseif panel.emoji_svg and panel.emoji_svg ~= "" then
+		return ui.svg { code = panel.emoji_svg, w = EMOJI, h = EMOJI, shrink = 0 }
 	elseif panel.emoji ~= "" then
 		return ui.text {
 			panel.emoji,

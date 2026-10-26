@@ -8,6 +8,7 @@ use zgx::input::InputEvent;
 use zgx::reactive::{Runtime, Signal};
 
 use super::{ExpressionPicker, portrait, section_title};
+use crate::emoji;
 use crate::timeline::{icon, tok};
 
 const CELL: f32 = 44.;
@@ -16,6 +17,8 @@ const RAIL: f32 = 48.;
 const RAIL_ITEM: f32 = 40.;
 const PORTRAIT: f32 = 32.;
 const PREVIEW: f32 = 24.;
+const RAIL_GLYPH: f32 = 20.;
+const TONE_GLYPH: f32 = 18.;
 const FOOTER: f32 = 40.;
 const LOCKED_OPACITY: f32 = 0.35;
 
@@ -97,7 +100,10 @@ impl ExpressionPicker {
 		let scroll = state.scroll.clone();
 		let content = match &entry.icon {
 			RailIcon::Recent => icon("clock", 20., "interactive_normal"),
-			RailIcon::Glyph(glyph) => text(*glyph).text_size(tok("font_lg")),
+			RailIcon::Glyph(glyph) => match emoji::svg_of(glyph) {
+				Some(art) => svg(*glyph, art).size(RAIL_GLYPH, RAIL_GLYPH),
+				None => text(*glyph).text_size(tok("font_lg")),
+			},
 			RailIcon::Guild { guild_id, icon } => {
 				portrait(&self.pictures, *guild_id, icon.as_deref(), &entry.title, PORTRAIT)
 			}
@@ -227,7 +233,10 @@ impl ExpressionPicker {
 
 	fn emoji_visual(&self, cell: &EmojiCell, side: f32, text_size: &str) -> View {
 		match (&cell.glyph, &cell.custom) {
-			(Some(glyph), _) => text(glyph.clone()).text_size(tok(text_size)),
+			(Some(glyph), _) => match emoji::svg_of(glyph) {
+				Some(art) => svg(glyph.clone(), art).size(side, side),
+				None => text(glyph.clone()).text_size(tok(text_size)),
+			},
 			(None, Some(custom)) => {
 				let picture = self.pictures.picture(&self.pictures.emoji(
 					custom.id.get(),
@@ -306,9 +315,16 @@ impl ExpressionPicker {
 			.on_click(move || {
 				open.update(|open| *open = !*open);
 			})
-			.child(text_signal(move || {
-				format!("{TONE_SAMPLE}{}", TONES[label.get().min(TONES.len() - 1)])
-			}))
+			.child(switch(
+				move || label.get().min(TONES.len() - 1),
+				|tone: usize, _| {
+					let sample = format!("{TONE_SAMPLE}{}", TONES[tone]);
+					match emoji::svg_of(&sample) {
+						Some(art) => svg(sample, art).size(TONE_GLYPH, TONE_GLYPH),
+						None => text(sample),
+					}
+				},
+			))
 			.tooltip("Skin tone");
 		menu("Skin tone", self.emoji.tone_open.clone(), trigger)
 			.p(4.)

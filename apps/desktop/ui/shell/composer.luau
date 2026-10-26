@@ -33,7 +33,16 @@ local function length(text: string): number
 end
 
 local function suggestion_visual(item: state.ComposerSuggestion)
-	if item.kind == "glyph" then
+	if item.kind == "glyph" and item.svg and item.svg ~= "" then
+		return ui.row {
+			w = 24,
+			h = 24,
+			shrink = 0,
+			items = "center",
+			justify = "center",
+			ui.svg { code = item.svg, w = 20, h = 20, shrink = 0 },
+		}
+	elseif item.kind == "glyph" then
 		return ui.text { item.glyph, literal = true, text_size = 20, w = 24, align = "center", shrink = 0 }
 	elseif item.kind == "icon" then
 		return icon { name = item.icon, size = 20, color = theme.color.text_muted }

@@ -10,10 +10,12 @@ use zgx::reactive::Signal;
 
 use super::CommunityLayer;
 use super::parts::{Tone, action_button, body, caption, enabled_when, footer, hint, panel};
+use crate::emoji;
 use crate::timeline::{TypeSize, icon, tok};
 
 const WIDTH: f32 = 540.;
 const CHECKBOX: f32 = 20.;
+const OPTION_GLYPH: f32 = 24.;
 const LIST_MAX: f32 = 360.;
 const ELSEWHERE: &str =
 	"This server asks questions kyoko can't show yet. Answer them in the official client.";
@@ -238,9 +240,7 @@ fn option_view(flow: &Rc<Flow>, prompt: &OnboardingPrompt, option: &OnboardingOp
 		})
 		.hover(|style| style.bg(tok("modifier_hover")))
 		.on_click(move || pick.pick(&prompt, id))
-		.when_some(glyph, |row, glyph| {
-			row.child(text(glyph).shrink_0().type_size("font_lg"))
-		})
+		.when_some(glyph, |row, glyph| row.child(emoji::glyph(glyph, OPTION_GLYPH)))
 		.child(
 			column()
 				.grow()

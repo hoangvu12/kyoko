@@ -1,18 +1,34 @@
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use media::ImageName;
 use zgx::compose::NodeHandle;
 use zgx::compose::prelude::*;
-use zgx::scene::{NodeId, NodeKind, Rect, Scene};
+use zgx::scene::{Color, NodeId, NodeKind, Rect, Scene};
+use zgx::svg::SvgData;
 
 use super::pictures::Pictures;
 
-pub const PLACEHOLDER: &str = "\u{2060}";
+pub enum Art {
+	Image(ImageName),
+	Svg(Arc<SvgData>),
+}
 
 pub struct Placed {
 	pub range: Range<usize>,
-	pub name: ImageName,
+	pub art: Art,
+}
+
+const COPY_TEXT_SIZE: f32 = 1.;
+const COPY_TEXT_TRACKING: f32 = -0.5;
+
+pub fn placeholder(copied: TextSpan, room: f32) -> TextSpan {
+	copied
+		.text_size(COPY_TEXT_SIZE)
+		.letter_spacing(COPY_TEXT_TRACKING)
+		.text_color(Color(0, 0, 0, 0))
+		.padding(room, 0.)
 }
 
 pub struct Paragraph {
@@ -30,22 +46,27 @@ pub fn paragraph(paragraph: Paragraph, pictures: &Rc<Pictures>) -> View {
 	let rects = pictures.runtime().signal(Vec::<Rect>::new());
 	let ranges: Rc<[Range<usize>]> = placed.iter().map(|item| item.range.clone()).collect();
 	let images = placed.into_iter().enumerate().map(|(index, item)| {
-		let picture = pictures.picture(&item.name);
 		let rects = rects.clone();
-		div().absolute().size(side, side).reactive_style(move || {
-			let at = rects.with(|rects| rects.get(index).copied());
-			let styles = match at {
-				Some(rect) => Styles::new()
-					.left(rect.x + (rect.width - side) / 2.)
-					.top(rect.y + (rect.height - side) / 2.)
-					.visible(),
-				None => Styles::new().invisible(),
-			};
-			match picture.get() {
-				Some(image) => styles.bg_image(image, ObjectFit::Contain),
-				None => styles,
+		let at = move || match rects.with(|rects| rects.get(index).copied()) {
+			Some(rect) => Styles::new()
+				.left(rect.x + (rect.width - side) / 2.)
+				.top(rect.y + (rect.height - side) / 2.)
+				.visible(),
+			None => Styles::new().invisible(),
+		};
+		let frame = div().absolute().size(side, side);
+		match item.art {
+			Art::Image(name) => {
+				let picture = pictures.picture(&name);
+				frame.reactive_style(move || match picture.get() {
+					Some(image) => at().bg_image(image, ObjectFit::Contain),
+					None => at(),
+				})
 			}
-		})
+			Art::Svg(data) => frame
+				.reactive_style(at)
+				.child(svg("emoji", data).size(side, side)),
+		}
 	});
 	div()
 		.relative()

@@ -5,15 +5,17 @@ use chrono::Utc;
 use markdown::highlight::{TokenKind, highlight};
 use markdown::{Document, Node};
 use protocol::Snowflake;
+use twemoji::Piece;
 use zgx::compose::SpanHover;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 use zgx::scene::Color;
 use zgx::theme::Themed;
 
-use super::inline::{self, PLACEHOLDER, Paragraph, Placed};
+use super::inline::{self, Art, Paragraph, Placed};
 use super::pictures::{EMOJI, JUMBO_EMOJI};
 use super::rows::{RowEnv, tok};
+use crate::emoji;
 
 const LINE_RATIO: f32 = 1.375;
 const JUMBO_TEXT: f32 = 40.;
@@ -229,18 +231,40 @@ impl Body<'_> {
 		}
 	}
 
-	fn emoji(&self, inline: &mut Inline, id: u64, animated: bool) {
+	fn placed(&self, inline: &mut Inline, copied: &str, art: Option<Art>, style: &Style) {
 		let side = self.emoji_side();
-		let name = self.env.pictures.emoji(id, animated, f64::from(side));
 		let start = inline.length;
-		inline.length += PLACEHOLDER.len();
-		inline.placed.push(Placed {
-			range: start..inline.length,
-			name,
-		});
+		inline.length += copied.len();
+		if let Some(art) = art.filter(|_| !conceals(style)) {
+			inline.placed.push(Placed {
+				range: start..inline.length,
+				art,
+			});
+		}
+		let span = self.span(copied, style);
 		inline
 			.spans
-			.push(text_span(PLACEHOLDER).padding(side / 2. + EMOJI_MARGIN, 0.));
+			.push(inline::placeholder(span, side / 2. + EMOJI_MARGIN));
+	}
+
+	fn custom_emoji(&self, inline: &mut Inline, emoji: (&str, u64, bool), style: &Style) {
+		let (name, id, animated) = emoji;
+		let side = self.emoji_side();
+		let art = Art::Image(self.env.pictures.emoji(id, animated, f64::from(side)));
+		let markup = bridge::custom_markup(name, Snowflake::from(id), animated);
+		self.placed(inline, &markup, Some(art), style);
+	}
+
+	fn text(&self, inline: &mut Inline, text: &str, style: &Style) {
+		for piece in twemoji::split(text) {
+			match piece {
+				Piece::Emoji { text, file } => match emoji::art(file) {
+					Some(svg) => self.placed(inline, text, Some(Art::Svg(svg)), style),
+					None => self.push(inline, text, style),
+				},
+				Piece::Text(text) => self.push(inline, text, style),
+			}
+		}
 	}
 
 	fn children(&self, nodes: &[Node], style: &Style, inline: &mut Inline) {
@@ -263,12 +287,12 @@ impl Body<'_> {
 				next.background = Some(Themed::Token(tok("mention_background")));
 			}
 		}
-		self.push(inline, label, &next);
+		self.text(inline, label, &next);
 	}
 
 	fn inline(&self, node: &Node, style: &Style, inline: &mut Inline) {
 		match node {
-			Node::Text(text) => self.push(inline, text, style),
+			Node::Text(text) => self.text(inline, text, style),
 			Node::Bold(children) => {
 				let next = Style {
 					weight: Some(700),
@@ -335,7 +359,9 @@ impl Body<'_> {
 			Node::Here => self.mention(inline, "@here", None, style),
 			Node::CommandMention { name, .. } => self.mention(inline, &format!("/{name}"), None, style),
 			Node::GuildNav(kind) => self.mention(inline, bridge::guild_nav_label(*kind), None, style),
-			Node::CustomEmoji { id, animated, .. } => self.emoji(inline, *id, *animated),
+			Node::CustomEmoji { name, id, animated } => {
+				self.custom_emoji(inline, (name, *id, *animated), style)
+			}
 			Node::Timestamp { unix, style: kind } => {
 				let label = bridge::timestamp_text(*unix, *kind, Utc::now());
 				let next = Style {
@@ -458,4 +484,8 @@ impl Body<'_> {
 			.text_color(tok("text_normal"))
 			.child(View::from(rich_text().children(spans)).w_full().text_wrap(true))
 	}
+}
+
+fn conceals(style: &Style) -> bool {
+	matches!(style.click, Some(Click::Spoiler(_)))
 }

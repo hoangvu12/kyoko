@@ -7,6 +7,7 @@ use zgx::scene::Color;
 use zgx::style::ObjectFit;
 use zgx::theme::Themed;
 
+use crate::emoji;
 use crate::timeline::pictures::Pictures;
 use crate::timeline::{TypeSize, tok};
 
@@ -180,9 +181,7 @@ pub fn status_line(pictures: &Rc<Pictures>, custom: &StatusLine, emoji: Option<&
 	if custom.is_empty() {
 		return None;
 	}
-	let glyph = custom
-		.glyph()
-		.map(|glyph| text(glyph.to_owned()).text_size(EMOJI - 2.).line_height(EMOJI));
+	let glyph = custom.glyph().map(|glyph| emoji::glyph(glyph, EMOJI));
 	let image =
 		emoji.map(|name| picture_box(pictures, Some(name), div().size(EMOJI, EMOJI), ObjectFit::Contain));
 	Some(

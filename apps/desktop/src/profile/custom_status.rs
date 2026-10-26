@@ -12,6 +12,7 @@ use zgx::theme::Themed;
 
 use super::parts::{self, label};
 use super::{ProfileLayer, Request};
+use crate::emoji;
 use crate::timeline::icons::icon;
 use crate::timeline::tok;
 
@@ -23,6 +24,7 @@ const CHIP: f32 = 32.;
 const BUTTON: f32 = 32.;
 const MAX_LENGTH: usize = 128;
 const TOP_SHARE: f32 = 0.1;
+const STATUS_GLYPH: f32 = 24.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClearAfter {
@@ -271,7 +273,7 @@ fn emoji_button(layer: &Rc<ProfileLayer>) -> View {
 		.child(switch(
 			move || emoji.get(),
 			|glyph: Option<String>, _| match glyph {
-				Some(glyph) => text(glyph).text_size(tok("font_lg")),
+				Some(glyph) => emoji::glyph(glyph, STATUS_GLYPH),
 				None => icon("emoji", 24., "interactive_normal"),
 			},
 		))

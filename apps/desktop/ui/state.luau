@@ -85,7 +85,7 @@ export type FriendAdd = { phase: string, text: string }
 export type ComposerReplace = { serial: number, text: string, caret: number }
 export type ComposerReply = { active: boolean, name: string?, ping: boolean?, own: boolean? }
 export type ComposerFile = { id: string, name: string, size: string, image: string }
-export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string }
+export type ComposerSuggestion = { key: string, label: string, detail: string, kind: string, image: string, glyph: string, icon: string, svg: string? }
 export type ComposerNotice = { kind: string, text: string?, confirmable: boolean?, nonce: string? }
 export type MemberWindow = {
 	first: number,
@@ -150,6 +150,7 @@ export type UserPanel = {
 	subtitle: string,
 	emoji: string,
 	emoji_image: string,
+	emoji_svg: string?,
 	status: string,
 	latency: string,
 }
@@ -333,6 +334,7 @@ M.user = {
 		subtitle = "",
 		emoji = "",
 		emoji_image = "",
+		emoji_svg = "",
 		status = "online",
 		latency = "Connecting...",
 	} :: UserPanel),

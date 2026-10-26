@@ -180,6 +180,7 @@ fn the_interface_loads_and_builds_every_screen() {
 			"user.panel",
 			json!({
 				"name": "ada", "subtitle": "brb coffee", "emoji": "\u{2615}", "emoji_image": "",
+				"emoji_svg": crate::emoji::luau_code("\u{2615}"),
 				"status": "dnd", "latency": "Latency: 42 ms",
 			}),
 		)],

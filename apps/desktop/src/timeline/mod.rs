@@ -2,6 +2,8 @@ mod actions;
 mod attachments;
 mod body;
 mod dialogs;
+#[cfg(test)]
+mod emoji_tests;
 mod extras;
 pub(crate) mod icons;
 mod inline;

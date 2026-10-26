@@ -72,5 +72,12 @@ return function()
 			},
 			widgets.hint("Sends the GIF you choose back to Discord to improve search results. Off by default."),
 		},
+		ui.column {
+			w_full = true,
+			widgets.heading("Credits", theme.size.space_8),
+			widgets.hint(
+				"Emoji graphics are Twemoji by Twitter, Jason Sofonia, Justine De Caires and contributors (jdecked/twemoji), licensed under CC-BY 4.0. Emoji names come from GitHub's gemoji (MIT). Every notice is in THIRD_PARTY_NOTICES.md."
+			),
+		},
 	}
 end

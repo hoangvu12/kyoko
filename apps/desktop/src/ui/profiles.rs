@@ -129,6 +129,7 @@ impl Link {
 				("subtitle", subtitle.as_str().into()),
 				("emoji", glyph.as_str().into()),
 				("emoji_image", image.as_str().into()),
+				("emoji_svg", crate::emoji::luau_code(glyph).as_str().into()),
 				("status", status.as_str().into()),
 				("latency", latency.as_str().into()),
 			]));
@@ -288,6 +289,7 @@ pub(super) fn empty_panel() -> zgx_script::Value {
 		("subtitle", "".into()),
 		("emoji", "".into()),
 		("emoji_image", "".into()),
+		("emoji_svg", "".into()),
 		("status", "online".into()),
 		("latency", "Connecting".into()),
 	])

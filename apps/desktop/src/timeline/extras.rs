@@ -11,6 +11,7 @@ use super::attachments::picture;
 use super::icons::icon;
 use super::pictures::REACTION_EMOJI;
 use super::rows::{RowEnv, TypeSize, tok};
+use crate::emoji;
 
 const POLL_WIDTH: f32 = 432.;
 const POLL_ROW: f32 = 40.;
@@ -34,16 +35,16 @@ pub fn reactions(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 
 fn chip(entry: &Rc<MessageEntry>, reaction: &Reaction, env: &Rc<RowEnv>) -> View {
 	let size = REACTION_EMOJI as f32;
-	let glyph = match env.pictures.reaction(&reaction.emoji) {
-		Some(name) => div().size(size, size).shrink_0().child(picture(
+	let unicode = reaction.emoji.name.clone().unwrap_or_default();
+	let glyph = match (env.pictures.reaction(&reaction.emoji), emoji::svg_of(&unicode)) {
+		(Some(name), _) => div().size(size, size).shrink_0().child(picture(
 			&env.pictures,
 			Some(name),
 			None,
 			ObjectFit::Contain,
 		)),
-		None => text(reaction.emoji.name.clone().unwrap_or_default())
-			.text_size(size)
-			.line_height(size + 2.),
+		(None, Some(art)) => svg(unicode, art).size(size, size).shrink_0(),
+		(None, None) => text(unicode).text_size(size).line_height(size + 2.),
 	};
 	let (border, background, color) = if reaction.me {
 		("brand", "reaction_me", "mention_text")

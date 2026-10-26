@@ -4,6 +4,7 @@ mod capture;
 mod churn;
 mod community;
 mod dm_sidebar;
+mod emoji;
 mod fonts;
 mod frame;
 mod friends;

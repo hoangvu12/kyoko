@@ -997,6 +997,7 @@ impl Link {
 						.into(),
 					),
 					("glyph", glyph.into()),
+					("svg", crate::emoji::luau_code(glyph).as_str().into()),
 					("icon", icon.into()),
 				])
 			})
