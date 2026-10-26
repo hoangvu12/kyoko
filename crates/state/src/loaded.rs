@@ -87,7 +87,10 @@ pub enum Loaded {
 	ReactionUsers {
 		message_id: Snowflake,
 		emoji: String,
+		burst: bool,
 		users: Vec<User>,
+		append: bool,
+		limit: usize,
 	},
 	GifTrending(GifTrending),
 	GifTrendingGifs(Vec<Gif>),
@@ -214,6 +217,19 @@ pub struct BanList {
 	pub has_more: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Reactors {
+	pub users: Vec<Arc<User>>,
+	pub has_more: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReactorsKey {
+	pub message_id: Snowflake,
+	pub emoji: String,
+	pub burst: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthSession {
 	pub id_hash: String,
@@ -249,7 +265,7 @@ pub(crate) struct Lazy {
 	pub(crate) bans: HashMap<Snowflake, BanList>,
 	pub(crate) auth_sessions: Option<Vec<AuthSession>>,
 	pub(crate) community: crate::community::Community,
-	pub(crate) reaction_users: HashMap<(Snowflake, String), Vec<User>>,
+	pub(crate) reaction_users: HashMap<ReactorsKey, Reactors>,
 	pub(crate) expressions: Expressions,
 }
 
@@ -619,14 +635,29 @@ impl State {
 			Loaded::ReactionUsers {
 				message_id,
 				emoji,
+				burst,
 				users,
+				append,
+				limit,
 			} => {
 				for user in users {
 					intern_user(&mut self.users, user);
 				}
-				self.lazy
-					.reaction_users
-					.insert((*message_id, emoji.clone()), users.clone());
+				let key = ReactorsKey {
+					message_id: *message_id,
+					emoji: emoji.clone(),
+					burst: *burst,
+				};
+				let list = self.lazy.reaction_users.entry(key).or_default();
+				if !*append {
+					list.users.clear();
+				}
+				for user in users {
+					if !list.users.iter().any(|known| known.id == user.id) {
+						list.users.push(Arc::new(user.clone()));
+					}
+				}
+				list.has_more = users.len() >= *limit;
 				changes.loaded.insert(*message_id);
 			}
 			Loaded::GifTrending(trending) => {
@@ -836,10 +867,47 @@ impl State {
 		changes
 	}
 
-	pub fn reaction_users(&self, message_id: Snowflake, emoji: &str) -> Option<&[User]> {
-		self.lazy
-			.reaction_users
-			.get(&(message_id, emoji.to_owned()))
-			.map(Vec::as_slice)
+	pub fn reactors(&self, message_id: Snowflake, emoji: &str, burst: bool) -> Option<&Reactors> {
+		self.lazy.reaction_users.get(&ReactorsKey {
+			message_id,
+			emoji: emoji.to_owned(),
+			burst,
+		})
+	}
+
+	pub(crate) fn reactor_added(
+		&mut self,
+		message_id: Snowflake,
+		reacted: crate::messages::Reacted,
+		user_id: Snowflake,
+	) {
+		let key = ReactorsKey {
+			message_id,
+			emoji: crate::messages::reaction_name(reacted.emoji),
+			burst: reacted.burst,
+		};
+		let user = self.users.get(&user_id).cloned();
+		if let (Some(list), Some(user)) = (self.lazy.reaction_users.get_mut(&key), user)
+			&& !list.has_more
+			&& !list.users.iter().any(|known| known.id == user_id)
+		{
+			list.users.push(user);
+		}
+	}
+
+	pub(crate) fn reactor_removed(
+		&mut self,
+		message_id: Snowflake,
+		reacted: crate::messages::Reacted,
+		user_id: Snowflake,
+	) {
+		let key = ReactorsKey {
+			message_id,
+			emoji: crate::messages::reaction_name(reacted.emoji),
+			burst: reacted.burst,
+		};
+		if let Some(list) = self.lazy.reaction_users.get_mut(&key) {
+			list.users.retain(|known| known.id != user_id);
+		}
 	}
 }

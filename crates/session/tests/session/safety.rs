@@ -36,6 +36,7 @@ fn react(running: &Running, channel_id: Snowflake, message_id: Snowflake, emoji:
 		channel_id,
 		message_id,
 		emoji: emoji.to_owned(),
+		burst: false,
 	});
 }
 

@@ -330,7 +330,7 @@ fn message_frame(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>)
 	)
 }
 
-fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<View> {
+fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> Vec<View> {
 	let mut out = kept::history(entry, env, bump, BODY);
 	if !entry.content.is_empty() && !super::pictures::only_link(entry) {
 		let look = Look {
@@ -358,7 +358,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec<Vi
 	out.extend(attachments::stickers(entry, env));
 	out.extend(extras::thread_chip(entry, env));
 	out.extend(extras::poll(entry, env, bump));
-	out.extend(extras::reactions(entry, env));
+	out.extend(super::reactions::chips(entry, env, hovered));
 	out.extend(kept::accessories(entry, env));
 	out
 }
@@ -504,7 +504,7 @@ fn first_of_group(
 				.on_click(move || actions.profile(author))
 		})
 		.child(header)
-		.children(content(entry, env, bump))
+		.children(content(entry, env, hovered, bump))
 }
 
 fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> View {
@@ -532,7 +532,7 @@ fn follow_up(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bum
 		});
 	message_frame(entry, env, hovered)
 		.child(clock)
-		.children(content(entry, env, bump))
+		.children(content(entry, env, hovered, bump))
 }
 
 fn system_icon(icon_kind: SystemIcon) -> (&'static str, &'static str) {

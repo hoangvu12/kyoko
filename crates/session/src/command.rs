@@ -83,11 +83,20 @@ pub enum Command {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 		emoji: String,
+		burst: bool,
 	},
 	RemoveReaction {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 		emoji: String,
+		burst: bool,
+	},
+	RemoveUserReaction {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		emoji: String,
+		burst: bool,
+		user_id: Snowflake,
 	},
 	Typing {
 		channel_id: Snowflake,
@@ -469,6 +478,8 @@ pub enum Command {
 		channel_id: Snowflake,
 		message_id: Snowflake,
 		emoji: String,
+		burst: bool,
+		after: Option<Snowflake>,
 	},
 	ForwardMessage {
 		channel_id: Snowflake,

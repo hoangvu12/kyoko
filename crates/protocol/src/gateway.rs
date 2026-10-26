@@ -211,6 +211,23 @@ pub struct MessageReactionAdd {
 	pub burst: Option<bool>,
 	#[serde(rename = "type")]
 	pub kind: Option<i64>,
+	pub burst_colors: LenientVec<String>,
+}
+
+impl MessageReactionAdd {
+	pub fn is_burst(&self) -> bool {
+		burst_reaction(self.burst, self.kind)
+	}
+}
+
+impl MessageReactionRemove {
+	pub fn is_burst(&self) -> bool {
+		burst_reaction(self.burst, self.kind)
+	}
+}
+
+fn burst_reaction(burst: Option<bool>, kind: Option<i64>) -> bool {
+	kind.map_or(burst == Some(true), |kind| kind == 1)
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

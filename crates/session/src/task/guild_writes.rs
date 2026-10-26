@@ -88,6 +88,13 @@ pub(super) enum Call {
 	},
 	DeleteSticker(Snowflake),
 	RevokeInvite(String),
+	RemoveReaction {
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		emoji: String,
+		burst: bool,
+		user_id: Snowflake,
+	},
 }
 
 impl Call {
@@ -237,6 +244,21 @@ impl Call {
 				.map(drop),
 			Self::DeleteSticker(id) => rest.delete_guild_sticker(guild_id, id).await,
 			Self::RevokeInvite(code) => rest.delete_invite(&code, None).await,
+			Self::RemoveReaction {
+				channel_id,
+				message_id,
+				emoji,
+				burst,
+				user_id,
+			} => {
+				let reaction = rest::api::ReactionRef {
+					channel_id,
+					message_id,
+					emoji: &emoji,
+					burst,
+				};
+				rest.remove_user_reaction(reaction, user_id).await
+			}
 		}
 	}
 }

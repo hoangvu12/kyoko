@@ -46,11 +46,11 @@ pub use guild::GuildState;
 pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{
 	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, BanList, ConnectedAccount, InviteInfo,
-	InvitePreview, Loaded, ProfileBadge, UserProfile, audit_action_label,
+	InvitePreview, Loaded, ProfileBadge, Reactors, UserProfile, audit_action_label,
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
-pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply_update};
+pub use messages::{ChannelMessages, PendingMessage, SendFailure, Viewport, apply_update, reaction_name};
 pub use notifications::{AlertKind, Attention};
 pub use own_status::{CustomStatus, StatusEmoji, status_kind};
 pub use permissions::DM_PERMISSIONS;

@@ -220,7 +220,22 @@ pub struct Reaction {
 	pub me: bool,
 	pub me_burst: bool,
 	pub emoji: PartialEmoji,
-	pub burst_colors: Vec<String>,
+	pub burst_colors: LenientVec<String>,
+}
+
+impl Reaction {
+	pub fn burst_count(&self) -> i64 {
+		self.count_details
+			.as_ref()
+			.map_or(0, |details| details.burst.max(0))
+	}
+
+	pub fn normal_count(&self) -> i64 {
+		match &self.count_details {
+			Some(details) if details.normal > 0 || details.burst > 0 => details.normal.max(0),
+			_ => self.count.max(0),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

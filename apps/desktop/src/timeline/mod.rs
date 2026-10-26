@@ -16,6 +16,7 @@ mod lightbox;
 mod links;
 pub(crate) mod pictures;
 mod popout;
+mod reactions;
 mod rows;
 mod scroll;
 mod unread;
@@ -136,6 +137,11 @@ impl TimelineView {
 			runtime,
 			Wiring {
 				dialogs: Rc::new(Dialogs::new(runtime, commands.clone(), pictures.clone())),
+				reactions: Rc::new(reactions::Reactions::new(
+					runtime,
+					commands.clone(),
+					pictures.clone(),
+				)),
 				picker: ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction),
 				popout,
 				links: links.clone(),
@@ -265,6 +271,44 @@ impl TimelineView {
 
 	pub fn on_emoji_catalog(&self, source: impl Fn() -> Option<EmojiPicker> + 'static) {
 		self.actions.on_emoji_catalog(source);
+	}
+
+	pub fn on_reaction_names(
+		&self,
+		names: impl Fn(Snowflake, &bridge::ReactionChip) -> Option<Vec<String>> + 'static,
+	) {
+		self.actions.reactions.on_names(names);
+	}
+
+	pub fn on_reaction_lists(
+		&self,
+		lists: impl Fn(&bridge::ListRequest) -> Option<bridge::ReactionsList> + 'static,
+	) {
+		self.actions.reactions.on_lists(lists);
+	}
+
+	pub fn set_nitro(&self, nitro: bool) {
+		self.actions.reactions.set_nitro(nitro);
+	}
+
+	pub fn reactions_changed(&self) {
+		self.actions.reactions.changed();
+	}
+
+	pub fn open_reactions(&self, entry: &MessageEntry, chip: Option<&bridge::ReactionChip>) {
+		let moderator = self
+			.actions
+			.access
+			.with_untracked(|access| access.manage_messages);
+		self.actions.reactions.open_list(entry, chip, moderator);
+	}
+
+	pub fn reactions_settled(&self) -> bool {
+		self.actions.reactions.list_settled()
+	}
+
+	pub fn reaction_anchor(&self, id: &str) -> Option<zgx::scene::Rect> {
+		self.actions.reactions.anchor(id)
 	}
 
 	pub fn set_origin(&self, x: f32, y: f32) {
@@ -553,6 +597,7 @@ impl TimelineView {
 				.child(this.actions.picker.view())
 				.child(this.env.links.view())
 				.child(this.actions.dialogs.view())
+				.child(this.actions.reactions.view())
 				.child(this.actions.popout.view())
 				.on_mount(move |node| {
 					if let Some(view) = mounted.upgrade() {

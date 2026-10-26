@@ -125,11 +125,27 @@ fn search_pairs(query: SearchQuery, channel_id: Option<Snowflake>) -> Vec<(&'sta
 	pairs
 }
 
-fn reaction_path(channel_id: Snowflake, message_id: Snowflake, emoji: &str) -> String {
-	format!(
-		"/channels/{channel_id}/messages/{message_id}/reactions/{}",
-		encode_component(emoji)
-	)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReactionRef<'a> {
+	pub channel_id: Snowflake,
+	pub message_id: Snowflake,
+	pub emoji: &'a str,
+	pub burst: bool,
+}
+
+impl ReactionRef<'_> {
+	fn path(&self) -> String {
+		format!(
+			"/channels/{}/messages/{}/reactions/{}",
+			self.channel_id,
+			self.message_id,
+			encode_component(self.emoji)
+		)
+	}
+
+	fn kind(&self) -> u8 {
+		u8::from(self.burst)
+	}
 }
 
 impl RestClient {
@@ -228,36 +244,39 @@ impl RestClient {
 		self.send(request).await
 	}
 
-	pub async fn add_reaction(
-		&self,
-		channel_id: Snowflake,
-		message_id: Snowflake,
-		emoji: &str,
-	) -> Result<()> {
-		let path = format!("{}/@me", reaction_path(channel_id, message_id, emoji));
-		self.send_empty(Request::put(path)).await
+	pub async fn add_reaction(&self, reaction: ReactionRef<'_>) -> Result<()> {
+		let path = format!("{}/@me", reaction.path());
+		let request = Request::put(path);
+		let request = if reaction.burst {
+			request.query(&[("type", reaction.kind().to_string())])
+		} else {
+			request
+		};
+		self.send_empty(request).await
 	}
 
-	pub async fn remove_own_reaction(
-		&self,
-		channel_id: Snowflake,
-		message_id: Snowflake,
-		emoji: &str,
-	) -> Result<()> {
-		let path = format!("{}/@me", reaction_path(channel_id, message_id, emoji));
+	pub async fn remove_own_reaction(&self, reaction: ReactionRef<'_>) -> Result<()> {
+		let path = format!("{}/{}/@me", reaction.path(), reaction.kind());
+		self.send_empty(Request::delete(path)).await
+	}
+
+	pub async fn remove_user_reaction(&self, reaction: ReactionRef<'_>, user_id: Snowflake) -> Result<()> {
+		let path = format!("{}/{}/{user_id}", reaction.path(), reaction.kind());
 		self.send_empty(Request::delete(path)).await
 	}
 
 	pub async fn reactions(
 		&self,
-		channel_id: Snowflake,
-		message_id: Snowflake,
-		emoji: &str,
+		reaction: ReactionRef<'_>,
+		after: Option<Snowflake>,
 		limit: u8,
 	) -> Result<LenientVec<User>> {
-		let request =
-			Request::get(reaction_path(channel_id, message_id, emoji)).query(&[("limit", limit.to_string())]);
-		self.send(request).await
+		let mut pairs = vec![("limit", limit.to_string())];
+		if let Some(after) = after {
+			pairs.push(("after", after.to_string()));
+		}
+		pairs.push(("type", reaction.kind().to_string()));
+		self.send(Request::get(reaction.path()).query(&pairs)).await
 	}
 
 	pub async fn create_dm(&self, recipient_id: Snowflake) -> Result<Channel> {

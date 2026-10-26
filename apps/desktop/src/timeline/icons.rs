@@ -104,6 +104,9 @@ icon_files!(
 	"picker_lock",
 	"picker_chevron",
 	"picker_search",
+	"sparkle",
+	"add_reaction",
+	"add_super_reaction",
 );
 
 const PLUGIN_ICONS: usize = 64;

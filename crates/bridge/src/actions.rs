@@ -51,6 +51,7 @@ impl Access {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MessageAction {
 	React,
+	ViewReactions,
 	Reply,
 	Edit,
 	CopyText,
@@ -73,6 +74,7 @@ impl MessageAction {
 	pub fn label(self, selected: usize) -> String {
 		match self {
 			Self::React => "Add Reaction".to_owned(),
+			Self::ViewReactions => "View Reactions".to_owned(),
 			Self::Reply => "Reply".to_owned(),
 			Self::Edit => "Edit Message".to_owned(),
 			Self::CopyText => "Copy Text".to_owned(),
@@ -95,6 +97,7 @@ impl MessageAction {
 	pub fn icon(self) -> &'static str {
 		match self {
 			Self::React => "emoji",
+			Self::ViewReactions => "add_reaction",
 			Self::Reply => "reply",
 			Self::Edit => "edit",
 			Self::CopyText | Self::CopyId => "copy",
@@ -163,6 +166,10 @@ pub fn can_join_reaction(entry: &MessageEntry, access: &Access) -> bool {
 	has_actions(entry) && !entry.deleted && access.read_history
 }
 
+pub fn can_add_super_reaction(entry: &MessageEntry, access: &Access, nitro: bool) -> bool {
+	nitro && can_add_reaction(entry, access)
+}
+
 fn threadable(entry: &MessageEntry) -> bool {
 	matches!(entry.kind, MessageType::Default | MessageType::Reply) && entry.message.thread.is_none()
 }
@@ -201,6 +208,7 @@ pub fn message_menu(entry: &MessageEntry, access: &Access, context: MenuContext)
 	}
 	let deletable = can_delete(entry, access);
 	menu.add_if(can_add_reaction(entry, access), React);
+	menu.add_if(!entry.message.reactions.is_empty(), ViewReactions);
 	menu.separator();
 	menu.add_if(can_edit(entry), Edit);
 	menu.add_if(can_reply(entry, access), Reply);
@@ -259,11 +267,14 @@ pub enum ReactionToggle {
 }
 
 pub fn reaction_toggle(entry: &MessageEntry, emoji: &str) -> ReactionToggle {
-	let mine = entry
-		.message
-		.reactions
-		.iter()
-		.any(|reaction| reaction.me && reaction_key(&reaction.emoji) == emoji);
+	reaction_toggle_of(entry, emoji, false)
+}
+
+pub fn reaction_toggle_of(entry: &MessageEntry, emoji: &str, burst: bool) -> ReactionToggle {
+	let mine = entry.message.reactions.iter().any(|reaction| {
+		let reacted = if burst { reaction.me_burst } else { reaction.me };
+		reacted && reaction_key(&reaction.emoji) == emoji
+	});
 	if mine {
 		ReactionToggle::Remove(emoji.to_owned())
 	} else {

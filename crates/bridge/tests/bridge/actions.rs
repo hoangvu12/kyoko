@@ -180,6 +180,7 @@ async fn reactions_toggle_and_new_ones_need_add_reactions() {
 		channel_id,
 		message_id: target,
 		emoji: PARTY.to_owned(),
+		burst: false,
 	});
 	running
 		.until("my reaction to show", |view| {

@@ -24,6 +24,7 @@ mod password_login;
 mod profile;
 mod qr_login;
 mod rail;
+mod reactions;
 mod search;
 mod settings;
 mod sidebar;
@@ -38,8 +39,9 @@ mod web_login;
 
 pub use actions::{
 	Access, DeleteProgress, MenuContext, MenuEntry, MessageAction, REPORT_URL, ReactionToggle,
-	can_add_reaction, can_delete, can_edit, can_remove_embeds, can_reply, has_actions, message_link,
-	message_menu, reaction_allowed, reaction_toggle, toolbar_actions,
+	can_add_reaction, can_add_super_reaction, can_delete, can_edit, can_remove_embeds, can_reply,
+	has_actions, message_link, message_menu, reaction_allowed, reaction_toggle, reaction_toggle_of,
+	toolbar_actions,
 };
 pub use alerts::{ToastText, toast_text};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
@@ -121,6 +123,10 @@ pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{
 	DEFAULT_FOLDER_COLOR, Drop, Rail, RailFolder, RailGuild, RailItem, acronym, new_folder_id, rearranged,
 	rearranged_folder, reorder_command, reorder_folder_command,
+};
+pub use reactions::{
+	ListRequest, REACTOR_PAGE, ReactionChip, ReactionTip, ReactionsList, Reactor, emoji_label, hex_color,
+	reaction_chips, reaction_tip, tip_names,
 };
 pub use search::{
 	HIT_SNIPPET, ParsedSearch, SearchChip, SearchFilter, SearchHit, SearchPanel, parse_search, result_count,

@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +17,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::fixtures::CURRENT_USER_ID;
 use crate::json::{author_id, mentions_user, message_id, parse_id, to_json};
 use crate::ops::{Draft, UploadedFile};
+use crate::reactions::React;
 use crate::state::{Shared, Store};
 use crate::threads::ThreadRequest;
 
@@ -213,11 +214,26 @@ pub async fn delete_message(
 	Ok(StatusCode::NO_CONTENT)
 }
 
+fn burst_of(params: &HashMap<String, String>) -> bool {
+	params.get("type").is_some_and(|kind| kind == "1")
+}
+
+fn react(id: u64, mid: u64, emoji: &str, user_id: u64, burst: bool) -> React<'_> {
+	React {
+		channel_id: id,
+		message_id: mid,
+		emoji,
+		user_id,
+		burst,
+	}
+}
+
 pub async fn add_reaction(
 	State(shared): State<Arc<Shared>>,
 	Path((id, mid, emoji)): Path<(u64, u64, String)>,
+	Query(params): Query<HashMap<String, String>>,
 ) -> Result<StatusCode, ApiError> {
-	shared.set_reaction(id, mid, &emoji, true)?;
+	shared.react(react(id, mid, &emoji, CURRENT_USER_ID, burst_of(&params)), true)?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
@@ -225,7 +241,20 @@ pub async fn remove_reaction(
 	State(shared): State<Arc<Shared>>,
 	Path((id, mid, emoji)): Path<(u64, u64, String)>,
 ) -> Result<StatusCode, ApiError> {
-	shared.set_reaction(id, mid, &emoji, false)?;
+	shared.react(react(id, mid, &emoji, CURRENT_USER_ID, false), false)?;
+	Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn remove_typed_reaction(
+	State(shared): State<Arc<Shared>>,
+	Path((id, mid, emoji, kind, user)): Path<(u64, u64, String, u8, String)>,
+) -> Result<StatusCode, ApiError> {
+	let user_id = if user == "@me" {
+		CURRENT_USER_ID
+	} else {
+		user.parse().map_err(|_| ApiError::unknown_message())?
+	};
+	shared.react(react(id, mid, &emoji, user_id, kind == 1), false)?;
 	Ok(StatusCode::NO_CONTENT)
 }
 

@@ -42,6 +42,17 @@ A message send is `POST /channels/<id>/messages`, and creating a thread or a for
 
 Reactions, pins and unpins are mutations. Before any request the session checks permissions: adding a reaction needs Read Message History, and Add Reactions when nobody has reacted with that emoji yet; pinning needs Manage Messages in a server. A refusal never reaches REST, and a REST failure is reported as a `CommandRejected` with the reason; neither is retried.
 
+Reaction routes, as the web client sends them (docs.discord.food, "Message"), all through `rest::api::ReactionRef` (channel, message, emoji as `name` or `name:id`, burst):
+
+| Call | Route |
+|---|---|
+| Add (`AddReaction`) | `PUT /channels/{c}/messages/{m}/reactions/{emoji}/@me`, with `?type=1` for a super (burst) reaction |
+| Remove your own (`RemoveReaction`) | `DELETE /channels/{c}/messages/{m}/reactions/{emoji}/{0 or 1}/@me` |
+| Remove someone's (`RemoveUserReaction`) | `DELETE /channels/{c}/messages/{m}/reactions/{emoji}/{0 or 1}/{user}` |
+| Who reacted (`LoadReactionUsers`) | `GET /channels/{c}/messages/{m}/reactions/{emoji}?limit=100&after={last user}&type={0 or 1}` |
+
+A super reaction is sent only when the account has Nitro (`State::has_nitro`; the client has no burst-credit count), otherwise it is refused before any request. Removing someone else's reaction needs Manage Messages in a server channel and goes through the paced server-write queue (`guild_writes.rs`, `Call::RemoveReaction`), like kicks and bans. The who-reacted list is paged by user id: each page is 100, `after` is the highest id loaded, and a page shorter than 100 ends the list (`state::Reactors::has_more`). Pages land in `State::reactors(message, emoji, burst)`; reaction add and remove events keep a loaded list current.
+
 ## Read acks
 
 Every read receipt goes through one debouncer per channel in the session (`crates/session/src/task/reads.rs`). The local read state updates immediately, so badges clear at once. The REST ack waits.

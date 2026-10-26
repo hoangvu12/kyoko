@@ -154,12 +154,14 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `expressions-in-messages-emoji-popout` | `expressions-in-messages-emoji-popout.html` |
 | `expressions-in-messages-sticker-popout` | `expressions-in-messages-sticker-popout.html` |
 | `link-preview-while-typing` | `link-preview-while-typing.html` |
+| `reactions` | `reactions.html` |
+| `reactions-list` | `reactions-list.html` |
 
 Several screens share `midnight-discord.html`, the main screen, which also shows the hover bar on a message; compare the region the screen is about. `composer` and `composer-reply` share `composer-markdown.html`, which has a draft and a reply bar.
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications and Plugins.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `emoji-autocomplete`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `reactions`, `reactions-list`, `settings-themes`, `voice-message`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `app-modal`, `app-modal-error`, `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-attachment-option`, `command-attachment-option-picked`, `command-choices-and-autocomplete`, `command-choices-failed`, `command-choices-invalid`, `command-choices-loading`, `command-options`, `command-options-optional`, `command-options-remind`, `command-picker`, `command-picker-built-in`, `command-response-states`, `composer-drop`, `composer-markdown-over-limit`, `composer-plus-menu`, `composer-upload-failed`, `composer-uploads`, `emoji-autocomplete`, `inbox`, `message-components`, `message-components-multi-select`, `message-components-v2`, `poll-create`, `poll-in-messages`, `poll-in-messages-ended`, `settings-themes`, `voice-message`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -438,6 +440,15 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The message is sent through the
 |---|---|---|---|
 | `message-context-menu-own` | 07 | Default selection, then send "can someone ping me" and right-click it at (640, 690), as `message-context-menu` does: the menu of your own message. | yes |
 | `delete-message-dialog` | 07 | As `message-context-menu-own`, but instead of the menu run Delete Message on that message (`TimelineView::run_action`), which opens the confirmation with its preview. | yes |
+
+### Midnight 06 Reactions and super reactions
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). The messages are the `-# showcase: reactions` section at the end of mockcord's `#showcase` channel: normal, reacted, custom and super reactions (one of them yours), with no `burst_colors`, so super chips take Midnight's purple-to-blue gradient.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `reactions` | 06 | Open `#showcase` at its newest messages, then hover the 👍 chip of "midnight 2.1.1 is out…" through `Ui::dispatch`: the row's hover bar, the add-reaction and add-super-reaction buttons, and the chip's tooltip naming who reacted (loaded from the reactions route). | yes |
+| `reactions-list` | 06 | As `reactions`, then open the Reactions list of that message on 🔥 (`TimelineView::open_reactions`, what View Reactions does) and hover its second reactor, which shows the remove button (the mock user has Manage Messages there). | yes |
 
 ### 38 Toasts, transitions and connection status
 

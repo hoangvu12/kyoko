@@ -13,7 +13,7 @@ use serde_json::value::RawValue;
 use crate::changes::Changes;
 use crate::guild::{is_thread, stripped_member};
 use crate::member_list::MemberSlot;
-use crate::messages::{add_reaction, apply_update, remove_emoji, remove_reaction};
+use crate::messages::{Reacted, add_reaction, apply_update, remove_emoji, remove_reaction};
 use crate::state::{ConnectionStatus, State, intern_user};
 
 #[derive(Deserialize, Default)]
@@ -41,14 +41,28 @@ impl State {
 			DispatchEvent::MessageDeleteBulk(delete) => self.messages_delete(delete.channel_id, &delete.ids),
 			DispatchEvent::MessageReactionAdd(add) => {
 				let mine = Some(add.user_id) == self.current_user_id();
+				let reacted = Reacted {
+					emoji: &add.emoji,
+					mine,
+					burst: add.is_burst(),
+					colors: &add.burst_colors,
+				};
+				self.reactor_added(add.message_id, reacted, add.user_id);
 				self.edit_message(add.channel_id, add.message_id, |message| {
-					add_reaction(message, &add.emoji, mine)
+					add_reaction(message, reacted)
 				})
 			}
 			DispatchEvent::MessageReactionRemove(remove) => {
 				let mine = Some(remove.user_id) == self.current_user_id();
+				let reacted = Reacted {
+					emoji: &remove.emoji,
+					mine,
+					burst: remove.is_burst(),
+					colors: &[],
+				};
+				self.reactor_removed(remove.message_id, reacted, remove.user_id);
 				self.edit_message(remove.channel_id, remove.message_id, |message| {
-					remove_reaction(message, &remove.emoji, mine)
+					remove_reaction(message, reacted)
 				})
 			}
 			DispatchEvent::MessageReactionRemoveAll(remove) => {

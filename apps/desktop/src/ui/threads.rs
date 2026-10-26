@@ -322,6 +322,20 @@ impl Link {
 			let guild_id = link.thread_open()?.guild_id;
 			Some(EmojiPicker::of(&shared.read(), guild_id))
 		});
+		let actions = Rc::downgrade(link);
+		view.on_reaction_names(move |message_id, chip| {
+			let link = actions.upgrade()?;
+			let shared = link.state()?;
+			let guild_id = link.thread_open()?.guild_id;
+			bridge::tip_names(&shared.read(), guild_id, message_id, chip)
+		});
+		let actions = Rc::downgrade(link);
+		view.on_reaction_lists(move |request| {
+			let link = actions.upgrade()?;
+			let shared = link.state()?;
+			let guild_id = link.thread_open()?.guild_id;
+			bridge::ReactionsList::of(&shared.read(), guild_id, request)
+		});
 	}
 
 	fn wire_layer(link: &Rc<Link>) {
@@ -662,6 +676,10 @@ impl Link {
 			self.threads
 				.view
 				.set_access(Access::of(state, open.guild_id, open.channel_id, Utc::now()));
+			self.threads.view.set_nitro(state.has_nitro());
+			if !changes.loaded.is_empty() || !changes.messages.is_empty() {
+				self.threads.view.reactions_changed();
+			}
 			if changes.deletions {
 				self.threads
 					.view

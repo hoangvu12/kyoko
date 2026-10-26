@@ -15,6 +15,7 @@ mod media;
 mod member_list;
 mod ops;
 mod password;
+mod reactions;
 mod ready;
 mod record;
 mod remote_auth;
@@ -37,6 +38,7 @@ pub use password::{
 	BACKUP_CODE, CAPTCHA_LOGIN, LIMITED_CODE, MFA_LOGIN, MOCK_PASSWORD, PASSWORD_LOGIN, SECURITY_KEY_LOGIN,
 	SMS_CODE, SMS_PHONE, TOTP_CODE,
 };
+pub use reactions::BURST_COLORS;
 pub use ready::API_CODE_VERSION;
 pub use record::{
 	GatewayClose, GatewayConnection, GatewayFrame, Headers, MediaRequest, Recording, RestRequest,

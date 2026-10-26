@@ -16,6 +16,7 @@ mod plugin_slots;
 mod plugins;
 mod profiles;
 mod qr_code;
+mod reaction_shots;
 #[cfg(test)]
 mod root;
 #[cfg(test)]
@@ -871,6 +872,7 @@ impl Link {
 			}
 			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
+			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
 			capture::Screen::CloneDialog => {
 				self.drive_clone_dialog().await;
 				self.until_capture(|link| link.community_settled()).await;

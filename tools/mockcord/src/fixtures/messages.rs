@@ -479,7 +479,7 @@ impl<'a> Generator<'a, '_> {
 							name: emoji.name.clone(),
 							animated: emoji.animated.unwrap_or(false),
 						},
-						burst_colors: Vec::new(),
+						burst_colors: LenientVec::default(),
 					});
 				}
 				message.reactions = LenientVec::from(reactions);
@@ -744,7 +744,7 @@ fn reaction(name: &str, count: i64, me: bool) -> Reaction {
 			name: Some(name.to_owned()),
 			animated: false,
 		},
-		burst_colors: Vec::new(),
+		burst_colors: LenientVec::default(),
 	}
 }
 

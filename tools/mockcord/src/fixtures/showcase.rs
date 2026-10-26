@@ -34,6 +34,12 @@ pub const SECTIONS: [(&str, &str); 8] = [
 	("timeline-system", "showcase: system messages"),
 ];
 
+pub const REACTIONS_SECTION: &str = "showcase: reactions";
+pub const REACTIONS_MESSAGE: &str =
+	"midnight 2.1.1 is out: picker shadow fixed, reaction chips use the theme tokens now";
+pub const TOOLTIP_EMOJI: &str = "\u{1f44d}";
+pub const LISTED_EMOJI: &str = "\u{1f525}";
+
 pub fn screen_section(screen: &str) -> Option<&'static str> {
 	SECTIONS
 		.iter()
@@ -172,7 +178,25 @@ fn custom_reaction(id: Option<Snowflake>, name: &str, animated: bool, count: i64
 			name: Some(name.to_owned()),
 			animated,
 		},
-		burst_colors: Vec::new(),
+		burst_colors: LenientVec::default(),
+	}
+}
+
+fn super_reaction(name: &str, count: i64, me: bool) -> Reaction {
+	Reaction {
+		count,
+		count_details: Some(ReactionCountDetails {
+			burst: count,
+			normal: 0,
+		}),
+		me: false,
+		me_burst: me,
+		emoji: PartialEmoji {
+			id: None,
+			name: Some(name.to_owned()),
+			animated: false,
+		},
+		burst_colors: LenientVec::default(),
 	}
 }
 
@@ -570,6 +594,43 @@ pub fn build(spec: &Showcase) -> Built {
 		message.content = CHANNEL_NAME.to_owned();
 	});
 	writer.say(2, "and that is every kind of message");
+
+	writer.section(REACTIONS_SECTION);
+	writer.post(1, |message| {
+		message.content = "is the new picker build on canary yet".to_owned();
+		message.reactions = LenientVec::from(vec![reaction("\u{1f440}", 2, false)]);
+	});
+	writer.say(2, "yes, since this morning");
+	writer.post(0, |message| {
+		message.content = REACTIONS_MESSAGE.to_owned();
+		let mut reactions = vec![reaction(LISTED_EMOJI, 7, true), reaction(TOOLTIP_EMOJI, 4, false)];
+		if let Some(emoji) = moving {
+			reactions.push(custom_reaction(
+				emoji.id,
+				emoji.name.as_deref().unwrap_or("emoji"),
+				true,
+				3,
+				false,
+			));
+		}
+		reactions.push(super_reaction("\u{1f389}", 3, false));
+		reactions.push(super_reaction("\u{2764}\u{fe0f}", 2, true));
+		message.reactions = LenientVec::from(reactions);
+	});
+	writer.post(0, |message| {
+		message.content = "changelog is in #announcements".to_owned();
+		message.reactions = LenientVec::from(vec![
+			reaction("\u{1f64f}", 2, false),
+			reaction("\u{1f480}", 1, true),
+		]);
+	});
+	writer.post(1, |message| {
+		message.content = "the gradient border on super reactions is so pretty".to_owned();
+		message.reactions = LenientVec::from(vec![
+			super_reaction("\u{1f62d}", 1, false),
+			reaction("\u{2764}\u{fe0f}", 1, false),
+		]);
+	});
 
 	let last = writer.ids.last().copied();
 	let read = writer.last_read.or(last);

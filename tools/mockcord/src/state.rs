@@ -55,6 +55,7 @@ pub struct Store {
 	pub favorite_emojis: Vec<String>,
 	pub favorite_gifs: Vec<protocol::FavoriteGif>,
 	pub uploads: HashMap<String, UploadedFile>,
+	pub reactors: HashMap<(u64, String, bool), Vec<u64>>,
 	last_id: u64,
 }
 
@@ -161,6 +162,7 @@ impl Store {
 			favorite_emojis: crate::admin::seed_favorite_emojis(fixtures),
 			favorite_gifs: Vec::new(),
 			uploads: HashMap::new(),
+			reactors: HashMap::new(),
 			last_id,
 		}
 	}

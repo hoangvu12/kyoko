@@ -323,6 +323,7 @@ async fn unadvertised_reaction_debounce_keeps_single_reaction_events() {
 		channel_id,
 		message_id,
 		emoji: REACTION.to_owned(),
+		burst: false,
 	});
 	running
 		.until("the reaction applied to the message", |state| {

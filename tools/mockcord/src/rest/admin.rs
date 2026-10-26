@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult};
 use crate::json::{parse_id, to_json};
+use crate::reactions::ReactionPage;
 use crate::state::Shared;
 
 type Mock = State<Arc<Shared>>;
@@ -499,11 +500,15 @@ pub async fn reactions(
 	Path((id, message_id, emoji)): Path<(u64, u64, String)>,
 	Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult {
-	let limit = params
-		.get("limit")
-		.and_then(|limit| limit.parse().ok())
-		.unwrap_or(DEFAULT_REACTION_LIMIT);
-	shared.reaction_users(id, message_id, &emoji, limit).map(Json)
+	let page = ReactionPage {
+		limit: params
+			.get("limit")
+			.and_then(|limit| limit.parse().ok())
+			.unwrap_or(DEFAULT_REACTION_LIMIT),
+		after: params.get("after").and_then(|after| after.parse().ok()),
+		burst: params.get("type").is_some_and(|kind| kind == "1"),
+	};
+	shared.reaction_users(id, message_id, &emoji, page).map(Json)
 }
 
 pub fn profile_extras(shared: &Shared, user_id: u64, guild_id: Option<u64>) -> Value {

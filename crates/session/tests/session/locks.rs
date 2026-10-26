@@ -289,6 +289,7 @@ async fn a_server_gate_holds_sends_and_reactions() {
 		channel_id,
 		message_id: Snowflake(message_id),
 		emoji: "👍".to_owned(),
+		burst: false,
 	});
 	refused(&running, before).await;
 	assert_eq!(

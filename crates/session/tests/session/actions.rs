@@ -146,6 +146,7 @@ async fn pins_and_new_reactions_without_permission_never_reach_rest() {
 		channel_id,
 		message_id,
 		emoji: PARTY.to_owned(),
+		burst: false,
 	});
 	running
 		.until("the new reaction to be refused", |state| {
@@ -206,6 +207,7 @@ async fn joining_an_existing_reaction_needs_only_history() {
 		channel_id,
 		message_id,
 		emoji: THUMBS_UP.to_owned(),
+		burst: false,
 	});
 	running
 		.until_wire("the joined reaction request", |recording| {
@@ -230,6 +232,7 @@ async fn a_refused_reaction_reports_why() {
 		channel_id,
 		message_id,
 		emoji: PARTY.to_owned(),
+		burst: false,
 	});
 	running
 		.until("the refusal to be reported", |state| {

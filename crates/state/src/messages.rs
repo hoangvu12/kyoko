@@ -532,38 +532,77 @@ pub fn apply_update(message: &mut Message, update: &MessageUpdate) {
 	}
 }
 
+pub fn reaction_name(emoji: &PartialEmoji) -> String {
+	match (&emoji.id, &emoji.name) {
+		(Some(id), name) => format!("{}:{id}", name.as_deref().unwrap_or("emoji")),
+		(None, name) => name.clone().unwrap_or_default(),
+	}
+}
+
 fn same_emoji(a: &PartialEmoji, b: &PartialEmoji) -> bool {
 	a.id == b.id && (a.id.is_some() || a.name == b.name)
 }
 
-pub fn add_reaction(message: &mut Message, emoji: &PartialEmoji, mine: bool) {
-	match message
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reacted<'a> {
+	pub emoji: &'a PartialEmoji,
+	pub mine: bool,
+	pub burst: bool,
+	pub colors: &'a [String],
+}
+
+fn adjust(reaction: &mut Reaction, burst: bool, delta: i64) {
+	let (normal, bursts) = (reaction.normal_count(), reaction.burst_count());
+	let (normal, bursts) = if burst {
+		(normal, (bursts + delta).max(0))
+	} else {
+		((normal + delta).max(0), bursts)
+	};
+	reaction.count_details = Some(protocol::ReactionCountDetails {
+		burst: bursts,
+		normal,
+	});
+	reaction.count = normal + bursts;
+}
+
+pub fn add_reaction(message: &mut Message, reacted: Reacted) {
+	let index = match message
 		.reactions
-		.iter_mut()
-		.find(|reaction| same_emoji(&reaction.emoji, emoji))
+		.iter()
+		.position(|reaction| same_emoji(&reaction.emoji, reacted.emoji))
 	{
-		Some(reaction) => {
-			reaction.count += 1;
-			reaction.me |= mine;
+		Some(index) => index,
+		None => {
+			message.reactions.push(Reaction {
+				emoji: reacted.emoji.clone(),
+				..Reaction::default()
+			});
+			message.reactions.len() - 1
 		}
-		None => message.reactions.push(Reaction {
-			count: 1,
-			me: mine,
-			emoji: emoji.clone(),
-			..Reaction::default()
-		}),
+	};
+	let reaction = &mut message.reactions[index];
+	adjust(reaction, reacted.burst, 1);
+	if reacted.burst {
+		reaction.me_burst |= reacted.mine;
+		if !reacted.colors.is_empty() {
+			reaction.burst_colors = reacted.colors.to_vec().into();
+		}
+	} else {
+		reaction.me |= reacted.mine;
 	}
 }
 
-pub fn remove_reaction(message: &mut Message, emoji: &PartialEmoji, mine: bool) {
+pub fn remove_reaction(message: &mut Message, reacted: Reacted) {
 	if let Some(reaction) = message
 		.reactions
 		.iter_mut()
-		.find(|reaction| same_emoji(&reaction.emoji, emoji))
+		.find(|reaction| same_emoji(&reaction.emoji, reacted.emoji))
 	{
-		reaction.count -= 1;
-		if mine {
-			reaction.me = false;
+		adjust(reaction, reacted.burst, -1);
+		match (reacted.mine, reacted.burst) {
+			(true, true) => reaction.me_burst = false,
+			(true, false) => reaction.me = false,
+			(false, _) => {}
 		}
 	}
 	message.reactions.retain(|reaction| reaction.count > 0);

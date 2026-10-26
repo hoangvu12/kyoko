@@ -2,88 +2,17 @@ use std::rc::Rc;
 
 use bridge::{MessageEntry, PollSummary};
 use chrono::Utc;
-use protocol::{Reaction, Snowflake};
+use protocol::Snowflake;
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 
-use super::actions::aimed;
-use super::attachments::picture;
 use super::icons::icon;
-use super::pictures::REACTION_EMOJI;
 use super::rows::{RowEnv, TypeSize, tok};
-use crate::emoji;
 
 const POLL_WIDTH: f32 = 432.;
 const POLL_ROW: f32 = 40.;
 const POLL_DOT: f32 = 16.;
-const CHIP_HEIGHT: f32 = 24.;
-
-pub fn reactions(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
-	let reactions = &entry.message.reactions;
-	if reactions.is_empty() || !env.prefs.get().show_reactions {
-		return None;
-	}
-	let shared = Rc::new(entry.clone());
-	Some(
-		row()
-			.flex_wrap()
-			.gap(4.)
-			.mt(4.)
-			.children(reactions.iter().map(|reaction| chip(&shared, reaction, env))),
-	)
-}
-
-fn chip(entry: &Rc<MessageEntry>, reaction: &Reaction, env: &Rc<RowEnv>) -> View {
-	let size = REACTION_EMOJI as f32;
-	let unicode = reaction.emoji.name.clone().unwrap_or_default();
-	let glyph = match (env.pictures.reaction(&reaction.emoji), emoji::svg_of(&unicode)) {
-		(Some(name), _) => div().size(size, size).shrink_0().child(picture(
-			&env.pictures,
-			Some(name),
-			None,
-			ObjectFit::Contain,
-		)),
-		(None, Some(art)) => svg(unicode, art).size(size, size).shrink_0(),
-		(None, None) => text(unicode).text_size(size).line_height(size + 2.),
-	};
-	let (border, background, color) = if reaction.me {
-		("brand", "reaction_me", "mention_text")
-	} else {
-		(
-			"background_secondary",
-			"background_secondary",
-			"interactive_normal",
-		)
-	};
-	let chip = row()
-		.items_center()
-		.gap(6.)
-		.h(CHIP_HEIGHT)
-		.px(6.)
-		.rounded(tok("radius_md"))
-		.border(1.)
-		.border_color(tok(border))
-		.bg(tok(background))
-		.type_size("font_sm")
-		.font_weight(600)
-		.text_color(tok(color))
-		.cursor(Cursor::Pointer)
-		.when(!reaction.me, |chip| {
-			chip.hover(|style| style.border_color(tok("interactive_muted")))
-		})
-		.when(!entry.deleted && !entry.pending, |chip| {
-			let (actions, entry, key) = (
-				env.actions.clone(),
-				entry.clone(),
-				bridge::reaction_key(&reaction.emoji),
-			);
-			chip.on_click(move || actions.toggle_reaction(&entry, &key))
-		})
-		.child(glyph)
-		.child(text(reaction.count.to_string()));
-	aimed(chip, &env.actions, bridge::reaction_expression(&reaction.emoji))
-}
 
 pub fn thread_chip(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 	let thread = entry.message.thread.as_ref()?;

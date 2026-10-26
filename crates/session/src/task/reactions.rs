@@ -1,16 +1,17 @@
-use protocol::{PartialEmoji, Permissions, Snowflake};
+use protocol::{Permissions, Snowflake};
+use rest::api::ReactionRef;
 
 use super::Core;
-
-fn reaction_name(emoji: &PartialEmoji) -> String {
-	match (&emoji.id, &emoji.name) {
-		(Some(id), name) => format!("{}:{id}", name.as_deref().unwrap_or("emoji")),
-		(None, name) => name.clone().unwrap_or_default(),
-	}
-}
+use super::guild_writes::{Call, Write};
 
 impl Core {
-	pub(super) fn add_reaction(&mut self, channel_id: Snowflake, message_id: Snowflake, emoji: String) {
+	pub(super) fn add_reaction(
+		&mut self,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		emoji: String,
+		burst: bool,
+	) {
 		let joining = self.has_reaction(channel_id, message_id, &emoji);
 		if !self.channel_allows(
 			channel_id,
@@ -22,16 +23,63 @@ impl Core {
 		if !joining && !self.channel_allows(channel_id, Permissions::ADD_REACTIONS, "Add Reactions") {
 			return;
 		}
+		if burst && !self.state.read().has_nitro() {
+			self.reject("Super reactions need Nitro on this account");
+			return;
+		}
 		self.remember_reaction(&emoji);
 		self.spawn_action("add reaction", move |rest| async move {
-			rest.add_reaction(channel_id, message_id, &emoji).await
+			let reaction = ReactionRef {
+				channel_id,
+				message_id,
+				emoji: &emoji,
+				burst,
+			};
+			rest.add_reaction(reaction).await
 		});
 	}
 
-	pub(super) fn remove_reaction(&mut self, channel_id: Snowflake, message_id: Snowflake, emoji: String) {
+	pub(super) fn remove_reaction(
+		&mut self,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		emoji: String,
+		burst: bool,
+	) {
 		self.spawn_action("remove reaction", move |rest| async move {
-			rest.remove_own_reaction(channel_id, message_id, &emoji).await
+			let reaction = ReactionRef {
+				channel_id,
+				message_id,
+				emoji: &emoji,
+				burst,
+			};
+			rest.remove_own_reaction(reaction).await
 		});
+	}
+
+	pub(super) fn remove_user_reaction(
+		&mut self,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		emoji: String,
+		burst: bool,
+		user_id: Snowflake,
+	) {
+		let Some(guild_id) = self.state.read().channel_guild(channel_id) else {
+			self.reject("This only works in a server");
+			return;
+		};
+		if !self.channel_allows(channel_id, Permissions::MANAGE_MESSAGES, "Manage Messages") {
+			return;
+		}
+		let call = Call::RemoveReaction {
+			channel_id,
+			message_id,
+			emoji,
+			burst,
+			user_id,
+		};
+		self.queue_guild_write(guild_id, Write::new("remove reaction", call));
 	}
 
 	fn has_reaction(&self, channel_id: Snowflake, message_id: Snowflake, emoji: &str) -> bool {
@@ -43,7 +91,7 @@ impl Core {
 				message
 					.reactions
 					.iter()
-					.any(|reaction| reaction_name(&reaction.emoji) == emoji)
+					.any(|reaction| state::reaction_name(&reaction.emoji) == emoji)
 			})
 	}
 }

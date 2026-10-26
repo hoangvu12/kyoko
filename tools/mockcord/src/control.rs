@@ -142,6 +142,35 @@ impl Control {
 		self.shared.delete_message(channel_id, id).is_ok()
 	}
 
+	pub fn react_as(&self, channel_id: u64, message_id: u64, user_id: u64, emoji: &str, burst: bool) -> bool {
+		let react = crate::reactions::React {
+			channel_id,
+			message_id,
+			emoji,
+			user_id,
+			burst,
+		};
+		self.shared.react(react, true).is_ok()
+	}
+
+	pub fn unreact_as(
+		&self,
+		channel_id: u64,
+		message_id: u64,
+		user_id: u64,
+		emoji: &str,
+		burst: bool,
+	) -> bool {
+		let react = crate::reactions::React {
+			channel_id,
+			message_id,
+			emoji,
+			user_id,
+			burst,
+		};
+		self.shared.react(react, false).is_ok()
+	}
+
 	pub fn bulk_delete(&self, channel_id: u64, ids: &[u64]) -> bool {
 		self.shared.bulk_delete(channel_id, ids).is_ok()
 	}

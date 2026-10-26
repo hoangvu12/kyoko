@@ -560,8 +560,5 @@ fn matches_domain(host: &str, domain: &str) -> bool {
 }
 
 pub fn reaction_key(emoji: &protocol::PartialEmoji) -> String {
-	match (&emoji.id, &emoji.name) {
-		(Some(id), name) => format!("{}:{id}", name.as_deref().unwrap_or("emoji")),
-		(None, name) => name.clone().unwrap_or_default(),
-	}
+	state::reaction_name(emoji)
 }

@@ -1344,35 +1344,6 @@ impl Shared {
 		Ok(value)
 	}
 
-	pub fn reaction_users(
-		&self,
-		channel_id: u64,
-		message_id: u64,
-		emoji: &str,
-		limit: usize,
-	) -> Result<Value, ApiError> {
-		let store = self.store.lock();
-		let message = store
-			.message(channel_id, message_id)
-			.ok_or_else(ApiError::unknown_message)?;
-		let name = emoji.rsplit_once(':').map_or(emoji, |(name, _)| name);
-		let count = message["reactions"]
-			.as_array()
-			.into_iter()
-			.flatten()
-			.find(|reaction| reaction["emoji"]["name"].as_str() == Some(name))
-			.and_then(|reaction| reaction["count"].as_u64())
-			.ok_or_else(ApiError::unknown_message)? as usize;
-		let users: Vec<Value> = self
-			.fixtures
-			.users
-			.values()
-			.take(count.min(limit))
-			.map(to_json)
-			.collect();
-		Ok(Value::Array(users))
-	}
-
 	pub fn patch_current_user(&self, body: &Value) -> Value {
 		let mut store = self.store.lock();
 		if let Some(name) = body["global_name"].as_str() {

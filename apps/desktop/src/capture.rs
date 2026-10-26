@@ -97,6 +97,13 @@ pub enum Screen {
 	LinkPreview,
 	HiddenChannel,
 	MemberNotes,
+	Reactions(ReactionShot),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReactionShot {
+	Chips,
+	List,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +203,8 @@ impl Screen {
 			"link-preview-while-typing" => Some(Screen::LinkPreview),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
+			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),
+			"reactions-list" => Some(Screen::Reactions(ReactionShot::List)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -254,7 +263,8 @@ impl Screen {
 			| Screen::Expressions(_)
 			| Screen::LinkPreview
 			| Screen::HiddenChannel
-			| Screen::MemberNotes => Some(Opening::First),
+			| Screen::MemberNotes
+			| Screen::Reactions(_) => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

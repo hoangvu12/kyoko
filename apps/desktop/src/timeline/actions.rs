@@ -19,12 +19,13 @@ use super::dialogs::{Confirm, Dialogs};
 use super::icons::glyph;
 use super::links::Links;
 use super::popout::ExpressionPopout;
+use super::reactions::Reactions;
 use super::rows::{Sender, tok};
 use crate::kit::{
 	self, MENU_BORDER, MENU_MARGIN, MENU_WIDTH, QUICK_REACTIONS, id_badge, menu_icon, menu_panel, menu_row,
 	separator,
 };
-use crate::pickers::{ExpressionPicker, Tab};
+use crate::pickers::{ExpressionPicker, Favorite, Tab};
 use crate::plugin_menu::{PluginMenu, Shown};
 use crate::toasts;
 
@@ -50,6 +51,7 @@ pub struct HeldReaction {
 	pub channel_id: Snowflake,
 	pub message_id: Snowflake,
 	pub emoji: String,
+	pub burst: bool,
 	pub target: RiskyTarget,
 	pub reason: RiskyReason,
 }
@@ -85,6 +87,7 @@ pub struct MessageActions {
 	context: Signal<Option<ContextMenu>>,
 	menus: Cell<u64>,
 	pub dialogs: Rc<Dialogs>,
+	pub reactions: Rc<Reactions>,
 	pub picker: Rc<ExpressionPicker>,
 	pub popout: Rc<ExpressionPopout>,
 	developer_mode: Cell<bool>,
@@ -108,6 +111,7 @@ pub struct MessageActions {
 
 pub struct Wiring {
 	pub dialogs: Rc<Dialogs>,
+	pub reactions: Rc<Reactions>,
 	pub picker: Rc<ExpressionPicker>,
 	pub popout: Rc<ExpressionPopout>,
 	pub links: Rc<Links>,
@@ -130,6 +134,7 @@ impl MessageActions {
 			context: runtime.signal(None),
 			menus: Cell::new(0),
 			dialogs: wiring.dialogs,
+			reactions: wiring.reactions,
 			picker: wiring.picker,
 			popout: wiring.popout,
 			developer_mode: Cell::new(wiring.developer_mode),
@@ -315,6 +320,7 @@ impl MessageActions {
 		self.context.set(None);
 		self.picker.close();
 		self.popout.close();
+		self.reactions.reset();
 	}
 
 	pub fn delete_selected(&self) {
@@ -388,7 +394,8 @@ impl MessageActions {
 		let channel_id = entry.message.channel_id;
 		let message_id = entry.id;
 		match action {
-			MessageAction::React => self.open_picker(entry),
+			MessageAction::React => self.open_reaction_picker(entry, false),
+			MessageAction::ViewReactions => self.reactions.open_list(entry, None, access.manage_messages),
 			MessageAction::Reply => self.compose(Compose::Reply(message_id)),
 			MessageAction::Edit => self.compose(Compose::Edit(message_id)),
 			MessageAction::CopyText => toasts::copy(&entry.message.content, "Text copied"),
@@ -445,7 +452,7 @@ impl MessageActions {
 		}
 	}
 
-	fn open_picker(self: &Rc<Self>, entry: &MessageEntry) {
+	pub fn open_reaction_picker(self: &Rc<Self>, entry: &MessageEntry, burst: bool) {
 		let model = self.emoji.borrow().as_ref().and_then(|source| source());
 		let Some(model) = model else {
 			return;
@@ -455,15 +462,28 @@ impl MessageActions {
 		self.picker.set_emoji(model);
 		self.picker.on_emoji(move |cell| {
 			if let Some(actions) = actions.upgrade() {
-				actions.toggle_reaction(&entry, &cell.reaction);
+				actions.toggle_reaction_of(&entry, &cell.reaction, burst);
+			}
+		});
+		let favorites = Rc::downgrade(self);
+		self.picker.on_favorite(move |favorite| {
+			if let Some(actions) = favorites.upgrade() {
+				actions.send(match favorite {
+					Favorite::Gif(gif, favorite) => Command::SetGifFavorite { gif, favorite },
+					Favorite::Emoji(entry, favorite) => Command::SetEmojiFavorite { entry, favorite },
+				});
 			}
 		});
 		self.picker.open(Tab::Emoji, self.local_pointer());
 	}
 
 	pub fn toggle_reaction(&self, entry: &MessageEntry, emoji: &str) {
+		self.toggle_reaction_of(entry, emoji, false);
+	}
+
+	pub fn toggle_reaction_of(&self, entry: &MessageEntry, emoji: &str, burst: bool) {
 		let access = self.access.with_untracked(|access| *access);
-		let toggle = bridge::reaction_toggle(entry, emoji);
+		let toggle = bridge::reaction_toggle_of(entry, emoji, burst);
 		if !bridge::reaction_allowed(entry, &access, &toggle) {
 			let reason = match toggle {
 				ReactionToggle::Add(_) if !access.read_history => {
@@ -482,6 +502,7 @@ impl MessageActions {
 						channel_id,
 						message_id,
 						emoji,
+						burst,
 						target: lock.target,
 						reason: lock.reason,
 					})));
@@ -491,12 +512,14 @@ impl MessageActions {
 					channel_id,
 					message_id,
 					emoji,
+					burst,
 				});
 			}
 			ReactionToggle::Remove(emoji) => self.send(Command::RemoveReaction {
 				channel_id,
 				message_id,
 				emoji,
+				burst,
 			}),
 		}
 	}
@@ -511,6 +534,7 @@ impl MessageActions {
 			channel_id: held.channel_id,
 			message_id: held.message_id,
 			emoji: held.emoji.clone(),
+			burst: held.burst,
 		});
 	}
 
@@ -833,6 +857,7 @@ fn needs_open_channel(action: MessageAction) -> bool {
 	matches!(
 		action,
 		MessageAction::React
+			| MessageAction::ViewReactions
 			| MessageAction::Reply
 			| MessageAction::Edit
 			| MessageAction::Select

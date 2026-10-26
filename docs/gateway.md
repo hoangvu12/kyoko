@@ -31,7 +31,7 @@ IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the 
 | 15 | CHANNEL_OBFUSCATION | no | Undocumented. |
 | 16 | AUTO_LOBBY_CONNECT | no | Kyoko has no lobbies. |
 
-Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead, which kyoko applies (see `docs/client-state.md`).
+Reaction events are read leniently: `type` 1 (or, without a `type`, `burst: true`) is a super reaction, counted in `count_details.burst` and `me_burst` apart from normal ones; `burst_colors` on an add replaces the reaction's colours, and a bad element in it is dropped. Batched reactions and passive guild updates are left off rather than implemented, because their payload shapes are only documented by the community. Unbatched reactions give the same snapshot. Without the passive bits, Discord sends CHANNEL_UNREAD_UPDATE for unsubscribed guilds instead, which kyoko applies (see `docs/client-state.md`).
 
 IDENTIFY's `client_state` comes from the persisted read-state and guild-settings versions plus READY's `api_code_version`; `docs/client-state.md` covers what is sent and how partial READY containers merge.
 

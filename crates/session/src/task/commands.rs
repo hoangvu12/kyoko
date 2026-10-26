@@ -3,7 +3,7 @@ use protocol::{Permissions, Snowflake, StatusKind};
 use std::time::Duration;
 
 use rest::RestClient;
-use rest::api::{ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
+use rest::api::{ReactionRef, ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
 use serde_json::{Value, json};
 use state::Loaded;
 
@@ -278,14 +278,23 @@ impl Core {
 				channel_id,
 				message_id,
 				emoji,
+				burst,
+				after,
 			} => self.spawn_load("reactions", move |rest| async move {
-				let users = rest
-					.reactions(channel_id, message_id, &emoji, REACTION_PAGE)
-					.await?;
+				let reaction = ReactionRef {
+					channel_id,
+					message_id,
+					emoji: &emoji,
+					burst,
+				};
+				let users = rest.reactions(reaction, after, REACTION_PAGE).await?;
 				Ok(Loaded::ReactionUsers {
 					message_id,
 					emoji,
+					burst,
 					users: users.into_vec(),
+					append: after.is_some(),
+					limit: usize::from(REACTION_PAGE),
 				})
 			}),
 			Command::VotePoll {

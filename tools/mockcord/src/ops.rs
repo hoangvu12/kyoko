@@ -1,5 +1,4 @@
 use chrono::{SecondsFormat, Utc};
-use protocol::capability::DEBOUNCE_MESSAGE_REACTIONS;
 use protocol::{
 	Attachment, AttachmentDescriptor, CreateMessage, EditMessage, Embed, EmbedKind, EmbedMedia,
 	EmbedProvider, LenientVec, Message, MessageFlags, MessageReference, MessageReferenceKind, MessageType,
@@ -199,7 +198,7 @@ impl Shared {
 		value
 	}
 
-	fn guild_of(store: &Store, channel_id: u64) -> Result<Option<Snowflake>, ApiError> {
+	pub(crate) fn guild_of(store: &Store, channel_id: u64) -> Result<Option<Snowflake>, ApiError> {
 		store
 			.channels
 			.get(&channel_id)
@@ -391,78 +390,6 @@ impl Shared {
 		Ok(())
 	}
 
-	pub fn set_reaction(&self, channel_id: u64, id: u64, emoji: &str, add: bool) -> Result<(), ApiError> {
-		let (name, emoji_id) = match emoji.rsplit_once(':') {
-			Some((name, emoji_id)) if emoji_id.parse::<u64>().is_ok() => (name, Some(emoji_id)),
-			_ => (emoji, None),
-		};
-		let mut store = self.store.lock();
-		let guild_id = Self::guild_of(&store, channel_id)?;
-		let message = store
-			.message_mut(channel_id, id)
-			.ok_or_else(ApiError::unknown_message)?;
-		let reactions = message
-			.as_object_mut()
-			.map(|fields| fields.entry("reactions").or_insert_with(|| json!([])))
-			.and_then(Value::as_array_mut)
-			.ok_or_else(ApiError::unknown_message)?;
-		let position = reactions
-			.iter()
-			.position(|reaction| reaction_matches(reaction, name, emoji_id));
-		match (position, add) {
-			(Some(index), true) => {
-				if reactions[index]["me"].as_bool() != Some(true) {
-					reactions[index]["me"] = json!(true);
-					adjust_count(&mut reactions[index], 1);
-				}
-			}
-			(None, true) => reactions.push(json!({
-				"count": 1,
-				"count_details": { "burst": 0, "normal": 1 },
-				"me": true,
-				"me_burst": false,
-				"emoji": { "id": emoji_id, "name": name, "animated": false },
-				"burst_colors": [],
-			})),
-			(Some(index), false) => {
-				if reactions[index]["me"].as_bool() == Some(true) {
-					reactions[index]["me"] = json!(false);
-					adjust_count(&mut reactions[index], -1);
-				}
-				if reactions[index]["count"].as_i64().unwrap_or(0) <= 0 {
-					reactions.remove(index);
-				}
-			}
-			(None, false) => return Ok(()),
-		}
-		let mut data = json!({
-			"user_id": CURRENT_USER_ID.to_string(),
-			"channel_id": channel_id.to_string(),
-			"message_id": id.to_string(),
-			"emoji": { "id": emoji_id, "name": name, "animated": false },
-			"burst": false,
-			"type": 0,
-		});
-		if let Some(guild_id) = guild_id {
-			data["guild_id"] = json!(guild_id.to_string());
-			if add {
-				data["member"] = self.partial_member(guild_id.0, CURRENT_USER_ID);
-			}
-		}
-		drop(store);
-		if add {
-			let batched = batched_reaction(&data);
-			self.hub.broadcast_by_capability(
-				DEBOUNCE_MESSAGE_REACTIONS,
-				("MESSAGE_REACTION_ADD_MANY", &batched),
-				("MESSAGE_REACTION_ADD", &data),
-			);
-		} else {
-			self.hub.broadcast("MESSAGE_REACTION_REMOVE", &data);
-		}
-		Ok(())
-	}
-
 	pub fn typing(&self, channel_id: u64, user_id: u64) -> Result<(), ApiError> {
 		let guild_id = Self::guild_of(&self.store.lock(), channel_id)?;
 		let mut data = json!({
@@ -514,20 +441,6 @@ fn blank_read_state(channel_id: u64) -> ReadState {
 	}
 }
 
-fn reaction_matches(reaction: &Value, name: &str, emoji_id: Option<&str>) -> bool {
-	let emoji = &reaction["emoji"];
-	match emoji_id {
-		Some(emoji_id) => emoji["id"].as_str() == Some(emoji_id),
-		None => emoji["id"].is_null() && emoji["name"].as_str() == Some(name),
-	}
-}
-
-fn adjust_count(reaction: &mut Value, delta: i64) {
-	let count = reaction["count"].as_i64().unwrap_or(0) + delta;
-	reaction["count"] = json!(count);
-	reaction["count_details"]["normal"] = json!(count);
-}
-
 fn uploaded_attachment(
 	channel_id: u64,
 	attachment_id: u64,
@@ -565,16 +478,4 @@ fn host_attachment(attachment: &mut Attachment, origin: &str, channel_id: u64, s
 	attachment.proxy_url = Some(url);
 	attachment.width = Some(i64::from(width));
 	attachment.height = Some(i64::from(height));
-}
-
-fn batched_reaction(single: &Value) -> Value {
-	let mut batched = json!({
-		"channel_id": single["channel_id"],
-		"message_id": single["message_id"],
-		"reactions": [{ "emoji": single["emoji"], "users": [single["user_id"]] }],
-	});
-	if !single["guild_id"].is_null() {
-		batched["guild_id"] = single["guild_id"].clone();
-	}
-	batched
 }

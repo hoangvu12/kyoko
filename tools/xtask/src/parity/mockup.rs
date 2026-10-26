@@ -87,6 +87,8 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 		"expressions-in-messages-sticker-popout",
 	),
 	("link-preview-while-typing", "link-preview-while-typing"),
+	("reactions", "reactions"),
+	("reactions-list", "reactions-list"),
 ];
 
 pub struct Pairing {

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use bridge::{Access, DeleteProgress, EmojiPicker, MessageAction};
+use bridge::{Access, DeleteProgress, EmojiPicker, MessageAction, ReactionsList};
 use chrono::Utc;
 use state::{Changes, State};
 use zgx::input::{InputEvent, PointerButton};
@@ -33,6 +33,20 @@ impl Link {
 			let shared = actions.upgrade()?.state()?;
 			Some(bridge::expression_details(&shared.read(), subject))
 		});
+		let actions = Rc::downgrade(link);
+		link.timeline_view.on_reaction_names(move |message_id, chip| {
+			let link = actions.upgrade()?;
+			let shared = link.state()?;
+			let guild_id = link.timeline.borrow().open()?.guild_id;
+			bridge::tip_names(&shared.read(), guild_id, message_id, chip)
+		});
+		let actions = Rc::downgrade(link);
+		link.timeline_view.on_reaction_lists(move |request| {
+			let link = actions.upgrade()?;
+			let shared = link.state()?;
+			let guild_id = link.timeline.borrow().open()?.guild_id;
+			ReactionsList::of(&shared.read(), guild_id, request)
+		});
 	}
 
 	pub(super) fn place_actions(&self, slot: Slot) {
@@ -55,6 +69,10 @@ impl Link {
 			.map(|open| Access::of(state, open.guild_id, open.channel_id, Utc::now()))
 			.unwrap_or_default();
 		self.timeline_view.set_access(access);
+		self.timeline_view.set_nitro(state.has_nitro());
+		if !changes.loaded.is_empty() || !changes.messages.is_empty() {
+			self.timeline_view.reactions_changed();
+		}
 		if changes.favorite_gifs {
 			self.timeline_view
 				.set_favorite_gifs(state.favorite_gifs().iter().map(|gif| gif.url.clone()).collect());

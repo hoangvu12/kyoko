@@ -814,12 +814,21 @@ impl Core {
 				channel_id,
 				message_id,
 				emoji,
-			} => self.add_reaction(channel_id, message_id, emoji),
+				burst,
+			} => self.add_reaction(channel_id, message_id, emoji, burst),
 			Command::RemoveReaction {
 				channel_id,
 				message_id,
 				emoji,
-			} => self.remove_reaction(channel_id, message_id, emoji),
+				burst,
+			} => self.remove_reaction(channel_id, message_id, emoji, burst),
+			Command::RemoveUserReaction {
+				channel_id,
+				message_id,
+				emoji,
+				burst,
+				user_id,
+			} => self.remove_user_reaction(channel_id, message_id, emoji, burst, user_id),
 			Command::Typing { channel_id } => self.typing(channel_id),
 			Command::AckChannel {
 				channel_id,
