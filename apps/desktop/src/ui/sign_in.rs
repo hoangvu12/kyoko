@@ -497,6 +497,7 @@ impl Link {
 		self.close_server_settings();
 		self.close_thread_pane(false);
 		self.close_expressions();
+		self.close_apps();
 		self.profile.close_all();
 		self.community.close();
 		self.moderation.close_menu();

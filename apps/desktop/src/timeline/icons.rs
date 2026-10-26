@@ -120,6 +120,7 @@ icon_files!(
 	"chevron_up",
 	"spinner",
 	"poll",
+	"apps",
 );
 
 const PLUGIN_ICONS: usize = 64;

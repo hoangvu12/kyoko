@@ -524,6 +524,7 @@ fn mockcord_flags(screen: &str) -> &'static [&'static str] {
 		"command-response-states" => &["--slow-followups", "--hold-ping"],
 		"message-components" => &["--slow-followups"],
 		"app-modal-error" => &["--failing-modals"],
+		"apps-launcher" => &["--more-apps"],
 		_ => &[],
 	}
 }

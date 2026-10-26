@@ -840,6 +840,9 @@ return function(scope: any?)
 				composer_button("sticker", "Open sticker picker", opens("sticker")),
 			}),
 			composer_button("emoji", "Select emoji", opens("emoji")),
+			ui.show(function()
+				return not commanding()
+			end, composer_button("apps", "Apps", opens("apps"))),
 		}
 	end
 

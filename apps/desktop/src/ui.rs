@@ -1,3 +1,4 @@
+mod apps;
 mod cloner;
 mod community;
 mod component_shots;
@@ -240,6 +241,7 @@ pub fn run(
 			let friend_dialog = link.friend_dialog.view();
 			let scrim = link.scrim.view();
 			let composer_layer = link.composer_layer.view();
+			let apps = link.apps.view();
 			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
@@ -271,6 +273,7 @@ pub fn run(
 						toasts,
 						composer_layer,
 						friend_dialog,
+						apps,
 					],
 				)
 				.on_event(move |event| {
@@ -434,6 +437,7 @@ pub(crate) struct Link {
 	pending_dm: Cell<Option<Snowflake>>,
 	composer: composer::ComposerView,
 	expressions: expressions::Expressions,
+	apps: apps::Apps,
 	threads: threads::ThreadPane,
 	settings: settings::SettingsView,
 	finder: search::Finder,
@@ -516,6 +520,7 @@ impl Link {
 		let community = CommunityLayer::new(&window.runtime, timeline_view.pictures());
 		let finder = search::Finder::new(host, &window.runtime, timeline_view.pictures());
 		let expressions = expressions::Expressions::new(&window.runtime, timeline_view.pictures());
+		let apps = apps::Apps::new(&window.runtime, timeline_view.pictures());
 		let moderation = ModerationLayer::new(&window.runtime);
 		let hidden = hidden::HiddenPane::new(host, &window.runtime);
 		let mut timeline = Timeline::default();
@@ -579,6 +584,7 @@ impl Link {
 			pending_dm: Cell::new(None),
 			composer,
 			expressions,
+			apps,
 			threads: thread_pane,
 			settings,
 			finder,
@@ -614,6 +620,7 @@ impl Link {
 		Link::install_friend_dialog(&link);
 		Link::install_composer(host, &link);
 		Link::install_expressions(host, &link);
+		Link::install_apps(host, &link);
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
 		Link::install_server_settings(host, &link);
@@ -902,6 +909,7 @@ impl Link {
 			capture::Screen::VoiceMessage => self.drive_voice_message().await,
 			capture::Screen::Components(shot) => self.drive_component_shot(*shot).await,
 			capture::Screen::Polls(shot) => self.drive_polls(*shot).await,
+			capture::Screen::AppsLauncher => self.drive_apps().await,
 			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
 			capture::Screen::ComposerShot(shot) => self.drive_composer_shot(*shot).await,
 			capture::Screen::CloneDialog => {
@@ -1151,6 +1159,7 @@ impl Link {
 			self.dm_panel_apply(&state, changes);
 			self.composer_apply(&state, changes);
 			self.expressions_apply(&state, changes);
+			self.apps_apply(&state, changes);
 			self.publish_actions(&state, changes);
 			self.settings_apply(&state, changes);
 			self.publish_profiles(&state, changes);
@@ -1343,6 +1352,7 @@ impl Link {
 		let mut names: Vec<String> = self.luau_visible.borrow().clone();
 		names.extend(self.composer.images());
 		names.extend(self.expressions.images());
+		names.extend(self.apps.images());
 		names.extend(self.avatar.borrow().iter().map(|name| name.to_string()));
 		names.extend(self.rail_icons.borrow().iter().cloned());
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());

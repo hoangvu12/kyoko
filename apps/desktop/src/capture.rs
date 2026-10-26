@@ -109,6 +109,7 @@ pub enum Screen {
 	VoiceMessage,
 	Components(ComponentShot),
 	Polls(PollShot),
+	AppsLauncher,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,6 +288,7 @@ impl Screen {
 			"poll-create" => Some(Screen::Polls(PollShot::Create)),
 			"poll-in-messages" => Some(Screen::Polls(PollShot::Messages)),
 			"poll-in-messages-ended" => Some(Screen::Polls(PollShot::Ended)),
+			"apps-launcher" => Some(Screen::AppsLauncher),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -351,7 +353,8 @@ impl Screen {
 			| Screen::FriendConfirm(_)
 			| Screen::VoiceMessage
 			| Screen::Components(_)
-			| Screen::Polls(_) => Some(Opening::First),
+			| Screen::Polls(_)
+			| Screen::AppsLauncher => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

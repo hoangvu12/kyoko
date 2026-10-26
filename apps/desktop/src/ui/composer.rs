@@ -590,6 +590,7 @@ impl Link {
 				}
 			}
 			Request::ImagesChanged => self.refresh_visible(),
+			Request::UseApps => self.use_apps(),
 		}
 	}
 
@@ -608,6 +609,7 @@ impl Link {
 			at,
 			thread,
 			poll,
+			apps: pane == Pane::Main,
 		});
 	}
 
@@ -1124,6 +1126,7 @@ impl Link {
 		if switched {
 			if pane == Pane::Main {
 				self.close_expressions();
+				self.close_apps();
 			}
 			if view.draft_due.get().is_some() {
 				self.flush_draft(pane);
@@ -1231,6 +1234,27 @@ impl Link {
 		let outcome = pick(&mut self.composer.composer.borrow_mut(), &shared.read());
 		self.composer_send(outcome.commands);
 		self.publish_composer_all(Pane::Main);
+	}
+
+	pub(super) fn composer_open_app(&self, app_id: Snowflake) {
+		let opened = self.composer.composer.borrow_mut().open_app(app_id);
+		if opened.is_some() {
+			self.replace_text(Pane::Main, opened);
+			self.request_focus(Pane::Main);
+		}
+	}
+
+	pub(super) fn composer_pick_command(&self, entry: bridge::CommandEntry) {
+		if !self.composer.composer.borrow_mut().pick_command(entry) {
+			return;
+		}
+		self.composer.draft_due.set(None);
+		self.focus_command(Pane::Main);
+		self.ask_autocomplete(Pane::Main, false);
+		self.replace_text(Pane::Main, Some((String::new(), 0)));
+		if let Some(shared) = self.state() {
+			self.publish_composer_suggestions(Pane::Main, &shared.read());
+		}
 	}
 
 	pub(super) fn composer_channel(&self) -> Option<(Option<Snowflake>, Snowflake)> {

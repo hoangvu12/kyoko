@@ -125,6 +125,7 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("poll-create", "poll-create"),
 	("poll-in-messages", "poll-in-messages"),
 	("poll-in-messages-ended", "poll-in-messages-ended"),
+	("apps-launcher", "apps-launcher"),
 ];
 
 pub struct Pairing {

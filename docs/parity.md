@@ -185,6 +185,7 @@ The table is mirrored in `MOCKUPS` in `tools/xtask/src/parity/mockup.rs`; change
 | `poll-create` | `poll-create.html` |
 | `poll-in-messages` | `poll-in-messages.html` |
 | `poll-in-messages-ended` | `poll-in-messages-ended.html` |
+| `apps-launcher` | `apps-launcher.html` |
 
 `inbox.html` stays unmapped: kyoko has no inbox (the channel header's inbox button has no surface and there is no recent-mentions data), so there is no kyoko state to pair with it.
 
@@ -192,7 +193,7 @@ Several screens share `midnight-discord.html`, the main screen, which also shows
 
 Kyoko screens with no mockup yet: `channel-sidebar-collapsed`, `composer-silent-typing`, `member-list-scrolled`, `account-switcher`, `timeline-media` and the `timeline-*` showcase screens, and the settings pages other than My Account, Appearance, Notifications, Plugins and Themes.
 
-Mockup pages with no kyoko screen yet, for the tickets that build them to map: `apps-launcher`, `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`.
+Mockup pages with no kyoko screen yet, for the tickets that build them to map: `built-in-gif`, `built-in-sticker`, `built-in-thread`, `command-picker-built-in`, `inbox`.
 
 To map a new screen: give it kyoko capture steps (above) and a row in the Screens tables below, add the pair to `MOCKUPS` and to this table, and take the page off the unmapped list. Several kyoko screens may share a mockup, and a mockup with no matching kyoko state stays unmapped rather than paired with something close.
 
@@ -573,6 +574,14 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). The polls are the `-# showcase:
 | `poll-create` | 17 | Default selection, then open Create Poll (`ComposerLayer::open_poll`, what the `+` menu's item does) and fill the question and four answers (two with emoji, the last empty) through `PollForm::fill`. | yes |
 | `poll-in-messages` | 17 | Open `#showcase` with the voted poll at the bottom of the timeline: the unvoted poll above it with radios, Show results and a disabled Vote, the voted one with bars, the check and Remove Vote. | yes |
 | `poll-in-messages-ended` | 17 | Open `#showcase` with the poll result message at the bottom: the ended poll with the winner's green bar and trophy and "Poll closed", then the result line with View Poll. | yes |
+
+### Midnight 15 Apps launcher
+
+Kyoko only (`--apps kyoko`, or `parity mockup`). For `apps-launcher` the parity tool adds `--more-apps`: mockcord's command index then also lists the mockup's Warden, Lyra, Ticketeer and Countr (one command each) and Arcade, an activity-only app with just a launch entry point, and the account's frecency settings are seeded with `/roll`, `/remind`, `/poll`, `/snap`, `/play` and `/warn`, so Recents read Mockbot, Remindy, Polly, Snapper, Lyra, Warden.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `apps-launcher` | 15 | Default selection, then open the launcher the way the composer's apps button does (`Link::use_apps`, anchored to the `composer` slot) and wait for the command index and the frecency settings: search, Recents tiles and the eight Apps in this Server rows (Arcade left out). | yes |
 
 ### 38 Toasts, transitions and connection status
 

@@ -31,6 +31,7 @@ pub enum Pane {
 pub enum Request {
 	Upload(Pane),
 	CreateThread,
+	UseApps,
 	SaveFile(Pane, u64, FileEdit),
 	SendPoll(Pane, PollDraft),
 	PollEmoji,
@@ -43,6 +44,7 @@ pub struct PlusMenu {
 	pub at: (f32, f32),
 	pub thread: bool,
 	pub poll: bool,
+	pub apps: bool,
 }
 
 #[derive(Clone)]
@@ -231,7 +233,7 @@ impl ComposerLayer {
 	fn menu_panel(self: &Rc<Self>, menu: PlusMenu, open: Signal<bool>) -> View {
 		let (x, y) = menu.at;
 		let spot = div().absolute().left(x).top(y).w(0.).h(0.);
-		let (upload, thread, poll) = (self.clone(), self.clone(), self.clone());
+		let (upload, thread, poll, apps) = (self.clone(), self.clone(), self.clone(), self.clone());
 		let pane = menu.pane;
 		let mut items = vec![
 			entry("Upload a File", "upload")
@@ -253,6 +255,13 @@ impl ComposerLayer {
 						poll.menu_open.set(false);
 						poll.open_poll(pane);
 					}),
+			);
+		}
+		if menu.apps {
+			items.push(
+				entry("Use Apps", "apps")
+					.id("composer-menu-apps")
+					.on_click(move || apps.choose(Request::UseApps)),
 			);
 		}
 		kit::menu_panel(

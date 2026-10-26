@@ -87,9 +87,16 @@ impl Link {
 			let Some(link) = actions.upgrade() else {
 				return;
 			};
-			let tab = field(&argument, "tab").and_then(text).and_then(Tab::named);
+			let named = field(&argument, "tab").and_then(text);
 			let toolbar = field(&argument, "toolbar").and_then(toolbar_slot);
 			let at = picker_anchor(link.expressions.composer.get(), toolbar);
+			if named == Some(super::apps::APPS_TAB) {
+				if let Some(at) = at {
+					link.open_apps(at);
+				}
+				return;
+			}
+			let tab = named.and_then(Tab::named);
 			if let (Some(tab), Some(at)) = (tab, at) {
 				link.open_expressions(tab, at);
 			}

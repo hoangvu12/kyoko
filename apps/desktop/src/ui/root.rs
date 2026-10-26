@@ -21,7 +21,7 @@ use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
-const LAYERS: [&str; 13] = [
+const LAYERS: [&str; 14] = [
 	"timeline slot",
 	"thread slot",
 	"scrim",
@@ -35,6 +35,7 @@ const LAYERS: [&str; 13] = [
 	"toasts",
 	"composer menu, attachment dialog and drop card",
 	"friend confirmations",
+	"apps launcher",
 ];
 
 const LUAU_BUTTONS: [(&str, &str); 2] = [
@@ -178,6 +179,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 			crate::composer_layer::ComposerLayer::new(runtime, pictures).view()
 		}
 		"friend confirmations" => crate::friend_dialog::FriendDialog::new(runtime).view(),
+		"apps launcher" => super::apps::Apps::new(runtime, pictures).view(),
 		_ => unreachable!("no layer named {name}"),
 	}
 }
@@ -494,6 +496,7 @@ fn the_plus_menu_opens_the_poll_dialog_which_posts_a_draft_within_the_limits() {
 		at: (400., 700.),
 		thread: false,
 		poll: true,
+		apps: true,
 	});
 	app.frames(10);
 	app.click("composer-menu-poll");
@@ -566,4 +569,128 @@ fn the_plus_menu_opens_the_poll_dialog_which_posts_a_draft_within_the_limits() {
 	app.key(zgx::input::Key::Escape);
 	app.frames(30);
 	assert!(!on_top(&mut app, "poll-dialog"), "Escape closes the dialog");
+}
+
+type LauncherParts = (
+	Rc<crate::apps_launcher::AppsLauncherView>,
+	Rc<RefCell<Vec<crate::apps_launcher::Pick>>>,
+);
+
+fn launcher_model() -> bridge::AppsLauncher {
+	let app = |id: u64, name: &str, hue: usize| bridge::LauncherApp {
+		app: bridge::CommandApp {
+			id: Some(protocol::Snowflake(id)),
+			name: name.to_owned(),
+			icon: None,
+			hue,
+		},
+		description: format!("{name} does things"),
+	};
+	bridge::AppsLauncher {
+		recents: vec![app(2, "Remindy", 1)],
+		apps: (1..=8)
+			.map(|id| app(id, &format!("App {id}"), id as usize))
+			.collect(),
+	}
+}
+
+#[test]
+fn the_apps_button_opens_the_launcher_and_escape_or_a_press_outside_closes_it() {
+	use crate::apps_launcher::{AppsLauncherView, Pick};
+	let tokio = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.expect("a tokio runtime");
+	let handle = tokio.handle().clone();
+	let parts: Rc<RefCell<Option<LauncherParts>>> = Rc::default();
+	let (made, used) = (parts.clone(), parts.clone());
+	let mut app = TestApp::wrapped(
+		move |runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "dark");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			let pictures = Rc::new(Pictures::new(
+				runtime.clone(),
+				gallery(&handle),
+				media::cdn::CDN.to_owned(),
+				None,
+			));
+			let launcher = AppsLauncherView::new(runtime, pictures);
+			let picks: Rc<RefCell<Vec<Pick>>> = Rc::default();
+			let heard = picks.clone();
+			launcher.on_pick(move |pick| heard.borrow_mut().push(pick));
+			let opened = launcher.clone();
+			host.action("composer.picker", move |argument| {
+				let tab = super::field(&argument, "tab").and_then(super::text);
+				if tab == Some(super::apps::APPS_TAB) {
+					opened.open((900., 800.), 640., launcher_model(), true);
+				}
+			});
+			*made.borrow_mut() = Some((launcher, picks));
+			host
+		},
+		move |luau| {
+			let (launcher, _) = used.borrow().clone().expect("the launcher");
+			layered(luau, [launcher.view()])
+		},
+	);
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"a server channel",
+		"Playing Chess",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("sidebar.guild_id", json!("10")),
+			("sidebar.guild_name", json!("Kyoko")),
+			("sidebar.rows", sidebar_rows()),
+			("timeline.channel_id", json!("20")),
+			("timeline.channel_name", json!("general")),
+			("composer.open", json!(true)),
+			("members.heights", json!([44, 42, 42])),
+			("members.window", member_window()),
+		],
+	);
+	let (launcher, picks) = parts.borrow().clone().expect("the launcher");
+	let open = |app: &mut TestApp| {
+		app.click("composer_apps_button");
+		app.frames(30);
+	};
+	open(&mut app);
+	assert!(launcher.is_open(), "the apps button opens the launcher");
+	assert!(
+		on_top(&mut app, "apps-app-1"),
+		"the launcher lists the server's apps"
+	);
+	assert!(app.find("apps-recent-2").is_some(), "and the recent ones");
+	let (list, frame) = (app.bounds("apps-list"), app.bounds("apps-launcher"));
+	assert!(
+		list.y + list.height <= frame.y + frame.height,
+		"the app list stays inside the launcher: {list:?} in {frame:?}"
+	);
+	assert!(
+		list.height > 6. * 56.,
+		"the app list takes the room the launcher has: {list:?}"
+	);
+	app.key(zgx::input::Key::Escape);
+	app.frames(30);
+	assert!(!launcher.is_open(), "Escape closes the launcher");
+	open(&mut app);
+	assert!(launcher.is_open());
+	app.click("top_bar_threads");
+	app.frames(30);
+	assert!(!launcher.is_open(), "a press outside closes the launcher");
+	open(&mut app);
+	app.click("apps-app-1");
+	app.frames(30);
+	assert!(!launcher.is_open(), "picking an app closes the launcher");
+	assert_eq!(
+		*picks.borrow(),
+		[Pick::App(protocol::Snowflake(1))],
+		"picking an app hands it to the composer's command picker"
+	);
 }
