@@ -4,7 +4,7 @@
 
 **Blocked by:** 43 (Web login)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The login window sets no user agent override; the seam test that checked the Chrome string now checks that the page's user agent and its client hints agree (both WebView2's)
 - [ ] `docs/sign-in.md` and `docs/fingerprint.md` say the login window is honestly WebView2 and why, and drop the "client hints aren't Chrome's" caveat
