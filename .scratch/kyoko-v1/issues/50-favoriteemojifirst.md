@@ -4,7 +4,18 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 32 (Lightbox and pickers)
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] An emoji autocomplete ranking hook exists
-- [ ] Favourites rank first in the composer's autocomplete
+- [x] An emoji autocomplete ranking hook exists
+- [x] Favourites rank first in the composer's autocomplete
+
+## Answer
+
+Merged to main as `9b0b28e`. Docs: `docs/plugins.md` ("Emoji ranking", FavoriteEmojiFirst), `docs/rest.md` ("Favourite emoji"), `docs/ui.md`, `docs/architecture.md`, `docs/testing.md`.
+
+- Favourites: kyoko now reads the frecency settings proto (type 2) as the web client does: lazily, `GET /users/@me/settings-proto/2` (no query or body, usual headers), once per session, the first time the composer asks to rank emoji; a failed read retries at most once a minute, silently. Gateway type-2 updates replace the list; a partial update without favourites leaves it. Decoder reads `favorite_emojis` (field 5, strings in field 1; checked against discord-protos). A favourite matches a custom emoji by id and a Unicode emoji by shortcode or characters (with or without U+FE0F). State in `crates/state/src/favorites.rs` (`State::favorite_emojis()`, `favorite_position(id, glyph)`, `favorites_generation()`; `Changes::emoji_ranking`). To confirm on real traffic: whether the web client first loads type 2 on picker open or on first use (listed in `docs/rest.md`).
+- `hook:emoji_rank`: `rank_emoji(request)` with the query, server and up to 100 candidates in kyoko's order plus any later favourite match (`key`, `name`, `id`, `emoji`, `favorite` = 1-based place); returns keys to put first. Chains in id order, 100 ms deadline (`Limits::rank_deadline`), fails open with a strike. The UI never waits: the composer shows kyoko's order at once and sends `Command::RankEmoji`; the session waits for 100 ms of quiet, runs one ranking at a time on a blocking worker, keeps only the latest query, stores the result per server, query and favourites generation; stale results are ignored. Typing `:smile` quickly makes one call per plugin; selection moves and state refreshes never call it; no permitted plugin, no call.
+- FavoriteEmojiFirst (`plugins/favorite-emoji-first/`, only `hook:emoji_rank`, bundled, ships disabled): favourites first in their favourite order in the composer's `:` suggestions. The picker's search (a plain substring filter) is not ranked; M08 owns it.
+- Mockcord serves and stores the frecency proto (seeded with the first server's `blob_wave` and `heart`), accepts `PATCH /settings-proto/2` and dispatches the update; `Control::set_favorite_emojis`, `update_favorite_emojis`.
+- Tests: session `favourites.rs` (single lazy read with the request shape, updates from other devices, one hook call for a burst of keys, failing hook keeps the order); plugin-seam `favorite_emoji_first.rs` (order and re-order after favourites change, permission, failing and looping plugins, plugin off); bridge `the_emoji_autocomplete_lists_favourites_first_once_favorite_emoji_first_runs` with the real plugin; `headless-run` ranks the mock's favourite first. Rebased by its worker onto 48 (union conflicts in the plugin crate, docs, headless). Checks re-run by the orchestrator from a clean build; `headless-run` failed once on 48's flaky check and passed on rerun.
+- For M08: write favourites with `PATCH /users/@me/settings-proto/2` `{"settings":"<base64>"}` using `protocol::encode_favorite_emojis(&[String])` (field 5 only; custom by id, Unicode by name; send the whole list); add a `Command` with a writer like `task/layout.rs` (local change at once, debounce, roll back on failure). Expose the private `want_frecency` (e.g. `Command::LoadFrecency`) so the picker loads favourites on open. To rank the picker's search, build `EmojiCandidate`s from `EmojiPicker::search` and send `Command::RankEmoji`; results are keyed by server and query, so store per surface if the composer and picker both rank. For M09: suggestions come from `bridge::composer::suggestions`, which applies `State::emoji_ranking`; keep calling `Composer::rank_request` on query changes and `changes.emoji_ranking`. Locked rows are filtered out of candidates (`usable`).
