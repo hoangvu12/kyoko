@@ -69,13 +69,13 @@ pub enum ServerPage {
 }
 
 pub const SERVER_GROUPS: [(&str, &[ServerPage]); 4] = [
-	("Server", &[ServerPage::Overview, ServerPage::Roles]),
+	("", &[ServerPage::Overview]),
 	("Expression", &[ServerPage::Emoji, ServerPage::Stickers]),
 	(
 		"People",
-		&[ServerPage::Members, ServerPage::Invites, ServerPage::Bans],
+		&[ServerPage::Members, ServerPage::Roles, ServerPage::Invites],
 	),
-	("Moderation", &[ServerPage::AuditLog]),
+	("Moderation", &[ServerPage::AuditLog, ServerPage::Bans]),
 ];
 
 impl ServerPage {
@@ -221,20 +221,33 @@ pub fn role_rows(state: &State, guild_id: Snowflake) -> Vec<RoleRow> {
 		.collect()
 }
 
-pub fn role_swap(
+pub fn role_move_to(
 	state: &State,
 	guild_id: Snowflake,
 	role_id: Snowflake,
-	up: bool,
+	onto: Snowflake,
 ) -> Option<Vec<(Snowflake, i64)>> {
+	let access = GuildAccess::of(state, guild_id);
 	let roles = sorted_roles(state, guild_id);
-	let index = roles.iter().position(|role| role.id == role_id)?;
-	let neighbour = if up { index.checked_sub(1)? } else { index + 1 };
-	let other = roles.get(neighbour)?;
-	if other.id == guild_id {
+	let from = roles.iter().position(|role| role.id == role_id)?;
+	let to = roles.iter().position(|role| role.id == onto)?;
+	let (low, high) = (from.min(to), from.max(to));
+	let span = &roles[low..=high];
+	let movable = |role: &Role| role.id != guild_id && access.above(role.position);
+	if from == to || !span.iter().all(movable) {
 		return None;
 	}
-	Some(vec![(role_id, other.position), (other.id, roles[index].position)])
+	let mut order: Vec<&Role> = span.iter().collect();
+	let moved = order.remove(from - low);
+	order.insert(to - low, moved);
+	Some(
+		order
+			.into_iter()
+			.zip(span.iter().map(|role| role.position))
+			.filter(|(role, position)| role.position != *position)
+			.map(|(role, position)| (role.id, position))
+			.collect(),
+	)
 }
 
 pub struct Right {
@@ -513,9 +526,37 @@ pub struct MemberRow {
 	pub username: String,
 	pub color: Option<u32>,
 	pub roles: Vec<RoleChip>,
+	pub joined: Option<DateTime<Utc>>,
 }
 
-pub fn member_rows(state: &State, guild_id: Snowflake, query: &str) -> (Vec<MemberRow>, usize) {
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MemberSort {
+	#[default]
+	Newest,
+	Oldest,
+	Name,
+}
+
+pub const MEMBER_SORTS: [(MemberSort, &str); 3] = [
+	(MemberSort::Newest, "Sort: Member Since"),
+	(MemberSort::Oldest, "Sort: Oldest Members"),
+	(MemberSort::Name, "Sort: Name"),
+];
+
+impl MemberSort {
+	pub fn at(index: usize) -> Self {
+		MEMBER_SORTS
+			.get(index)
+			.map_or_else(Self::default, |(sort, _)| *sort)
+	}
+}
+
+pub fn member_rows(
+	state: &State,
+	guild_id: Snowflake,
+	query: &str,
+	sort: MemberSort,
+) -> (Vec<MemberRow>, usize) {
 	let Some(guild) = state.guild(guild_id) else {
 		return (Vec::new(), 0);
 	};
@@ -544,13 +585,20 @@ pub fn member_rows(state: &State, guild_id: Snowflake, query: &str) -> (Vec<Memb
 						color: Some(role_color(role)).filter(|color| *color != 0),
 					})
 					.collect(),
+				joined: member.joined_at,
 				name,
 				username,
 			})
 		})
 		.collect();
 	let total = rows.len();
-	rows.sort_by_key(|row| row.name.to_lowercase());
+	match sort {
+		MemberSort::Name => rows.sort_by_key(|row| row.name.to_lowercase()),
+		MemberSort::Newest => rows.sort_by_key(|row| (Reverse(row.joined), row.name.to_lowercase())),
+		MemberSort::Oldest => {
+			rows.sort_by_key(|row| (row.joined.is_none(), row.joined, row.name.to_lowercase()));
+		}
+	}
 	rows.truncate(MEMBER_ROW_LIMIT);
 	(rows, total)
 }
@@ -559,6 +607,7 @@ pub fn member_rows(state: &State, guild_id: Snowflake, query: &str) -> (Vec<Memb
 pub struct BanRow {
 	pub id: Snowflake,
 	pub name: String,
+	pub username: String,
 	pub reason: Option<String>,
 }
 
@@ -585,6 +634,7 @@ pub fn ban_rows(state: &State, guild_id: Snowflake, query: &str) -> Vec<BanRow> 
 				.clone()
 				.filter(|name| !name.is_empty())
 				.unwrap_or_else(|| ban.user.username.clone()),
+			username: ban.user.username.clone(),
 			reason: ban.reason.clone(),
 		})
 		.collect()
@@ -635,6 +685,9 @@ pub struct AuditRow {
 	pub actor_id: Option<Snowflake>,
 	pub actor: String,
 	pub sentence: String,
+	pub parts: Vec<(String, bool)>,
+	pub icon: &'static str,
+	pub tone: AuditTone,
 	pub when: String,
 	pub changes: Vec<AuditChangeLine>,
 	pub reason: Option<String>,
@@ -679,6 +732,77 @@ fn target_label(state: &State, guild_id: Snowflake, entry: &AuditEntry) -> Strin
 			.unwrap_or_else(|| id.to_string()),
 		_ => named.unwrap_or_else(|| id.to_string()),
 	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuditTone {
+	Create,
+	Update,
+	Delete,
+}
+
+impl AuditTone {
+	pub fn of(action_type: i64) -> Self {
+		match action_type {
+			10 | 13 | 23 | 30 | 40 | 50 | 60 | 74 | 110 => Self::Create,
+			12 | 15 | 20 | 21 | 22 | 27 | 32 | 42 | 52 | 62 | 72 | 73 | 75 | 112 => Self::Delete,
+			_ => Self::Update,
+		}
+	}
+
+	pub fn key(self) -> &'static str {
+		match self {
+			Self::Create => "create",
+			Self::Update => "update",
+			Self::Delete => "delete",
+		}
+	}
+}
+
+pub fn audit_icon(action_type: i64) -> &'static str {
+	match action_type {
+		1 => "settings",
+		10..=15 => "hash",
+		20 | 21 => "user_x",
+		22 | 23 => "gavel",
+		24..=27 => "members",
+		30..=32 => "shield",
+		40..=42 => "link",
+		50..=52 => "connections",
+		60..=62 => "emoji",
+		72..=75 => "chat",
+		110..=112 => "thread",
+		_ => "audit_log",
+	}
+}
+
+const ACTOR_MARK: char = '\u{1}';
+const TARGET_MARK: char = '\u{2}';
+
+pub fn audit_parts(action_type: i64, actor: &str, target: &str) -> Vec<(String, bool)> {
+	let template = audit_sentence(action_type, &ACTOR_MARK.to_string(), &TARGET_MARK.to_string());
+	let mut parts = Vec::new();
+	let mut plain = String::new();
+	for character in template.chars() {
+		let named = match character {
+			ACTOR_MARK => actor,
+			TARGET_MARK => target,
+			_ => {
+				plain.push(character);
+				continue;
+			}
+		};
+		if !plain.is_empty() {
+			parts.push((std::mem::take(&mut plain), false));
+		}
+		if !named.is_empty() {
+			parts.push((named.to_owned(), true));
+		}
+	}
+	if !plain.is_empty() {
+		parts.push((plain, false));
+	}
+	parts
 }
 
 pub fn audit_sentence(action_type: i64, actor: &str, target: &str) -> String {
@@ -736,6 +860,9 @@ pub fn audit_rows(state: &State, guild_id: Snowflake, today: NaiveDate) -> Optio
 					id: entry.id,
 					actor_id: entry.user_id,
 					sentence: audit_sentence(entry.action_type, &actor, &target),
+					parts: audit_parts(entry.action_type, &actor, &target),
+					icon: audit_icon(entry.action_type),
+					tone: AuditTone::of(entry.action_type),
 					when: message_time(entry.id.timestamp(), today),
 					changes: entry
 						.changes

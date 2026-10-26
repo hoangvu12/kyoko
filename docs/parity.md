@@ -352,7 +352,7 @@ Oxidcord has no rules (membership screening) or onboarding screens, so they have
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `server-settings-overview` | 36 | Default selection, then open server settings on Overview. The mock fixtures seed three bans, their audit entries and two invites in the first guild. | yes |
+| `server-settings-overview` | 36 | Default selection, then open server settings on Overview; since Midnight 23 they open as the settings dialog over the dimmed app. The mock fixtures seed three bans, their audit entries and two invites in the first guild. | yes |
 | `server-settings-roles` | 36 | As above, on Roles. | yes |
 | `server-settings-emoji` | 36 | As above, on Emoji. | yes |
 | `server-settings-stickers` | 36 | As above, on Stickers. | yes |

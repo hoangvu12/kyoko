@@ -69,8 +69,12 @@ impl RestClient {
 		guild_id: Snowflake,
 		before: Option<Snowflake>,
 		action_type: Option<i64>,
+		user_id: Option<Snowflake>,
 	) -> Result<Value> {
 		let mut request = Request::get(format!("/guilds/{guild_id}/audit-logs")).query(&[("limit", "50")]);
+		if let Some(user_id) = user_id {
+			request = request.query(&[("user_id", user_id.to_string())]);
+		}
 		if let Some(before) = before {
 			request = request.query(&[("before", before.to_string())]);
 		}

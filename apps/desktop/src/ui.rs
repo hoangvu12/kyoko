@@ -525,6 +525,7 @@ impl Link {
 		let composer_layer = crate::composer_layer::ComposerLayer::new(&window.runtime);
 		let friend_dialog = FriendDialog::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
+		let server = server_settings::ServerSettingsView::new(host, &window.runtime);
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -585,7 +586,7 @@ impl Link {
 			moderation,
 			moderation_effect: RefCell::new(None),
 			hidden,
-			server: server_settings::ServerSettingsView::new(host),
+			server,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),

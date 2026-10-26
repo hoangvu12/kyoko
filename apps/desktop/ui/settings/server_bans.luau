@@ -1,81 +1,100 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local avatar = require("@components/avatar")
-local widgets = require("@settings/widgets")
-local kit = require("@settings/server_kit")
+local kit = require("./kit")
 
-local ROW_GAP = 8
-local AVATAR = 32
-
-local query = ui.state("server.bans_query", "")
+local query = ui.state("bans_query", "")
 
 local function bans()
 	return state.server.bans:get()
 end
 
+local COLUMNS: { kit.Column } = {
+	{ title = "User", grow = 1 },
+	{ title = "Reason", grow = 1.4 },
+}
+
 local function row(entry: state.ServerBanRow)
-	return ui.row {
-		w_full = true,
-		h = theme.number(theme.size.list_row_height)() + ROW_GAP,
-		px = theme.size.space_12,
-		gap = theme.size.space_12,
-		items = "center",
-		border_sides = { 0, 0, 1, 0 },
-		border_color = theme.color.divider,
-		avatar { src = entry.avatar, size = AVATAR },
-		ui.column {
-			grow = 1,
-			min_w = 0,
-			widgets.label(entry.name, theme.size.font_md, theme.color.header_primary, {
-				weight = theme.weight.semibold,
-				literal = true,
+	return kit.table_row {
+		id = "ban_revoke_" .. entry.id,
+		label = "Revoke the ban on " .. entry.name,
+		columns = COLUMNS,
+		on_click = function()
+			actions.server_action("unban", { id = entry.id, name = entry.name })
+		end,
+		cells = {
+			kit.person(entry.avatar, entry.name, nil, entry.username),
+			kit.text(entry.reason, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_3, {
 				truncate = true,
+				min_w = 0,
 			}),
-			widgets.label(entry.reason, theme.size.font_sm, theme.color.text_muted, { literal = true, truncate = true }),
 		},
-		kit.button {
-			id = "ban_revoke_" .. entry.id,
-			text = "Revoke Ban",
-			tone = "outline",
-			on_click = function()
-				actions.server_action("unban", { id = entry.id, name = entry.name })
-			end,
-		},
+		actions = function(hovered: () -> boolean)
+			return kit.row_actions(
+				hovered,
+				ui.row {
+					w = theme.size.space_24,
+					h = theme.size.space_24,
+					rounded = theme.size.space_24,
+					justify = "center",
+					items = "center",
+					bg = theme.color.bg_4,
+					tooltip = "Revoke Ban",
+					require("@components/icon") {
+						name = "close",
+						size = theme.size.icon_size_sm :: any,
+						color = theme.color.red_2,
+					},
+				}
+			)
+		end,
 	}
 end
 
-return function()
+local function build()
 	ui.effect(function()
 		actions.server_action("bans_search", query:get())
 	end)
 	return ui.column {
 		w_full = true,
-		grow = 1,
-		min_h = 0,
-		kit.title("Bans"),
-		ui.div {
+		gap = theme.size.space_16,
+		kit.title("Server Ban List"),
+		kit.hint("Bans by default are by account and IP. Click a ban to revoke it."),
+		ui.row {
 			w_full = true,
-			shrink = 0,
-			pb = theme.size.space_16,
-			kit.input(query, "Search by username or ID"),
+			kit.search_input(query, "Search Bans by User Id or Username", { id = "bans_search" }),
 		},
-		kit.caption(function()
+		kit.text(function()
 			local value = bans()
 			local count = if value then #value.rows else 0
 			return string.format("%d %s", count, if count == 1 then "ban" else "bans")
-		end),
-		kit.rows(bans, row, kit.empty("ban", "Nobody is banned from this server.")),
+		end, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_4, { weight = theme.weight.medium }),
+		ui.column {
+			w_full = true,
+			kit.table_head(COLUMNS),
+			ui.each(ui.computed(function()
+				local value = bans()
+				return if value then value.rows else {}
+			end), row, {
+				key = function(entry: state.ServerBanRow)
+					return entry.id .. "|" .. entry.name .. "|" .. entry.reason .. "|" .. entry.avatar
+				end,
+				w_full = true,
+			}),
+			ui.show(function()
+				local value = bans()
+				return value ~= nil and value.loaded and #value.rows == 0
+			end, kit.empty("ban", "Nobody is banned from this server.")),
+		},
 		ui.show(function()
 			local value = bans()
 			return value ~= nil and value.has_more
 		end, ui.row {
 			w_full = true,
 			justify = "center",
-			pb = theme.size.space_16,
 			kit.button {
+				id = "bans_more",
 				text = "Load more",
-				tone = "outline",
 				on_click = function()
 					actions.server_action("bans_more")
 				end,
@@ -83,3 +102,8 @@ return function()
 		}),
 	}
 end
+
+return {
+	keywords = "bans banned unban revoke",
+	build = build,
+}

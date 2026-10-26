@@ -2,8 +2,7 @@ local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
-local widgets = require("@settings/widgets")
-local kit = require("@settings/server_kit")
+local kit = require("./kit")
 
 local PALETTE = {
 	"#1abc9c",
@@ -28,19 +27,28 @@ local PALETTE = {
 	"#546e7a",
 }
 local TABS = { "Display", "Permissions" }
-local SEGMENT = 32
-local SWATCH_BORDER = 2
+local CLEAR = "#00000000"
 
-local draft_name = ui.state("server.role_name", "")
-local draft_color = ui.state("server.role_color", "")
-local draft_hoist = ui.state("server.role_hoist", false)
-local draft_mentionable = ui.state("server.role_mentionable", false)
-local draft_granted = ui.state("server.role_granted", {} :: { [string]: boolean })
-local tab = ui.state("server.role_tab", 1)
-local search = ui.state("server.role_search", "")
+local draft_name = ui.state("role_name", "")
+local draft_color = ui.state("role_color", "")
+local draft_hoist = ui.state("role_hoist", false)
+local draft_mentionable = ui.state("role_mentionable", false)
+local draft_granted = ui.state("role_granted", {} :: { [string]: boolean })
+local tab = ui.state("role_tab", 1)
+local rights_query = ui.state("rights_query", "")
+local roles_query = ui.state("roles_query", "")
+
+local function n(token: string): number
+	return theme.number(token)()
+end
 
 local function role(): state.ServerRole?
 	return state.server.role:get()
+end
+
+local function rows(): { state.ServerRoleRow }
+	local value = state.server.roles:get()
+	return if value then value.rows else {}
 end
 
 local function granted_set(list: { number }): { [string]: boolean }
@@ -107,164 +115,358 @@ local function save()
 	})
 end
 
+local function matches(entry: state.ServerRoleRow): boolean
+	local wanted = string.lower(roles_query:get())
+	return wanted == "" or string.find(string.lower(entry.name), wanted, 1, true) ~= nil
+end
+
+local function listed(): { state.ServerRoleRow }
+	local found = {}
+	for _, entry in rows() do
+		if not entry.everyone and matches(entry) then
+			table.insert(found, entry)
+		end
+	end
+	return found
+end
+
+local function neighbour(entry: state.ServerRoleRow, step: number): state.ServerRoleRow?
+	local all = rows()
+	for index, found in all do
+		if found.id == entry.id then
+			local other = all[index + step]
+			return if other and other.movable then other else nil
+		end
+	end
+	return nil
+end
+
+local function accepts(entry: state.ServerRoleRow): (any) -> boolean
+	return function(payload: any): boolean
+		return entry.movable and type(payload) == "table" and payload.role ~= nil and payload.role ~= entry.id
+	end
+end
+
+local function more_menu(entry: state.ServerRoleRow)
+	local open = ui.use_state(false)
+	local items = {}
+	local above = neighbour(entry, -1)
+	local below = neighbour(entry, 1)
+	if above then
+		table.insert(
+			items,
+			ui.menu_item {
+				"Move Up",
+				id = "role_up_" .. entry.id,
+				on_click = function()
+					actions.server_action("role_drop", { id = entry.id, onto = above.id })
+				end,
+			}
+		)
+	end
+	if below then
+		table.insert(
+			items,
+			ui.menu_item {
+				"Move Down",
+				id = "role_down_" .. entry.id,
+				on_click = function()
+					actions.server_action("role_drop", { id = entry.id, onto = below.id })
+				end,
+			}
+		)
+	end
+	table.insert(
+		items,
+		ui.menu_item {
+			"Edit Role",
+			id = "role_open_" .. entry.id,
+			on_click = function()
+				actions.server_action("role_open", entry.id)
+			end,
+		}
+	)
+	return ui.menu {
+		open = open,
+		label = "Role options",
+		w = theme.size.menu_width,
+		px = theme.size.space_8,
+		py = theme.size.space_6,
+		gap = theme.size.space_2,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		placement = { side = "bottom", align = "end", offset = 4 },
+		anchor = kit.round_button {
+			id = "role_more_" .. entry.id,
+			name = "more",
+			tooltip = "More",
+			size = n(theme.size.button_size) + n(theme.size.space_4),
+			bg = theme.color.bg_3,
+			tint = theme.color.text_4,
+			on_click = ui.toggle(open),
+		},
+		table.unpack(items),
+	}
+end
+
+local MEMBERS_COLUMN = function()
+	return n(theme.size.space_40) * 2
+end
+local ACTIONS_COLUMN = function()
+	return n(theme.size.button_size) * 2 + n(theme.size.space_16)
+end
+
 local role_row = ui.component(function(props: { entry: state.ServerRoleRow })
 	local entry = props.entry
 	local hovered = ui.use_state(false)
-	return ui.button {
+	local over = ui.use_state(false)
+	return ui.row {
+		id = "role_row_" .. entry.id,
 		w_full = true,
-		h = theme.size.list_row_height,
-		px = theme.size.space_12,
+		h = theme.size.space_56,
+		px = theme.size.space_8,
 		gap = theme.size.space_12,
 		items = "center",
-		border = 0,
-		focus = { border = 0 },
 		rounded = theme.size.radius_sm,
-		cursor = "pointer",
-		bg = function()
-			return if hovered:get() then theme.color.modifier_hover else "#00000000"
+		border_sides = { 0, 0, 1, 0 },
+		border_color = function()
+			if over:get() then
+				return theme.color.accent_2
+			end
+			return if hovered:get() then CLEAR else theme.color.border
 		end,
+		bg = function()
+			if over:get() then
+				return theme.color.active
+			end
+			return if hovered:get() then theme.color.hover else CLEAR
+		end,
+		cursor = "pointer",
 		on_hover = function(inside: boolean)
 			hovered:set(inside)
 		end,
 		on_click = function()
 			actions.server_action("role_open", entry.id)
 		end,
+		on_drag = if entry.movable
+			then function()
+				return { role = entry.id }
+			end
+			else nil,
+		drop_when = accepts(entry),
+		on_drag_over = function()
+			over:set(true)
+		end,
+		on_drag_leave = function()
+			over:set(false)
+		end,
+		on_drop = function(payload: any)
+			over:set(false)
+			actions.server_action("role_drop", { id = payload.role, onto = entry.id })
+		end,
+		icon {
+			name = "grip",
+			size = theme.size.icon_size_sm :: any,
+			color = if entry.movable then theme.color.text_5 else CLEAR,
+		},
 		icon {
 			name = "shield",
-			size = theme.number(theme.size.glyph_md)(),
-			color = if entry.color ~= "" then entry.color else theme.color.interactive_muted,
+			size = theme.size.icon_size_md :: any,
+			color = if entry.color ~= "" then entry.color else theme.color.text_4,
 		},
-		widgets.label(entry.name, theme.size.font_md, theme.color.header_primary, {
+		kit.text(entry.name, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_2, {
 			weight = theme.weight.medium,
-			literal = true,
 			truncate = true,
 			grow = 1,
 			min_w = 0,
 		}),
 		ui.row {
+			w = MEMBERS_COLUMN(),
 			shrink = 0,
 			items = "center",
-			gap = theme.size.space_4,
-			icon { name = "members", size = theme.number(theme.size.glyph_sm)(), color = theme.color.text_muted },
-			widgets.label(tostring(entry.members), theme.size.font_sm, theme.color.text_muted, { literal = true }),
+			gap = theme.size.space_6,
+			kit.text(tostring(entry.members), theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_4, {
+				weight = theme.weight.medium,
+			}),
+			icon { name = "profile", size = theme.size.icon_size_xs :: any, color = theme.color.text_4 },
 		},
-		if entry.movable
-			then kit.icon_button {
-				name = "arrow_up",
-				tooltip = "Move up",
+		ui.row {
+			w = ACTIONS_COLUMN(),
+			shrink = 0,
+			justify = "end",
+			gap = theme.size.space_8,
+			kit.round_button {
+				id = "role_edit_" .. entry.id,
+				name = "edit",
+				tooltip = "Edit",
+				size = n(theme.size.button_size) + n(theme.size.space_4),
+				bg = theme.color.bg_3,
+				tint = theme.color.text_4,
 				on_click = function()
-					actions.server_action("role_move", { id = entry.id, up = true })
+					actions.server_action("role_open", entry.id)
 				end,
-			}
-			else nil,
-		if entry.movable
-			then kit.icon_button {
-				name = "arrow_down",
-				tooltip = "Move down",
-				on_click = function()
-					actions.server_action("role_move", { id = entry.id, up = false })
-				end,
-			}
-			else nil,
+			},
+			more_menu(entry),
+		},
 	}
 end)
 
+local function everyone_card()
+	return ui.presence(function()
+		for _, entry in rows() do
+			if entry.everyone then
+				return entry.id
+			end
+		end
+		return nil
+	end, function(id: string)
+		return ui.button {
+			id = "role_everyone",
+			label = "Default Permissions",
+			w_full = true,
+			gap = theme.size.space_16,
+			px = theme.size.space_16,
+			py = theme.size.space_12,
+			items = "center",
+			rounded = theme.size.radius_sm,
+			border = 0,
+			focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+			bg = theme.color.bg_3,
+			hover = { bg = theme.color.bg_2 },
+			cursor = "pointer",
+			on_click = function()
+				actions.server_action("role_open", id)
+			end,
+			ui.row {
+				w = theme.size.avatar_size_md,
+				h = theme.size.avatar_size_md,
+				shrink = 0,
+				rounded = theme.size.avatar_size_md,
+				justify = "center",
+				items = "center",
+				bg = theme.color.bg_2,
+				icon { name = "members", size = theme.size.icon_size_md :: any, color = theme.color.text_3 },
+			},
+			kit.label("Default Permissions", "@everyone • applies to all server members"),
+			icon { name = "chevron_right", size = theme.size.icon_size_md :: any, color = theme.color.text_4 },
+		}
+	end)
+end
+
 local function list()
-	local function roles()
-		return state.server.roles:get()
-	end
 	return ui.column {
 		w_full = true,
-		grow = 1,
-		min_h = 0,
+		gap = theme.size.space_16,
 		kit.title("Roles"),
+		ui.div {
+			w_full = true,
+			mt = -n(theme.size.space_8),
+			kit.hint("Use roles to group your server members and assign permissions."),
+		},
+		everyone_card(),
 		ui.row {
 			w_full = true,
-			shrink = 0,
-			items = "center",
-			justify = "between",
-			pb = theme.size.space_16,
-			widgets.hint(function()
-				local value = roles()
-				local count = if value then value.count else 0
-				return string.format("%d %s", count, if count == 1 then "role" else "roles")
-			end),
+			gap = theme.size.space_12,
+			kit.search_input(roles_query, "Search Roles", { id = "role_search" }),
 			kit.button {
+				id = "role_create",
 				text = "Create Role",
-				icon = "plus",
+				tone = "primary",
+				height = theme.size.select_height,
 				on_click = function()
 					actions.server_action("role_create")
 				end,
 			},
 		},
-		ui.scroll {
+		kit.hint("Members use the color of the highest role they have on this list. Drag roles to reorder them."),
+		ui.column {
 			w_full = true,
-			grow = 1,
-			min_h = 0,
-			ui.each(ui.computed(function()
-				local value = roles()
-				return if value then value.rows else {}
-			end), function(entry: state.ServerRoleRow)
+			ui.row {
+				w_full = true,
+				gap = theme.size.space_12,
+				px = theme.size.space_8,
+				pb = theme.size.space_8,
+				border_sides = { 0, 0, 1, 0 },
+				border_color = theme.color.border,
+				ui.div {
+					grow = 1,
+					min_w = 0,
+					pl = n(theme.size.icon_size_sm) + n(theme.size.icon_size_md) + n(theme.size.space_24),
+					kit.eyebrow(function()
+						return "Roles — " .. tostring(#listed())
+					end),
+				},
+				ui.div { w = MEMBERS_COLUMN(), shrink = 0, kit.eyebrow("Members") },
+				ui.div { w = ACTIONS_COLUMN(), shrink = 0 },
+			},
+			ui.each(ui.computed(listed), function(entry: state.ServerRoleRow)
 				return role_row { entry = entry }
 			end, {
-				key = function(row: state.ServerRoleRow)
-					return row.id
+				key = function(entry: state.ServerRoleRow)
+					return entry.id .. "|" .. entry.name .. "|" .. entry.color .. "|" .. tostring(entry.members)
 				end,
 				w_full = true,
-				gap = theme.size.space_2,
-				pb = theme.size.space_32,
 			}),
+			ui.show(function()
+				return #listed() == 0 and roles_query:get() ~= ""
+			end, kit.empty("search", "No roles match your search.")),
 		},
 	}
 end
 
-local function segmented()
+local function tabs()
 	local pills = {}
 	for index, text in TABS do
 		table.insert(
 			pills,
 			ui.button {
-				h = SEGMENT,
+				id = "role_tab_" .. string.lower(text),
+				h = theme.size.button_height_sm,
 				px = theme.size.space_12,
 				items = "center",
 				rounded = theme.size.radius_sm,
-				border = 1,
-				focus = { border = 1 },
+				border = 0,
+				focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
 				cursor = "pointer",
-				border_color = function()
-					return if tab:get() == index then theme.color.brand else theme.color.divider
-				end,
 				bg = function()
-					return if tab:get() == index then theme.color.brand_selected else theme.color.background_secondary
+					return if tab:get() == index then theme.color.bg_2 else CLEAR
 				end,
+				hover = { bg = theme.color.bg_3 },
 				on_click = function()
 					tab:set(index)
 				end,
-				ui.text {
-					text,
-					literal = true,
-					text_size = theme.size.font_sm,
-					weight = theme.weight.medium,
-					color = function()
-						return if tab:get() == index then theme.color.interactive_active else theme.color.interactive_normal
-					end,
-				},
+				kit.text(text, theme.size.font_size_md, theme.size.line_height_label, function()
+					return if tab:get() == index then theme.color.text_2 else theme.color.text_4
+				end, { weight = theme.weight.medium }),
 			}
 		)
 	end
-	return ui.row { shrink = 0, gap = theme.size.space_8, pb = theme.size.space_16, table.unpack(pills) }
+	return ui.row {
+		w_full = true,
+		gap = theme.size.space_8,
+		pb = theme.size.space_12,
+		border_sides = { 0, 0, 1, 0 },
+		border_color = theme.color.border,
+		table.unpack(pills),
+	}
 end
 
-local function switch_row(title: string, note: string, value: any)
-	return widgets.row(title, note, widgets.switch {
-		label = title,
-		checked = function()
-			return value:get()
-		end,
-		on_change = function(checked: boolean)
-			value:set(checked)
-		end,
-	})
+local function switch_line(title: string, note: string, value: any)
+	return kit.line(
+		title,
+		note,
+		kit.switch {
+			label = title,
+			checked = function()
+				return value:get()
+			end,
+			on_change = function(checked: boolean)
+				value:set(checked)
+			end,
+		}
+	)
 end
 
 local function swatch(color: string)
@@ -273,14 +475,12 @@ local function swatch(color: string)
 		h = theme.size.settings_swatch,
 		p = 0,
 		rounded = theme.size.radius_sm,
-		border = SWATCH_BORDER,
-		focus = { border = SWATCH_BORDER },
+		border = theme.size.space_2,
+		focus = { border = theme.size.space_2 },
 		cursor = "pointer",
 		bg = color,
 		border_color = function()
-			return if string.lower(draft_color:get()) == color
-				then theme.color.interactive_active
-				else theme.color.background_primary
+			return if string.lower(draft_color:get()) == color then theme.color.text_2 else theme.color.bg_4
 		end,
 		on_click = function()
 			draft_color:set(color)
@@ -295,55 +495,63 @@ local function display_tab(current: state.ServerRole)
 	end
 	return ui.column {
 		w_full = true,
-		gap = theme.size.space_24,
-		if not current.everyone then kit.field("Role name", kit.input(draft_name, "")) else nil,
+		gap = theme.size.settings_row_gap,
+		if not current.everyone then kit.field("Role Name", kit.input(draft_name, "", { label = "Role Name" })) else nil,
 		kit.field(
-			"Role color",
+			"Role Color",
 			ui.column {
 				w_full = true,
 				gap = theme.size.space_12,
 				ui.row { w_full = true, flex_wrap = true, gap = theme.size.space_8, table.unpack(swatches) },
-				ui.div { w = theme.size.settings_nav_width, kit.input(draft_color, "#99aab5") },
+				ui.div { w = theme.size.settings_dialog_nav_width, kit.input(draft_color, "#99aab5", { label = "Role Color" }) },
 			}
 		),
-		switch_row(
-			"Display role members separately",
+		switch_line(
+			"Display role members separately from online members",
 			"Show members with this role in their own group in the member list.",
 			draft_hoist
 		),
-		switch_row("Allow anyone to @mention this role", "Members can ping everyone who has this role.", draft_mentionable),
+		switch_line("Allow anyone to @mention this role", "Members can ping everyone who has this role.", draft_mentionable),
 	}
 end
 
 local function permissions_tab()
 	local sections = {}
 	for _, group in state.server.rights:get() do
-		local rows = {}
+		local lines = {}
 		for _, right in group.rights do
 			table.insert(
-				rows,
+				lines,
 				ui.show(function()
-					local wanted = string.lower(search:get())
+					local wanted = string.lower(rights_query:get())
 					return wanted == "" or string.find(string.lower(right.name), wanted, 1, true) ~= nil
-				end, widgets.row(right.name, right.hint, widgets.switch {
-					label = right.name,
-					checked = function()
-						return draft_granted:get()[tostring(right.index)] == true
-					end,
-					on_change = function(checked: boolean)
-						local next = table.clone(draft_granted:get())
-						next[tostring(right.index)] = if checked then true else nil
-						draft_granted:set(next)
-					end,
-				}))
+				end, ui.div {
+					w_full = true,
+					pt = theme.size.space_16,
+					kit.line(
+						right.name,
+						right.hint,
+						kit.switch {
+							label = right.name,
+							checked = function()
+								return draft_granted:get()[tostring(right.index)] == true
+							end,
+							on_change = function(checked: boolean)
+								local next = table.clone(draft_granted:get())
+								next[tostring(right.index)] = if checked then true else nil
+								draft_granted:set(next)
+							end,
+						}
+					),
+				})
 			)
 		end
-		table.insert(sections, ui.column { w_full = true, kit.caption(group.title), table.unpack(rows) })
+		table.insert(sections, ui.column { w_full = true, kit.eyebrow(group.title), table.unpack(lines) })
 	end
 	return ui.column {
 		w_full = true,
-		gap = theme.size.space_16,
-		kit.input(search, "Search permissions"),
+		gap = theme.size.settings_row_gap,
+		kit.search_input(rights_query, "Search permissions"),
 		table.unpack(sections),
 	}
 end
@@ -351,61 +559,49 @@ end
 local function editor(current: state.ServerRole)
 	load(current)
 	tab:set(1)
-	search:set("")
+	rights_query:set("")
 	return ui.column {
 		w_full = true,
-		grow = 1,
-		min_h = 0,
+		gap = theme.size.space_16,
 		ui.row {
 			w_full = true,
-			shrink = 0,
 			items = "center",
 			gap = theme.size.space_12,
-			pb = theme.size.space_20,
-			kit.icon_button {
+			kit.round_button {
+				id = "role_back",
 				name = "chevron_left",
 				tooltip = "Back to roles",
+				size = n(theme.size.button_size),
+				bg = theme.color.bg_3,
 				on_click = function()
 					actions.server_action("role_open", "")
 				end,
 			},
-			widgets.label(current.title, theme.size.font_xl, theme.color.header_primary, {
-				weight = theme.weight.bold,
-				literal = true,
-				truncate = true,
+			ui.div {
 				grow = 1,
 				min_w = 0,
-			}),
+				kit.title("Edit Role — " .. current.title),
+			},
 			if current.deletable
 				then kit.button {
+					id = "role_delete",
 					text = "Delete Role",
-					tone = "danger_outline",
+					tone = "critical_secondary",
 					on_click = function()
 						actions.server_action("role_delete", current.id)
 					end,
 				}
 				else nil,
 		},
-		segmented(),
-		ui.scroll {
-			w_full = true,
-			grow = 1,
-			min_h = 0,
-			ui.column {
-				w_full = true,
-				pb = theme.size.space_32,
-				ui.show(function()
-					return tab:get() == 1
-				end, display_tab(current), permissions_tab()),
-			},
-		},
-		ui.show(dirty, kit.save_bar(function()
-			load(current)
-		end, save)),
+		tabs(),
+		ui.show(function()
+			return tab:get() == 1
+		end, display_tab(current), permissions_tab()),
 	}
 end
 
-return function()
+local function build()
+	roles_query:set("")
 	return ui.show(function()
 		return role() ~= nil
 	end, ui.presence(function()
@@ -416,3 +612,16 @@ return function()
 		return if current then editor(current) else ui.div {}
 	end), list())
 end
+
+return {
+	keywords = "roles permissions colors color hierarchy create role everyone",
+	build = build,
+	save_bar = function()
+		return ui.show(dirty, kit.save_bar(function()
+			local current = role()
+			if current then
+				load(current)
+			end
+		end, save))
+	end,
+}

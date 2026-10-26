@@ -1,94 +1,98 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local avatar = require("@components/avatar")
-local widgets = require("@settings/widgets")
-local kit = require("@settings/server_kit")
+local icon = require("@components/icon")
+local kit = require("./kit")
 
-local ROW_GAP = 8
-local NAME_COLUMN = 216
-local AVATAR = 32
+local query = ui.state("members_query", "")
 
-local query = ui.state("server.members_query", "")
+local function n(token: string): number
+	return theme.number(token)()
+end
 
 local function members()
 	return state.server.members:get()
 end
 
-local function row(entry: state.ServerMemberRow)
-	local badges = {}
-	for _, chip in entry.roles do
-		table.insert(badges, kit.badge(chip.name, chip.color, chip.tint))
+local function count_text(count: number): string
+	local digits = tostring(math.floor(count))
+	local grouped = string.reverse((string.gsub(string.reverse(digits), "(%d%d%d)", "%1,")))
+	return (string.gsub(grouped, "^,", ""))
+end
+
+local COLUMNS: { kit.Column } = {
+	{ title = "Name", grow = 1.6 },
+	{ title = "Member since", grow = 1 },
+	{ title = "Roles", grow = 1.4 },
+	{ title = "", w = function()
+		return n(theme.size.space_24)
+	end },
+}
+
+local function open_menu(entry: state.ServerMemberRow)
+	return function(event: any)
+		actions.server_action("member_menu", { id = entry.id, x = event.x, y = event.y })
+		return nil
 	end
-	return ui.row {
-		w_full = true,
-		h = theme.number(theme.size.list_row_height)() + ROW_GAP,
-		px = theme.size.space_12,
-		gap = theme.size.space_12,
-		items = "center",
-		border_sides = { 0, 0, 1, 0 },
-		border_color = theme.color.divider,
-		context_menu = function(event: any)
-			actions.server_action("member_menu", { id = entry.id, x = event.x, y = event.y })
-			return nil
-		end,
-		avatar { src = entry.avatar, size = AVATAR },
-		ui.column {
-			w = NAME_COLUMN,
-			shrink = 0,
-			min_w = 0,
-			widgets.label(entry.name, theme.size.font_md, if entry.color ~= "" then entry.color else theme.color.header_primary, {
-				weight = theme.weight.semibold,
-				literal = true,
+end
+
+local function row(entry: state.ServerMemberRow)
+	local chips = {}
+	for _, chip in entry.roles do
+		table.insert(chips, kit.chip(chip.name, chip.color))
+	end
+	return kit.table_row {
+		id = "member_row_" .. entry.id,
+		columns = COLUMNS,
+		context_menu = open_menu(entry),
+		cells = {
+			kit.person(entry.avatar, entry.name, entry.color, entry.username),
+			kit.text(entry.since or "", theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_3, {
 				truncate = true,
+				min_w = 0,
 			}),
-			widgets.label(entry.username, theme.size.font_sm, theme.color.text_muted, { literal = true, truncate = true }),
+			ui.row { min_w = 0, flex_wrap = true, gap = theme.size.space_4, table.unpack(chips) },
+			ui.show(function()
+				local value = members()
+				return value ~= nil and value.actions
+			end, ui.button {
+				id = "member_more_" .. entry.id,
+				w = theme.size.space_24,
+				h = theme.size.space_24,
+				shrink = 0,
+				p = 0,
+				border = 0,
+				focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+				rounded = theme.size.radius_sm,
+				justify = "center",
+				items = "center",
+				cursor = "pointer",
+				tooltip = "More",
+				label = "More",
+				bg = "#00000000",
+				hover = { bg = theme.color.hover },
+				on_press = function(event: any)
+					actions.server_action("member_menu", { id = entry.id, x = event.x, y = event.y })
+				end,
+				icon { name = "more", size = theme.size.icon_size_sm :: any, color = theme.color.text_4 },
+			}),
 		},
-		ui.row {
-			grow = 1,
-			min_w = 0,
-			flex_wrap = true,
-			gap = theme.size.space_4,
-			table.unpack(badges),
-		},
-		ui.show(function()
-			local value = members()
-			return value ~= nil and value.actions
-		end, ui.button {
-			w = 28,
-			h = 28,
-			shrink = 0,
-			p = 0,
-			border = 0,
-			focus = { border = 0 },
-			rounded = theme.size.radius_sm,
-			justify = "center",
-			items = "center",
-			cursor = "pointer",
-			tooltip = "More",
-			bg = "#00000000",
-			on_press = function(event: any)
-				actions.server_action("member_menu", { id = entry.id, x = event.x, y = event.y })
-			end,
-			require("@components/icon") { name = "more", size = 16, color = theme.color.interactive_normal },
-		}),
 	}
 end
 
-return function()
+local function build()
 	ui.effect(function()
 		actions.server_action("members_search", query:get())
 	end)
 	return ui.column {
 		w_full = true,
-		grow = 1,
-		min_h = 0,
-		kit.title("Members"),
-		ui.div {
+		gap = theme.size.space_16,
+		kit.title("Server Members"),
+		ui.row {
 			w_full = true,
-			shrink = 0,
-			pb = theme.size.space_16,
-			kit.input(query, "Search members", {
+			gap = theme.size.space_12,
+			kit.search_input(query, "Search by username or id", {
+				id = "members_search",
 				on_key = function(event: any): boolean?
 					if event.key == "Enter" then
 						actions.server_action("members_remote", query:get())
@@ -97,12 +101,53 @@ return function()
 					return false
 				end,
 			}),
+			kit.select {
+				id = "members_sort",
+				labels = state.server.member_sorts:peek(),
+				w = n(theme.size.settings_column_width) * 0.32,
+				current = function()
+					local value = members()
+					return (if value then value.sort or 0 else 0) + 1
+				end,
+				pick = function(index: number)
+					actions.server_action("members_sort", index - 1)
+				end,
+			},
 		},
-		kit.caption(function()
+		kit.text(function()
 			local value = members()
-			local total = if value then value.total else 0
-			return string.format("%d %s", total, if total == 1 then "member" else "members")
-		end),
-		kit.rows(members, row, kit.empty("members", "No members match your search.")),
+			if not value then
+				return ""
+			end
+			local count = value.count or value.total
+			return string.format(
+				"Showing %s of %s %s",
+				count_text(value.shown or #value.rows),
+				count_text(count),
+				if count == 1 then "member" else "members"
+			)
+		end, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_4, { weight = theme.weight.medium }),
+		ui.column {
+			w_full = true,
+			kit.table_head(COLUMNS),
+			ui.each(ui.computed(function()
+				local value = members()
+				return if value then value.rows else {}
+			end), row, {
+				key = function(entry: state.ServerMemberRow)
+					return entry.id .. "|" .. entry.name .. "|" .. entry.avatar .. "|" .. entry.color .. "|" .. (entry.since or "")
+				end,
+				w_full = true,
+			}),
+			ui.show(function()
+				local value = members()
+				return value ~= nil and #value.rows == 0
+			end, kit.empty("members", "No members match your search.")),
+		},
 	}
 end
+
+return {
+	keywords = "members people search kick ban timeout nickname roles member since",
+	build = build,
+}

@@ -287,7 +287,7 @@ export type ForumCard = {
 
 export type ServerPageEntry = { key: string, title: string, icon: string }
 export type ServerGroup = { title: string, pages: { ServerPageEntry } }
-export type ServerGuild = { id: string, name: string, groups: { ServerGroup } }
+export type ServerGuild = { id: string, name: string, icon: string?, acronym: string?, groups: { ServerGroup } }
 export type ServerOverview = { name: string, description: string, icon: string, pending: boolean }
 export type ServerRoleRow = {
 	id: string,
@@ -318,9 +318,18 @@ export type ServerMemberRow = {
 	color: string,
 	avatar: string,
 	roles: { ServerChip },
+	since: string?,
 }
 export type ServerUpload = { serial: number, name: string, preview: string }
-export type ServerEmojiRow = { id: string, name: string, image: string, uploader: string, avatar: string }
+export type ServerEmojiRow = {
+	id: string,
+	name: string,
+	image: string,
+	uploader: string,
+	avatar: string,
+	animated: boolean?,
+	color: string?,
+}
 export type ServerStickerRow = { id: string, name: string, tags: string, image: string }
 export type ServerInviteRow = {
 	id: string,
@@ -330,8 +339,9 @@ export type ServerInviteRow = {
 	uses: string,
 	expires: string,
 	temporary: boolean,
+	color: string?,
 }
-export type ServerBanRow = { id: string, name: string, reason: string, avatar: string }
+export type ServerBanRow = { id: string, name: string, username: string?, reason: string, avatar: string }
 export type ServerAuditChange = { key: string, old: string, new: string }
 export type ServerAuditRow = {
 	id: string,
@@ -340,7 +350,11 @@ export type ServerAuditRow = {
 	avatar: string,
 	changes: { ServerAuditChange },
 	reason: string,
+	parts: { { text: string, strong: boolean } }?,
+	icon: string?,
+	tone: string?,
 }
+export type ServerAuditPerson = { id: string, name: string }
 
 local M = {}
 
@@ -582,13 +596,23 @@ M.server = {
 	roles = ui.shared("server.roles", nil :: { count: number, rows: { ServerRoleRow } }?),
 	role = ui.shared("server.role", nil :: ServerRole?),
 	rights = ui.shared("server.rights", {} :: { ServerRightGroup }),
-	members = ui.shared("server.members", nil :: { total: number, rows: { ServerMemberRow }, actions: boolean }?),
+	members = ui.shared("server.members", nil :: {
+		total: number,
+		rows: { ServerMemberRow },
+		actions: boolean,
+		shown: number?,
+		count: number?,
+		sort: number?,
+	}?),
+	member_sorts = ui.shared("server.member_sorts", {} :: { string }),
 	bans = ui.shared("server.bans", nil :: { loaded: boolean, has_more: boolean, rows: { ServerBanRow } }?),
 	audit = ui.shared("server.audit", nil :: {
 		loaded: boolean,
 		has_more: boolean,
 		filter: number,
 		rows: { ServerAuditRow },
+		people: { ServerAuditPerson }?,
+		person: number?,
 	}?),
 	audit_filters = ui.shared("server.audit_filters", {} :: { string }),
 	emoji = ui.shared("server.emoji", nil :: {
@@ -601,6 +625,7 @@ M.server = {
 	stickers = ui.shared("server.stickers", nil :: {
 		count: number,
 		slots: number,
+		tier: number?,
 		rows: { ServerStickerRow },
 		upload: ServerUpload?,
 	}?),

@@ -88,11 +88,12 @@ pub use gif_picker::{
 	gif_still, gif_tile_height, is_video_url,
 };
 pub use guild_admin::{
-	AUDIT_FILTERS, AuditChangeLine, AuditRow, BAN_HISTORY_CHOICES, BanRow, DEFAULT_TIMEOUT, GuildAccess,
-	MEMBER_ROW_LIMIT, MODERATION_PERMISSIONS, MemberRow, ModerationItem, NICKNAME_LIMIT, REASON_LIMIT,
-	RIGHT_GROUPS, Right, RightGroup, RoleChoice, RoleRow, SERVER_GROUPS, ServerPage, TIMEOUT_CHOICES,
-	VoiceChoice, audit_filter, audit_rows, audit_sentence, ban_rows, member_rows, moderation_items,
-	role_color, role_rows, role_swap, sorted_roles, trimmed,
+	AUDIT_FILTERS, AuditChangeLine, AuditRow, AuditTone, BAN_HISTORY_CHOICES, BanRow, DEFAULT_TIMEOUT,
+	GuildAccess, MEMBER_ROW_LIMIT, MEMBER_SORTS, MODERATION_PERMISSIONS, MemberRow, MemberSort,
+	ModerationItem, NICKNAME_LIMIT, REASON_LIMIT, RIGHT_GROUPS, Right, RightGroup, RoleChoice, RoleRow,
+	SERVER_GROUPS, ServerPage, TIMEOUT_CHOICES, VoiceChoice, audit_filter, audit_icon, audit_parts,
+	audit_rows, audit_sentence, ban_rows, member_rows, moderation_items, role_color, role_move_to, role_rows,
+	sorted_roles, trimmed,
 };
 pub use hidden::{
 	HiddenChannel, ModeratorNotes, Overwriter, channel_kind_label, hidden_channel, moderator_notes,

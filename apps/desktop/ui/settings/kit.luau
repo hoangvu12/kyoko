@@ -2,6 +2,7 @@ local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
+local avatar = require("@components/avatar")
 local search = require("./search")
 
 export type Option = { label: string, value: any }
@@ -248,13 +249,20 @@ local function ink(tone: string): string
 	return theme.color.text_3
 end
 
-M.button = ui.component(function(props: { text: string, tone: string?, on_click: () -> (), id: string?, icon: string? })
+M.button = ui.component(function(props: {
+	text: string,
+	tone: string?,
+	on_click: () -> (),
+	id: string?,
+	icon: string?,
+	height: string?,
+})
 	local hovered = ui.use_state(false)
 	local tone = props.tone or "secondary"
 	local solid = tone == "primary" or tone == "critical"
 	return ui.button {
 		id = props.id,
-		h = theme.size.button_height_sm,
+		h = props.height or theme.size.button_height_sm,
 		px = theme.size.space_16,
 		gap = theme.size.space_8,
 		shrink = 0,
@@ -626,6 +634,434 @@ function M.page(spec: Spec)
 		table.insert(parts, M.section(heading))
 	end
 	return ui.column { w_full = true, table.unpack(parts) }
+end
+
+function M.title(content: any, action: any?)
+	return ui.row {
+		w_full = true,
+		items = "center",
+		justify = "between",
+		gap = theme.size.space_16,
+		M.text(content, theme.size.font_size_xl, theme.size.line_height_xl, theme.color.text_2, {
+			weight = theme.weight.semibold,
+			min_w = 0,
+			truncate = true,
+		}),
+		action,
+	}
+end
+
+function M.eyebrow(content: any)
+	return M.text(function()
+		return string.upper(if type(content) == "function" then content() else content)
+	end, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4, {
+		weight = theme.weight.bold,
+		shrink = 0,
+	})
+end
+
+function M.field(caption: string, content: any)
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_8,
+		M.eyebrow(caption),
+		content,
+	}
+end
+
+local function input_props(extra: { [string]: any }?): { [string]: any }
+	local props: { [string]: any } = {
+		w_full = true,
+		h = theme.size.input_height,
+		px = theme.size.space_12,
+		rounded = theme.size.radius_sm,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border_light,
+		hover = { border_color = theme.color.border },
+		focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+		bg = theme.color.bg_3,
+		text_size = theme.size.font_size_md,
+		color = theme.color.text_3,
+		placeholder_color = theme.color.text_5,
+	}
+	for key, value in extra or {} do
+		props[key] = value
+	end
+	return props
+end
+
+function M.input(value: any, placeholder: string, extra: { [string]: any }?)
+	local props = input_props(extra)
+	props.value = value
+	props.placeholder = placeholder
+	props.label = props.label or placeholder
+	return ui.input(props)
+end
+
+function M.textarea(value: any, placeholder: string, lines: number, extra: { [string]: any }?)
+	local props = input_props(extra)
+	props.value = value
+	props.placeholder = placeholder
+	props.label = props.label or placeholder
+	props.wrap = true
+	props.h = lines * theme.number(theme.size.line_height_label)() + theme.number(theme.size.space_10)() * 2
+	props.py = theme.size.space_10
+	props.line_height = theme.size.line_height_label
+	return ui.textarea(props)
+end
+
+function M.search_input(value: any, placeholder: string, extra: { [string]: any }?)
+	local props = input_props(extra)
+	props.value = value
+	props.placeholder = placeholder
+	props.label = placeholder
+	props.grow = 1
+	props.min_w = 0
+	props.h = theme.size.select_height
+	props.pr = theme.size.space_40
+	return ui.div {
+		relative = true,
+		grow = 1,
+		min_w = 0,
+		ui.input(props),
+		ui.row {
+			absolute = true,
+			top = 0,
+			bottom = 0,
+			right = theme.number(theme.size.space_12)(),
+			items = "center",
+			pointer_events = "none",
+			icon { name = "search", size = theme.size.icon_size_sm :: any, color = theme.color.text_4 },
+		},
+	}
+end
+
+M.select = ui.component(function(props: {
+	labels: { string },
+	current: () -> number,
+	pick: (number) -> (),
+	id: string?,
+	w: any?,
+	grow: number?,
+	prefix: string?,
+})
+	local open = ui.use_state(false)
+	local items = {}
+	for index, text in props.labels do
+		table.insert(
+			items,
+			ui.menu_item {
+				text,
+				id = if props.id then props.id .. "_" .. tostring(index) else nil,
+				h = theme.size.settings_item_height,
+				checked = function()
+					return props.current() == index
+				end,
+				on_click = function()
+					props.pick(index)
+				end,
+			}
+		)
+	end
+	local menu = ui.menu {
+		open = open,
+		label = "Choose",
+		match_anchor_width = true,
+		px = theme.size.space_8,
+		py = theme.size.space_6,
+		gap = theme.size.space_2,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		placement = { side = "bottom", align = "start", offset = 4 },
+		anchor = ui.button {
+			id = props.id,
+			w_full = true,
+			min_w = 0,
+			h = theme.size.select_height,
+			px = theme.size.space_12,
+			gap = theme.size.space_8,
+			shrink = 0,
+			items = "center",
+			rounded = theme.size.radius_sm,
+			border = theme.size.border_thickness,
+			border_color = theme.color.border_light,
+			hover = { border_color = theme.color.border },
+			focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+			bg = theme.color.bg_3,
+			cursor = "pointer",
+			on_click = ui.toggle(open),
+			M.text(function()
+				return (props.prefix or "") .. (props.labels[props.current()] or "")
+			end, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_3, {
+				grow = 1,
+				min_w = 0,
+				truncate = true,
+			}),
+			icon { name = "chevron_down", size = theme.size.icon_size_md :: any, color = theme.color.text_3 },
+		},
+		table.unpack(items),
+	}
+	return ui.div {
+		w = props.w,
+		grow = props.grow,
+		basis = if props.grow then 0 else nil,
+		shrink = if props.w then 0 else 1,
+		min_w = 0,
+		menu,
+	}
+end)
+
+export type Column = { title: string, grow: number?, w: any? }
+
+local function cell(column: Column, content: any)
+	return ui.row {
+		grow = column.grow or 0,
+		basis = if column.grow then 0 else nil,
+		w = column.w,
+		shrink = if column.w then 0 else 1,
+		min_w = 0,
+		items = "center",
+		gap = theme.size.space_8,
+		content,
+	}
+end
+
+function M.table_head(columns: { Column }, extra: { [string]: any }?)
+	local cells = {}
+	for _, column in columns do
+		table.insert(cells, cell(column, if column.title ~= "" then M.eyebrow(column.title) else nil))
+	end
+	local props: { [string]: any } = {
+		w_full = true,
+		gap = theme.size.space_12,
+		px = theme.size.space_8,
+		pb = theme.size.space_8,
+		border_sides = { 0, 0, 1, 0 },
+		border_color = theme.color.border,
+	}
+	for key, value in extra or {} do
+		props[key] = value
+	end
+	for _, made in cells do
+		table.insert(props, made)
+	end
+	return ui.row(props)
+end
+
+M.table_row = ui.component(function(props: {
+	columns: { Column },
+	cells: { any },
+	id: string?,
+	label: string?,
+	on_click: (() -> ())?,
+	on_press: ((any) -> ())?,
+	context_menu: ((any) -> any)?,
+	actions: ((() -> boolean) -> any)?,
+	height: any?,
+})
+	local hovered = ui.use_state(false)
+	local function hover(): boolean
+		return hovered:get()
+	end
+	local body: { [string]: any } = {
+		id = props.id,
+		label = props.label,
+		relative = true,
+		w_full = true,
+		min_h = props.height or theme.size.space_56,
+		gap = theme.size.space_12,
+		p = theme.size.space_8,
+		items = "center",
+		rounded = theme.size.radius_sm,
+		border = 0,
+		border_sides = { 0, 0, 1, 0 },
+		border_color = function()
+			return if hovered:get() then CLEAR else theme.color.border
+		end,
+		focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+		bg = function()
+			return if hovered:get() then theme.color.hover else CLEAR
+		end,
+		cursor = if props.on_click or props.on_press then "pointer" else nil,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		on_click = props.on_click,
+		on_press = props.on_press,
+		context_menu = props.context_menu,
+	}
+	for index, column in props.columns do
+		table.insert(body, cell(column, props.cells[index]))
+	end
+	if props.actions then
+		table.insert(body, props.actions(hover))
+	end
+	if props.on_click or props.on_press then
+		return ui.button(body)
+	end
+	return ui.row(body)
+end)
+
+function M.round_button(props: {
+	name: string,
+	tooltip: string,
+	on_click: (() -> ())?,
+	on_press: ((any) -> ())?,
+	tint: any?,
+	id: string?,
+	size: any?,
+	bg: any?,
+})
+	return ui.button {
+		id = props.id,
+		w = props.size or theme.size.space_24,
+		h = props.size or theme.size.space_24,
+		shrink = 0,
+		p = 0,
+		border = 0,
+		focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+		rounded = props.size or theme.size.space_24,
+		justify = "center",
+		items = "center",
+		cursor = "pointer",
+		tooltip = props.tooltip,
+		label = props.tooltip,
+		bg = props.bg or theme.color.bg_4,
+		hover = { bg = theme.color.bg_2 },
+		on_click = props.on_click,
+		on_press = props.on_press,
+		icon { name = props.name, size = theme.size.icon_size_sm :: any, color = props.tint or theme.color.text_3 },
+	}
+end
+
+function M.row_actions(shown: () -> boolean, ...: any)
+	return ui.show(shown, ui.row {
+		absolute = true,
+		top = 0,
+		bottom = 0,
+		right = theme.number(theme.size.space_8)(),
+		items = "center",
+		gap = theme.size.space_8,
+		...,
+	})
+end
+
+function M.person(src: string, name: string, color: string?, sub: string?, size: string?)
+	local side = theme.number(size or theme.size.avatar_size_sm)()
+	return ui.row {
+		min_w = 0,
+		items = "center",
+		gap = theme.size.space_8,
+		ui.div {
+			w = side,
+			h = side,
+			shrink = 0,
+			rounded = side,
+			bg = theme.color.bg_2,
+			if src ~= "" then avatar { src = src, size = side } else nil,
+		},
+		ui.column {
+			min_w = 0,
+			M.text(name, theme.size.font_size_sm, theme.size.line_height_sm, if color and color ~= "" then color else theme.color.text_2, {
+				weight = theme.weight.semibold,
+				truncate = true,
+				min_w = 0,
+			}),
+			if sub and sub ~= ""
+				then M.text(sub, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4, {
+					truncate = true,
+					min_w = 0,
+				})
+				else nil,
+		},
+	}
+end
+
+function M.chip(name: string, color: string?)
+	return ui.row {
+		h = theme.size.space_20,
+		shrink = 0,
+		px = theme.size.space_6,
+		gap = theme.size.space_4,
+		items = "center",
+		rounded = theme.size.radius_xs,
+		bg = theme.color.bg_2,
+		ui.div {
+			w = theme.size.space_8,
+			h = theme.size.space_8,
+			shrink = 0,
+			rounded = theme.size.space_8,
+			bg = if color and color ~= "" then color else theme.color.text_4,
+		},
+		M.text(name, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_3, {
+			weight = theme.weight.medium,
+		}),
+	}
+end
+
+function M.save_bar(on_reset: () -> (), on_save: () -> ())
+	return ui.row {
+		id = "settings_save_bar",
+		absolute = true,
+		left = 0,
+		right = 0,
+		bottom = theme.number(theme.size.space_16)(),
+		justify = "center",
+		px = theme.size.space_24,
+		ui.row {
+			grow = 1,
+			max_w = theme.size.settings_column_width,
+			items = "center",
+			gap = theme.size.space_12,
+			py = theme.size.space_10,
+			pr = theme.size.space_10,
+			pl = theme.size.space_16,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.bg_3,
+			border = theme.size.border_thickness,
+			border_color = theme.color.border,
+			M.text("Careful — you have unsaved changes!", theme.size.font_size_md, theme.size.line_height_label, theme.color.text_3, {
+				weight = theme.weight.medium,
+				grow = 1,
+				min_w = 0,
+				wrap = true,
+			}),
+			ui.button {
+				id = "settings_save_reset",
+				h = theme.size.button_height_md,
+				px = theme.size.space_16,
+				border = 0,
+				focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
+				bg = CLEAR,
+				cursor = "pointer",
+				hover = { underline = true },
+				on_click = on_reset,
+				M.text("Reset", theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_3, {
+					weight = theme.weight.medium,
+				}),
+			},
+			M.button {
+				id = "settings_save_changes",
+				text = "Save Changes",
+				tone = "primary",
+				height = theme.size.button_height_md,
+				on_click = on_save,
+			},
+		},
+	}
+end
+
+function M.empty(glyph: string, content: string)
+	return ui.column {
+		w_full = true,
+		items = "center",
+		gap = theme.size.space_8,
+		py = theme.size.space_40,
+		icon { name = glyph, size = theme.size.icon_size_lg :: any, color = theme.color.text_5 },
+		M.hint(content),
+	}
 end
 
 function M.web_note(content: string)

@@ -1,18 +1,14 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local widgets = require("@settings/widgets")
-local kit = require("@settings/server_kit")
+local kit = require("./kit")
 
-local TILE = 96
 local NAME_LIMIT = 100
 local DESCRIPTION_LINES = 3
-local LINE = 22
-local TEXT_INSET = 10
-local TEXT_TOP = 8
 
-local name = ui.state("server.overview_name", "")
-local description = ui.state("server.overview_description", "")
+local name = ui.state("name", "")
+local description = ui.state("description", "")
+local picking = false
 
 local function saved(): state.ServerOverview
 	return state.server.overview:get() or { name = "", description = "", icon = "", pending = false }
@@ -35,6 +31,10 @@ local function description_changed(): boolean
 	return trimmed(description:get()) ~= saved().description
 end
 
+local function dirty(): boolean
+	return name_changed() or description_changed() or saved().pending
+end
+
 local function reset()
 	local current = saved()
 	name:set(current.name)
@@ -42,7 +42,12 @@ local function reset()
 	actions.server_action("reset_icon")
 end
 
-local picking = false
+local function save()
+	actions.server_action("save_overview", {
+		name = if name_changed() then wanted_name() else nil,
+		description = if description_changed() then trimmed(description:get()) else nil,
+	})
+end
 
 local function pick_icon()
 	if picking then
@@ -51,20 +56,13 @@ local function pick_icon()
 	picking = true
 	ui.task(function()
 		local ok, files = pcall(function()
-			return ui.open_files({ title = "Upload Icon", multiple = false }):await()
+			return ui.open_files({ title = "Upload Image", multiple = false }):await()
 		end)
 		picking = false
 		if ok and files[1] then
 			actions.server_action("icon", files[1].path)
 		end
 	end)
-end
-
-local function save()
-	actions.server_action("save_overview", {
-		name = if name_changed() then wanted_name() else nil,
-		description = if description_changed() then trimmed(description:get()) else nil,
-	})
 end
 
 local function initials(text: string): string
@@ -76,30 +74,34 @@ local function initials(text: string): string
 end
 
 local function tile()
+	local side = theme.number(theme.size.avatar_size_lg)() + theme.number(theme.size.space_20)()
 	return ui.row {
-		w = TILE,
-		h = TILE,
+		id = "server_overview_icon",
+		w = side,
+		h = side,
 		shrink = 0,
-		rounded = TILE,
+		rounded = theme.size.radius_lg,
 		overflow = "hidden",
 		justify = "center",
 		items = "center",
-		bg = theme.color.background_tertiary,
+		bg = theme.color.text_1,
 		ui.presence(function()
-			local icon = saved().icon
-			return if icon ~= "" then icon else nil
-		end, function(icon: string)
-			return ui.image { src = icon, w = TILE, h = TILE, fit = "cover" }
+			local picture = saved().icon
+			return if picture ~= "" then picture else nil
+		end, function(picture: string)
+			return ui.image { src = picture, w = side, h = side, fit = "cover" }
 		end),
 		ui.show(function()
 			return saved().icon == ""
-		end, widgets.label(function()
+		end, kit.text(function()
 			return initials(saved().name)
-		end, theme.size.font_lg, theme.color.header_primary, { literal = true })),
+		end, theme.size.font_size_xl, theme.size.line_height_xl, theme.color.accent_5, {
+			weight = theme.weight.bold,
+		})),
 	}
 end
 
-return function()
+local function follow_saved()
 	local seen: state.ServerOverview? = nil
 	ui.effect(function()
 		local current = state.server.overview:get()
@@ -109,65 +111,52 @@ return function()
 			description:set(current.description)
 		end
 	end)
+end
+
+local function build()
+	follow_saved()
 	return ui.column {
 		w_full = true,
-		grow = 1,
-		min_h = 0,
-		kit.title("Overview"),
-		ui.scroll {
+		kit.title("Server Overview"),
+		ui.row {
 			w_full = true,
-			grow = 1,
-			min_h = 0,
+			mt = theme.size.settings_row_gap,
+			gap = theme.size.space_24,
+			items = "start",
+			tile(),
 			ui.column {
-				w_full = true,
-				gap = theme.size.space_24,
-				pb = theme.size.space_32,
-				ui.row {
-					items = "center",
-					gap = theme.size.space_24,
-					tile(),
-					ui.column {
-						items = "start",
-						gap = theme.size.space_8,
-						kit.button {
-							text = "Upload Icon",
-							on_click = pick_icon,
-						},
-						widgets.hint("Minimum 128 by 128. A square image works best."),
-					},
-				},
-				kit.field("Server name", kit.input(name, "")),
-				kit.field(
-					"Description",
-					ui.div {
-						w_full = true,
-						px = theme.size.space_12,
-						py = theme.size.space_8,
-						rounded = theme.size.radius_sm,
-						bg = theme.color.input_background,
-						ui.textarea {
-							value = description,
-							label = "Description",
-							placeholder = "Tell people what this server is about",
-							placeholder_color = theme.color.text_muted,
-							wrap = true,
-							w_full = true,
-							h = DESCRIPTION_LINES * LINE + TEXT_TOP * 2,
-							px = TEXT_INSET,
-							py = TEXT_TOP,
-							bg = "#00000000",
-							border = 0,
-							focus = { border = 0 },
-							text_size = theme.size.font_sm,
-							line_height = LINE,
-							color = theme.color.text_normal,
-						},
-					}
-				),
+				grow = 1,
+				basis = 0,
+				min_w = 0,
+				gap = theme.size.space_8,
+				items = "start",
+				kit.hint("We recommend an image of at least 512x512 for the server."),
+				kit.button { id = "server_upload_icon", text = "Upload Image", on_click = pick_icon },
+			},
+			ui.column {
+				grow = 1,
+				basis = 0,
+				min_w = 0,
+				kit.field("Server Name", kit.input(name, "", { id = "server_overview_name", label = "Server Name" })),
 			},
 		},
-		ui.show(function()
-			return name_changed() or description_changed() or saved().pending
-		end, kit.save_bar(reset, save)),
+		kit.divider(),
+		kit.label("Server Description", "Tell people what this server is about."),
+		ui.div {
+			w_full = true,
+			mt = theme.size.space_12,
+			kit.textarea(description, "Tell people what this server is about", DESCRIPTION_LINES, {
+				id = "server_overview_description",
+				label = "Server Description",
+			}),
+		},
 	}
 end
+
+return {
+	keywords = "server overview profile name icon image upload description",
+	build = build,
+	save_bar = function()
+		return ui.show(dirty, kit.save_bar(reset, save))
+	end,
+}

@@ -336,6 +336,7 @@ pub enum Command {
 		guild_id: Snowflake,
 		before: Option<Snowflake>,
 		action_type: Option<i64>,
+		user_id: Option<Snowflake>,
 	},
 	LoadBans {
 		guild_id: Snowflake,

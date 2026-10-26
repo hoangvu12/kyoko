@@ -913,6 +913,7 @@ impl Shared {
 		guild_id: u64,
 		before: Option<u64>,
 		action_type: Option<i64>,
+		user_id: Option<u64>,
 	) -> Result<Value, ApiError> {
 		let store = self.store.lock();
 		self.live_guild(&store, guild_id)?;
@@ -923,6 +924,7 @@ impl Shared {
 			.flatten()
 			.filter(|entry| before.is_none_or(|before| parse_id(&entry["id"]).is_some_and(|id| id < before)))
 			.filter(|entry| action_type.is_none_or(|kind| entry["action_type"].as_i64() == Some(kind)))
+			.filter(|entry| user_id.is_none_or(|user| parse_id(&entry["user_id"]) == Some(user)))
 			.take(AUDIT_PAGE)
 			.collect();
 		let mut user_ids: BTreeSet<u64> = BTreeSet::new();

@@ -1,174 +1,129 @@
 local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
-local widgets = require("@settings/widgets")
-local frame = require("@settings/frame")
-local overview = require("@settings/server_overview")
-local roles = require("@settings/server_roles")
-local members = require("@settings/server_members")
-local bans = require("@settings/server_bans")
-local audit = require("@settings/server_audit")
-local emoji = require("@settings/server_emoji")
-local stickers = require("@settings/server_stickers")
-local invites = require("@settings/server_invites")
+local kit = require("@settings/kit")
+local dialog = require("@settings/dialog")
 
-local TOP = 60
-local NAV_PAD = 8
-local CONTENT_ROOM = 128
-local COLUMN_ROOM = 96
+export type ServerPageModule = { keywords: string, build: () -> any, save_bar: (() -> any)? }
 
-local BUILDERS: { [string]: () -> any } = {
-	overview = overview,
-	roles = roles,
-	members = members,
-	bans = bans,
-	["audit-log"] = audit,
-	emoji = emoji,
-	stickers = stickers,
-	invites = invites,
+local PAGES: { [string]: ServerPageModule } = {
+	overview = require("@settings/server_overview"),
+	roles = require("@settings/server_roles"),
+	members = require("@settings/server_members"),
+	bans = require("@settings/server_bans"),
+	["audit-log"] = require("@settings/server_audit"),
+	emoji = require("@settings/server_emoji"),
+	stickers = require("@settings/server_stickers"),
+	invites = require("@settings/server_invites"),
 }
 
-local function page_key(): string
-	return state.server.page:get()
+local function n(token: string): number
+	return theme.number(token)()
 end
 
-local function nav()
-	return ui.presence(function()
-		return state.server.guild:get()
-	end, function(guild: state.ServerGuild)
-		local items = {
-			ui.div {
-				px = NAV_PAD,
-				pb = theme.size.space_16,
-				widgets.label(guild.name, theme.size.font_md, theme.color.header_primary, {
-					weight = theme.weight.bold,
-					literal = true,
-					truncate = true,
-				}),
-			},
-		}
-		for _, group in guild.groups do
-			local entries = {
-				ui.div {
-					px = NAV_PAD,
-					pb = theme.size.space_4,
-					widgets.label(string.upper(group.title), theme.size.font_tiny, theme.color.header_secondary, {
-						weight = theme.weight.bold,
-						literal = true,
-					}),
-				},
-			}
-			for _, page in group.pages do
-				table.insert(
-					entries,
-					frame.nav_item {
-						title = page.title,
-						icon = page.icon,
-						selected = function()
-							return page_key() == page.key
-						end,
-						on_click = function()
-							actions.open_server_settings(page.key)
-						end,
-						height = theme.number(theme.size.control_height)(),
-						pad = NAV_PAD,
-						glyph = theme.number(theme.size.glyph_md)(),
-						id = "server_nav_" .. page.key,
-					}
-				)
+local function sections(): { dialog.Section }
+	local guild = state.server.guild:get()
+	local found = {}
+	for index, group in (guild and guild.groups) or {} do
+		local pages = {}
+		for _, entry in group.pages do
+			local module = PAGES[entry.key]
+			if module then
+				table.insert(pages, {
+					key = entry.key,
+					title = entry.title,
+					icon = entry.icon,
+					keywords = module.keywords,
+					build = module.build,
+				})
 			end
-			table.insert(
-				items,
-				ui.column {
-					w_full = true,
-					gap = theme.size.space_2,
-					pb = theme.size.space_16,
-					table.unpack(entries),
-				}
-			)
 		end
-		return ui.column {
-			w = theme.size.settings_nav_width,
-			h_full = true,
-			shrink = 0,
-			pt = TOP,
-			pr = theme.size.space_16,
-			table.unpack(items),
-		}
-	end)
+		table.insert(found, { key = tostring(index), title = group.title, pages = pages })
+	end
+	return found
 end
 
-local function content()
-	return ui.presence(function()
-		local key = page_key()
-		return if key ~= "" then key else nil
-	end, function(key: string)
-		local build = BUILDERS[key]
-		return if build then build() else ui.div {}
-	end)
-end
-
-local function view()
-	local root = ui.ref()
-	local nav_width = theme.number(theme.size.settings_nav_width)
-	local content_width = theme.number(theme.size.settings_content_width)
-	local function column_width(): number
-		local width = root.width or 0
-		return math.max(0, math.min(content_width(), width - nav_width() - CONTENT_ROOM))
-	end
-	local function left(): number
-		local width = root.width or 0
-		return math.max(0, (width - nav_width() - column_width() - COLUMN_ROOM) / 2) + nav_width()
-	end
-	return ui.row {
-		ref = root,
-		absolute = true,
-		top = theme.number(theme.size.title_bar_height),
-		left = 0,
-		right = 0,
-		bottom = 0,
-		bg = theme.color.background_primary,
-		color = theme.color.text_normal,
-		focusable = true,
-		on_mount = function(element: any)
-			element:focus()
-		end,
-		on_key = function(event: any): boolean?
-			if event.key == "Escape" then
-				actions.close_server_settings()
-				return true
+local function find(key: string): dialog.Page?
+	for _, section in sections() do
+		for _, page in section.pages do
+			if page.key == key then
+				return page
 			end
-			return false
-		end,
-		ui.row {
-			w = left,
-			h_full = true,
-			shrink = 0,
-			justify = "end",
-			bg = theme.color.background_secondary,
-			nav(),
-		},
-		ui.div {
-			relative = true,
-			grow = 1,
-			min_w = 0,
-			h_full = true,
-			overflow = "hidden",
-			ui.column {
-				w = column_width,
-				h_full = true,
-				pt = TOP,
-				pl = theme.size.space_32,
-				pr = 64,
-				content(),
-			},
-			frame.close_button { on_close = actions.close_server_settings, esc = false, top = TOP },
-		},
-	}
+		end
+	end
+	return nil
+end
+
+local function shape(): string
+	local keys = {}
+	for _, section in sections() do
+		table.insert(keys, section.title or "")
+		for _, page in section.pages do
+			table.insert(keys, page.key)
+		end
+	end
+	return table.concat(keys, "|")
+end
+
+local function guild_field(name: string): () -> string
+	return function()
+		local guild = state.server.guild:get()
+		return if guild then (guild :: any)[name] or "" else ""
+	end
+end
+
+local function server_card()
+	local side = n(theme.size.avatar_size_md)
+	return dialog.card(
+		ui.presence(function()
+			return guild_field("icon")() .. "|" .. guild_field("acronym")()
+		end, function()
+			local picture = guild_field("icon")()
+			return ui.row {
+				id = "server_card_icon",
+				w = side,
+				h = side,
+				shrink = 0,
+				justify = "center",
+				items = "center",
+				overflow = "hidden",
+				rounded = theme.size.radius_md,
+				bg = theme.color.text_1,
+				if picture ~= ""
+					then ui.image { src = picture, w = side, h = side, fit = "cover" }
+					else kit.text(guild_field("acronym")(), theme.size.font_size_md, theme.size.line_height_label, theme.color.accent_5, {
+						weight = theme.weight.bold,
+					}),
+			}
+		end),
+		guild_field("name"),
+		kit.text("Server Settings", theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_4, {
+			weight = theme.weight.medium,
+		})
+	)
 end
 
 return function()
-	return ui.show(function()
-		return page_key() ~= ""
-	end, view())
+	return dialog.frame {
+		prefix = "server",
+		label = "Server Settings",
+		page_key = function()
+			return state.server.page:get()
+		end,
+		sections = sections,
+		shape = shape,
+		find = find,
+		build = function(page: dialog.Page)
+			return if page.build then page.build() else ui.div {}
+		end,
+		select = function(key: string)
+			actions.open_server_settings(key)
+		end,
+		close = actions.close_server_settings,
+		card = server_card,
+		overlay = function(key: string)
+			local module = PAGES[key]
+			return if module and module.save_bar then module.save_bar() else nil
+		end,
+	}
 end

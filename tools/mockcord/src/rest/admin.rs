@@ -272,6 +272,7 @@ pub async fn guild_invites(State(shared): Mock, Path(id): Path<u64>) -> ApiResul
 pub struct AuditParams {
 	before: Option<u64>,
 	action_type: Option<i64>,
+	user_id: Option<u64>,
 }
 
 pub async fn audit_log(
@@ -280,7 +281,7 @@ pub async fn audit_log(
 	Query(params): Query<AuditParams>,
 ) -> ApiResult {
 	shared
-		.audit_log_json(id, params.before, params.action_type)
+		.audit_log_json(id, params.before, params.action_type, params.user_id)
 		.map(Json)
 }
 

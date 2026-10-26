@@ -192,7 +192,7 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(
 		&mut app,
 		"a role being edited",
-		"Display role members separately",
+		"Display role members separately from online members",
 		&[
 			("server.page", json!("roles")),
 			(
@@ -393,9 +393,17 @@ fn server_guild() -> serde_json::Value {
 		"id": "10",
 		"name": "Kyoko",
 		"groups": [
-			{ "title": "Server", "pages": [page("overview", "Overview", "settings"), page("roles", "Roles", "shield")] },
-			{ "title": "People", "pages": [page("members", "Members", "members"), page("bans", "Bans", "ban")] },
-			{ "title": "Moderation", "pages": [page("audit-log", "Audit Log", "audit_log")] },
+			{ "title": "", "pages": [page("overview", "Overview", "settings")] },
+			{ "title": "Expression", "pages": [page("emoji", "Emoji", "emoji"), page("stickers", "Stickers", "sticker")] },
+			{
+				"title": "People",
+				"pages": [
+					page("members", "Members", "members"),
+					page("roles", "Roles", "shield"),
+					page("invites", "Invites", "mail"),
+				],
+			},
+			{ "title": "Moderation", "pages": [page("audit-log", "Audit Log", "audit_log"), page("bans", "Bans", "ban")] },
 		],
 	})
 }
@@ -1054,6 +1062,214 @@ fn the_server_settings_pages_call_the_host() {
 			("server.open".to_owned(), json!("roles")),
 		]
 	);
+}
+
+fn server_dialog_values(page: &str) -> Vec<(&'static str, serde_json::Value)> {
+	vec![
+		("login.screen", json!("main")),
+		("server.guild", server_guild()),
+		("server.rights", server_rights()),
+		("server.audit_filters", json!(["All Actions", "Member Kick"])),
+		(
+			"server.member_sorts",
+			json!(["Sort: Member Since", "Sort: Oldest Members", "Sort: Name"]),
+		),
+		(
+			"server.roles",
+			json!({
+				"count": 4,
+				"rows": [
+					{ "id": "41", "name": "Mods", "color": "#2ecc71", "members": 7, "everyone": false, "movable": true },
+					{ "id": "42", "name": "Members", "color": "#3498db", "members": 40, "everyone": false, "movable": true },
+					{ "id": "43", "name": "Muted", "color": "", "members": 2, "everyone": false, "movable": true },
+					{ "id": "10", "name": "@everyone", "color": "", "members": 50, "everyone": true, "movable": false },
+				],
+			}),
+		),
+		(
+			"server.members",
+			json!({
+				"total": 1, "shown": 1, "count": 24108, "sort": 0, "actions": true,
+				"rows": [{
+					"id": "30", "name": "Brave Ember", "username": "brave_ember", "color": "#5865f2", "avatar": "",
+					"since": "Jan 12, 2022",
+					"roles": [{ "name": "Members", "color": "#5865f2", "tint": "#5865f22e" }],
+				}],
+			}),
+		),
+		(
+			"server.audit",
+			json!({
+				"loaded": true, "has_more": false, "filter": 0, "person": 0,
+				"people": [{ "id": "7", "name": "Clever Lynx" }],
+				"rows": [{
+					"id": "32", "sentence": "Clever Lynx updated the role Mods", "when": "Today at 4:30 PM",
+					"avatar": "", "icon": "shield", "tone": "update",
+					"parts": [
+						{ "text": "Clever Lynx", "strong": true },
+						{ "text": " updated the role ", "strong": false },
+						{ "text": "Mods", "strong": true },
+					],
+					"changes": [{ "key": "color", "old": "#db9aab", "new": "#d3869b" }], "reason": "",
+				}],
+			}),
+		),
+		("server.page", json!(page)),
+	]
+}
+
+fn drag(app: &mut TestApp, from: &str, to: &str) {
+	use zgx::input::{InputEvent, PointerButton};
+	let (start, end) = (app.bounds(from), app.bounds(to));
+	let (x, y) = (start.x + 40., start.y + start.height / 2.);
+	let (to_x, to_y) = (end.x + 40., end.y + end.height / 2.);
+	app.ui.dispatch(InputEvent::PointerMove { x, y });
+	app.ui.dispatch(InputEvent::PointerDown {
+		x,
+		y,
+		button: PointerButton::Primary,
+	});
+	for step in 1..=8 {
+		let share = step as f32 / 8.;
+		app.ui.dispatch(InputEvent::PointerMove {
+			x: x + (to_x - x) * share,
+			y: y + (to_y - y) * share,
+		});
+		app.frames(1);
+	}
+	app.ui.dispatch(InputEvent::PointerUp {
+		x: to_x,
+		y: to_y,
+		button: PointerButton::Primary,
+	});
+	app.frames(2);
+}
+
+fn nav_order(app: &mut TestApp, prefix: &str, keys: &[&str]) -> Vec<String> {
+	let mut shown: Vec<(f32, String)> = keys
+		.iter()
+		.filter_map(|key| {
+			let id = format!("{prefix}_nav_{key}");
+			app.find(&id).map(|_| (app.bounds(&id).y, (*key).to_owned()))
+		})
+		.collect();
+	shown.sort_by(|left, right| left.0.total_cmp(&right.0));
+	shown.into_iter().map(|(_, key)| key).collect()
+}
+
+#[test]
+fn server_settings_are_a_dialog_with_discords_groups_drag_to_reorder_and_filters() {
+	let calls: Calls = std::rc::Rc::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"the roles page",
+		"Default Permissions",
+		&server_dialog_values("roles"),
+	);
+	app.frames(20);
+	let pages = [
+		"overview",
+		"emoji",
+		"stickers",
+		"members",
+		"roles",
+		"invites",
+		"audit-log",
+		"bans",
+	];
+	assert_eq!(
+		nav_order(&mut app, "server", &pages),
+		pages,
+		"the sidebar lists the pages in Discord's groups"
+	);
+	assert!(app.texts().iter().any(|text| text == "ROLES — 3"));
+	assert!(
+		app.find("role_row_10").is_none(),
+		"@everyone is the Default Permissions card"
+	);
+
+	app.type_text("role_search", "mu");
+	assert!(app.find("role_row_43").is_some());
+	assert!(
+		app.find("role_row_41").is_none(),
+		"the search keeps the matching roles"
+	);
+	app.key(zgx::input::Key::Backspace);
+	app.key(zgx::input::Key::Backspace);
+	app.frames(2);
+	assert!(app.find("role_row_41").is_some());
+
+	drag(&mut app, "role_row_43", "role_row_41");
+	assert_eq!(
+		last_call(&calls, "server.role_drop"),
+		Some(json!({ "id": "43", "onto": "41" })),
+		"dropping Muted on Mods moves it there"
+	);
+	app.click("role_everyone");
+	assert_eq!(last_call(&calls, "server.role_open"), Some(json!("10")));
+
+	app.type_text("server_search", "audit");
+	assert_eq!(nav_order(&mut app, "server", &pages), ["audit-log"]);
+	app.click("server_search_clear");
+	assert_eq!(nav_order(&mut app, "server", &pages), pages);
+
+	shows(
+		&mut app,
+		"the members page",
+		"Jan 12, 2022",
+		&[("server.page", json!("members"))],
+	);
+	assert!(
+		app.texts()
+			.iter()
+			.any(|text| text == "Showing 1 of 24,108 members")
+	);
+	app.click("members_sort");
+	app.frames(2);
+	app.click("members_sort_3");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "server.members_sort"), Some(json!(2)));
+
+	shows(
+		&mut app,
+		"the audit log",
+		"Today at 4:30 PM",
+		&[("server.page", json!("audit-log"))],
+	);
+	assert!(app.find("audit_toggle_32").is_some());
+	app.click("audit_toggle_32");
+	app.frames(2);
+	assert!(
+		app.texts().iter().any(|text| text.contains("#d3869b")),
+		"an entry opens to its changes"
+	);
+	app.click("audit_user");
+	app.frames(2);
+	app.click("audit_user_2");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "server.audit_user"), Some(json!("7")));
+
+	let closes = |calls: &Calls| {
+		calls
+			.borrow()
+			.iter()
+			.filter(|(name, _)| name == "server.close")
+			.count()
+	};
+	app.click("server_close");
+	assert_eq!(closes(&calls), 1, "the X closes server settings");
+	app.host.shared("server.page", Value::Nil).set(Value::from(""));
+	app.frames(2);
+	shows(
+		&mut app,
+		"server settings again",
+		"Server Ban List",
+		&[("server.page", json!("bans"))],
+	);
+	app.key(zgx::input::Key::Escape);
+	assert_eq!(closes(&calls), 2, "Escape closes server settings");
 }
 
 const TYPING: &str = "ada is typing...";

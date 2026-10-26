@@ -244,6 +244,7 @@ async fn kicks_bans_and_timeouts_carry_the_audit_log_reason() {
 		guild_id: guild.id,
 		before: None,
 		action_type: None,
+		user_id: None,
 	});
 	running
 		.until("the kick in the audit log", |state: &State| {
@@ -389,6 +390,7 @@ async fn the_audit_log_loads_and_pages_back_with_before() {
 		guild_id: guild.id,
 		before: None,
 		action_type: None,
+		user_id: None,
 	});
 	running
 		.until("the first page", |state: &State| {
@@ -408,6 +410,7 @@ async fn the_audit_log_loads_and_pages_back_with_before() {
 		guild_id: guild.id,
 		before: Some(last),
 		action_type: None,
+		user_id: None,
 	});
 	running
 		.until("the second page", |state: &State| {
@@ -425,6 +428,44 @@ async fn the_audit_log_loads_and_pages_back_with_before() {
 	let sent = queries(&running.mock().recording(), &path);
 	assert_eq!(sent[0], "limit=50");
 	assert_eq!(sent[1], format!("limit=50&before={last}"));
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_audit_log_filters_by_the_user_who_acted() {
+	let (running, guild) = start("moderation-audit-user").await;
+	assert_ne!(guild.me, guild.owner);
+	running.mock().add_audit_entries(guild.id.0, 3);
+	running.session().send(Command::LoadAuditLog {
+		guild_id: guild.id,
+		before: None,
+		action_type: None,
+		user_id: Some(guild.owner),
+	});
+	running
+		.until("the owner's entries", |state: &State| {
+			state.audit_log(guild.id).is_some_and(|log| {
+				!log.entries.is_empty() && log.entries.iter().all(|entry| entry.user_id == Some(guild.owner))
+			})
+		})
+		.await;
+	running.session().send(Command::LoadAuditLog {
+		guild_id: guild.id,
+		before: None,
+		action_type: None,
+		user_id: Some(guild.me),
+	});
+	running
+		.until("only the current user's entries", |state: &State| {
+			state.audit_log(guild.id).is_some_and(|log| {
+				log.entries.len() == 3 && log.entries.iter().all(|entry| entry.user_id == Some(guild.me))
+			})
+		})
+		.await;
+	let path = format!("/guilds/{}/audit-logs", guild.id);
+	let sent = queries(&running.mock().recording(), &path);
+	assert_eq!(sent[0], format!("limit=50&user_id={}", guild.owner));
+	assert_eq!(sent[1], format!("limit=50&user_id={}", guild.me));
 	running.stop().await;
 }
 

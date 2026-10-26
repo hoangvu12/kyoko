@@ -288,6 +288,7 @@ impl Harness {
 			guild_id,
 			before: None,
 			action_type: None,
+			user_id: None,
 		});
 		self.until("the audit log to list the kick", |state| {
 			state.audit_log(guild_id).is_some_and(|log| {

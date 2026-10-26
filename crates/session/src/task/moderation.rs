@@ -201,10 +201,11 @@ impl Core {
 				guild_id,
 				before,
 				action_type,
+				user_id,
 			} => {
 				if self.guild_allows(guild_id, Permissions::VIEW_AUDIT_LOG, "View Audit Log") {
 					self.spawn_load("audit log", move |rest| async move {
-						let raw = rest.audit_log(guild_id, before, action_type).await?;
+						let raw = rest.audit_log(guild_id, before, action_type, user_id).await?;
 						Ok(Loaded::AuditLog {
 							guild_id,
 							raw,

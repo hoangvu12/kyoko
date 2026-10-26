@@ -1,4 +1,7 @@
-use bridge::{GuildAccess, ModerationItem, ServerPage, audit_rows, moderation_items, role_rows, role_swap};
+use bridge::{
+	AuditTone, GuildAccess, MemberSort, ModerationItem, ServerPage, audit_rows, member_rows,
+	moderation_items, role_move_to, role_rows,
+};
 use chrono::Utc;
 use protocol::{Permissions, Snowflake};
 use serde_json::json;
@@ -127,9 +130,66 @@ fn roles_follow_the_hierarchy(state: &State, guild: &Guild) {
 	assert_eq!(ServerPage::opening(None, &access), Some(ServerPage::Overview));
 	assert!(ServerPage::ALL.iter().all(|page| page.allowed(&access)));
 	let muted = rows[3].id;
-	assert_eq!(role_swap(state, guild.id, muted, false), None);
-	let swapped = role_swap(state, guild.id, muted, true).expect("Muted moves up");
-	assert_eq!(swapped, vec![(muted, 2), (rows[2].id, 1)]);
+	assert_eq!(
+		role_move_to(state, guild.id, muted, rows[2].id),
+		Some(vec![(muted, 2), (rows[2].id, 1)]),
+		"Muted moves up past Members"
+	);
+	roles_move_where_they_are_dropped(state, guild);
+}
+
+fn roles_move_where_they_are_dropped(state: &State, guild: &Guild) {
+	let rows = role_rows(state, guild.id);
+	let (admin, mods, members, muted, everyone) =
+		(rows[0].id, rows[1].id, rows[2].id, rows[3].id, rows[4].id);
+	assert_eq!(
+		role_move_to(state, guild.id, muted, mods),
+		Some(vec![(muted, 3), (mods, 2), (members, 1)]),
+		"Muted dropped on Mods takes its place and the roles between move down"
+	);
+	assert_eq!(
+		role_move_to(state, guild.id, mods, muted),
+		Some(vec![(members, 3), (muted, 2), (mods, 1)]),
+		"Mods dropped on Muted goes below the roles between"
+	);
+	assert_eq!(
+		role_move_to(state, guild.id, mods, admin),
+		None,
+		"a role above the user's stays put"
+	);
+	assert_eq!(
+		role_move_to(state, guild.id, muted, everyone),
+		None,
+		"@everyone stays last"
+	);
+	assert_eq!(role_move_to(state, guild.id, muted, muted), None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn members_sort_by_when_they_joined_or_by_name() {
+	let (running, guild) = started("admin-member-sort").await;
+	members_follow_the_sort(&running.session().state().read(), &guild);
+	running.stop().await;
+}
+
+fn members_follow_the_sort(state: &State, guild: &Guild) {
+	let (newest, total) = member_rows(state, guild.id, "", MemberSort::Newest);
+	assert_eq!(newest.len(), total);
+	assert!(
+		newest.windows(2).all(|pair| pair[0].joined >= pair[1].joined),
+		"Member Since lists the newest members first"
+	);
+	assert!(newest.iter().any(|row| row.joined.is_some()));
+	let (oldest, _) = member_rows(state, guild.id, "", MemberSort::Oldest);
+	let dated: Vec<_> = oldest.iter().filter_map(|row| row.joined).collect();
+	assert!(dated.windows(2).all(|pair| pair[0] <= pair[1]));
+	let (named, _) = member_rows(state, guild.id, "", MemberSort::Name);
+	let names: Vec<String> = named.iter().map(|row| row.name.to_lowercase()).collect();
+	let mut sorted = names.clone();
+	sorted.sort();
+	assert_eq!(names, sorted);
+	assert_eq!(MemberSort::at(0), MemberSort::Newest);
+	assert_eq!(MemberSort::at(99), MemberSort::Newest);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -139,6 +199,7 @@ async fn the_audit_log_reads_as_sentences_with_reasons() {
 		guild_id: guild.id,
 		before: None,
 		action_type: None,
+		user_id: None,
 	});
 	running
 		.until_state("the audit log", |state| state.audit_log(guild.id).is_some())
@@ -155,5 +216,22 @@ async fn the_audit_log_reads_as_sentences_with_reasons() {
 		.find(|row| row.reason.as_deref() == Some("Spam links in every channel"))
 		.expect("a ban with its reason");
 	assert!(banned.sentence.contains(" banned "));
+	assert_eq!(banned.tone, AuditTone::Delete);
+	assert_eq!(banned.icon, "gavel");
+	let strong: Vec<&str> = banned
+		.parts
+		.iter()
+		.filter(|(_, strong)| *strong)
+		.map(|(text, _)| text.as_str())
+		.collect();
+	assert_eq!(
+		strong,
+		[
+			banned.actor.as_str(),
+			banned.sentence.rsplit(" banned ").next().unwrap_or_default()
+		]
+	);
+	let joined: String = banned.parts.iter().map(|(text, _)| text.as_str()).collect();
+	assert_eq!(joined, banned.sentence, "the parts read as the sentence");
 	running.stop().await;
 }

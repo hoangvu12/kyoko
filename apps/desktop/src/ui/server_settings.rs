@@ -4,18 +4,19 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use bridge::{
-	AUDIT_FILTERS, GuildAccess, Inbox, MODERATION_PERMISSIONS, RIGHT_GROUPS, RoleChip, SERVER_GROUPS,
-	ServerPage, audit_filter, audit_rows, ban_rows, member_rows, moderation_items, role_color, role_rows,
-	role_swap,
+	AUDIT_FILTERS, GuildAccess, Inbox, MEMBER_SORTS, MODERATION_PERMISSIONS, MemberSort, RIGHT_GROUPS,
+	RoleChip, SERVER_GROUPS, ServerPage, audit_filter, audit_rows, ban_rows, member_rows, moderation_items,
+	role_color, role_move_to, role_rows,
 };
 use chrono::Utc;
 use media::ImageName;
 use protocol::{ChannelType, Permissions, Snowflake};
 use session::Command;
 use state::{Changes, State};
+use zgx::reactive::{Runtime, Signal};
 use zgx_script::{ScriptHost, Shared, Value};
 
-use super::{Link, Slot, field, number, record, text};
+use super::{Link, field, number, record, text};
 use crate::moderation::{ChannelDraft, Confirm, ConfirmAction, MemberMenu, Request};
 
 const ROW_AVATAR: f64 = 32.;
@@ -44,6 +45,9 @@ struct Open {
 	members_query: String,
 	bans_query: String,
 	audit_filter: usize,
+	audit_user: Option<Snowflake>,
+	audit_people: Vec<(Snowflake, String)>,
+	member_sort: usize,
 	role: Option<Snowflake>,
 }
 
@@ -68,12 +72,16 @@ pub(crate) struct ServerSettingsView {
 	icon: RefCell<Option<ImageName>>,
 	pending_icon: RefCell<Option<Vec<u8>>>,
 	images: RefCell<Vec<String>>,
+	dimmed: Signal<bool>,
+	_scrim: Rc<()>,
 	_rights: Shared,
 	_filters: Shared,
+	_sorts: Shared,
 }
 
 impl ServerSettingsView {
-	pub(crate) fn new(host: &ScriptHost) -> Self {
+	pub(crate) fn new(host: &ScriptHost, runtime: &Runtime) -> Self {
+		let dimmed = runtime.signal(false);
 		Self {
 			page: host.shared("server.page", ""),
 			guild: host.shared("server.guild", Value::Nil),
@@ -95,8 +103,14 @@ impl ServerSettingsView {
 			icon: RefCell::new(None),
 			pending_icon: RefCell::new(None),
 			images: RefCell::new(Vec::new()),
+			_scrim: crate::scrim::track(&dimmed),
+			dimmed,
 			_rights: host.shared("server.rights", rights_value()),
 			_filters: host.shared("server.audit_filters", audit_filters_value()),
+			_sorts: host.shared(
+				"server.member_sorts",
+				Value::List(MEMBER_SORTS.iter().map(|(_, label)| (*label).into()).collect()),
+			),
 		}
 	}
 
@@ -346,10 +360,13 @@ impl Link {
 			}
 		});
 		let actions = Rc::downgrade(link);
-		host.action("server.role_move", move |argument| {
-			if let (Some(link), Some(role_id)) = (actions.upgrade(), id_field(&argument, "id")) {
-				let up = matches!(field(&argument, "up"), Some(Value::Bool(true)));
-				link.move_role(role_id, up);
+		host.action("server.role_drop", move |argument| {
+			if let (Some(link), Some(role_id), Some(onto)) = (
+				actions.upgrade(),
+				id_field(&argument, "id"),
+				id_field(&argument, "onto"),
+			) {
+				link.drop_role(role_id, onto);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -362,6 +379,13 @@ impl Link {
 		host.action("server.members_search", move |argument| {
 			if let Some(link) = actions.upgrade() {
 				link.server.open.borrow_mut().members_query = text(&argument).unwrap_or_default().to_owned();
+				link.republish_server();
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("server.members_sort", move |argument| {
+			if let (Some(link), Value::Num(index)) = (actions.upgrade(), &argument) {
+				link.server.open.borrow_mut().member_sort = (*index as usize).min(MEMBER_SORTS.len() - 1);
 				link.republish_server();
 			}
 		});
@@ -417,6 +441,12 @@ impl Link {
 		host.action("server.audit_filter", move |argument| {
 			if let (Some(link), Value::Num(index)) = (actions.upgrade(), &argument) {
 				link.set_audit_filter(*index as usize);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("server.audit_user", move |argument| {
+			if let Some(link) = actions.upgrade() {
+				link.set_audit_user(snowflake_of(&argument));
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -713,7 +743,7 @@ impl Link {
 		};
 		self.load_server_page(guild_id, page);
 		if !self.server.shown.replace(true) {
-			self.window.slot.set(Slot::default());
+			self.server.dimmed.set(true);
 		}
 		self.republish_server();
 	}
@@ -721,11 +751,7 @@ impl Link {
 	fn load_server_page(&self, guild_id: Snowflake, page: ServerPage) {
 		match page {
 			ServerPage::Bans => self.send(Command::LoadBans { guild_id }),
-			ServerPage::AuditLog => self.send(Command::LoadAuditLog {
-				guild_id,
-				before: None,
-				action_type: audit_filter(self.server.open.borrow().audit_filter),
-			}),
+			ServerPage::AuditLog => self.load_audit(guild_id, None),
 			ServerPage::Invites => self.send(Command::LoadInvites { guild_id }),
 			ServerPage::Stickers => self.send(Command::LoadGuildStickers { guild_id }),
 			_ => {}
@@ -742,9 +768,7 @@ impl Link {
 		self.server.icon.borrow_mut().take();
 		self.server.pending_icon.borrow_mut().take();
 		self.server.upload.borrow_mut().take();
-		if self.dms.page().is_empty() {
-			self.window.slot.set(self.reported_slot.get());
-		}
+		self.server.dimmed.set(false);
 		self.refresh_visible();
 	}
 
@@ -794,12 +818,12 @@ impl Link {
 		});
 	}
 
-	fn move_role(&self, role_id: Snowflake, up: bool) {
+	fn drop_role(&self, role_id: Snowflake, onto: Snowflake) {
 		let (Some(shared), Some(guild_id)) = (self.state(), self.server.guild_id()) else {
 			return;
 		};
-		let positions = role_swap(&shared.read(), guild_id, role_id, up);
-		if let Some(positions) = positions {
+		let positions = role_move_to(&shared.read(), guild_id, role_id, onto);
+		if let Some(positions) = positions.filter(|positions| !positions.is_empty()) {
 			self.send(Command::ReorderRoles { guild_id, positions });
 		}
 	}
@@ -875,12 +899,30 @@ impl Link {
 		};
 		let index = index.min(AUDIT_FILTERS.len() - 1);
 		self.server.open.borrow_mut().audit_filter = index;
+		self.load_audit(guild_id, None);
+		self.republish_server();
+	}
+
+	fn set_audit_user(&self, user_id: Option<Snowflake>) {
+		let Some(guild_id) = self.server.guild_id() else {
+			return;
+		};
+		self.server.open.borrow_mut().audit_user = user_id;
+		self.load_audit(guild_id, None);
+		self.republish_server();
+	}
+
+	fn load_audit(&self, guild_id: Snowflake, before: Option<Snowflake>) {
+		let (action_type, user_id) = {
+			let open = self.server.open.borrow();
+			(audit_filter(open.audit_filter), open.audit_user)
+		};
 		self.send(Command::LoadAuditLog {
 			guild_id,
-			before: None,
-			action_type: audit_filter(index),
+			before,
+			action_type,
+			user_id,
 		});
-		self.republish_server();
 	}
 
 	fn load_more_audit(&self) {
@@ -891,11 +933,7 @@ impl Link {
 			.read()
 			.audit_log(guild_id)
 			.and_then(|log| log.entries.last().map(|entry| entry.id));
-		self.send(Command::LoadAuditLog {
-			guild_id,
-			before,
-			action_type: audit_filter(self.server.open.borrow().audit_filter),
-		});
+		self.load_audit(guild_id, before);
 	}
 
 	pub(super) fn server_settings_apply(&self, state: &State, changes: &Changes) {
@@ -955,15 +993,24 @@ impl Link {
 					.then(|| record([("title", (*title).into()), ("pages", Value::List(pages.into()))]))
 			})
 			.collect();
+		let icon = self.server_icon(state, guild_id, guild.icon.as_deref());
+		images.extend(icon.clone());
 		self.server.guild.set(record([
 			("id", guild_id.to_string().as_str().into()),
 			("name", guild.name.as_str().into()),
+			(
+				"icon",
+				icon.as_ref()
+					.map(|name| format!("host:{name}"))
+					.unwrap_or_default()
+					.as_str()
+					.into(),
+			),
+			("acronym", bridge::acronym(&guild.name).as_str().into()),
 			("groups", Value::List(groups.into())),
 		]));
 		match page {
 			ServerPage::Overview => {
-				let icon = self.server_icon(state, guild_id, guild.icon.as_deref());
-				images.extend(icon.clone());
 				let pending = self.server.pending_icon.borrow().is_some();
 				let shown = if pending {
 					format!("host:{ICON_PREVIEW}")
@@ -982,7 +1029,9 @@ impl Link {
 			}
 			ServerPage::Roles => self.publish_roles(state, guild_id, open.role),
 			ServerPage::Members => {
-				let (rows, total) = member_rows(state, guild_id, &open.members_query);
+				let sort = MemberSort::at(open.member_sort);
+				let (rows, total) = member_rows(state, guild_id, &open.members_query, sort);
+				let shown = rows.len();
 				let rows = rows
 					.iter()
 					.map(|row| {
@@ -1002,11 +1051,29 @@ impl Link {
 									.into(),
 							),
 							("roles", Value::List(row.roles.iter().map(chip_value).collect())),
+							(
+								"since",
+								row.joined
+									.map(|joined| bridge::since_label(joined.date_naive()))
+									.unwrap_or_default()
+									.as_str()
+									.into(),
+							),
 						])
 					})
 					.collect();
+				let count = if open.members_query.trim().is_empty() {
+					guild
+						.member_count
+						.map_or(total, |count| usize::try_from(count).unwrap_or(0).max(total))
+				} else {
+					total
+				};
 				self.server.members.set(record([
 					("total", Value::Num(total as f64)),
+					("shown", Value::Num(shown as f64)),
+					("count", Value::Num(count as f64)),
+					("sort", Value::Num(open.member_sort as f64)),
 					("rows", Value::List(rows)),
 					("actions", access.has_any(MODERATION_PERMISSIONS).into()),
 				]));
@@ -1021,6 +1088,7 @@ impl Link {
 						record([
 							("id", row.id.to_string().as_str().into()),
 							("name", row.name.as_str().into()),
+							("username", row.username.as_str().into()),
 							(
 								"reason",
 								row.reason.as_deref().unwrap_or("No reason given").into(),
@@ -1044,6 +1112,7 @@ impl Link {
 			}
 			ServerPage::AuditLog => {
 				let rows = audit_rows(state, guild_id, bridge::today());
+				let people = self.audit_people(state, guild_id, rows.iter().flatten());
 				let has_more = state.audit_log(guild_id).is_some_and(|log| log.has_more);
 				let rows: Vec<Value> = rows
 					.iter()
@@ -1062,9 +1131,19 @@ impl Link {
 								])
 							})
 							.collect();
+						let parts = row
+							.parts
+							.iter()
+							.map(|(text, strong)| {
+								record([("text", text.as_str().into()), ("strong", (*strong).into())])
+							})
+							.collect();
 						record([
 							("id", row.id.to_string().as_str().into()),
 							("sentence", row.sentence.as_str().into()),
+							("parts", Value::List(parts)),
+							("icon", row.icon.into()),
+							("tone", row.tone.key().into()),
 							("when", row.when.as_str().into()),
 							(
 								"avatar",
@@ -1079,10 +1158,25 @@ impl Link {
 						])
 					})
 					.collect();
+				let person = open
+					.audit_user
+					.and_then(|user| people.iter().position(|(id, _)| *id == user))
+					.map_or(0, |index| index + 1);
+				let people: Vec<Value> = people
+					.iter()
+					.map(|(id, name)| {
+						record([
+							("id", id.to_string().as_str().into()),
+							("name", name.as_str().into()),
+						])
+					})
+					.collect();
 				self.server.audit.set(record([
 					("loaded", state.audit_log(guild_id).is_some().into()),
 					("has_more", has_more.into()),
 					("filter", Value::Num(open.audit_filter as f64)),
+					("people", Value::List(people.into())),
+					("person", Value::Num(person as f64)),
 					("rows", Value::List(rows.into())),
 				]));
 			}
@@ -1147,9 +1241,15 @@ impl Link {
 				let uploader_name = uploader
 					.map(|id| state.display_name(Some(guild_id), id))
 					.unwrap_or_default();
+				let uploader_color = uploader
+					.and_then(|id| state.role_color(guild_id, id))
+					.map(hex)
+					.unwrap_or_default();
 				Some(record([
 					("id", id.to_string().as_str().into()),
 					("name", name.as_str().into()),
+					("animated", (emoji.animated == Some(true)).into()),
+					("color", uploader_color.as_str().into()),
 					("image", format!("host:{image}").as_str().into()),
 					("uploader", uploader_name.as_str().into()),
 					(
@@ -1203,8 +1303,13 @@ impl Link {
 				])
 			})
 			.collect();
+		let tier = state
+			.guild(guild_id)
+			.and_then(|guild| guild.premium_tier)
+			.map_or(0, i64::from);
 		self.server.stickers.set(record([
 			("count", Value::Num(stickers.len() as f64)),
+			("tier", Value::Num(tier as f64)),
 			(
 				"slots",
 				Value::Num(
@@ -1243,9 +1348,15 @@ impl Link {
 					.inviter_id
 					.map(|id| state.display_name(Some(guild_id), id))
 					.unwrap_or_default();
+				let color = invite
+					.inviter_id
+					.and_then(|id| state.role_color(guild_id, id))
+					.map(hex)
+					.unwrap_or_default();
 				record([
 					("id", invite.code.as_str().into()),
 					("inviter", inviter.as_str().into()),
+					("color", color.as_str().into()),
 					(
 						"avatar",
 						avatar
@@ -1317,6 +1428,30 @@ impl Link {
 			("deletable", (!everyone && !role.managed).into()),
 			("granted", Value::List(granted.into())),
 		]));
+	}
+
+	fn audit_people<'a>(
+		&self,
+		state: &State,
+		guild_id: Snowflake,
+		rows: impl Iterator<Item = &'a bridge::AuditRow>,
+	) -> Vec<(Snowflake, String)> {
+		let mut open = self.server.open.borrow_mut();
+		for row in rows {
+			if let Some(id) = row.actor_id
+				&& !open.audit_people.iter().any(|(known, _)| *known == id)
+			{
+				open.audit_people.push((id, row.actor.clone()));
+			}
+		}
+		if let Some(user) = open.audit_user
+			&& !open.audit_people.iter().any(|(known, _)| *known == user)
+		{
+			let name = state.display_name(Some(guild_id), user);
+			open.audit_people.push((user, name));
+		}
+		open.audit_people.sort_by_key(|(_, name)| name.to_lowercase());
+		open.audit_people.clone()
 	}
 
 	fn server_avatar(&self, state: &State, user_id: Snowflake) -> Option<String> {
