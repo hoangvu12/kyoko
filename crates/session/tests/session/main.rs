@@ -15,6 +15,7 @@ mod fingerprint;
 mod friends;
 mod gateway;
 mod harness;
+mod hidden;
 mod hooks;
 mod kept;
 mod layout;

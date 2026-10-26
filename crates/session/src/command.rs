@@ -550,3 +550,41 @@ pub enum Command {
 	ShowDeletedMessages(bool),
 	Shutdown,
 }
+
+impl Command {
+	pub fn reads_channel(&self) -> Option<Snowflake> {
+		match self {
+			Command::SelectChannel { channel_id, .. }
+			| Command::LoadOlder { channel_id }
+			| Command::LoadNewer { channel_id }
+			| Command::LoadAround { channel_id, .. }
+			| Command::RefreshMedia { channel_id, .. }
+			| Command::SetViewport { channel_id, .. }
+			| Command::SendMessage { channel_id, .. }
+			| Command::LoadApplicationCommands { channel_id }
+			| Command::RunApplicationCommand { channel_id, .. }
+			| Command::AddReaction { channel_id, .. }
+			| Command::Typing { channel_id }
+			| Command::AckChannel { channel_id, .. }
+			| Command::SetMemberViewport { channel_id, .. }
+			| Command::CreateThread { channel_id, .. }
+			| Command::JoinThread {
+				thread_id: channel_id,
+			}
+			| Command::LoadArchivedThreads { channel_id, .. }
+			| Command::LoadForumPosts { channel_id, .. }
+			| Command::CreateForumPost { channel_id, .. }
+			| Command::LoadPins { channel_id }
+			| Command::MarkChannelRead { channel_id }
+			| Command::MarkUnread { channel_id, .. }
+			| Command::LoadReactionUsers { channel_id, .. }
+			| Command::SendSticker { channel_id, .. }
+			| Command::SendGif { channel_id, .. }
+			| Command::Search {
+				channel_id: Some(channel_id),
+				..
+			} => Some(*channel_id),
+			_ => None,
+		}
+	}
+}

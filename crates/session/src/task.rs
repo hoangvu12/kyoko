@@ -48,6 +48,7 @@ mod expressions;
 mod failures;
 mod gif_favorites;
 mod guild_writes;
+mod hidden;
 mod interactions;
 mod layout;
 mod locks;
@@ -752,7 +753,7 @@ impl Core {
 	}
 
 	fn on_command(&mut self, command: Command) -> bool {
-		if self.held_by_lock(&command) {
+		if self.refuses_hidden(&command) || self.held_by_lock(&command) {
 			return true;
 		}
 		match command {
@@ -1176,12 +1177,12 @@ impl Core {
 			.selected()
 			.filter(|selected| selected.guild_id == Some(guild_id))
 			.map(|selected| selected.channel_id)
+			.filter(|channel_id| !state.is_hidden(*channel_id))
 			.or_else(|| {
-				state
-					.guild(guild_id)?
-					.channels
-					.values()
-					.find_map(|channel| (channel.kind == ChannelType::GuildText).then_some(channel.id))
+				state.guild(guild_id)?.channels.values().find_map(|channel| {
+					(channel.kind == ChannelType::GuildText && !state.is_hidden(channel.id))
+						.then_some(channel.id)
+				})
 			})
 	}
 

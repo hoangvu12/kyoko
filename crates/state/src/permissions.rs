@@ -167,6 +167,12 @@ impl State {
 			.contains(Permissions::VIEW_CHANNEL)
 	}
 
+	pub fn is_hidden(&self, channel_id: Snowflake) -> bool {
+		self.current_user_id().is_some()
+			&& matches!(self.channel_guilds.get(&channel_id), Some(Some(_)))
+			&& !self.can_view(channel_id)
+	}
+
 	pub fn can_send(&self, channel_id: Snowflake) -> bool {
 		let needed = match self.channel(channel_id) {
 			Some(channel) if is_thread(channel.kind) => Permissions::SEND_MESSAGES_IN_THREADS,
