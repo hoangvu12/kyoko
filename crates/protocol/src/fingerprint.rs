@@ -19,6 +19,9 @@ pub const LOGIN_REFERER: &str = "https://discord.com/login";
 pub const MAX_INSTALLATION_ID_LEN: usize = 128;
 pub const IMAGE_ACCEPT: &str = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 pub const IMAGE_REFERER: &str = "https://discord.com/";
+pub const AUDIO_ACCEPT: &str = "*/*";
+pub const AUDIO_ACCEPT_ENCODING: &str = "identity;q=1, *;q=0";
+pub const AUDIO_RANGE: &str = "bytes=0-";
 pub const HEARTBEAT_SESSION_LIFETIME: Duration = Duration::from_secs(30 * 60);
 pub const LAUNCH_SIGNATURE_MOD_BITS: u128 = (1 << 119)
 	| (1 << 108)
@@ -208,6 +211,22 @@ impl Fingerprint {
 			("sec-ch-ua-mobile", "?0".to_owned()),
 			("sec-ch-ua-platform", sec_ch_ua_platform().to_owned()),
 			("sec-fetch-dest", "image".to_owned()),
+			("sec-fetch-mode", "no-cors".to_owned()),
+			("sec-fetch-site", "cross-site".to_owned()),
+		]
+	}
+
+	pub fn audio_headers(&self) -> Vec<(&'static str, String)> {
+		vec![
+			("accept", AUDIO_ACCEPT.to_owned()),
+			("accept-encoding", AUDIO_ACCEPT_ENCODING.to_owned()),
+			("accept-language", self.accept_language()),
+			("range", AUDIO_RANGE.to_owned()),
+			("referer", IMAGE_REFERER.to_owned()),
+			("sec-ch-ua", sec_ch_ua()),
+			("sec-ch-ua-mobile", "?0".to_owned()),
+			("sec-ch-ua-platform", sec_ch_ua_platform().to_owned()),
+			("sec-fetch-dest", "audio".to_owned()),
 			("sec-fetch-mode", "no-cors".to_owned()),
 			("sec-fetch-site", "cross-site".to_owned()),
 		]

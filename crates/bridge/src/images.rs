@@ -14,7 +14,8 @@ const IMAGE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
 pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> media::Result<MediaFetcher> {
 	let mut builder = MediaFetcher::builder()
 		.user_agent(fingerprint.user_agent())
-		.headers(fingerprint.image_headers());
+		.headers(fingerprint.image_headers())
+		.audio_headers(fingerprint.audio_headers());
 	if let Some(port) = loopback_port {
 		builder = builder.only_loopback(port);
 	}
@@ -163,6 +164,23 @@ pub fn refresh_command(origin: Origin) -> Command {
 }
 
 pub fn local_media(url: &str, mock_origin: Option<&str>) -> String {
+	local(url, mock_origin, |_| "png".to_owned())
+}
+
+pub fn local_audio(url: &str, mock_origin: Option<&str>) -> String {
+	local(url, mock_origin, |parsed| {
+		parsed
+			.path()
+			.rsplit_once('.')
+			.map(|(_, extension)| extension.to_ascii_lowercase())
+			.filter(|extension| {
+				!extension.is_empty() && extension.chars().all(|letter| letter.is_ascii_alphanumeric())
+			})
+			.unwrap_or_else(|| "ogg".to_owned())
+	})
+}
+
+fn local(url: &str, mock_origin: Option<&str>, extension: impl FnOnce(&Url) -> String) -> String {
 	let Some(origin) = mock_origin else {
 		return url.to_owned();
 	};
@@ -175,9 +193,10 @@ pub fn local_media(url: &str, mock_origin: Option<&str>) -> String {
 	let mut hasher = DefaultHasher::new();
 	parsed.path().hash(&mut hasher);
 	format!(
-		"{}/media/{:016x}.png",
+		"{}/media/{:016x}.{}",
 		origin.trim_end_matches('/'),
-		hasher.finish()
+		hasher.finish(),
+		extension(&parsed)
 	)
 }
 

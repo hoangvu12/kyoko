@@ -487,6 +487,17 @@ impl Gallery {
 		&self.shared.loader
 	}
 
+	pub fn runtime(&self) -> &Handle {
+		&self.shared.runtime
+	}
+
+	pub fn refresh(&self, origin: Origin) {
+		let refresher = self.shared.refresher.read().clone();
+		if let Some(refresher) = refresher {
+			refresher(origin);
+		}
+	}
+
 	pub fn set_waker(&self, waker: impl Fn() + Send + Sync + 'static) {
 		*self.shared.waker.write() = Some(Arc::new(waker));
 	}

@@ -15,7 +15,7 @@ mod types;
 pub use cache::{DiskCache, SizeHint};
 pub use decode::{Limits, decode};
 pub use error::{MediaError, Result, redact_url};
-pub use fetch::{MediaFetcher, MediaFetcherBuilder};
+pub use fetch::{MediaFetcher, MediaFetcherBuilder, Purpose};
 pub use gallery::{
 	ANIMATION_SHARE, Animations, DEFAULT_BUDGET_BYTES, Gallery, GalleryStats, ImageName, ImageRequest,
 	Origin, Pixels, Playback, Status, Update,

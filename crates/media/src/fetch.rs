@@ -34,12 +34,19 @@ const LOOPBACK_HOST: &str = "127.0.0.1";
 
 type SharedFetch = Shared<BoxFuture<'static, Result<Bytes>>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Purpose {
+	Image,
+	Audio,
+}
+
 pub struct MediaFetcherBuilder {
 	hosts: HashSet<String>,
 	max_bytes: usize,
 	loopback_port: Option<u16>,
 	user_agent: String,
 	headers: Vec<(String, String)>,
+	audio_headers: Vec<(String, String)>,
 	concurrency: usize,
 }
 
@@ -74,10 +81,16 @@ impl MediaFetcherBuilder {
 		N: Into<String>,
 		V: Into<String>,
 	{
-		self.headers = headers
-			.into_iter()
-			.map(|(name, value)| (name.into(), value.into()))
-			.collect();
+		self.headers = owned(headers);
+		self
+	}
+
+	pub fn audio_headers<N, V>(mut self, headers: impl IntoIterator<Item = (N, V)>) -> Self
+	where
+		N: Into<String>,
+		V: Into<String>,
+	{
+		self.audio_headers = owned(headers);
 		self
 	}
 
@@ -108,12 +121,13 @@ impl MediaFetcherBuilder {
 			.redirect(policy)
 			.referer(false)
 			.user_agent(self.user_agent)
-			.default_headers(header_map(&self.headers))
 			.build()
 			.map_err(|error| MediaError::Fetch(error.without_url().to_string()))?;
 		Ok(MediaFetcher {
 			inner: Arc::new(FetcherInner {
 				client,
+				image_headers: header_map(&self.headers),
+				audio_headers: header_map(&self.audio_headers),
 				hosts,
 				max_bytes: self.max_bytes,
 				inflight: Mutex::new(HashMap::new()),
@@ -130,9 +144,11 @@ pub struct MediaFetcher {
 
 struct FetcherInner {
 	client: reqwest::Client,
+	image_headers: HeaderMap,
+	audio_headers: HeaderMap,
 	hosts: Arc<Allowed>,
 	max_bytes: usize,
-	inflight: Mutex<HashMap<String, SharedFetch>>,
+	inflight: Mutex<HashMap<(Purpose, String), SharedFetch>>,
 	permits: Semaphore,
 }
 
@@ -147,6 +163,7 @@ impl MediaFetcher {
 			loopback_port: None,
 			user_agent: DEFAULT_USER_AGENT.to_owned(),
 			headers: Vec::new(),
+			audio_headers: Vec::new(),
 			concurrency: DEFAULT_CONCURRENCY,
 		}
 	}
@@ -156,22 +173,27 @@ impl MediaFetcher {
 	}
 
 	pub async fn fetch(&self, url: &str) -> Result<Bytes> {
+		self.fetch_for(url, Purpose::Image).await
+	}
+
+	pub async fn fetch_for(&self, url: &str, purpose: Purpose) -> Result<Bytes> {
 		let parsed = self.inner.validate(url)?;
+		let key = (purpose, url.to_owned());
 		let shared = {
 			let mut inflight = self.inner.inflight.lock();
-			match inflight.get(url) {
+			match inflight.get(&key) {
 				Some(existing) => existing.clone(),
 				None => {
 					let inner = self.inner.clone();
-					let key = url.to_owned();
+					let owned = key.clone();
 					let shared = async move {
-						let result = inner.download(parsed).await;
-						inner.inflight.lock().remove(&key);
+						let result = inner.download(parsed, purpose).await;
+						inner.inflight.lock().remove(&owned);
 						result
 					}
 					.boxed()
 					.shared();
-					inflight.insert(url.to_owned(), shared.clone());
+					inflight.insert(key, shared.clone());
 					shared
 				}
 			}
@@ -191,7 +213,7 @@ impl FetcherInner {
 		}
 	}
 
-	async fn download(&self, url: Url) -> Result<Bytes> {
+	async fn download(&self, url: Url, purpose: Purpose) -> Result<Bytes> {
 		let _permit = self
 			.permits
 			.acquire()
@@ -201,6 +223,10 @@ impl FetcherInner {
 		let mut response = self
 			.client
 			.get(url)
+			.headers(match purpose {
+				Purpose::Image => self.image_headers.clone(),
+				Purpose::Audio => self.audio_headers.clone(),
+			})
 			.send()
 			.await
 			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_url())))?;
@@ -227,6 +253,17 @@ impl FetcherInner {
 		}
 		Ok(body.freeze())
 	}
+}
+
+fn owned<N, V>(headers: impl IntoIterator<Item = (N, V)>) -> Vec<(String, String)>
+where
+	N: Into<String>,
+	V: Into<String>,
+{
+	headers
+		.into_iter()
+		.map(|(name, value)| (name.into(), value.into()))
+		.collect()
 }
 
 fn header_map(headers: &[(String, String)]) -> HeaderMap {

@@ -8,7 +8,7 @@ use tokio::task::spawn_blocking;
 use crate::cache::{DiskCache, SizeHint};
 use crate::decode::{Limits, decode};
 use crate::error::{MediaError, Result, redact_url};
-use crate::fetch::MediaFetcher;
+use crate::fetch::{MediaFetcher, Purpose};
 use crate::resize::resize_decoded;
 use crate::shape::Shape;
 use crate::types::Decoded;
@@ -78,10 +78,18 @@ impl MediaService {
 	}
 
 	pub async fn bytes(&self, url: &str) -> Result<Bytes> {
+		self.bytes_for(url, Purpose::Image).await
+	}
+
+	pub async fn audio(&self, url: &str) -> Result<Bytes> {
+		self.bytes_for(url, Purpose::Audio).await
+	}
+
+	async fn bytes_for(&self, url: &str, purpose: Purpose) -> Result<Bytes> {
 		if let Some(bytes) = self.cached_bytes(url).await {
 			return Ok(bytes);
 		}
-		let bytes = self.inner.fetcher.fetch(url).await?;
+		let bytes = self.inner.fetcher.fetch_for(url, purpose).await?;
 		self.store_on_disk(url, bytes.clone()).await;
 		Ok(bytes)
 	}
