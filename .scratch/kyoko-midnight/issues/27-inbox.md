@@ -4,7 +4,7 @@
 
 **Blocked by:** Midnight 22; v1 10
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/inbox.html`
 
