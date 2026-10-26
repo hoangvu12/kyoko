@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -51,7 +52,6 @@ const TYPING_QUIET: Duration = Duration::from_millis(500);
 const ONE_PING_PER_DM: &str = "one-ping-per-dm";
 const SHOW_ME_YOUR_NAME: &str = "show-me-your-name";
 const DONT_ROUND: &str = "dont-round-my-timestamps";
-const FORMAT_POLL: Duration = Duration::from_millis(20);
 const REDRAWS: usize = 100;
 const FAVORITE_EMOJI_FIRST: &str = "favorite-emoji-first";
 const FAVORITE_QUERY: &str = "wave";
@@ -351,50 +351,45 @@ impl Harness {
 	async fn formats_names_and_times(
 		&self,
 		plugins: &PluginHost,
+		server: &Server,
 		guild_id: Snowflake,
 		channel_id: Snowflake,
 	) -> Result<u64> {
-		let display = bridge::Display::new(Arc::new(plugins.clone()), |_| {});
-		let mut timeline = bridge::Timeline::default();
-		timeline.set_display(display.clone());
-		timeline.select(&self.state.read(), Some(guild_id), channel_id);
-		let deadline = Instant::now() + STEP_TIMEOUT;
-		loop {
-			let shown = {
-				let state = self.state.read();
-				timeline.redraw(&state, Formatting::Names);
-				let mut plain = timeline.messages().filter(|entry| entry.is_plain()).peekable();
-				plain.peek().is_some() && plain.all(|entry| shows_username(&state, guild_id, entry))
-			};
-			if shown {
-				break;
-			}
-			ensure!(
-				Instant::now() < deadline,
-				"ShowMeYourName did not reach the timeline"
-			);
-			tokio::time::sleep(FORMAT_POLL).await;
-		}
+		let wake = self.wake.clone();
+		let display = bridge::Display::new(Arc::new(plugins.clone()), move |_| wake.notify_one());
+		let timeline = RefCell::new(bridge::Timeline::default());
+		timeline.borrow_mut().set_display(display.clone());
+		timeline
+			.borrow_mut()
+			.select(&self.state.read(), Some(guild_id), channel_id);
+		self.wait("ShowMeYourName to settle on the timeline", || {
+			let state = self.state.read();
+			let settled = members_settled(&state, server, guild_id, channel_id);
+			let mut timeline = timeline.borrow_mut();
+			timeline.redraw(&state, Formatting::Names);
+			let mut plain = timeline.messages().filter(|entry| entry.is_plain()).peekable();
+			settled
+				&& display.pending() == 0
+				&& plain.peek().is_some()
+				&& plain.all(|entry| shows_username(&state, guild_id, entry))
+		})
+		.await?;
 		let calls = display.calls();
 		for _ in 0..REDRAWS {
-			timeline.redraw(&self.state.read(), Formatting::Names);
+			timeline
+				.borrow_mut()
+				.redraw(&self.state.read(), Formatting::Names);
 		}
 		ensure!(
-			display.calls() == calls,
+			display.calls() == calls && display.pending() == 0,
 			"redrawing the timeline asked ShowMeYourName again"
 		);
 		let now = chrono::Utc::now();
 		let unix = (now - chrono::TimeDelta::hours(2 * 24 + 23)).timestamp();
-		loop {
-			if display.relative(unix, now) == "2 days ago" {
-				break;
-			}
-			ensure!(
-				Instant::now() < deadline,
-				"DontRoundMyTimestamps did not round a relative time down"
-			);
-			tokio::time::sleep(FORMAT_POLL).await;
-		}
+		self.wait("DontRoundMyTimestamps to round a relative time down", || {
+			display.relative(unix, now) == "2 days ago"
+		})
+		.await?;
 		Ok(display.calls())
 	}
 
@@ -464,6 +459,22 @@ fn shows_username(state: &State, guild_id: Snowflake, entry: &bridge::MessageEnt
 	let name = person.name().to_owned();
 	let extra = (name.to_lowercase() != person.username.to_lowercase()).then_some(person.username.as_str());
 	entry.author == name && entry.author_extra.as_deref() == extra
+}
+
+fn members_settled(state: &State, server: &Server, guild_id: Snowflake, channel_id: Snowflake) -> bool {
+	let Some(guild) = server
+		.fixtures()
+		.guilds
+		.iter()
+		.find(|guild| guild.id == guild_id.0)
+	else {
+		return true;
+	};
+	state
+		.backfill_needs(channel_id, None)
+		.members
+		.iter()
+		.all(|user_id| guild.member(user_id.0).is_none())
 }
 
 fn first_text_channel(state: &State) -> Option<(Snowflake, Snowflake)> {
@@ -623,7 +634,7 @@ async fn scenario(
 		})
 		.await?;
 	let display_calls = harness
-		.formats_names_and_times(&plugins, guild_id, channel_id)
+		.formats_names_and_times(&plugins, server, guild_id, channel_id)
 		.await?;
 	let cleaned_id = harness.round_trip_as(channel_id, DIRTY_LINK, CLEAN_LINK).await?;
 	ensure!(
