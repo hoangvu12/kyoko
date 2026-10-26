@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 23 (Channel sidebar)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Hidden channels show in the sidebar with a lock icon and an info view
 - [ ] No message fetch or subscription is ever made for a hidden channel
