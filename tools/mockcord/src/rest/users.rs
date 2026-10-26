@@ -230,3 +230,29 @@ pub async fn invite(State(shared): State<Arc<Shared>>, Path(code): Path<String>)
 		"approximate_presence_count": online,
 	})))
 }
+
+pub async fn recent_mentions(
+	State(shared): State<Arc<Shared>>,
+	Query(params): Query<HashMap<String, String>>,
+) -> Json<Value> {
+	let flag = |name: &str| params.get(name).is_none_or(|value| value != "false");
+	let query = crate::mentions::MentionsQuery {
+		limit: params
+			.get("limit")
+			.and_then(|limit| limit.parse().ok())
+			.unwrap_or(crate::mentions::DEFAULT_LIMIT),
+		before: params.get("before").and_then(|id| id.parse().ok()),
+		guild_id: params.get("guild_id").and_then(|id| id.parse().ok()),
+		everyone: flag("everyone"),
+		roles: flag("roles"),
+	};
+	Json(Value::Array(shared.recent_mentions(&query)))
+}
+
+pub async fn dismiss_mention(
+	State(shared): State<Arc<Shared>>,
+	Path(id): Path<u64>,
+) -> Result<axum::http::StatusCode, ApiError> {
+	shared.dismiss_mention(id);
+	Ok(axum::http::StatusCode::NO_CONTENT)
+}

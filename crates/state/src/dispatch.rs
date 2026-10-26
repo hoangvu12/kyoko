@@ -85,6 +85,7 @@ impl State {
 			DispatchEvent::MessagePollVoteAdd(vote) => self.poll_voted(vote, 1),
 			DispatchEvent::MessagePollVoteRemove(vote) => self.poll_voted(vote, -1),
 			DispatchEvent::MessageAck(ack) => self.message_ack(ack),
+			DispatchEvent::RecentMentionDelete(delete) => self.remove_recent_mention(delete.message_id),
 			DispatchEvent::ChannelCreate(channel) if channel.guild_id.is_none() => Changes {
 				private_channels: self.add_late_private_channels(std::slice::from_ref(&**channel)),
 				..Changes::default()

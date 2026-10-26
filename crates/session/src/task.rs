@@ -54,6 +54,7 @@ mod interactions;
 mod layout;
 mod locks;
 mod member_requests;
+mod mentions;
 mod moderation;
 mod outbox;
 mod profiles;
@@ -248,6 +249,7 @@ pub(crate) struct Core {
 	components: components::Components,
 	ranker: emoji_rank::EmojiRanker,
 	favorite_writes: favorite_writes::FavoriteWrites,
+	mentions: mentions::Mentions,
 }
 
 fn page_query(
@@ -330,6 +332,7 @@ impl Core {
 			components: components::Components::default(),
 			ranker: emoji_rank::EmojiRanker::default(),
 			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
+			mentions: mentions::Mentions::default(),
 		}
 	}
 

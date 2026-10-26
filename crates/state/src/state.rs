@@ -667,6 +667,9 @@ impl State {
 				return self.remote_video_changed(*user_id, *kind, *active);
 			}
 			LocalEvent::Loaded(loaded) => return self.apply_loaded(loaded),
+			LocalEvent::RecentMentionRemoved { message_id } => {
+				return self.remove_recent_mention(*message_id);
+			}
 			LocalEvent::CommandRejected { reason } => {
 				self.rejection_count += 1;
 				self.rejection = Some(Rejection {

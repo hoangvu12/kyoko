@@ -15,6 +15,7 @@ mod ids;
 mod json;
 mod media;
 mod member_list;
+mod mentions;
 mod ops;
 mod password;
 mod polls;

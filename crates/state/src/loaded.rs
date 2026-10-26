@@ -17,6 +17,9 @@ use crate::state::{State, intern_user};
 
 #[derive(Debug, Clone)]
 pub enum Loaded {
+	RecentMentions {
+		messages: Vec<Message>,
+	},
 	Pins {
 		channel_id: Snowflake,
 		messages: Vec<Message>,
@@ -268,6 +271,7 @@ pub(crate) struct Lazy {
 	pub(crate) community: crate::community::Community,
 	pub(crate) reaction_users: HashMap<ReactorsKey, Reactors>,
 	pub(crate) expressions: Expressions,
+	pub(crate) mentions: Option<Vec<Arc<Message>>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -463,6 +467,7 @@ impl State {
 	pub(crate) fn apply_loaded(&mut self, loaded: &Loaded) -> Changes {
 		let mut changes = Changes::default();
 		match loaded {
+			Loaded::RecentMentions { messages } => changes.merge(self.recent_mentions_loaded(messages)),
 			Loaded::Pins { channel_id, messages } => {
 				let guild_id = self.channel_guild(*channel_id);
 				let shared = messages

@@ -308,6 +308,12 @@ pub struct ChannelPinsUpdate {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
+pub struct RecentMentionDelete {
+	pub message_id: Snowflake,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThreadDelete {
 	pub id: Snowflake,
 	pub guild_id: Option<Snowflake>,
@@ -502,6 +508,7 @@ pub enum DispatchEvent {
 	ChannelUpdate(Box<Channel>),
 	ChannelDelete(Box<Channel>),
 	ChannelPinsUpdate(ChannelPinsUpdate),
+	RecentMentionDelete(RecentMentionDelete),
 	ChannelUnreadUpdate(Box<ChannelUnreadUpdate>),
 	ThreadCreate(Box<Channel>),
 	ThreadUpdate(Box<Channel>),
@@ -579,6 +586,7 @@ impl DispatchEvent {
 			"CHANNEL_UPDATE" => Self::ChannelUpdate(decode(name, data)?),
 			"CHANNEL_DELETE" => Self::ChannelDelete(decode(name, data)?),
 			"CHANNEL_PINS_UPDATE" => Self::ChannelPinsUpdate(decode(name, data)?),
+			"RECENT_MENTION_DELETE" => Self::RecentMentionDelete(decode(name, data)?),
 			"CHANNEL_UNREAD_UPDATE" => Self::ChannelUnreadUpdate(decode(name, data)?),
 			"THREAD_CREATE" => Self::ThreadCreate(decode(name, data)?),
 			"THREAD_UPDATE" => Self::ThreadUpdate(decode(name, data)?),

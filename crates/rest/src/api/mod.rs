@@ -13,3 +13,4 @@ pub use channels::{
 pub use expressions::{GIF_PROVIDER, GifProvider};
 pub use guild_admin::image_data_uri;
 pub use interactions::{CommandScope, UploadSlot, UploadSlotRequest};
+pub use users::{MENTIONS_PAGE, MentionsQuery};

@@ -233,6 +233,14 @@ pub enum Command {
 	LoadPins {
 		channel_id: Snowflake,
 	},
+	LoadRecentMentions {
+		everyone: bool,
+		roles: bool,
+		guild_id: Option<Snowflake>,
+	},
+	RemoveRecentMention {
+		message_id: Snowflake,
+	},
 	PinMessage {
 		channel_id: Snowflake,
 		message_id: Snowflake,

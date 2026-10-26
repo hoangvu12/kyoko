@@ -24,6 +24,7 @@ mod kept;
 mod layout;
 mod locks;
 mod members;
+mod mentions;
 mod moderation;
 mod polls;
 mod reactions;

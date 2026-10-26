@@ -1,10 +1,31 @@
 use protocol::fingerprint::ContextProperties;
-use protocol::{Guild, LenientVec, Relationship, Snowflake, User};
+use protocol::{Guild, LenientVec, Message, Relationship, Snowflake, User};
 use serde_json::{Value, json};
 
 use crate::client::RestClient;
 use crate::error::Result;
 use crate::request::Request;
+
+pub const MENTIONS_PAGE: u8 = 25;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MentionsQuery {
+	pub limit: u8,
+	pub roles: bool,
+	pub everyone: bool,
+	pub guild_id: Option<Snowflake>,
+}
+
+impl Default for MentionsQuery {
+	fn default() -> Self {
+		Self {
+			limit: MENTIONS_PAGE,
+			roles: true,
+			everyone: true,
+			guild_id: None,
+		}
+	}
+}
 
 impl RestClient {
 	pub async fn current_user(&self) -> Result<User> {
@@ -111,6 +132,23 @@ impl RestClient {
 		let scope = guild_id.map_or_else(|| "@me".to_owned(), |id| id.to_string());
 		let request = Request::patch(format!("/users/@me/guilds/{scope}/settings")).json(&changes);
 		self.send(request).await
+	}
+
+	pub async fn recent_mentions(&self, query: MentionsQuery) -> Result<LenientVec<Message>> {
+		let mut pairs = vec![
+			("limit", query.limit.to_string()),
+			("roles", query.roles.to_string()),
+			("everyone", query.everyone.to_string()),
+		];
+		if let Some(guild_id) = query.guild_id {
+			pairs.push(("guild_id", guild_id.to_string()));
+		}
+		self.send(Request::get("/users/@me/mentions").query(&pairs)).await
+	}
+
+	pub async fn delete_recent_mention(&self, message_id: Snowflake) -> Result<()> {
+		self.send_empty(Request::delete(format!("/users/@me/mentions/{message_id}")))
+			.await
 	}
 
 	pub async fn ack_bulk(&self, read_states: Vec<(Snowflake, Snowflake)>) -> Result<()> {

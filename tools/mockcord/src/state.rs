@@ -61,6 +61,7 @@ pub struct Store {
 	pub more_apps: bool,
 	pub uploads: HashMap<String, UploadedFile>,
 	pub reactors: HashMap<(u64, String, bool), Vec<u64>>,
+	pub dismissed_mentions: BTreeSet<u64>,
 	last_id: u64,
 }
 
@@ -173,6 +174,7 @@ impl Store {
 			more_apps: false,
 			uploads: HashMap::new(),
 			reactors: HashMap::new(),
+			dismissed_mentions: BTreeSet::new(),
 			last_id,
 		}
 	}

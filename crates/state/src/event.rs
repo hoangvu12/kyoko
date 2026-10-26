@@ -163,6 +163,9 @@ pub enum LocalEvent {
 		active: bool,
 	},
 	Loaded(Box<Loaded>),
+	RecentMentionRemoved {
+		message_id: Snowflake,
+	},
 	CommandRejected {
 		reason: String,
 	},

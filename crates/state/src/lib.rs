@@ -13,6 +13,7 @@ mod kept;
 mod loaded;
 mod locks;
 mod member_list;
+mod mentions;
 mod messages;
 mod modal;
 mod notifications;
@@ -51,6 +52,7 @@ pub use loaded::{
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};
+pub use mentions::UnreadChannel;
 pub use messages::{
 	ChannelMessages, CommandStage, DEFERRED_REPLY_WINDOW, PendingFile, PendingMessage, SendFailure,
 	UploadProgress, Viewport, apply_update, reaction_name,

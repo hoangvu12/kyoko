@@ -74,6 +74,8 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			put(admin::put_relationship).delete(admin::delete_relationship),
 		)
 		.route("/users/@me/channels", post(users::create_dm))
+		.route("/users/@me/mentions", get(users::recent_mentions))
+		.route("/users/@me/mentions/{id}", delete(users::dismiss_mention))
 		.route("/users/{id}", get(users::user))
 		.route("/users/{id}/profile", get(users::profile))
 		.route("/read-states/ack-bulk", post(admin::ack_bulk))

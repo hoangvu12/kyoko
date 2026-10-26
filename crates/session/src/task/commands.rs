@@ -3,7 +3,7 @@ use protocol::{Permissions, Snowflake, StatusKind};
 use std::time::Duration;
 
 use rest::RestClient;
-use rest::api::{ReactionRef, ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
+use rest::api::{MentionsQuery, ReactionRef, ThreadList, ThreadSearch, ThreadSearchReply, image_data_uri};
 use serde_json::{Value, json};
 use state::Loaded;
 
@@ -69,6 +69,8 @@ impl Core {
 			| Command::LoadForumPosts { .. }
 			| Command::CreateForumPost { .. }
 			| Command::LoadPins { .. }
+			| Command::LoadRecentMentions { .. }
+			| Command::RemoveRecentMention { .. }
 			| Command::PinMessage { .. }
 			| Command::UnpinMessage { .. }
 			| Command::LoadProfile { .. }
@@ -259,6 +261,17 @@ impl Core {
 				}
 			}
 			Command::LoadPins { channel_id } => self.load_pins(channel_id),
+			Command::LoadRecentMentions {
+				everyone,
+				roles,
+				guild_id,
+			} => self.load_recent_mentions(MentionsQuery {
+				everyone,
+				roles,
+				guild_id,
+				..MentionsQuery::default()
+			}),
+			Command::RemoveRecentMention { message_id } => self.remove_recent_mention(message_id),
 			Command::PinMessage {
 				channel_id,
 				message_id,
