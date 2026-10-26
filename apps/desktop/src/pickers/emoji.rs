@@ -22,7 +22,7 @@ use crate::timeline::{icon, tok};
 
 const COLUMNS: usize = 9;
 const CELL: f32 = 48.;
-const CELL_IMAGE: f32 = 40.;
+pub(crate) const CELL_IMAGE: f32 = 40.;
 const GRID_PADDING: f32 = 8.;
 const GRID_WIDTH: f32 = INNER_WIDTH - RAIL;
 const TONE_GLYPH: f32 = 24.;

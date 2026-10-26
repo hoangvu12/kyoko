@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chrono::{DateTime, Local, TimeZone, Utc};
 use markdown::{Document, GuildNavKind, Mentions, Node, TimestampStyle};
-use protocol::{Message, MessageType, Poll, Snowflake, User};
+use protocol::{Message, MessageType, Snowflake, User};
 use state::{RenderedMessage, ReplyTarget, State};
 use url::Url;
 
@@ -375,6 +375,7 @@ pub enum SystemIcon {
 	Call,
 	Rename,
 	Picture,
+	Poll,
 	Other,
 }
 
@@ -419,96 +420,10 @@ pub fn system_line(kind: MessageType, name: &str, target: &str, content: &str) -
 			format!("{name} changed the channel name: {content}"),
 		),
 		MessageType::ChannelIconChange => (SystemIcon::Picture, format!("{name} changed the group icon.")),
+		MessageType::PollResult => (SystemIcon::Poll, format!("{name}'s poll has closed.")),
 		_ => (SystemIcon::Other, format!("{name} sent a system message.")),
 	};
 	SystemLine { icon, text }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PollSummary {
-	pub question: String,
-	pub choices: Vec<PollChoice>,
-	pub total: i64,
-	pub finished: bool,
-	pub multi: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PollChoice {
-	pub id: i64,
-	pub text: String,
-	pub count: i64,
-	pub share: f32,
-	pub voted: bool,
-}
-
-impl PollSummary {
-	pub fn of(poll: &Poll, now: DateTime<Utc>) -> Self {
-		let count_of = |id: i64| {
-			poll.results
-				.as_ref()
-				.and_then(|results| results.answer_counts.iter().find(|entry| entry.id == id))
-				.map_or((0, false), |entry| (entry.count.max(0), entry.me_voted))
-		};
-		let total: i64 = poll
-			.answers
-			.iter()
-			.map(|answer| count_of(answer.answer_id.unwrap_or_default()).0)
-			.sum();
-		let choices = poll
-			.answers
-			.iter()
-			.map(|answer| {
-				let id = answer.answer_id.unwrap_or_default();
-				let (count, voted) = count_of(id);
-				PollChoice {
-					id,
-					text: answer.poll_media.text.clone().unwrap_or_default(),
-					count,
-					share: if total > 0 {
-						count as f32 / total as f32
-					} else {
-						0.
-					},
-					voted,
-				}
-			})
-			.collect();
-		Self {
-			question: poll.question.text.clone().unwrap_or_default(),
-			choices,
-			total,
-			finished: poll.results.as_ref().is_some_and(|results| results.is_finalized)
-				|| poll.expiry.is_some_and(|expiry| expiry <= now),
-			multi: poll.allow_multiselect,
-		}
-	}
-
-	pub fn voted(&self) -> Vec<i64> {
-		self.choices
-			.iter()
-			.filter(|choice| choice.voted)
-			.map(|choice| choice.id)
-			.collect()
-	}
-
-	pub fn hint(&self) -> &'static str {
-		if self.finished {
-			"Poll closed"
-		} else if self.multi {
-			"Select one or more answers"
-		} else {
-			"Select one answer"
-		}
-	}
-
-	pub fn votes_label(&self) -> String {
-		if self.total == 1 {
-			"1 vote".to_owned()
-		} else {
-			format!("{} votes", self.total)
-		}
-	}
 }
 
 pub fn percent(share: f32) -> u32 {

@@ -270,9 +270,13 @@ fn polls_sum_votes_and_close_at_expiry() {
 	assert_eq!(open.voted(), vec![1]);
 	assert_eq!(open.hint(), "Select one or more answers");
 	assert_eq!(open.votes_label(), "4 votes");
+	assert_eq!(open.footer(), "4 votes \u{b7} 1h left");
+	assert!(!open.choices[0].winner);
 	let closed = PollSummary::of(&poll, now + Duration::hours(2));
 	assert!(closed.finished);
-	assert_eq!(closed.hint(), "Poll closed");
+	assert_eq!(closed.hint(), "Select one or more answers");
+	assert_eq!(closed.footer(), "4 votes \u{b7} Poll closed");
+	assert!(closed.choices[0].winner && !closed.choices[1].winner);
 }
 
 #[test]

@@ -41,6 +41,17 @@ pub const COMPONENTS_SECTION: &str = "showcase: components";
 pub const RELEASE_QUESTION: &str = "did the release post go out";
 pub const REACTIONS_SECTION: &str = "showcase: reactions";
 pub const VOICE_SECTION: &str = "showcase: voice messages";
+pub const POLLS_SECTION: &str = "showcase: polls";
+pub const ENDED_POLL_SECTION: &str = "showcase: ended poll";
+pub const POLL_QUESTION: &str = "What should we play tonight?";
+pub const ENDED_POLL_LEAD: &str = "vote before it closes";
+const POLL_ANSWERS: [(&str, &str); 3] = [
+	("\u{1f3af}", "Valorant"),
+	("\u{26cf}\u{fe0f}", "Minecraft"),
+	("\u{1f526}", "Lethal Company"),
+];
+const POLL_COUNTS: [i64; 3] = [7, 3, 2];
+const VOTED_ANSWER: usize = 1;
 pub const AUDIO_CAPTION: &str = "here is the loop as a file";
 pub const REACTIONS_MESSAGE: &str =
 	"midnight 2.1.1 is out: picker shadow fixed, reaction chips use the theme tokens now";
@@ -273,6 +284,55 @@ fn poll(
 						id: index as i64 + 1,
 						count: *count,
 						me_voted: *me_voted,
+					})
+					.collect::<Vec<_>>(),
+			),
+		}),
+	}
+}
+
+fn open_poll_expiry() -> DateTime<Utc> {
+	let now = Utc::now().timestamp();
+	let hour = Duration::hours(1).num_seconds();
+	DateTime::from_timestamp(now - now % hour, 0).unwrap_or_default() + Duration::hours(24)
+}
+
+fn game_poll(voted: Option<usize>, finished: bool, expiry: DateTime<Utc>) -> Poll {
+	Poll {
+		question: PollMedia {
+			text: Some(POLL_QUESTION.to_owned()),
+			emoji: None,
+		},
+		answers: LenientVec::from(
+			POLL_ANSWERS
+				.iter()
+				.enumerate()
+				.map(|(index, (emoji, text))| PollAnswer {
+					answer_id: Some(index as i64 + 1),
+					poll_media: PollMedia {
+						text: Some((*text).to_owned()),
+						emoji: Some(PartialEmoji {
+							id: None,
+							name: Some((*emoji).to_owned()),
+							animated: false,
+						}),
+					},
+				})
+				.collect::<Vec<_>>(),
+		),
+		expiry: Some(expiry),
+		allow_multiselect: false,
+		layout_type: Some(PollLayout::Default),
+		results: Some(PollResults {
+			is_finalized: finished,
+			answer_counts: LenientVec::from(
+				POLL_COUNTS
+					.iter()
+					.enumerate()
+					.map(|(index, count)| PollAnswerCount {
+						id: index as i64 + 1,
+						count: *count,
+						me_voted: voted == Some(index),
 					})
 					.collect::<Vec<_>>(),
 			),
@@ -681,6 +741,29 @@ pub fn build(spec: &Showcase) -> Built {
 		),
 		MessageFlags::IS_COMPONENTS_V2,
 	);
+	writer.section(POLLS_SECTION);
+	let open_until = open_poll_expiry();
+	writer.post(1, |message| {
+		message.poll = Some(game_poll(None, false, open_until));
+	});
+	writer.post(1, |message| {
+		message.poll = Some(game_poll(Some(VOTED_ANSWER), false, open_until));
+	});
+
+	writer.section(ENDED_POLL_SECTION);
+	writer.say(2, ENDED_POLL_LEAD);
+	let closed_at = writer.time();
+	let ended = writer.post(1, |message| {
+		message.poll = Some(game_poll(None, true, closed_at));
+	});
+	let ended_message = writer.stored(ended);
+	writer.post(1, |message| {
+		message.kind = MessageType::PollResult;
+		message.message_reference = Some(writer_reference(spec, ended));
+		if let Some(poll) = ended_message.as_ref().and_then(|stored| stored.poll.as_ref()) {
+			message.embeds = LenientVec::from(vec![crate::polls::result_embed(poll)]);
+		}
+	});
 
 	writer.section(REACTIONS_SECTION);
 	writer.post(1, |message| {

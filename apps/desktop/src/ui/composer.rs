@@ -575,6 +575,21 @@ impl Link {
 					self.publish_composer_all(pane);
 				}
 			}
+			Request::SendPoll(pane, poll) => {
+				if let Some(open) = self.pane_open(pane) {
+					self.send(session::Command::SendPoll {
+						channel_id: open.channel_id,
+						poll,
+					});
+				}
+			}
+			Request::PollEmoji => {
+				if let Some(shared) = self.state() {
+					let model = bridge::EmojiPicker::of(&shared.read(), self.open_guild());
+					self.composer_layer.pick_poll_emoji(model);
+				}
+			}
+			Request::ImagesChanged => self.refresh_visible(),
 		}
 	}
 
@@ -584,7 +599,16 @@ impl Link {
 				self.pane_open(pane)
 					.is_some_and(|open| bridge::can_create_threads(&shared.read(), open.channel_id))
 			});
-		self.composer_layer.open_menu(PlusMenu { pane, at, thread });
+		let poll = self.state().is_some_and(|shared| {
+			self.pane_open(pane)
+				.is_some_and(|open| bridge::can_create_polls(&shared.read(), open.channel_id))
+		});
+		self.composer_layer.open_menu(PlusMenu {
+			pane,
+			at,
+			thread,
+			poll,
+		});
 	}
 
 	fn composer_edit_file(&self, pane: Pane, id: u64) {

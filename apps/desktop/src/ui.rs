@@ -15,6 +15,7 @@ mod message_actions;
 mod notices;
 mod plugin_slots;
 mod plugins;
+mod poll_shots;
 mod profiles;
 mod qr_code;
 mod reaction_shots;
@@ -523,7 +524,8 @@ impl Link {
 		members.set_display(display.clone());
 		let toasts = ToastLayer::new(&window.runtime);
 		let scrim = crate::scrim::Scrim::new(&window.runtime);
-		let composer_layer = crate::composer_layer::ComposerLayer::new(&window.runtime);
+		let composer_layer =
+			crate::composer_layer::ComposerLayer::new(&window.runtime, timeline_view.pictures());
 		let friend_dialog = FriendDialog::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let server = server_settings::ServerSettingsView::new(host, &window.runtime);
@@ -899,6 +901,7 @@ impl Link {
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::VoiceMessage => self.drive_voice_message().await,
 			capture::Screen::Components(shot) => self.drive_component_shot(*shot).await,
+			capture::Screen::Polls(shot) => self.drive_polls(*shot).await,
 			capture::Screen::Reactions(shot) => self.drive_reaction_shot(*shot).await,
 			capture::Screen::ComposerShot(shot) => self.drive_composer_shot(*shot).await,
 			capture::Screen::CloneDialog => {
@@ -1353,6 +1356,7 @@ impl Link {
 		names.extend(self.server_images());
 		names.extend(self.friends_images());
 		names.extend(self.dm_panel.images());
+		names.extend(self.composer_layer.images().iter().map(|name| name.to_string()));
 		names.extend(self.login_images());
 		names.extend(
 			self.timeline_view

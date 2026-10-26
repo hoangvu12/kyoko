@@ -122,6 +122,9 @@ pub const MOCKUPS: &[(&str, &str)] = &[
 	("message-components-v2", "message-components-v2"),
 	("app-modal", "app-modal"),
 	("app-modal-error", "app-modal-error"),
+	("poll-create", "poll-create"),
+	("poll-in-messages", "poll-in-messages"),
+	("poll-in-messages-ended", "poll-in-messages-ended"),
 ];
 
 pub struct Pairing {

@@ -108,6 +108,7 @@ pub enum Screen {
 	FriendConfirm(FriendShot),
 	VoiceMessage,
 	Components(ComponentShot),
+	Polls(PollShot),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +118,13 @@ pub enum ComponentShot {
 	V2,
 	Modal,
 	ModalError,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PollShot {
+	Create,
+	Messages,
+	Ended,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,6 +284,9 @@ impl Screen {
 			"message-components-v2" => Some(Screen::Components(ComponentShot::V2)),
 			"app-modal" => Some(Screen::Components(ComponentShot::Modal)),
 			"app-modal-error" => Some(Screen::Components(ComponentShot::ModalError)),
+			"poll-create" => Some(Screen::Polls(PollShot::Create)),
+			"poll-in-messages" => Some(Screen::Polls(PollShot::Messages)),
+			"poll-in-messages-ended" => Some(Screen::Polls(PollShot::Ended)),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -339,7 +350,8 @@ impl Screen {
 			| Screen::Reactions(_)
 			| Screen::FriendConfirm(_)
 			| Screen::VoiceMessage
-			| Screen::Components(_) => Some(Opening::First),
+			| Screen::Components(_)
+			| Screen::Polls(_) => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

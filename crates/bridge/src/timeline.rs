@@ -210,7 +210,6 @@ fn is_plain(kind: MessageType) -> bool {
 			| MessageType::Reply
 			| MessageType::ChatInputCommand
 			| MessageType::ContextMenuCommand
-			| MessageType::PollResult
 	)
 }
 

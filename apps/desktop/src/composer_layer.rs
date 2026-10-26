@@ -1,14 +1,19 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use bridge::FileEdit;
+use bridge::{EmojiPicker, FileEdit};
+use media::ImageName;
+use protocol::PartialEmoji;
+use session::PollDraft;
 use zgx::compose::prelude::*;
 use zgx::compose::{Placement, PlacementEdge, PlacementSide};
 use zgx::reactive::{Runtime, Signal};
 
 use crate::kit::{self, Variant};
 use crate::motion;
-use crate::timeline::{icon, tok};
+use crate::pickers::{CELL_IMAGE, ExpressionPicker, Mode, Tab};
+use crate::poll_dialog::PollForm;
+use crate::timeline::{Pictures, icon, tok};
 
 const MENU_ICON: f32 = 20.;
 const MENU_OFFSET: f32 = 8.;
@@ -27,6 +32,9 @@ pub enum Request {
 	Upload(Pane),
 	CreateThread,
 	SaveFile(Pane, u64, FileEdit),
+	SendPoll(Pane, PollDraft),
+	PollEmoji,
+	ImagesChanged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -34,6 +42,7 @@ pub struct PlusMenu {
 	pub pane: Pane,
 	pub at: (f32, f32),
 	pub thread: bool,
+	pub poll: bool,
 }
 
 #[derive(Clone)]
@@ -63,11 +72,15 @@ pub struct ComposerLayer {
 	drop: Signal<Option<String>>,
 	window: Signal<(f32, f32)>,
 	requests: Handler,
+	pictures: Rc<Pictures>,
+	poll: Rc<PollForm>,
+	poll_pane: std::cell::Cell<Pane>,
+	picker: Rc<ExpressionPicker>,
 }
 
 impl ComposerLayer {
-	pub fn new(runtime: &Runtime) -> Rc<Self> {
-		Rc::new(Self {
+	pub fn new(runtime: &Runtime, pictures: Rc<Pictures>) -> Rc<Self> {
+		let layer = Rc::new(Self {
 			runtime: runtime.clone(),
 			menu_open: runtime.signal(false),
 			menu: runtime.signal(None),
@@ -76,7 +89,82 @@ impl ComposerLayer {
 			drop: runtime.signal(None),
 			window: runtime.signal((0., 0.)),
 			requests: RefCell::new(None),
-		})
+			poll: PollForm::new(runtime, pictures.clone()),
+			picker: ExpressionPicker::new(runtime, pictures.clone(), Mode::Reaction),
+			poll_pane: std::cell::Cell::new(Pane::Main),
+			pictures,
+		});
+		let weak = Rc::downgrade(&layer);
+		layer.poll.on_post(move |draft| {
+			if let Some(layer) = weak.upgrade() {
+				layer.picker.close();
+				layer.request(Request::SendPoll(layer.poll_pane.get(), draft));
+			}
+		});
+		let weak = Rc::downgrade(&layer);
+		layer.poll.on_pick_emoji(move |_| {
+			if let Some(layer) = weak.upgrade() {
+				layer.request(Request::PollEmoji);
+			}
+		});
+		let weak = Rc::downgrade(&layer);
+		layer.picker.on_images_changed(move || {
+			if let Some(layer) = weak.upgrade() {
+				layer.request(Request::ImagesChanged);
+			}
+		});
+		let weak = Rc::downgrade(&layer);
+		layer.picker.on_emoji(move |cell| {
+			let Some(layer) = weak.upgrade() else {
+				return;
+			};
+			let emoji = match (&cell.glyph, &cell.custom) {
+				(Some(glyph), _) => PartialEmoji {
+					id: None,
+					name: Some(glyph.clone()),
+					animated: false,
+				},
+				(None, Some(custom)) => PartialEmoji {
+					id: Some(custom.id),
+					name: None,
+					animated: custom.animated,
+				},
+				(None, None) => return,
+			};
+			layer.poll.set_emoji(emoji);
+			layer.picker.close();
+			layer.request(Request::ImagesChanged);
+		});
+		layer
+	}
+
+	pub fn poll_form(&self) -> &Rc<PollForm> {
+		&self.poll
+	}
+
+	pub fn open_poll(&self, pane: Pane) {
+		self.poll_pane.set(pane);
+		self.picker.close();
+		self.poll.open();
+	}
+
+	pub fn pick_poll_emoji(&self, model: EmojiPicker) {
+		let (width, _) = self.window.with_untracked(|window| *window);
+		let (_, y) = self.poll.spot();
+		let right = (width + crate::poll_dialog::DIALOG_WIDTH) / 2.;
+		self.picker.set_emoji(model);
+		self.picker.open(Tab::Emoji, (right, y));
+	}
+
+	pub fn images(&self) -> Vec<ImageName> {
+		let mut names = self.picker.images();
+		names.extend(
+			self.poll
+				.custom_emoji()
+				.into_iter()
+				.map(|(id, animated)| self.pictures.emoji(id, animated, f64::from(CELL_IMAGE))),
+		);
+		names
 	}
 
 	pub fn on_request(&self, handler: impl Fn(Request) + 'static) {
@@ -127,6 +215,8 @@ impl ComposerLayer {
 			.child(self.menu_view())
 			.child(self.edit_view())
 			.child(self.drop_view())
+			.child(self.poll.view())
+			.child(self.picker.view())
 	}
 
 	fn menu_view(self: &Rc<Self>) -> View {
@@ -141,7 +231,7 @@ impl ComposerLayer {
 	fn menu_panel(self: &Rc<Self>, menu: PlusMenu, open: Signal<bool>) -> View {
 		let (x, y) = menu.at;
 		let spot = div().absolute().left(x).top(y).w(0.).h(0.);
-		let (upload, thread) = (self.clone(), self.clone());
+		let (upload, thread, poll) = (self.clone(), self.clone(), self.clone());
 		let pane = menu.pane;
 		let mut items = vec![
 			entry("Upload a File", "upload")
@@ -153,6 +243,16 @@ impl ComposerLayer {
 				entry("Create Thread", "thread")
 					.id("composer-menu-thread")
 					.on_click(move || thread.choose(Request::CreateThread)),
+			);
+		}
+		if menu.poll {
+			items.push(
+				entry("Create Poll", "poll")
+					.id("composer-menu-poll")
+					.on_click(move || {
+						poll.menu_open.set(false);
+						poll.open_poll(pane);
+					}),
 			);
 		}
 		kit::menu_panel(

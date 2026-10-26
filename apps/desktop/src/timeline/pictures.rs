@@ -259,6 +259,13 @@ impl Pictures {
 				.iter()
 				.filter_map(|reaction| self.reaction(&reaction.emoji)),
 		);
+		if let Some(poll) = &message.poll {
+			names.extend(
+				poll.answers
+					.iter()
+					.filter_map(|answer| self.reaction(answer.poll_media.emoji.as_ref()?)),
+			);
+		}
 		names.dedup();
 		names
 	}

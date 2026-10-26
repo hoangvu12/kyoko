@@ -19,6 +19,7 @@ mod motion;
 mod notify;
 mod pickers;
 mod plugin_menu;
+mod poll_dialog;
 mod profile;
 mod rail;
 mod scrim;

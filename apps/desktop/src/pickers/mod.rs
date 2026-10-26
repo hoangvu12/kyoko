@@ -1,4 +1,5 @@
 mod emoji;
+pub(crate) use emoji::CELL_IMAGE;
 mod gif;
 mod sticker;
 

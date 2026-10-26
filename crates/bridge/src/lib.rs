@@ -23,6 +23,7 @@ mod member_list;
 mod message;
 mod password_login;
 mod playback;
+mod polls;
 mod profile;
 mod qr_login;
 mod rail;
@@ -112,10 +113,10 @@ pub use member_list::{
 	MemberRowKind, OpenMembers, layout_of,
 };
 pub use message::{
-	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, PollChoice,
-	PollSummary, Quote, ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL,
-	UNKNOWN_ROLE, UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name,
-	reaction_key, snippet, system_line, timestamp_in, timestamp_text, user_display,
+	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, Quote,
+	ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, SystemIcon, SystemLine, UNKNOWN_CHANNEL, UNKNOWN_ROLE,
+	UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name, reaction_key,
+	snippet, system_line, timestamp_in, timestamp_text, user_display,
 };
 pub use password_login::{
 	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,
@@ -125,6 +126,7 @@ pub use playback::{
 	AudioFailure, AudioPhase, AudioPlayer, AudioSpeed, AudioState, AudioTrack, FLAT_BAR, PROBE_LIMIT_BYTES,
 	WAVEFORM_BARS, audio_clock, is_audio, is_voice_message, waveform,
 };
+pub use polls::{PollChoice, PollOutcome, PollSummary, can_create_polls, time_left};
 pub use profile::{
 	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
 	ProfileCard, ProfileConnection, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,

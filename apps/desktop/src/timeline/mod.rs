@@ -19,6 +19,7 @@ mod kept_tests;
 mod lightbox;
 mod links;
 pub(crate) mod pictures;
+mod polls;
 mod popout;
 mod reactions;
 mod rows;
@@ -174,6 +175,7 @@ impl TimelineView {
 				revealed: RefCell::default(),
 				opened: RefCell::default(),
 				picks: RefCell::default(),
+				peeks: RefCell::default(),
 				commands: commands.clone(),
 				actions: actions.clone(),
 				lightbox: lightbox.clone(),

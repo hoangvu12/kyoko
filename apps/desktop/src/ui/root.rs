@@ -175,7 +175,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 		"toasts" => ToastLayer::new(runtime).view(),
 		"scrim" => crate::scrim::Scrim::new(runtime).view(),
 		"composer menu, attachment dialog and drop card" => {
-			crate::composer_layer::ComposerLayer::new(runtime).view()
+			crate::composer_layer::ComposerLayer::new(runtime, pictures).view()
 		}
 		"friend confirmations" => crate::friend_dialog::FriendDialog::new(runtime).view(),
 		_ => unreachable!("no layer named {name}"),
@@ -436,4 +436,134 @@ fn a_toast_floats_over_the_timeline_and_never_moves_its_rows() {
 			"a toast is centred on the timeline: {toast:?}"
 		);
 	}
+}
+
+type PollParts = (
+	Rc<crate::composer_layer::ComposerLayer>,
+	Rc<RefCell<Vec<crate::composer_layer::Request>>>,
+);
+
+fn sent_poll(requests: &RefCell<Vec<crate::composer_layer::Request>>) -> Option<session::PollDraft> {
+	requests.borrow().iter().find_map(|request| match request {
+		crate::composer_layer::Request::SendPoll(_, draft) => Some(draft.clone()),
+		_ => None,
+	})
+}
+
+#[test]
+fn the_plus_menu_opens_the_poll_dialog_which_posts_a_draft_within_the_limits() {
+	use crate::composer_layer::{ComposerLayer, Pane, PlusMenu, Request};
+	let tokio = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.expect("a tokio runtime");
+	let handle = tokio.handle().clone();
+	let parts: Rc<RefCell<Option<PollParts>>> = Rc::default();
+	let (made, used) = (parts.clone(), parts.clone());
+	let mut app = TestApp::wrapped(
+		move |runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "dark");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			let pictures = Rc::new(Pictures::new(
+				runtime.clone(),
+				gallery(&handle),
+				media::cdn::CDN.to_owned(),
+				None,
+			));
+			let layer = ComposerLayer::new(runtime, pictures);
+			layer.set_window(WIDE.0, WIDE.1);
+			let requests: Rc<RefCell<Vec<Request>>> = Rc::default();
+			let heard = requests.clone();
+			layer.on_request(move |request| heard.borrow_mut().push(request));
+			*made.borrow_mut() = Some((layer, requests));
+			host
+		},
+		move |luau| {
+			let (layer, _) = used.borrow().clone().expect("the composer layer");
+			layered(luau, [layer.view()])
+		},
+	);
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	let (layer, requests) = parts.borrow().clone().expect("the composer layer");
+	layer.open_menu(PlusMenu {
+		pane: Pane::Main,
+		at: (400., 700.),
+		thread: false,
+		poll: true,
+	});
+	app.frames(10);
+	app.click("composer-menu-poll");
+	app.frames(30);
+	assert!(on_top(&mut app, "poll-dialog"), "Create Poll opens the dialog");
+	assert!(app.find("poll-answer-1").is_some() && app.find("poll-answer-2").is_none());
+	app.click("poll-post");
+	app.frames(2);
+	assert!(sent_poll(&requests).is_none(), "an empty poll is not posted");
+	assert!(
+		app.opacity("poll-post") < 1.,
+		"Post looks disabled while the poll is empty"
+	);
+	app.type_text("poll-question", "What should we play tonight?");
+	app.type_text("poll-answer-0", "Valorant");
+	app.type_text("poll-answer-1", &"a".repeat(60));
+	app.click("poll-add-answer");
+	app.frames(5);
+	app.type_text("poll-answer-2", "Lethal Company");
+	app.click("poll-add-answer");
+	app.frames(5);
+	assert!(
+		app.find("poll-answer-3").is_some(),
+		"Add another answer adds a field"
+	);
+	app.click("poll-remove-3");
+	app.frames(5);
+	assert!(
+		app.find("poll-answer-3").is_none(),
+		"the remove button drops a field"
+	);
+	app.click("poll-emoji-0");
+	app.frames(2);
+	assert!(
+		requests.borrow().contains(&Request::PollEmoji),
+		"an answer's emoji button asks for the emoji picker"
+	);
+	app.click("poll-multiple");
+	app.frames(5);
+	assert_eq!(
+		app.opacity("poll-post"),
+		1.,
+		"Post is enabled once the poll is valid"
+	);
+	app.click("poll-post");
+	app.frames(30);
+	let draft = sent_poll(&requests).expect("the poll is posted");
+	assert_eq!(draft.question, "What should we play tonight?");
+	let answers: Vec<usize> = draft
+		.answers
+		.iter()
+		.map(|answer| answer.text.chars().count())
+		.collect();
+	assert_eq!(
+		answers,
+		[8, session::POLL_ANSWER_MAX, 14],
+		"answers stop at 55 characters"
+	);
+	assert_eq!(draft.duration_hours, session::POLL_DEFAULT_HOURS);
+	assert!(draft.multiple);
+	assert!(draft.problem().is_none());
+	assert!(!on_top(&mut app, "poll-dialog"), "posting closes the dialog");
+	layer.open_poll(Pane::Main);
+	app.frames(30);
+	assert!(on_top(&mut app, "poll-dialog"));
+	assert!(
+		app.find("poll-answer-2").is_none(),
+		"the dialog opens empty again"
+	);
+	app.key(zgx::input::Key::Escape);
+	app.frames(30);
+	assert!(!on_top(&mut app, "poll-dialog"), "Escape closes the dialog");
 }

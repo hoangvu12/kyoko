@@ -56,8 +56,9 @@ const SKELETON_HEIGHT: f32 = 240.;
 const SKELETON_ROWS: usize = 4;
 const AVERAGE_GLYPH: f32 = 7.5;
 const EMBED_TEXT: f32 = 120.;
-const POLL_CHROME: f32 = 110.;
-const POLL_ROW: f32 = 48.;
+const POLL_CHROME: f32 = 120.;
+const POLL_ROW: f32 = 52.;
+const POLL_RESULT_BUTTON: f32 = 36.;
 const REACTIONS: f32 = 28.;
 const FILE_CARD: f32 = 70.;
 const VOICE_MESSAGE: f32 = 52.;
@@ -148,6 +149,7 @@ pub struct RowEnv {
 	pub revealed: RefCell<HashSet<(Snowflake, usize)>>,
 	pub opened: RefCell<HashSet<Snowflake>>,
 	pub picks: RefCell<HashMap<Snowflake, Vec<i64>>>,
+	pub peeks: RefCell<HashSet<Snowflake>>,
 	pub commands: Rc<Sender>,
 	pub actions: Rc<MessageActions>,
 	pub lightbox: Rc<super::lightbox::Lightbox>,
@@ -189,6 +191,9 @@ pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal
 			inset(follow_up(entry, env, hovered, bump))
 		}
 		Row::Message(entry) if entry.is_plain() => inset(first_of_group(entry, env, hovered, bump)),
+		Row::Message(entry) if entry.kind == MessageType::PollResult => inset(super::polls::result_row_view(
+			entry, env, GUTTER, RIGHT, HEADER_GAP,
+		)),
 		Row::Message(entry) => inset(system_row(entry, env)),
 	}
 }
@@ -203,6 +208,9 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 		Row::Start => START_HEIGHT,
 		Row::Day(_) => DAY_HEIGHT,
 		Row::Unread => UNREAD_HEIGHT,
+		Row::Message(entry) if entry.kind == MessageType::PollResult => {
+			HEADER_GAP + LINE + POLL_RESULT_BUTTON + 4.
+		}
 		Row::Message(entry) => {
 			let header = if entry.grouped && entry.is_plain() {
 				0.
@@ -405,7 +413,7 @@ fn content(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump:
 	out.extend(super::components::components(entry, env, bump));
 	out.extend(attachments::stickers(entry, env));
 	out.extend(extras::thread_chip(entry, env));
-	out.extend(extras::poll(entry, env, bump));
+	out.extend(super::polls::poll(entry, env, bump));
 	out.extend(super::reactions::chips(entry, env, hovered));
 	out.extend(kept::accessories(entry, env));
 	out.extend(interaction_failed(entry));
@@ -734,6 +742,7 @@ fn system_icon(icon_kind: SystemIcon) -> (&'static str, &'static str) {
 		SystemIcon::Call => ("phone", "success"),
 		SystemIcon::Rename => ("edit", "interactive_normal"),
 		SystemIcon::Picture => ("image", "interactive_normal"),
+		SystemIcon::Poll => ("poll", "text_4"),
 		SystemIcon::Other => ("chat", "interactive_normal"),
 	}
 }
