@@ -4,7 +4,9 @@
 
 **Blocked by:** 40 (Tray, notifications and desktop integration)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
+
+Skipped for now (user decision, 2026-10-27). Not to be picked up until the user brings it back.
 
 - [ ] The installer and portable zip carry kyoko's identity
 - [ ] A tag-triggered workflow builds and publishes them
