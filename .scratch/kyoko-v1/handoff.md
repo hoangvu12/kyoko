@@ -24,7 +24,7 @@ Written by the fifth orchestrator (roboco chat `051e1203`, "kyoko orchestrator 5
 - Live markdown in the composer: accept partial for now (zgx's textarea only draws range backgrounds; what zgx would need is in Midnight 16's Answer and `docs/ui.md`). No upstream report.
 - PRODUCT.md (register product; users: the maintainer, then Discord users wanting a lighter native client; personality from the Midnight design; WCAG AA as now).
 - Midnight 19's brief as above.
-- Still waiting on the user (asked, no answer yet): the live GIF-provider check for Midnight 08 (does the web client send `provider=` on `/gifs/search`, a `limit` on `/gifs/trending-gifs`, which media hosts); whether web login keeps the Chrome user agent despite WebView2's Edge client hints (kept as the ticket says, recorded in v1 43's Answer); a one-time real-Discord check of web login's `localStorage.token` (only with the user's go-ahead: it needs a real sign-in).
+- Settled after the handoff (user, 2026-10-26, after comparing with oxidcord): Midnight 08 box 2 closed without a live check (no `provider`; switch to `klipy` if GIF search fails); web login gets WebView2's own user agent like oxidcord (new v1 ticket 66, small); no test sign-in for web login (the first real use is the check). Nothing is waiting on the user now.
 
 ### Things to know
 

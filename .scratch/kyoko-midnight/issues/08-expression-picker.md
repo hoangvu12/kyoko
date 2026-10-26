@@ -11,7 +11,7 @@
 **Spec:** `docs/design/midnight.md`, Expression picker
 
 - [x] The picker matches the mockups and opens anchored to its button
-- [ ] GIF search uses the provider the web client uses, checked against the live client and noted in the fingerprint docs
+- [x] GIF search uses the provider the web client uses, checked against the live client and noted in the fingerprint docs
 - [x] Favouriting a GIF or emoji persists through the settings proto, with session-seam tests
 - [x] Locked emoji show why and cannot be picked
 
@@ -29,3 +29,5 @@ Merged to main as `2eee428`. Docs: `docs/ui.md` ("Expression pickers", picker id
 - Mockup parity (port 8493): emoji-picker 21.7%, gif-picker 29.1%, sticker-picker 22.6%, gif-picker-results 30.8% (new), emoji-picker-search 19.5% (new), emoji-picker-no-nitro 22.5% (new; mockcord `--no-nitro`, passed by the parity tool for that screen only). By eye tabs, header, field, rail, headers, cells, footer, tiles, masonry, star and lock state line up; the composer sits ~13 points higher than the mockup's until M16.
 - Deviations: no POPULAR tag or NEW ribbon (no data); no visible focus ring on the search field; picker search isn't ranked by plugins (`hook:emoji_rank` ranks the composer's suggestions); capture steps set hover state directly (the picker is its own popup window). Seen by the orchestrator: without Nitro the current server's section also shows the lock when some of its emoji are animated (the mockup locks only other servers' sections).
 - For later tickets: M06: the reaction picker has no favourite handler (set `picker.on_favorite` sending `SetEmojiFavorite`); reaction-mode header is 80 high. M09: use `EmojiCell`'s `lock`/`favorite`. M16: keep `report_slot("composer")` on the input column, keep passing the button-bar box to `composer.picker` with its right edge at the composer's right edge, keep the button ids; `capture::COMPOSER_PICKER` is only a fallback.
+
+Box 2 closed by the user (2026-10-26) without a live check: kyoko sends no `provider` (the API docs dropped it in July 2026, after Tenor's shutdown); oxidcord still sends `provider=tenor`, written before the shutdown. If GIF search ever fails or comes back empty on real Discord, set `GIF_PROVIDER` to `klipy` (one line in `crates/rest/src/api/expressions.rs`).
