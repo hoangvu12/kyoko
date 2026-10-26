@@ -4,7 +4,7 @@
 
 **Blocked by:** 05, 10
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Mockups:** `docs/design/mockups/command-response-states.html`
 
