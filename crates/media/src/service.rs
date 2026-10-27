@@ -6,12 +6,12 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::cache::{DiskCache, SizeHint};
-use crate::decode::{Limits, decode};
+use crate::decode::{Limits, Plan, decode_planned};
 use crate::error::{MediaError, Result, redact_url};
 use crate::fetch::{MediaFetcher, Purpose};
-use crate::resize::resize_decoded;
-use crate::shape::Shape;
-use crate::types::Decoded;
+use crate::resize::shrink_image;
+use crate::shape::{Shape, mask_circle};
+use crate::types::{Decoded, DecodedImage};
 
 pub const DEFAULT_DECODE_WORKERS: usize = 2;
 const SHRINK_THRESHOLD: u32 = 2;
@@ -95,19 +95,29 @@ impl MediaService {
 	}
 
 	pub async fn load_variant(&self, url: &str, variant: Variant, source: Source) -> Result<Option<Decoded>> {
+		self.load_within(url, variant, source, usize::MAX).await
+	}
+
+	pub async fn load_within(
+		&self,
+		url: &str,
+		variant: Variant,
+		source: Source,
+		kept_bytes: usize,
+	) -> Result<Option<Decoded>> {
 		let (bytes, from_disk) = match (self.cached_bytes(url).await, source) {
 			(Some(bytes), _) => (bytes, true),
 			(None, Source::DiskOnly) => return Ok(None),
 			(None, Source::Anywhere) => (self.inner.fetcher.fetch(url).await?, false),
 		};
-		let decoded = self.decode(bytes.clone(), variant).await?;
+		let decoded = self.decode(bytes.clone(), variant, kept_bytes).await?;
 		if !from_disk {
 			self.store_on_disk(url, bytes).await;
 		}
 		Ok(Some(decoded))
 	}
 
-	async fn decode(&self, bytes: Bytes, variant: Variant) -> Result<Decoded> {
+	async fn decode(&self, bytes: Bytes, variant: Variant, kept_bytes: usize) -> Result<Decoded> {
 		let _permit = self
 			.inner
 			.decoders
@@ -115,15 +125,14 @@ impl MediaService {
 			.await
 			.map_err(|_| MediaError::Decode("the decoders closed".to_owned()))?;
 		let limits = self.inner.limits.clone();
-		spawn_blocking(move || {
-			decode(&bytes, &limits).map(|decoded| {
-				let mut decoded = shrink_to_hint(decoded, variant.hint);
-				variant.shape.apply(&mut decoded);
-				decoded
-			})
-		})
-		.await
-		.map_err(|error| MediaError::Decode(format!("decode task failed: {error}")))?
+		let plan = Plan {
+			hint: variant.hint,
+			kept_bytes,
+			prepare: Arc::new(move |image| fit_variant(image, variant)),
+		};
+		spawn_blocking(move || decode_planned(bytes, &limits, &plan))
+			.await
+			.map_err(|error| MediaError::Decode(format!("decode task failed: {error}")))?
 	}
 
 	async fn cached_bytes(&self, url: &str) -> Option<Bytes> {
@@ -146,16 +155,18 @@ impl MediaService {
 	}
 }
 
-fn shrink_to_hint(decoded: Decoded, hint: SizeHint) -> Decoded {
-	if hint.is_original() {
-		return decoded;
-	}
-	let (width, height) = decoded.dimensions();
-	if width > hint.width.saturating_mul(SHRINK_THRESHOLD)
-		|| height > hint.height.saturating_mul(SHRINK_THRESHOLD)
+fn fit_variant(image: DecodedImage, variant: Variant) -> DecodedImage {
+	let hint = variant.hint;
+	let mut image = if !hint.is_original()
+		&& (image.width > hint.width.saturating_mul(SHRINK_THRESHOLD)
+			|| image.height > hint.height.saturating_mul(SHRINK_THRESHOLD))
 	{
-		resize_decoded(decoded, hint.width, hint.height)
+		shrink_image(image, hint.width, hint.height)
 	} else {
-		decoded
+		image
+	};
+	if variant.shape == Shape::Circle {
+		mask_circle(&mut image);
 	}
+	image
 }

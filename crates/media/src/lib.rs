@@ -5,6 +5,7 @@ mod decode;
 mod error;
 pub mod fetch;
 mod gallery;
+mod lottie;
 pub mod placeholder;
 mod resize;
 mod service;
@@ -13,7 +14,7 @@ pub mod signed;
 mod types;
 
 pub use cache::{DiskCache, SizeHint};
-pub use decode::{Limits, decode};
+pub use decode::{Limits, Plan, Prepare, decode, decode_planned};
 pub use error::{MediaError, Result, redact_url};
 pub use fetch::{MediaFetcher, MediaFetcherBuilder, Purpose};
 pub use gallery::{
@@ -21,7 +22,7 @@ pub use gallery::{
 	Origin, Pixels, Playback, Status, Update,
 };
 pub use placeholder::placeholder_from_discord;
-pub use resize::{resize_decoded, resize_to_fit};
+pub use resize::{resize_decoded, resize_to_fit, shrink_image};
 pub use service::{DEFAULT_DECODE_WORKERS, MediaService, Source, Variant};
 pub use shape::Shape;
-pub use types::{Animation, Decoded, DecodedImage, Frame};
+pub use types::{Animation, Decoded, DecodedImage, Frame, Replay, Streamed};

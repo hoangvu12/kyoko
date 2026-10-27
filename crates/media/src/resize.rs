@@ -29,6 +29,20 @@ pub fn resize_decoded(decoded: Decoded, max_w: u32, max_h: u32) -> Decoded {
 				})
 				.collect(),
 		}),
+		Decoded::Streamed(mut streamed) => {
+			streamed.first = resize_exact(&mut resizer, &streamed.first, target_w, target_h);
+			streamed.replay = streamed
+				.replay
+				.map(move |image| resize_exact(&mut Resizer::new(), &image, target_w, target_h));
+			Decoded::Streamed(streamed)
+		}
+	}
+}
+
+pub fn shrink_image(image: DecodedImage, max_w: u32, max_h: u32) -> DecodedImage {
+	match fit_dimensions(image.width, image.height, max_w, max_h) {
+		Some((width, height)) => resize_exact(&mut Resizer::new(), &image, width, height),
+		None => image,
 	}
 }
 

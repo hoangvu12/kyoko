@@ -2,7 +2,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
+use std::sync::mpsc::{Receiver, TryRecvError, sync_channel};
 use std::sync::{Arc, Weak};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use lru::LruCache;
@@ -13,13 +15,15 @@ use tokio::sync::Notify;
 use crate::error::redact_url;
 use crate::service::{MediaService, Source, Variant};
 use crate::signed;
-use crate::types::Decoded;
+use crate::types::{Decoded, DecodedImage, Replay};
 
 pub const DEFAULT_BUDGET_BYTES: usize = 128 * 1024 * 1024;
 pub const ANIMATION_SHARE: usize = 8;
 const RETRY_AFTER: Duration = Duration::from_secs(60);
 const MAX_ENTRIES: usize = 4096;
 const NAME_PREFIX: &str = "media/";
+const STALL: Duration = Duration::from_millis(8);
+const STREAM_FRAMES_HELD: usize = 4;
 
 type Waker = Arc<dyn Fn() + Send + Sync>;
 type Refresher = Arc<dyn Fn(Origin) + Send + Sync>;
@@ -88,6 +92,7 @@ pub struct ImageRequest {
 	pub url: String,
 	pub variant: Variant,
 	pub origin: Option<Origin>,
+	pub fallback: Option<String>,
 }
 
 impl ImageRequest {
@@ -96,11 +101,17 @@ impl ImageRequest {
 			url: url.into(),
 			variant,
 			origin: None,
+			fallback: None,
 		}
 	}
 
 	pub fn from_message(mut self, origin: Origin) -> Self {
 		self.origin = Some(origin);
+		self
+	}
+
+	pub fn or_else(mut self, fallback: impl Into<String>) -> Self {
+		self.fallback = Some(fallback.into());
 		self
 	}
 }
@@ -172,56 +183,178 @@ pub struct GalleryStats {
 }
 
 struct Picture {
-	frames: Vec<(Pixels, Duration)>,
+	delays: Vec<Duration>,
 	loops: Option<u32>,
 	bytes: usize,
+	frames: Frames,
+}
+
+enum Frames {
+	Kept(Vec<Pixels>),
+	Streamed(Stream),
+}
+
+struct Stream {
+	first: Pixels,
+	current: Pixels,
+	replay: Replay,
+	player: Option<Player>,
+}
+
+struct Player {
+	frames: Receiver<DecodedImage>,
+	next: usize,
+}
+
+fn pixels_of(image: DecodedImage) -> Pixels {
+	Pixels {
+		width: image.width,
+		height: image.height,
+		rgba: Arc::from(image.rgba),
+	}
+}
+
+fn play(replay: Replay) -> Option<Player> {
+	let (sender, frames) = sync_channel(1);
+	thread::Builder::new()
+		.name("media-stream".to_owned())
+		.spawn(move || {
+			loop {
+				let mut open = true;
+				let mut sent = 0_usize;
+				replay.run(&mut |image| {
+					open = sender.send(image).is_ok();
+					sent += usize::from(open);
+					open
+				});
+				if !open || sent == 0 {
+					return;
+				}
+			}
+		})
+		.ok()?;
+	Some(Player { frames, next: 0 })
 }
 
 impl Picture {
+	fn still(image: DecodedImage) -> Self {
+		Self {
+			bytes: image.rgba.len(),
+			delays: vec![Duration::ZERO],
+			loops: None,
+			frames: Frames::Kept(vec![pixels_of(image)]),
+		}
+	}
+
 	fn from_decoded(decoded: Decoded, animation_cap: usize) -> Self {
 		let downgrade = decoded.byte_len() > animation_cap;
-		let (frames, loops) = match decoded {
-			Decoded::Still(image) => (vec![(image, 0)], None),
-			Decoded::Animated(animation) if downgrade => {
-				let first = animation.frames.into_iter().next();
-				(first.map(|frame| (frame.image, 0)).into_iter().collect(), None)
+		match decoded {
+			Decoded::Still(image) => Self::still(image),
+			Decoded::Animated(mut animation) if downgrade => {
+				Self::still(animation.frames.swap_remove(0).image)
 			}
-			Decoded::Animated(animation) => (
-				animation
+			Decoded::Animated(animation) => {
+				let (frames, delays): (Vec<Pixels>, Vec<Duration>) = animation
 					.frames
 					.into_iter()
-					.map(|frame| (frame.image, frame.delay_ms))
-					.collect(),
-				animation.loops,
-			),
-		};
-		let frames: Vec<(Pixels, Duration)> = frames
-			.into_iter()
-			.map(|(image, delay)| {
-				(
-					Pixels {
-						width: image.width,
-						height: image.height,
-						rgba: Arc::from(image.rgba),
-					},
-					Duration::from_millis(u64::from(delay)),
-				)
-			})
-			.collect();
-		let bytes = frames.iter().map(|(pixels, _)| pixels.rgba.len()).sum();
-		Self { frames, loops, bytes }
+					.map(|frame| {
+						(
+							pixels_of(frame.image),
+							Duration::from_millis(u64::from(frame.delay_ms)),
+						)
+					})
+					.unzip();
+				Self {
+					bytes: frames.iter().map(|pixels| pixels.rgba.len()).sum(),
+					delays,
+					loops: animation.loops,
+					frames: Frames::Kept(frames),
+				}
+			}
+			Decoded::Streamed(streamed) => {
+				let held = streamed.first.rgba.len().saturating_mul(STREAM_FRAMES_HELD);
+				let bytes = held.saturating_add(streamed.source_bytes);
+				if bytes > animation_cap || streamed.delays_ms.len() < 2 {
+					return Self::still(streamed.first);
+				}
+				let first = pixels_of(streamed.first);
+				Self {
+					bytes,
+					delays: streamed
+						.delays_ms
+						.iter()
+						.map(|delay| Duration::from_millis(u64::from(*delay)))
+						.collect(),
+					loops: streamed.loops,
+					frames: Frames::Streamed(Stream {
+						current: first.clone(),
+						first,
+						replay: streamed.replay,
+						player: None,
+					}),
+				}
+			}
+		}
 	}
 
 	fn animated(&self) -> bool {
-		self.frames.len() > 1
+		self.delays.len() > 1
 	}
 
 	fn delay(&self, frame: usize) -> Duration {
-		self.frames[frame].1
+		self.delays[frame]
 	}
 
 	fn cycle(&self) -> Duration {
-		self.frames.iter().map(|(_, delay)| *delay).sum()
+		self.delays.iter().sum()
+	}
+
+	fn finished(&self, plays: u32) -> bool {
+		self.loops.is_some_and(|loops| plays >= loops.max(1))
+	}
+
+	fn pixels(&self, frame: usize) -> Pixels {
+		match &self.frames {
+			Frames::Kept(frames) => frames[frame.min(frames.len() - 1)].clone(),
+			Frames::Streamed(stream) if frame == 0 => stream.first.clone(),
+			Frames::Streamed(stream) => stream.current.clone(),
+		}
+	}
+
+	fn stop(&mut self) {
+		if let Frames::Streamed(stream) = &mut self.frames {
+			stream.player = None;
+		}
+	}
+
+	fn reach(&mut self, frame: usize) -> bool {
+		let count = self.delays.len();
+		let Frames::Streamed(stream) = &mut self.frames else {
+			return true;
+		};
+		if stream.player.is_none() {
+			stream.player = play(stream.replay.clone());
+		}
+		let Some(player) = stream.player.as_mut() else {
+			return false;
+		};
+		loop {
+			match player.frames.try_recv() {
+				Ok(image) => {
+					let index = player.next;
+					player.next = (index + 1) % count;
+					if index == frame {
+						stream.current = pixels_of(image);
+						return true;
+					}
+				}
+				Err(TryRecvError::Empty) => return false,
+				Err(TryRecvError::Disconnected) => {
+					stream.player = None;
+					return false;
+				}
+			}
+		}
 	}
 }
 
@@ -269,10 +402,6 @@ impl Entry {
 			Phase::Refreshing { stale } => stale != url,
 			Phase::Failed { at } => at.elapsed() >= RETRY_AFTER,
 		}
-	}
-
-	fn finished(&self, picture: &Picture) -> bool {
-		picture.loops.is_some_and(|loops| self.plays >= loops.max(1))
 	}
 }
 
@@ -375,41 +504,54 @@ impl Inner {
 				self.animating.remove(&key);
 				continue;
 			};
-			let Phase::Ready(picture) = &entry.phase else {
+			let Entry {
+				phase,
+				frame,
+				due,
+				plays,
+				..
+			} = entry;
+			let Phase::Ready(picture) = phase else {
 				continue;
 			};
 			if !picture.animated() {
 				continue;
 			}
-			if !visible || !moving || entry.finished(picture) {
+			if !visible || !moving || picture.finished(*plays) {
 				self.animating.remove(&key);
-				entry.due = None;
-				if !moving && entry.frame != 0 {
-					entry.frame = 0;
-					entry.plays = 0;
+				*due = None;
+				picture.stop();
+				if !moving && *frame != 0 {
+					*frame = 0;
+					*plays = 0;
 					self.dirty.push(key);
 				}
 				continue;
 			}
 			self.animating.insert(key);
-			let mut due = entry.due.unwrap_or_else(|| now + picture.delay(entry.frame));
-			if now.saturating_duration_since(due) > picture.cycle() {
-				due = now;
+			let mut next_due = due.unwrap_or_else(|| now + picture.delay(*frame));
+			if now.saturating_duration_since(next_due) > picture.cycle() {
+				next_due = now;
 			}
-			let before = entry.frame;
-			while due <= now {
-				let next = (entry.frame + 1) % picture.frames.len();
-				if next == 0 {
-					entry.plays += 1;
-					if entry.finished(picture) {
-						break;
-					}
+			let before = *frame;
+			while next_due <= now {
+				let next = (*frame + 1) % picture.delays.len();
+				if next == 0 && picture.finished(*plays + 1) {
+					*plays += 1;
+					break;
 				}
-				entry.frame = next;
-				due += picture.delay(next).max(Duration::from_millis(1));
+				if !picture.reach(next) {
+					next_due = now + STALL;
+					break;
+				}
+				if next == 0 {
+					*plays += 1;
+				}
+				*frame = next;
+				next_due += picture.delay(next).max(Duration::from_millis(1));
 			}
-			entry.due = (!entry.finished(picture)).then_some(due);
-			if entry.frame != before {
+			*due = (!picture.finished(*plays)).then_some(next_due);
+			if *frame != before {
 				self.dirty.push(key);
 			}
 		}
@@ -437,7 +579,7 @@ impl Inner {
 			entry.shown = Some(entry.frame);
 			updates.push(Update::Show {
 				name: entry.name.clone(),
-				pixels: picture.frames[entry.frame].0.clone(),
+				pixels: picture.pixels(entry.frame),
 			});
 		}
 		updates
@@ -543,7 +685,7 @@ impl Gallery {
 		Some(match &inner.entries.peek(&key)?.phase {
 			Phase::Loading { .. } => Status::Loading,
 			Phase::Ready(picture) => Status::Ready {
-				frames: picture.frames.len(),
+				frames: picture.delays.len(),
 			},
 			Phase::Refreshing { .. } => Status::Refreshing,
 			Phase::Failed { .. } => Status::Failed,
@@ -560,8 +702,8 @@ impl Gallery {
 		let frame = entry
 			.shown
 			.unwrap_or(entry.frame)
-			.min(picture.frames.len().checked_sub(1)?);
-		Some(picture.frames[frame].0.clone())
+			.min(picture.delays.len().checked_sub(1)?);
+		Some(picture.pixels(frame))
 	}
 	pub fn set_visible<I, S>(&self, names: I)
 	where
@@ -732,13 +874,29 @@ async fn load_entry(shared: Arc<Shared>, key: u64, request: ImageRequest) {
 	} else {
 		Source::Anywhere
 	};
-	match shared.loader.load_variant(url, request.variant, source).await {
+	let cap = shared.inner.lock().budget / ANIMATION_SHARE;
+	match shared.loader.load_within(url, request.variant, source, cap).await {
 		Ok(Some(decoded)) => shared.finish(key, url, decoded),
 		Ok(None) => shared.refresh_or_fail(key, url),
 		Err(error) if error.is_gone() && signed::is_signed(url) => shared.refresh_or_fail(key, url),
 		Err(error) => {
 			tracing::debug!(url = redact_url(url), %error, "image did not load");
-			shared.fail(key, url);
+			let Some(fallback) = request.fallback.as_deref() else {
+				shared.fail(key, url);
+				return;
+			};
+			match shared
+				.loader
+				.load_within(fallback, request.variant, Source::Anywhere, cap)
+				.await
+			{
+				Ok(Some(decoded)) => shared.finish(key, url, decoded),
+				Ok(None) => shared.fail(key, url),
+				Err(error) => {
+					tracing::debug!(url = redact_url(fallback), %error, "fallback image did not load");
+					shared.fail(key, url);
+				}
+			}
 		}
 	}
 }

@@ -19,6 +19,13 @@ impl Shape {
 					mask_circle(&mut frame.image);
 				}
 			}
+			Decoded::Streamed(streamed) => {
+				mask_circle(&mut streamed.first);
+				streamed.replay = streamed.replay.clone().map(|mut image| {
+					mask_circle(&mut image);
+					image
+				});
+			}
 		}
 	}
 }
