@@ -47,6 +47,7 @@ pub struct Options {
 #[derive(Clone, Default)]
 struct Endpoints {
 	rest_base: Option<Url>,
+	gateway_url: Option<String>,
 	trust: Trust,
 }
 
@@ -78,6 +79,11 @@ impl Options {
 
 	pub fn rest_base(mut self, url: Url) -> Self {
 		self.endpoints.rest_base = Some(url);
+		self
+	}
+
+	pub fn gateway_url(mut self, url: impl Into<String>) -> Self {
+		self.endpoints.gateway_url = Some(url.into());
 		self
 	}
 
@@ -472,7 +478,11 @@ fn open_session(
 			.rest_base
 			.clone()
 			.unwrap_or_else(|| Url::parse(server.rest_base_url()).expect("rest url")),
-		gateway_url: server.gateway_url().to_owned(),
+		gateway_url: launch
+			.endpoints
+			.gateway_url
+			.clone()
+			.unwrap_or_else(|| server.gateway_url().to_owned()),
 		token: Token::new(server.token()),
 		runtime: None,
 		notify: Arc::new(move |_| notifier.notify_one()),

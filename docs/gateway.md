@@ -4,8 +4,12 @@
 
 ## Transport
 
+- The socket is a `wreq` websocket opened by `net::ws::connect` (`crates/net`) on a client the gateway builds once from `net::client_builder(Destination::Fetch, trust)` and keeps across reconnects. Each upgrade uses `net::websocket_emulation()`, so the wss ClientHello is Chrome's: ALPN `http/1.1` only and no ALPS (`docs/fingerprint.md`, "TLS and HTTP/2 handshake"). `GatewayConfig::trust` is `Trust::Bundled` in the app; tests pass a localhost root.
+- The upgrade carries `User-Agent`, `Origin: https://discord.com` and `Accept-Language` from the identify properties, as before; wreq adds the websocket headers, `Host` and `Accept-Encoding` itself, lowercase and in its own order, without `Pragma`, `Cache-Control` or `Sec-WebSocket-Extensions` (ticket 74). Connecting times out after 30 s; an upgrade answered with anything but 101 is a lost connection that names the status.
+- `wss` is required, `ws` only to a loopback host (mockcord).
 - JSON encoding with `compress=zlib-stream`. Each connection gets its own inflate context. A message is complete when the buffered bytes end in `00 00 ff ff`.
-- Inbound WebSocket messages, buffered compressed bytes and inflated output are each capped at 64 MiB. A user READY can pass 16 MiB. Going over the cap closes with 1009 and stops the session with a reason.
+- Kyoko inflates zlib-stream itself (`transport::ZlibStream`, flate2); wreq only hands over the binary messages.
+- Inbound WebSocket frames and messages (wreq's `max_frame_size` and `max_message_size`), buffered compressed bytes and inflated output are each capped at 64 MiB. A user READY can pass 16 MiB. Going over the cap closes with 1009 and stops the session with a reason; wreq's capacity error is recognised by `net::ws::is_oversized`.
 
 ## Capabilities
 

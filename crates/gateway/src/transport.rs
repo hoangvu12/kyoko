@@ -2,21 +2,17 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use flate2::{Decompress, FlushDecompress};
+use net::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderValue, ORIGIN, USER_AGENT};
+use net::ws::{self, Limits};
+use net::{Client, Destination, Trust};
 use protocol::IdentifyProperties;
 use protocol::fingerprint::{API_VERSION, WEB_ORIGIN, accept_language};
-use tokio::net::TcpStream;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::ClientRequestBuilder;
-use tokio_tungstenite::tungstenite::Error as WebSocketError;
-use tokio_tungstenite::tungstenite::protocol::CloseFrame;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
 use url::{Host, Url};
 
 use crate::error::GatewayError;
 
-pub(crate) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+pub(crate) type Socket = ws::WebSocket;
 
 const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
@@ -53,38 +49,49 @@ fn is_loopback(url: &Url) -> bool {
 	}
 }
 
-pub(crate) async fn connect(url: &Url, identify: &IdentifyProperties) -> Result<Socket, GatewayError> {
-	let config = WebSocketConfig::default()
-		.max_frame_size(Some(MAX_FRAME_BYTES))
-		.max_message_size(Some(MAX_FRAME_BYTES));
-	let uri = url.as_str().parse().map_err(|_| GatewayError::InvalidUrl)?;
-	let request = ClientRequestBuilder::new(uri)
-		.with_header("User-Agent", identify.user_agent())
-		.with_header("Origin", WEB_ORIGIN)
-		.with_header("Accept-Language", accept_language(&identify.system_locale));
-	let attempt = timeout(
-		CONNECT_TIMEOUT,
-		connect_async_with_config(request, Some(config), true),
-	)
-	.await
-	.map_err(|_| GatewayError::Transport("connect timed out".to_owned()))?;
-	let (socket, _) = attempt.map_err(read_error)?;
-	Ok(socket)
+pub(crate) fn client(trust: &Trust) -> Result<Client, GatewayError> {
+	net::client_builder(Destination::Fetch, trust)
+		.and_then(|builder| builder.build())
+		.map_err(|error| GatewayError::Transport(error.to_string()))
 }
 
-pub(crate) fn read_error(error: WebSocketError) -> GatewayError {
-	match error {
-		WebSocketError::Capacity(_) => GatewayError::OverSized,
-		other => GatewayError::Transport(other.to_string()),
+pub(crate) async fn connect(
+	client: &Client,
+	url: &Url,
+	identify: &IdentifyProperties,
+) -> Result<Socket, GatewayError> {
+	let mut headers = HeaderMap::new();
+	insert(&mut headers, USER_AGENT, identify.user_agent());
+	headers.insert(ORIGIN, HeaderValue::from_static(WEB_ORIGIN));
+	insert(
+		&mut headers,
+		ACCEPT_LANGUAGE,
+		&accept_language(&identify.system_locale),
+	);
+	let limits = Limits {
+		max_frame: MAX_FRAME_BYTES,
+		max_message: MAX_FRAME_BYTES,
+	};
+	ws::connect(client, url.as_str(), headers, limits, CONNECT_TIMEOUT)
+		.await
+		.map_err(|error| GatewayError::Transport(error.to_string()))
+}
+
+fn insert(headers: &mut HeaderMap, name: net::header::HeaderName, value: &str) {
+	if let Ok(value) = HeaderValue::from_str(value) {
+		headers.insert(name, value);
 	}
 }
 
+pub(crate) fn read_error(error: net::Error) -> GatewayError {
+	if ws::is_oversized(&error) {
+		return GatewayError::OverSized;
+	}
+	GatewayError::Transport(error.without_uri().to_string())
+}
+
 pub(crate) async fn hangup(socket: &mut Socket, code: u16, reason: &'static str) {
-	let frame = CloseFrame {
-		code: CloseCode::from(code),
-		reason: reason.into(),
-	};
-	let _ = timeout(CLOSE_TIMEOUT, socket.close(Some(frame))).await;
+	let _ = timeout(CLOSE_TIMEOUT, ws::close(socket, code, reason)).await;
 }
 
 pub(crate) struct ZlibStream {

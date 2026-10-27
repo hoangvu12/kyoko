@@ -1,6 +1,6 @@
 # Client fingerprint
 
-Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST also presents Chrome's TLS and HTTP/2 handshake through `crates/net`; the gateway, media, theme links and the QR socket do not yet. See "TLS and HTTP/2 handshake".
+Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST and the gateway also present Chrome's TLS and HTTP/2 handshake through `crates/net`; media, theme links and the QR socket do not yet. See "TLS and HTTP/2 handshake".
 
 ## What is sent
 
@@ -20,7 +20,7 @@ Kyoko presents itself as the Discord web client in Chrome, on both the gateway a
 
 ## TLS and HTTP/2 handshake
 
-REST (the API, uploads, the build-number scrape and the email login) runs on `wreq`, which runs BoringSSL with Chrome's TLS and HTTP/2 options, through the headless `crates/net`. Media and theme links still use reqwest on rustls, and the gateway and QR sockets tokio-tungstenite on rustls, so their ClientHello is a Rust program's until tickets 71 to 73 move them. Ticket 69 was the trial: `cargo xtask tls-capture` (`docs/testing.md`) recorded the local Chrome and a `wreq` client against a localhost listener, and nothing contacted Discord. Ticket 70 moved REST; the session tests in `crates/session/tests/session/tls_fingerprint.rs` hold it to the recorded Chrome.
+REST (the API, uploads, the build-number scrape and the email login) and the gateway run on `wreq`, which runs BoringSSL with Chrome's TLS and HTTP/2 options, through the headless `crates/net`. Media and theme links still use reqwest on rustls, and the QR socket tokio-tungstenite on rustls, so their ClientHello is a Rust program's until tickets 72 and 73 move them. Ticket 69 was the trial: `cargo xtask tls-capture` (`docs/testing.md`) recorded the local Chrome and a `wreq` client against a localhost listener, and nothing contacted Discord. Tickets 70 and 71 moved REST and the gateway; the session tests in `crates/session/tests/session/tls_fingerprint.rs` hold them to the recorded Chrome.
 
 ### Pins
 
@@ -34,6 +34,7 @@ Who uses what:
 
 - **API and uploads** (`RestClient`): `Destination::Fetch`, so every API request goes out with weight 220, as the web client's `fetch()` calls do. Kyoko's default headers, no redirects, kyoko's `CookieJar`.
 - **Build-number scrape** (`rest::api::build::discovery_client`): `Destination::Document`, weight 256, as the `/app` page load. Its script fetches share the client, so they carry 256 too, where Chrome gives scripts a lower weight; it runs once per launch.
+- **Gateway**: one client per gateway, `Destination::Fetch`, with the websocket emulation on each upgrade (`net::ws::connect`). REST and the gateway build separate clients from the same function. They talk to different hosts (discord.com and gateway.discord.gg), so Chrome would not share a connection or a TLS session between them either.
 - **Cookies**: `rest::CookieJar` implements wreq's `CookieStore`. On HTTP/2 it returns one `cookie` field per cookie, as Chrome does; on HTTP/1.1 one `Cookie` line. It persists, restores and adopts the web login page's cookies as before.
 
 ### What Chrome 156 sends
@@ -72,7 +73,7 @@ Keep claiming Chrome 156 (`CHROME_MAJOR = 156`) and use wreq-util's Chrome154 TL
 1. Update the local Chrome and record it: `cargo xtask tls-capture --client chrome --h2 --record chrome-<major>`.
 2. Compare wreq's profile with it: `cargo xtask tls-capture --client wreq --h2 --compare chrome-<major>`.
 3. With no difference, add the major to `net::profile` beside the profile it equals. With a difference, bump the wreq-util, wreq and btls revs to a profile that matches, or set the differing `TlsOptions` or `Http2Options` fields in `crates/net/src/chrome.rs`.
-4. Bump `CHROME_MAJOR`. The build fails until step 3 maps it, and the `tls_fingerprint` session tests fail until `chrome-<major>-https.json` exists and matches.
+4. Bump `CHROME_MAJOR`. The build fails until step 3 maps it, and the `tls_fingerprint` session tests fail until `chrome-<major>-https.json` and `chrome-<major>-wss.json` exist and match.
 
 ### Build cost
 

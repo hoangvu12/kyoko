@@ -16,6 +16,7 @@ pub enum Outgoing {
 	Frame(Arc<str>),
 	Close(u16),
 	Invalidate { resumable: bool },
+	Raw(Arc<str>),
 }
 
 #[derive(Clone)]
@@ -150,6 +151,11 @@ impl Hub {
 
 	pub fn invalidate_all(&self, resumable: bool) {
 		self.signal_all(|| Outgoing::Invalidate { resumable });
+	}
+
+	pub fn send_raw_all(&self, text: String) {
+		let text: Arc<str> = text.into();
+		self.signal_all(|| Outgoing::Raw(text.clone()));
 	}
 
 	pub fn end(&self, session_id: &str) {

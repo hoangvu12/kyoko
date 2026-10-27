@@ -134,6 +134,7 @@ pub struct Scenario {
 	rules: Mutex<Vec<Rule>>,
 	holds: Mutex<Vec<Hold>>,
 	failing_resumes: AtomicUsize,
+	gateway_message_parts: AtomicUsize,
 	closing_identifies: Mutex<Vec<u16>>,
 	closing_connections: Mutex<Vec<u16>>,
 	acks: Mutex<HeartbeatAcks>,
@@ -199,6 +200,14 @@ impl Scenario {
 		if let Some(mut open) = held {
 			let _ = open.wait_for(|open| *open).await;
 		}
+	}
+
+	pub fn split_gateway_messages(&self, parts: usize) {
+		self.gateway_message_parts.store(parts, Ordering::Relaxed);
+	}
+
+	pub fn gateway_message_parts(&self) -> usize {
+		self.gateway_message_parts.load(Ordering::Relaxed).max(1)
 	}
 
 	pub fn fail_resumes(&self, count: usize) {

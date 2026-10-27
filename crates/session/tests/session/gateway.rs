@@ -49,6 +49,9 @@ const FIRST_CAPPED_ATTEMPT: u32 = 5;
 const LARGE_READY_BYTES: usize = 20 * 1024 * 1024;
 const READY_MARKER: &str = "zlib marker";
 const LATE_CHANNEL_ID: u64 = 990_000_000_000_000_007;
+const SPLIT_PARTS: usize = 3;
+const OVERSIZED_MESSAGE_BYTES: usize = 64 * 1024 * 1024 + 1;
+const MESSAGE_TOO_BIG: u16 = 1009;
 
 fn tuned(backoff: Backoff) -> GatewayTuning {
 	GatewayTuning {
@@ -470,6 +473,74 @@ async fn a_large_ready_arrives_over_zlib_stream() {
 				.is_some_and(|guild| guild.channels.contains_key(&Snowflake(LATE_CHANNEL_ID)))
 		})
 		.await;
+	assert_eq!(running.mock().recording().connections.len(), 1);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn zlib_stream_messages_split_across_websocket_messages_still_inflate() {
+	let options = Options::new("zlib-split").prepare(|mock| {
+		mock.split_gateway_messages(SPLIT_PARTS);
+		mock.transform_ready(|_, ready| {
+			ready["user"]["global_name"] = json!(READY_MARKER);
+		});
+	});
+	let running = Running::start_with(options).await;
+	running
+		.until("a READY split across messages", |state| {
+			state.session().connected
+				&& state
+					.current_user()
+					.is_some_and(|user| user.global_name.as_deref() == Some(READY_MARKER))
+		})
+		.await;
+	let guild_id = running.fixtures().guilds[0].id;
+	running.mock().dispatch(
+		"CHANNEL_CREATE",
+		&json!({
+			"id": LATE_CHANNEL_ID.to_string(),
+			"type": 0,
+			"guild_id": guild_id.to_string(),
+			"name": "split-across-messages",
+			"position": 99,
+			"permission_overwrites": [],
+		}),
+	);
+	running
+		.until("a split dispatch after READY", |state| {
+			state
+				.guild(Snowflake(guild_id))
+				.is_some_and(|guild| guild.channels.contains_key(&Snowflake(LATE_CHANNEL_ID)))
+		})
+		.await;
+	assert_eq!(running.mock().recording().connections.len(), 1);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_websocket_message_over_the_cap_stops_the_session_as_too_big() {
+	let running = Running::start("gateway-oversized-message").await;
+	running.connected().await;
+	running
+		.mock()
+		.send_uncompressed_gateway_text(" ".repeat(OVERSIZED_MESSAGE_BYTES));
+	running
+		.until("a stop reason", |state| {
+			matches!(state.session().connection, ConnectionStatus::Disconnected(_))
+		})
+		.await;
+	let status = running.session().state().read().session().connection.clone();
+	assert!(
+		matches!(
+			&status,
+			ConnectionStatus::Disconnected(DisconnectReason::Rejected {
+				code: Some(MESSAGE_TOO_BIG),
+				..
+			})
+		),
+		"unexpected status {status:?}"
+	);
+	tokio::time::sleep(FATAL_QUIET).await;
 	assert_eq!(running.mock().recording().connections.len(), 1);
 	running.stop().await;
 }

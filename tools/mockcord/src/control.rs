@@ -103,6 +103,14 @@ impl Control {
 		self.shared.scenario.close_next_connections(code, count);
 	}
 
+	pub fn split_gateway_messages(&self, parts: usize) {
+		self.shared.scenario.split_gateway_messages(parts);
+	}
+
+	pub fn send_uncompressed_gateway_text(&self, text: String) {
+		self.shared.hub.send_raw_all(text);
+	}
+
 	pub fn fail_next_resume(&self) {
 		self.shared.scenario.fail_resumes(1);
 	}

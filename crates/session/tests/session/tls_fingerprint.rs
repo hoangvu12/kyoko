@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use mockcord::hello::{Capture, Connection, HelloListener, Mode, TlsSummary, chrome_fixture, differences};
 use protocol::ChannelType;
-use protocol::fingerprint::CHROME_MAJOR;
+use protocol::fingerprint::{CHROME_MAJOR, WEB_ORIGIN};
 use rest::CookieJar;
 use session::{Command, Trust, UploadFile};
 use store::{MemoryKeyring, Paths, Store};
@@ -220,5 +220,51 @@ async fn no_navigation_header_reaches_mockcord_on_any_rest_request() {
 	for connection in &recording.connections {
 		assert_eq!(navigation_only(&connection.headers), Vec::<String>::new());
 	}
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_gateway_presents_chromes_websocket_client_hello() {
+	let listener = listen(Mode::HelloOnly).await;
+	let running = Running::start_with(
+		Options::new("tls-gateway-hello").gateway_url(format!("wss://localhost:{}", listener.port())),
+	)
+	.await;
+	let connection = connection_where(&running, &listener, "a gateway client hello", |connection| {
+		connection.hello.is_some()
+	})
+	.await;
+	assert_hello_is_chromes(&connection, "wss");
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_gateway_upgrade_runs_over_tls_with_the_web_client_headers() {
+	let listener = listen(Mode::Complete).await;
+	let running = Running::start_with(
+		Options::new("tls-gateway-upgrade")
+			.gateway_url(format!("wss://localhost:{}", listener.port()))
+			.trust(Trust::only(listener.root_pem())),
+	)
+	.await;
+	let connection = connection_where(&running, &listener, "a gateway upgrade", |connection| {
+		connection.http1.is_some()
+	})
+	.await;
+	assert_eq!(connection.alpn.as_deref(), Some("http/1.1"));
+	let upgrade = connection.http1.expect("an upgrade request");
+	let chrome = chrome_fixture(CHROME_MAJOR, "wss")
+		.expect("a recorded fixture for CHROME_MAJOR")
+		.http1
+		.expect("the fixture recorded the upgrade");
+	assert!(upgrade.request_line.starts_with("GET /?v="));
+	assert_eq!(
+		header(&upgrade.headers, "user-agent"),
+		header(&chrome.headers, "user-agent")
+	);
+	assert_eq!(header(&upgrade.headers, "origin"), Some(WEB_ORIGIN));
+	assert!(header(&upgrade.headers, "accept-language").is_some());
+	assert_eq!(header(&upgrade.headers, "upgrade"), Some("websocket"));
+	assert_eq!(navigation_only(&upgrade.headers), Vec::<String>::new());
 	running.stop().await;
 }

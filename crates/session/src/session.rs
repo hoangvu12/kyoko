@@ -90,6 +90,7 @@ impl Session {
 		);
 		gateway_config.gateway_url = config.gateway_url;
 		gateway_config.tuning = config.gateway;
+		gateway_config.trust = config.trust;
 		let (gateway_start, gateway_started) = oneshot::channel();
 		let (gateway, gateway_events) =
 			Gateway::spawn_when(async move { gateway_started.await.ok() }, handle.clone());

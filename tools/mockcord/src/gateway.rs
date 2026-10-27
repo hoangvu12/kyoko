@@ -34,6 +34,7 @@ const CLOSE_ALREADY_AUTHENTICATED: u16 = 4005;
 const CLOSE_TIMED_OUT: u16 = 4009;
 const CLOSE_GOING_AWAY: u16 = 1001;
 const HEARTBEAT_ACK: &str = r#"{"op":11}"#;
+const ZLIB_SUFFIX_BYTES: usize = 4;
 
 #[derive(Deserialize)]
 pub struct GatewayQuery {
@@ -119,6 +120,11 @@ impl Connection {
 						self.close(code, "Closed by mock").await;
 						break;
 					}
+					Some(Outgoing::Raw(text)) => {
+						if self.socket.send(Message::Text(text.as_ref().into())).await.is_err() {
+							break;
+						}
+					}
 					Some(Outgoing::Invalidate { resumable }) => {
 						if !resumable && let Some(session) = self.session.take() {
 							self.shared.hub.end(&session);
@@ -149,20 +155,37 @@ impl Connection {
 	}
 
 	async fn send_text(&mut self, text: &str) -> bool {
-		let message = match &mut self.encoder {
-			Some(encoder) => {
-				if encoder
-					.write_all(text.as_bytes())
-					.and_then(|()| encoder.flush())
-					.is_err()
-				{
-					return false;
-				}
-				Message::Binary(Bytes::from(std::mem::take(encoder.get_mut())))
-			}
-			None => Message::Text(text.into()),
+		let Some(encoder) = &mut self.encoder else {
+			return self.socket.send(Message::Text(text.into())).await.is_ok();
 		};
-		self.socket.send(message).await.is_ok()
+		if encoder
+			.write_all(text.as_bytes())
+			.and_then(|()| encoder.flush())
+			.is_err()
+		{
+			return false;
+		}
+		let compressed = Bytes::from(std::mem::take(encoder.get_mut()));
+		let body = compressed.len().saturating_sub(ZLIB_SUFFIX_BYTES);
+		let part = body.div_ceil(self.shared.scenario.gateway_message_parts()).max(1);
+		let mut start = 0;
+		while start < compressed.len() {
+			let end = if start + part >= body {
+				compressed.len()
+			} else {
+				start + part
+			};
+			if self
+				.socket
+				.send(Message::Binary(compressed.slice(start..end)))
+				.await
+				.is_err()
+			{
+				return false;
+			}
+			start = end;
+		}
+		true
 	}
 
 	async fn close(&mut self, code: u16, reason: &'static str) {

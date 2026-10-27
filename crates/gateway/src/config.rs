@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use net::Trust;
 use protocol::capability::{
 	AUTH_TOKEN_REFRESH, DEDUPE_USER_OBJECTS, LAZY_USER_NOTES, MULTIPLE_GUILD_EXPERIMENT_POPULATIONS,
 	NON_CHANNEL_READ_STATES, PRIORITIZED_READY_PAYLOAD, VERSIONED_READ_STATES, VERSIONED_USER_GUILD_SETTINGS,
@@ -112,6 +113,7 @@ pub struct GatewayConfig {
 	pub initial_status: String,
 	pub tuning: GatewayTuning,
 	pub client_state: ClientStateSource,
+	pub trust: Trust,
 }
 
 impl GatewayConfig {
@@ -127,6 +129,7 @@ impl GatewayConfig {
 			initial_status: Self::INITIAL_STATUS.to_owned(),
 			tuning: GatewayTuning::default(),
 			client_state: ClientStateSource::default(),
+			trust: Trust::default(),
 		}
 	}
 }

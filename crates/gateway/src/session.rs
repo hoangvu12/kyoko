@@ -4,15 +4,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use futures_util::{FutureExt, SinkExt, StreamExt};
+use futures_util::{FutureExt, StreamExt};
+use net::ws::{CloseFrame, Message};
 use protocol::Token;
 use protocol::gateway::{DispatchEvent, GatewayPayload, Hello, Opcode, refreshed_token};
 use serde_json::value::RawValue;
 use tokio::sync::{Notify, mpsc, watch};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at, sleep, sleep_until};
-use tokio_tungstenite::tungstenite::Error as WebSocketError;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tracing::{debug, warn};
 
 use crate::config::GatewayConfig;
@@ -104,6 +102,7 @@ pub(crate) struct Session {
 	resume_url: Option<String>,
 	seq: Option<u64>,
 	failures: u32,
+	client: Option<net::Client>,
 }
 
 impl Session {
@@ -128,6 +127,7 @@ impl Session {
 			resume_url: None,
 			seq: None,
 			failures: 0,
+			client: None,
 		}
 	}
 
@@ -177,9 +177,13 @@ impl Session {
 			Ok(url) => url,
 			Err(error) => return Ok(Ended::fatal(None, error.to_string(), error)),
 		};
+		let client = match self.client() {
+			Ok(client) => client,
+			Err(error) => return Ok(Ended::fatal(None, error.to_string(), error)),
+		};
 		let properties = self.config.properties.current();
 		let opened = tokio::select! {
-			opened = transport::connect(&url, &properties) => opened,
+			opened = transport::connect(&client, &url, &properties) => opened,
 			_ = stopped(&mut self.shutdown) => return Err(Shutdown),
 		};
 		let socket = match opened {
@@ -189,6 +193,15 @@ impl Session {
 		self.outbox.clear_control();
 		self.reconnect.notified().now_or_never();
 		self.drive(Connection::new(socket)).await
+	}
+
+	fn client(&mut self) -> Result<net::Client, GatewayError> {
+		if let Some(client) = &self.client {
+			return Ok(client.clone());
+		}
+		let client = transport::client(&self.config.trust)?;
+		self.client = Some(client.clone());
+		Ok(client)
 	}
 
 	fn resumable(&self) -> Option<(&str, &str, u64)> {
@@ -234,7 +247,7 @@ impl Session {
 	async fn on_socket(
 		&mut self,
 		connection: &mut Connection,
-		message: Option<Result<Message, WebSocketError>>,
+		message: Option<Result<Message, net::Error>>,
 	) -> Result<Option<Ended>, Shutdown> {
 		match message {
 			None => Ok(Some(Ended::lost("connection closed"))),
@@ -275,7 +288,7 @@ impl Session {
 	}
 
 	fn on_close(&mut self, frame: Option<CloseFrame>) -> Ended {
-		let code = frame.as_ref().map(|frame| u16::from(frame.code));
+		let code = frame.as_ref().map(|frame| u16::from(frame.code.clone()));
 		let reason = frame.map(|frame| frame.reason.to_string()).unwrap_or_default();
 		debug!(?code, "gateway close frame");
 		match code {

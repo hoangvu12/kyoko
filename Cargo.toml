@@ -35,6 +35,7 @@ mlua = { version = "0.12.2", features = ["luau"] }
 
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+tungstenite = { version = "0.29", default-features = false }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream", "multipart", "gzip", "brotli", "zstd", "http2", "cookies"] }
 wreq = { version = "0.16.1", default-features = false, features = ["tokio-rt", "webpki-roots", "chromium-roots", "json", "multipart", "stream", "cookies", "gzip", "brotli", "zstd", "deflate", "ws"] }
 wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582", default-features = false, features = ["emulation", "emulation-chromium-pki"] }

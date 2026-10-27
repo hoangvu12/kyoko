@@ -102,6 +102,7 @@ Gateway controls:
 - `close_next_identify(code)` closes the next IDENTIFY with the code instead of sending READY.
 - `close_next_connections(code, count)` closes the next `count` new sockets with the code before HELLO. Use it for consecutive failed reconnects.
 - `fail_next_resume()` answers the next RESUME with op 9 `false`.
+- `split_gateway_messages(parts)` sends every later compressed gateway payload as `parts` binary websocket messages, the `00 00 ff ff` suffix whole in the last one, as Discord splits large payloads. `send_uncompressed_gateway_text(text)` sends `text` as one text message on every socket, past the zlib stream (for the 64 MiB message cap).
 - `invalidate_session(resumable)` sends op 9. With `false`, mockcord also ends the session, so the client can IDENTIFY again on the same socket. `request_reconnect()` sends op 7. `request_heartbeat()` sends op 1.
 - `set_heartbeat_acks(HeartbeatAcks::Prompt | Delayed(d) | Withheld)` controls op 11 replies.
 - `post_message(channel_id, author_id, content)` posts a message as any fixture user, stores it like a REST send and broadcasts MESSAGE_CREATE. It returns the new id. Use it for incoming messages and for the user's own messages without a send.
@@ -166,7 +167,7 @@ Fixtures come from `MockConfig::seed`. The same seed and anchor always give the 
 
 ## TLS and HTTP/2 handshakes
 
-mockcord speaks plain HTTP/1.1 and `ws://`, so session tests against it never see a TLS or HTTP/2 handshake. The session tests in `tls_fingerprint.rs` point REST at an in-process `mockcord::hello::HelloListener` instead (below), and `cargo xtask tls-capture` records one by hand. It listens on `localhost` only, on a random port, with a throwaway rcgen root and a `localhost` certificate, and never connects anywhere itself.
+mockcord speaks plain HTTP/1.1 and `ws://`, so session tests against it never see a TLS or HTTP/2 handshake. The session tests in `tls_fingerprint.rs` point REST or the gateway at an in-process `mockcord::hello::HelloListener` instead (below), and `cargo xtask tls-capture` records one by hand. It listens on `localhost` only, on a random port, with a throwaway rcgen root and a `localhost` certificate, and never connects anywhere itself.
 
 ```
 cargo xtask tls-capture --client chrome --h2 --record chrome-156
@@ -179,10 +180,11 @@ cargo xtask tls-capture --client wreq --h2 --compare chrome-156
 - The summary (`mockcord::hello::Capture`) holds the cipher list, extensions in arrival order and as a sorted set, server name, versions, groups, key-share groups and lengths, signature algorithms, ALPN, ALPS, certificate compression, ECH GREASE parameters, the Trust Anchor IDs, and the other short extension bodies. Random values, the session id and key-share bytes are left out. The HTTP/2 part holds the frames before the first HEADERS, SETTINGS in order, the connection WINDOW_UPDATE, PRIORITY frames, and for every request on every HTTP/2 connection its flags, stream priority, pseudo-header order, decoded header list and number of `cookie` fields. The websocket part is the upgrade request line and headers, with `Sec-WebSocket-Key` replaced by `<random>`.
 - `--record <name>` writes `tools/mockcord/fixtures/tls/<name>-https.json` and `<name>-wss.json`. `--compare <name>` reads them and prints every field that differs, ignoring extension order (Chrome permutes it) but not where GREASE sits, and for HTTP/2 comparing SETTINGS, WINDOW_UPDATE, PRIORITY frames and the first request's flags, priority and pseudo-header order. Header lists are kept for reading, not compared, because they come from the caller.
 
-The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` feature so the shipped app does not carry it (`kyoko-session`'s tests turn the feature on). `crates/session/tests/session/tls_fingerprint.rs` starts it in-process and points a real session at it with the harness options `rest_base` and `trust` (`Trust::only(listener.root_pem())`, a test-only root; the ClientHello is the same with it):
+The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` feature so the shipped app does not carry it (`kyoko-session`'s tests turn the feature on). `crates/session/tests/session/tls_fingerprint.rs` starts it in-process and points a real session at it with the harness options `rest_base`, `gateway_url` and `trust` (`Trust::only(listener.root_pem())`, a test-only root; the ClientHello is the same with it):
 
-- the REST ClientHello against `chrome-<CHROME_MAJOR>-https.json` (`mockcord::hello::chrome_fixture`, compared with `differences`: no GREASE values, extension order, random or key-share bytes);
+- the REST ClientHello, and the gateway's wss ClientHello, against `chrome-<CHROME_MAJOR>-https.json` and `-wss.json` (`mockcord::hello::chrome_fixture`, compared with `differences`: no GREASE values, extension order, random or key-share bytes);
 - a completed REST connection: ALPN `h2`, Chrome's SETTINGS, WINDOW_UPDATE, no PRIORITY frames, and a GET with the flags, priority (weight 220) and `m,a,s,p` of Chrome's `fetch()`, with two seeded cookies as two `cookie` fields;
+- a completed gateway upgrade over TLS: ALPN `http/1.1`, the web client's `User-Agent`, `Origin` and `Accept-Language`;
 - against plain mockcord, that no request (API, upload, message post, gateway upgrade) carries a navigation-only header: `upgrade-insecure-requests`, `sec-fetch-user`, `sec-fetch-mode: navigate` or `accept: text/html...`.
 
 A new `CHROME_MAJOR` without recorded fixtures fails these tests (`docs/fingerprint.md`, "Bumping Chrome"). Fixtures must hold no secrets: the page sets its own test cookies, and a capture runs on a fresh profile. Results and the Chrome-against-wreq comparison are in `docs/fingerprint.md`, "TLS and HTTP/2 handshake".
