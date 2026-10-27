@@ -1,4 +1,5 @@
 pub mod autostart;
+pub mod caret;
 pub mod clipboard;
 pub mod foreground;
 pub mod hotkeys;

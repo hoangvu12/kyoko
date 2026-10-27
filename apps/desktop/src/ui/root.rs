@@ -21,7 +21,7 @@ use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
-const LAYERS: [&str; 15] = [
+pub(super) const LAYERS: [&str; 15] = [
 	"timeline slot",
 	"thread slot",
 	"scrim",
@@ -130,7 +130,7 @@ fn missed_presses(tokio: &tokio::runtime::Runtime, layers: &[&str]) -> Vec<&'sta
 		.collect()
 }
 
-fn gallery(handle: &tokio::runtime::Handle) -> Gallery {
+pub(super) fn gallery(handle: &tokio::runtime::Handle) -> Gallery {
 	let fetcher = MediaFetcher::new().expect("a media fetcher");
 	let cache = std::env::temp_dir().join(format!("kyoko-root-test-{}", std::process::id()));
 	Gallery::new(
@@ -139,7 +139,7 @@ fn gallery(handle: &tokio::runtime::Handle) -> Gallery {
 	)
 }
 
-fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Pictures>) -> View {
+pub(super) fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Pictures>) -> View {
 	let pictures = pictures.clone();
 	let timeline = || {
 		TimelineView::new(

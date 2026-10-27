@@ -746,6 +746,9 @@ function M.frame(spec: Spec)
 		right = 0,
 		bottom = 0,
 		pointer_events = "none",
+		invisible = function()
+			return not open:get()
+		end,
 		ref = window,
 		dialog(window),
 	}

@@ -4,6 +4,8 @@ mod community;
 mod component_shots;
 mod composer;
 mod connection;
+#[cfg(test)]
+mod cursors;
 mod display;
 mod expression_shots;
 mod expressions;
@@ -218,6 +220,12 @@ pub fn run(
 			cx.tasks.spawn(async move { pictures.show_images().await });
 			cx.tasks.spawn(link.clone().flush_members());
 			cx.tasks.spawn(link.clone().attach_frame());
+			if let (None, Some(half)) = (&capture, platform::caret::blink_time()) {
+				cx.tasks.spawn(crate::caret::run(
+					cx.ui.downgrade(),
+					crate::caret::Blink::new(half),
+				));
+			}
 			if let Err(error) = host.reload() {
 				tracing::warn!(%error, "the interface script did not load");
 			}

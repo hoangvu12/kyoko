@@ -57,6 +57,8 @@ Mockcord runs in-process under `--mock`, so the mock figures include it. The rea
 - **Helper windows.** Windows titled `Kyoko` include zero-size zgx helper windows, as 03 noted. Scripts that look for the window must take the largest match. A window minimised by a stray click needs `ShowWindow` before its client rect is non-zero.
 - `follow = true` on `ui.scroll` keeps the message list pinned to the newest message as messages arrive, with no extra code.
 - Host images need exactly `width * height * 4` RGBA bytes. `media`'s `DecodedImage` fits directly, and the first frame is used for animated images.
+- **Cursors.** `Scene::cursor_at` takes the topmost hit and ignores `pointer_events = "none"`, which input dispatch honours (`NodeInput::pass_through`), so a full-window pass-through node hides every explicit cursor under it. Kyoko keeps such nodes out of the hit test while they show nothing (v1 86, `docs/ui.md` "Cursors and the caret"); upstream fix: skip pass-through nodes in `cursor_at`.
+- **Caret.** Editors never blink their caret. Kyoko blinks it from the host through `Ui::focused_editor` and the public `EditorHandle::caret` node (v1 86); zgx is unchanged.
 
 ## Exit hang
 

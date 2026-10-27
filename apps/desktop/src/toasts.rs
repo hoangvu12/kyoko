@@ -185,6 +185,9 @@ impl ToastLayer {
 		self.entered
 			.borrow_mut()
 			.retain(|id| shown.iter().any(|toast| toast.id == *id));
+		if shown.is_empty() {
+			self.toasts.borrow_mut().resume(Instant::now());
+		}
 		if self.shown.with_untracked(|current| *current != shown) {
 			self.shown.set(shown);
 		}
@@ -223,9 +226,9 @@ impl ToastLayer {
 	}
 
 	fn raised_stack(self: &Rc<Self>) -> View {
-		let (this, raised) = (self.clone(), self.raised.clone());
+		let (this, raised, shown) = (self.clone(), self.raised.clone(), self.shown.clone());
 		div().child_when(
-			move || Some(raised.get()),
+			move || shown.with(|shown| !shown.is_empty()).then(|| raised.get()),
 			move |_, cx| {
 				modal("Notifications", cx.runtime().signal(true))
 					.layer()

@@ -2,6 +2,7 @@
 
 mod apps_launcher;
 mod capture;
+mod caret;
 mod churn;
 mod community;
 mod composer_layer;
