@@ -1,5 +1,21 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: ninth orchestrator hands off (roboco chat `2be6a038`, "kyoko orchestrator 9", same machine)
+
+Everything below still applies unless this section says otherwise. The user went to sleep (2026-10-27) after saying "ok just do ur thing, handoff to new orchestrator chat if u need": keep working through the list without waiting for them, and stop only for things that need them (below).
+
+### State
+
+- Resolved this session: v1 68 (login card leads with "Sign in on discord.com" and the QR code; email behind "Use email and password instead") and v1 69 (TLS build trial: **go**, wreq's Chrome154 profile matches local Chrome 156 with 0 differences on https and wss). New tickets 68–74; 70–74 are the TLS plan's T2–T6. Read 68's and 69's Answers.
+- libclang: the VS Clang component was 2.2 GB download / 5.7 GB installed, so I asked; the user chose the official **LLVM 23.1.4** (winget `LLVM.LLVM`, `C:\Program Files\LLVM`). I added `CMAKE` (VS 2022 Build Tools cmake) and `CMAKE_GENERATOR = "Visual Studio 17 2022"` to the user-level `~/.cargo/config.toml` `[env]`, so every shell and lane builds BoringSSL the same way (a different value reruns the ~4 min C build). The repo's `.cargo/config.toml` sets `HOST_CMAKE_TOOLCHAIN_FILE` to `.cargo/boringssl-no-asm.cmake` (no NASM). Shared BoringSSL prebuilt for btls rev `1298875`: `nguyenvu\.cache\boringssl-129887582a53` (`BORING_BSSL_PATH` + `BORING_BSSL_ASSUME_PATCHED=1`, see `docs/fingerprint.md`); lanes B and C haven't built BoringSSL yet (first build ~6.4 min dev).
+- In flight: **v1 70+71 (REST and gateway on wreq), lane A, worker `53d90ff9`** ("kyoko 70+71 REST and gateway on wreq (lane A)"), started on `40a7b66`, two commits expected (70 then 71). Its completion notice goes to `2be6a038`, not to you: poll it with `list_chats` (parent `2be6a038`) and `read_chat 53d90ff9 limit 1 include_tools false`. When it reports: verify in lane A (`verify.sh` plus `cargo xtask tls-capture --client wreq --h2 --compare chrome-156`, which must stay 0 and 0), check the AGENTS.md wording below, merge, write both Answers.
+- **AGENTS.md rule wording, approved by the user** (shown to them 2026-10-27; they answered "ok just do ur thing"): "Present the identify properties, REST and gateway headers, and the TLS and HTTP/2 handshake of the Discord web client in Chrome, nothing more; never automate user actions, bypass captchas, MFA, rate limits or client verification." plus `net` in the headless list. If the worker's wording differs, use this one.
+- `deny.toml` ignores RUSTSEC-2026-0391/-0398/-0403 (zstd 0.13 / zstd-safe 7, only from wreq-util's Firefox-only cert compressor). Told to the user as their call; no answer yet. Keep unless they object.
+- Next after 70+71: **72** (QR socket over `net::ws`, blocked by 71) and **73** (media and theme links on wreq; reqwest, rustls, aws-lc leave the shipped exe; blocked by 70) can run in parallel on two lanes (they touch different crates: `crates/login/src/qr` vs `crates/media`, `crates/session/src/theme_links.rs`; both touch `Cargo.toml`/`Cargo.lock`, expect a lockfile rebase). Then **74** (Chrome bump runbook, run once for 157 after its full stable 2026-11-03; it has a user-decision box about REST header order and websocket handshake headers: write the evidence and ask the user, don't decide). 69's Answer lists the notes each of them needs (`websocket_emulation()` clears ALPS; Chrome splits `cookie` on H2; image `Accept` gains `image/jxl` in 74).
+- Lanes B and C idle on `40a7b66`. Disk 107 GB free; lane targets A ~37 GB, B/C ~28 GB.
+- Not to do without the user: a CI run (pushing main runs CI anyway; that's fine as usual, but don't trigger extra runs or change workflows' secrets), real-Discord runs, releases, tags, upstream reports. v1 39 and 58 stay skipped.
+- Status notes for the user: one short plain numbered list of what's left, no ticket jargon. Left now: (1) REST and live connection on Chrome's handshake (running), (2) QR login connection, (3) images/media and dropping the old network libraries, (4) the Chrome bump procedure, run for 157.
+
 ## Latest: eighth orchestrator hands off (roboco chat `a5bca87c`, "kyoko orchestrator 8", same machine)
 
 Everything below still applies unless this section says otherwise.
