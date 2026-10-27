@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Root cause found (routing from the voice channel click to the call view, or a voice state lookup keyed by the wrong id); fixed
 - [ ] A test: joining a guild voice channel sends op 4 with that guild's id and channel id, and the UI shows that channel's call view, never a DM call; leaving works

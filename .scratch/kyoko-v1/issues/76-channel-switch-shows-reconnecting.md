@@ -6,7 +6,7 @@ Evidence: the orchestrator ran kyoko with `--log info,gateway=debug` (logs under
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Root cause written down (which state shows "Reconnecting" on a channel open, and why); fixed so the connection banner shows only for real gateway disconnects
 - [ ] Opening a channel shows a message skeleton in the message pane only, until the first page arrives; the channel list, member list and server rail don't rebuild or move (a test asserts the sidebar state is unchanged by a channel open)

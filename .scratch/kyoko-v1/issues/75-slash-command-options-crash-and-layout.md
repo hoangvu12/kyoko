@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Root cause of the crash found and fixed; a test that picks an optional option of a command (mockcord command with only optional options, string type) and fails without the fix
 - [ ] The caret sits right after `/dl ` (no gap); the composer's text layout is correct with the command chip
