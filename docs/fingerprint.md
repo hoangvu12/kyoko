@@ -196,6 +196,91 @@ Native Windows builds of `btls-sys` assemble BoringSSL's assembly unless they cr
 
 **CI.** No workflow file changed. `windows-latest` has CMake on `PATH`, LLVM in `C:\Program Files\LLVM` and Git, and the toolchain file removes the need for NASM, so `ci.yml` should build and test the workspace as it is, with the first run paying the BoringSSL fetch and build (`Swatinem/rust-cache` keeps `~/.cargo/git` and `target` afterwards). `release.yml` builds `-p kyoko`, which links `crates/net` since ticket 70, so its Windows job pays the BoringSSL build too. Its ubuntu `publish` job builds `xtask`, which does not depend on `crates/net`, so it builds no BoringSSL, but cargo still fetches the git pins and the BoringSSL submodule to load the workspace. None of this has run on CI yet.
 
+## Voice
+
+**Decision pending** (the user's, ticket 96). Kyoko has no voice yet. `crates/voice` is a build trial that no kyoko crate depends on; nothing below changed what kyoko sends. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
+
+### What the web client does
+
+From [voice connections](https://docs.discord.food/topics/voice-connections) (userdoccers `2e49806`, 2026-06-24, read 2026-10-28):
+
+- A browser cannot open a raw UDP socket, so the web client uses `protocol: "webrtc"`: ICE, DTLS 1.2+ and SRTP to Discord's SFU, with a stripped SDP fragment from Chrome's own offer in Select Protocol. It uses no IP discovery, no `mode`, no `secret_key` and none of the `aead_*` transport modes ("WebRTC Connections"). DAVE frames ride in Chrome's encoded transforms (`encodedInsertableStreams: daveEnabled`).
+- Discord's answer has `a=setup:passive`, so the browser is the DTLS client and sends the ClientHello the SFU sees on every call.
+- `protocol: "udp"` with IP discovery, `aead_aes256_gcm_rtpsize` or `aead_xchacha20_poly1305_rtpsize` is what the desktop app and bots use, and what oxidcord implements. Its payload types (Opus 120, H264 101/102) are not the browser's ("Do not rewrite browser WebRTC payload types to UDP defaults", Opus "usually payload type 111").
+- The web client heartbeats every `min(heartbeat_interval, 5000)` ms.
+
+### Chrome 156 on localhost
+
+`cargo xtask webrtc-capture --client chrome` (`docs/testing.md`, "WebRTC offer and DTLS hello"): Chrome 156.0.8078.48 on a throwaway profile, a page on `127.0.0.1` with `RTCPeerConnection({bundlePolicy: "max-bundle"})` and `recvonly` audio and video transceivers, answered by a local str0m peer. Fixtures: `tools/mockcord/fixtures/webrtc/chrome-156-offer.sdp`, `-offer.json`, `-dtls.json`. Two further runs compared with 0 differences. ICE, DTLS and the connection came up every time.
+
+The offer:
+
+- Session: `a=group:BUNDLE 0 1`, `a=extmap-allow-mixed`, `a=msid-semantic: WMS`. Each section: `UDP/TLS/RTP/SAVPF`, `a=ice-options:trickle`, `a=fingerprint:sha-256`, `a=setup:actpass`, `a=rtcp-mux`, `a=rtcp-rsize`, `a=rtcp-xr:rcvr-rtt=all`.
+- Audio (`mid 0`): `111 opus/48000/2` (`minptime=10;useinbandfec=1`, `transport-cc`), `63 red`, `9 G722`, `0 PCMU`, `8 PCMA`, `13 CN`, `110` and `126 telephone-event`. Extmaps 1 `ssrc-audio-level`, 2 `abs-send-time`, 3 `transport-wide-cc`, 4 `sdes:mid`.
+- Video (`mid 1`), 42 payload types: VP8 96 (RTX 97); VP9 profiles 0, 2, 1, 3 on 98, 100, 35, 37; H264 on 102, 104, 108, 114, 116, 39, 41, 43, 118, 120 (profiles `42001f`, `42e01f`, `4d001f`, `f4001f`, `64001f`, packetization modes 1 and 0); AV1 profiles 0 and 1 on 45, 47; H265 profiles 1 and 2 on 49, 51 (Chrome offers H265 only where the GPU decodes it, as here); each with RTX; then `122 red`, `124 ulpfec`, `53 flexfec-03`. Every video codec has `goog-remb`, `transport-cc`, `ccm fir`, `nack`, `nack pli`. Extmaps 14 `toffset`, 2 `abs-send-time`, 13 `video-orientation`, 3 `transport-wide-cc`, 5 `playout-delay`, 6 `video-content-type`, 7 `video-timing`, 8 `color-space`, 4 `sdes:mid`, 10 `rtp-stream-id`, 11 `repaired-rtp-stream-id`. These match the extmap ids in the docs' fragment example.
+
+The DTLS ClientHello is BoringSSL's, 1,413 bytes, so it is split over two datagrams (1,463 bytes with headers):
+
+- JA4 `dd3i140900_fa23b50283d1_01b4b87481e4`; record version DTLS 1.0, `legacy_version` DTLS 1.2, `supported_versions` DTLS 1.3 and 1.2, empty cookie, no GREASE.
+- 14 ciphers: the three TLS 1.3 suites, ECDHE-ECDSA and ECDHE-RSA with AES-128-GCM and ChaCha20, the four ECDHE CBC-SHA suites, and RSA AES-128-GCM, AES-128-CBC, AES-256-CBC.
+- Groups X25519MLKEM768, X25519, P-256, P-384, with key shares for X25519MLKEM768 (1,216 bytes) and X25519. Nine signature algorithms (ECDSA P-256/P-384, RSA-PSS and PKCS#1 with SHA-256/384/512, PKCS#1 SHA-1). `psk_key_exchange_modes` 1, `renegotiation_info`, `extended_master_secret`, `ec_point_formats`, `use_srtp` with `SRTP_AES128_CM_SHA1_80`, `SRTP_AEAD_AES_256_GCM`, `SRTP_AEAD_AES_128_GCM` in that order.
+- Extension order is permuted per connection, as in Chrome's TLS.
+
+### str0m against it
+
+str0m 0.24.1 (`str0m-wincrypto` 0.8.1, Windows CNG under the pure-Rust `dimpl` DTLS) recorded with `--client str0m` (fixtures `str0m-wincrypto-dtls12-*` and `str0m-wincrypto-auto-*`). `str0m-rust-crypto` 0.6 also runs `dimpl` and sends the same shape (it was tried during this ticket: the same differences, with a ChaCha20 suite added). The capture keeps only the wincrypto backend:
+
+| | Chrome 156 | str0m, DTLS 1.2 (default) | str0m, `auto` |
+|---|---|---|---|
+| JA4 | `dd3i140900_fa23b50283d1_01b4b87481e4` | `dd2i020500_177d36ae841b_cd314463c40d` | `dd3i040900_5794a053403b_9ab7eb0b348d` |
+| Versions | DTLS 1.3, 1.2 | 1.2 only | 1.3, 1.2 |
+| Ciphers | 14 | 2 (ECDHE-ECDSA AES-GCM) | 4 |
+| Groups, key shares | ML-KEM hybrid first, two shares | no ML-KEM, no shares | no ML-KEM, X25519 only |
+| Signature algorithms | 9 | 2 | 2 |
+| Record version | DTLS 1.0 | DTLS 1.2 | DTLS 1.2 |
+| Other | PSK modes, renegotiation_info, SRTP order 0001,0008,0007 | no PSK modes or renegotiation_info, SRTP order 0008,0007,0001 | adds `padding`, no PSK modes |
+
+`--compare chrome-156` finds 11 differences (1.2), 12 (1.3) and 10 (auto) in the hello. str0m's own offer differs in 48 fields (its codec list, payload types and extmaps); that part does not matter for B, because kyoko would build its Select Protocol fragment and codec list from the recorded Chrome offer, not from str0m's. The hello is what cannot be copied as text.
+
+BoringSSL itself does DTLS: the pinned `btls` (kyoko's TLS library since ticket 70) has `SslMethod::dtls()` and `set_tlsext_use_srtp`. A str0m `DtlsProvider` on `btls`, configured as Chrome's WebRTC configures BoringSSL, is the only route found to Chrome's hello; it is not written.
+
+### Build trial
+
+`crates/voice` (`cargo run -p kyoko-voice --example voice_trial --features openh264`) builds oxidcord's voice dependencies and runs each once: libopus 1.6.1 encode and decode (`opus` 0.4 on `opusic-sys` 0.7.6, bundled), `rubato` 5.0.1 resampling, `nnnoiseless` 0.5.2, cpal's WASAPI devices, both AEAD transport modes, a two-member DAVE MLS group on `openmls` 0.9.2 with `openmls_rust_crypto` 0.6 (P-256 suite, welcome, agreed media key, HMAC ratchet step), Media Foundation H.264 transforms (3 hardware and 1 software encoder, 1 decoder here), `GraphicsCaptureSession::IsSupported`, and with `--features openh264` an `openh264` 0.9.9 encode and decode. All pass on this machine.
+
+- **libopus under kyoko's toolchain file.** It builds with `HOST_CMAKE_TOOLCHAIN_FILE=.cargo/boringssl-no-asm.cmake` unchanged. `CMakeCache.txt` shows the toolchain file, `-MD`, and `OPUS_X86_MAY_HAVE_SSE`, `SSE2`, `SSE4_1` and `AVX2` all `ON` (runtime dispatch; `PRESUME_SSE`/`SSE2` `ON`). `opus.lib` (3.4 MB) holds `silk_NSQ_del_dec_sse4_1`, `celt_pitch_xcorr_avx2` and `opus_select_arch`, and references `MSVCRT` only, no `LIBCMT`. No fix needed. `OPENSSL_NO_ASM` is irrelevant to libopus.
+- **openh264.** Its build script finds no NASM and falls back to plain C ("Failed to compile NASM files, not using any assembly"), so a software encode would be slower than Cisco's binary.
+- **Windows features.** `Foundation`, `Graphics_Capture`, `Win32_Media_MediaFoundation`, `Win32_System_Com` on the locked `windows` 0.62.2. MF and COM: Media Foundation must tolerate COM already initialised in another apartment (cpal initialises it on the same thread); the trial treats `RPC_E_CHANGED_MODE` as "already initialised", as oxidcord does.
+
+Measured on the development machine, 2026-10-28, `CARGO_BUILD_JOBS=3`, other worktrees building at the same time (so ±30 %), building `-p kyoko-voice --features openh264 --examples` into an empty target dir:
+
+| | dev, sccache off | release, sccache off | dev, sccache on, cold | dev, sccache on, warm |
+|---|---|---|---|---|
+| Whole trial (all deps) | 378 s | 199 s | 248 s | 96 s |
+| `opusic-sys` build script (CMake, MSBuild) | 54.5 s | 54.0 s | 56.9 s | 47.9 s |
+| `openh264-sys2` build script (`cc`) | 64.4 s | 60.5 s | 102.1 s | 29.6 s |
+| `openmls` | 72.8 s | 16.9 s | 19.6 s | 18.5 s |
+| other large crates | `nnnoiseless` 97 s, `windows` 89 s, `kyoko-voice` 70 s, `libcrux-sha3` 24 s | `windows` 51 s, `nnnoiseless` 21 s | | |
+| No-op rebuild | 0.93 s | 0.91 s | | |
+
+- **sccache.** libopus is never cached: CMake's Visual Studio generator ignores the compiler launcher, as with `btls-sys`. openh264's 86 C++ files are: `cc` sees `RUSTC_WRAPPER` and compiles through sccache, so the warm build hit all 86 (the remaining 30 s is NASM probing and archiving). Rust crates hit as usual (184 hits on the warm build; sccache's counters are shared with the other lanes, so the counts are approximate).
+- **Disk.** A standalone target dir for the trial takes 0.95 GB dev and 0.66 GB release; the libopus build dir is 14 MB dev and 7 MB release, openh264's 23 MB and 5 MB. The `opusic-sys` source is 30 MB in `~/.cargo/registry`.
+- **Release `kyoko.exe`.** 79,469,568 bytes on `a976864`. With a temporary call into the trial (reverted, never committed): 84,065,792 bytes without openh264 (+4.38 MiB, +5.8 %) and 84,789,248 with it (+5.07 MiB, +6.7 %; openh264 alone +0.69 MiB). The trial calls each library once, so the real port will add oxidcord's own voice and video code on top (the plan estimates 1–2 MB).
+- **Licences and advisories.** `cargo deny check` passes with one new ignore: RUSTSEC-2026-0387 (non-constant-time arithmetic in `crypto-bigint` 0.5.5, fixed only in 0.7.6). It comes from `p256`/`p384` 0.13 under `openmls_rust_crypto`, `openmls_basic_credential` and `hpke-rs-rust-crypto` (the DAVE signing and HPKE keys), and from `dimpl` under str0m in xtask; no 0.5 or 0.13 release fixes it. Before DAVE ships (V3), either accept it for local timing only or give openmls a crypto provider that does not use RustCrypto's 0.13 curves (BoringSSL through `btls` is linked already). hpke-rs is MPL-2.0 and libopus BSD-3; `THIRD_PARTY_NOTICES.md` gets them when voice ships.
+- `cargo tree -p kyoko -e normal` still shows no rustls, aws-lc-sys, ring or TLS-enabled tokio-tungstenite (only wreq's own `tokio-tungstenite` 0.29 with default features off), and `kyoko-voice` brings none of them either.
+
+### The choice
+
+- **A. UDP, ported from oxidcord.** Weeks sooner. The voice server sees a session that identified as Chrome on the web switch to the desktop app's transport: `protocol: "udp"`, IP discovery, an `aead_*` mode, Opus on 120, no DTLS at all. That is a protocol-level difference, not a field-level one, and it shows on every call. Whether Discord acts on it is unknown; user-account clients (endcord, discordo) use UDP today.
+- **B. WebRTC as Chrome.** ICE, DTLS, SRTP, RTCP (RR/SR, NACK, PLI, transport-cc) and the answer synthesis. The SDP side is cheap: the fragment, codec list and payload types can be built from the recorded offer above. The DTLS side is not: str0m's hello differs from Chrome's in 10–12 fields, and the only matching hello found is BoringSSL's, which means writing a str0m DTLS provider on `btls` (Chrome's options: DTLS 1.3 and 1.2, the 14 suites, X25519MLKEM768 first, the SRTP order, extension permutation). Several weeks more than A, and the result still needs a capture of the real SFU's behaviour, which only a user run can give.
+- **C. Everything above the transport once, behind a `Transport` seam.** Signalling on `net::ws` (v9, web heartbeat, `rtc_connection_id`, two layers), DAVE, Opus, jitter, mixer, video codecs, session and UI are shared by A and B. Ship A first with the gap recorded here; B is a follow-up.
+
+**Recommendation: C**, and if B follows, do its DTLS on `btls`, not on str0m's default `dimpl` (the measurement shows dimpl cannot be made to look like Chrome without rewriting its hello). If "nothing more" must hold for voice from the first release, choose B and expect voice to land weeks later.
+
+**openh264: leave it out.** Media Foundation is licensed with Windows and does H.264 encode and decode here in hardware and software; openh264 costs 0.69 MiB, a 60–100 s C++ build (no NASM, so its slow C path), and Cisco's patent cover only applies to Cisco's downloaded binary, not a source build. Keep it behind the off-by-default `openh264` feature for testing only. Windows N editions without the Media Feature Pack show "video unavailable".
+
+**Decision: pending.** Transport A, B or C, and openh264 in or out, are the user's to choose; record the answer here.
+
 ## IDENTIFY
 
 Keys in this order: `token`, `properties`, `compress` (`false`), `presence`, `capabilities`, `client_state`. There is no `large_threshold`; the user default is already 250.
