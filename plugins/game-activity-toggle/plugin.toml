@@ -1,0 +1,7 @@
+id = "game-activity-toggle"
+name = "GameActivityToggle"
+version = "1.0.0"
+api = 1
+description = "Adds a controller button to your user panel that turns sharing your game activity on and off."
+authors = ["Kyoko"]
+permissions = ["action:activity", "ui:panel.buttons"]

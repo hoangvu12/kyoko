@@ -348,6 +348,17 @@ fn clone_expression(context: &Context) -> mlua::Result<()> {
 	Ok(())
 }
 
+fn share_activity(context: &Context, wanted: Option<bool>) -> mlua::Result<bool> {
+	let attachment = permit(context, "kyoko.actions.share_activity", Action::Activity)?;
+	let shared = wanted.unwrap_or_else(|| !attachment.state.read().status_settings().shares_activity());
+	attachment.commander.send(Command::SetActivitySharing(shared));
+	(context.requests)(PluginRequest::ActivitySharing {
+		plugin: context.id.clone(),
+		shared,
+	});
+	Ok(shared)
+}
+
 fn actions_table(lua: &Lua, context: &Rc<Context>) -> mlua::Result<Table> {
 	let table = lua.create_table()?;
 	let shared = context.clone();
@@ -379,6 +390,11 @@ fn actions_table(lua: &Lua, context: &Rc<Context>) -> mlua::Result<Table> {
 	table.set(
 		"clone_expression",
 		lua.create_function(move |_, ()| clone_expression(&shared))?,
+	)?;
+	let shared = context.clone();
+	table.set(
+		"share_activity",
+		lua.create_function(move |_, wanted: Option<bool>| share_activity(&shared, wanted))?,
 	)?;
 	Ok(table)
 }

@@ -288,7 +288,7 @@ fn right_clicking_an_emoji_then_clone_then_a_server_adds_it_there() {
 	press(&mut app, "plugin-menu-clone_emoji", PointerButton::Primary);
 	let expression = match heard.lock().expect("requests").pop() {
 		Some(PluginRequest::Clone { expression, .. }) => expression,
-		None => panic!("the plugin did not ask to clone"),
+		other => panic!("the plugin did not ask to clone: {other:?}"),
 	};
 	assert_eq!(
 		expression,

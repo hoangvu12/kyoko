@@ -191,7 +191,30 @@ const FORCE_OWNER_CROWN: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 14] = [
+const GAME_ACTIVITY_TOGGLE: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/game-activity-toggle/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/game-activity-toggle/logic.luau"),
+	),
+	(
+		"ui.luau",
+		include_str!("../../../plugins/game-activity-toggle/ui.luau"),
+	),
+	(
+		"gamepad.svg",
+		include_str!("../../../plugins/game-activity-toggle/gamepad.svg"),
+	),
+	(
+		"gamepad_off.svg",
+		include_str!("../../../plugins/game-activity-toggle/gamepad_off.svg"),
+	),
+];
+
+const PACKAGES: [Embedded; 15] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -206,6 +229,7 @@ const PACKAGES: [Embedded; 14] = [
 	READ_ALL_NOTIFICATIONS,
 	PLATFORM_INDICATORS,
 	FORCE_OWNER_CROWN,
+	GAME_ACTIVITY_TOGGLE,
 ];
 
 pub fn packages() -> Vec<Package> {

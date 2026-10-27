@@ -617,3 +617,86 @@ fn the_read_all_button_on_the_rail_marks_everything_read_only_when_clicked() {
 	drop(server);
 	drop(runtime);
 }
+
+#[test]
+fn the_game_activity_button_sits_in_the_panel_follows_sharing_and_asks_for_its_toggle() {
+	const ID: &str = "game-activity-toggle";
+	let plugins_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+	let lab = Lab::new("game-activity-toggle", &[plugins_dir]);
+	lab.host.scan();
+	let shown = lab
+		.host
+		.snapshot()
+		.into_iter()
+		.find(|plugin| plugin.id == ID)
+		.expect("GameActivityToggle loads")
+		.permissions;
+	lab.host.approve(ID, &shown).expect("approved");
+	let requests: Rc<RefCell<Vec<Request>>> = Rc::default();
+	let seen = requests.clone();
+	let (mut app, lab) = app_with(lab, move |lab, host| {
+		lab.mount(host, move |request| seen.borrow_mut().push(request))
+	});
+	shows(
+		&mut app,
+		"a channel with GameActivityToggle",
+		"general",
+		&channel_values(),
+	);
+	let button = app.bounds("game_activity_toggle_panel");
+	assert_eq!(
+		(button.width, button.height),
+		(32., 32.),
+		"the toggle matches the panel's icon buttons"
+	);
+	let shared = app
+		.host
+		.shared("plugin.game-activity-toggle.activity", Value::Nil);
+	assert_eq!(
+		shared.get(),
+		Value::Bool(true),
+		"sharing is on until the session says otherwise"
+	);
+
+	app.click("game_activity_toggle_panel");
+	assert_eq!(
+		requests.borrow().as_slice(),
+		[Request::Action {
+			id: ID.to_owned(),
+			key: "toggle".to_owned(),
+			slot: Some("panel.buttons"),
+		}],
+		"a click asks the plugin to toggle from the panel slot"
+	);
+
+	lab.borrow()
+		.slots
+		.as_ref()
+		.expect("the slots")
+		.share_activity(false);
+	app.frames(2);
+	assert_eq!(
+		shared.get(),
+		Value::Bool(false),
+		"the button sees sharing turned off"
+	);
+	assert!(app.error().is_none(), "the off icon draws: {:?}", app.error());
+	assert!(app.find("game_activity_toggle_panel").is_some());
+
+	lab.borrow().host.disable(ID);
+	{
+		let lab = lab.borrow();
+		let slots = lab.slots.as_ref().expect("the slots");
+		let script = app.host.clone();
+		assert!(
+			slots.publish(&script, &lab.host.snapshot()),
+			"disabling unmounts it"
+		);
+	}
+	app.host.reload().expect("the interface reloads");
+	app.frames(2);
+	assert!(
+		app.find("game_activity_toggle_panel").is_none(),
+		"a disabled plugin leaves the panel as it was"
+	);
+}

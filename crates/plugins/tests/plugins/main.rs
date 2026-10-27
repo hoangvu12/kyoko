@@ -9,6 +9,7 @@ mod display;
 mod events;
 mod expression_cloner;
 mod favorite_emoji_first;
+mod game_activity_toggle;
 mod gestures;
 mod hidden_views;
 mod message_logger;

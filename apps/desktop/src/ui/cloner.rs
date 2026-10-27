@@ -55,6 +55,14 @@ impl Cloner {
 	}
 }
 
+fn activity_text(shared: bool) -> &'static str {
+	if shared {
+		"Game activity is shared again"
+	} else {
+		"Game activity is hidden"
+	}
+}
+
 fn menu_item(item: MenuItem) -> PluginMenuItem {
 	PluginMenuItem {
 		plugin: item.plugin,
@@ -179,6 +187,9 @@ impl Link {
 					PluginRequest::Clone { plugin, expression } => {
 						tracing::info!(%plugin, sticker = expression.is_sticker(), "a plugin offers to clone");
 						self.community.open(Dialog::Clone(expression));
+					}
+					PluginRequest::ActivitySharing { shared, .. } => {
+						self.toasts.push(ToastKind::Success, activity_text(shared));
 					}
 				}
 			}

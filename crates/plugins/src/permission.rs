@@ -138,7 +138,10 @@ impl Action {
 	}
 
 	pub fn available(self) -> bool {
-		matches!(self, Action::MarkRead | Action::UploadExpression)
+		matches!(
+			self,
+			Action::MarkRead | Action::UploadExpression | Action::Activity
+		)
 	}
 }
 

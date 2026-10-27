@@ -16,6 +16,7 @@ const GESTURE_SOURCE: &str = "settings";
 const SLOT_SOURCE: &str = "slot";
 const SILENT_TYPING: &str = "silent-typing";
 const TEXT_REPLACE: &str = "text-replace";
+const GAME_ACTIVITY_TOGGLE: &str = "game-activity-toggle";
 
 type Activation = Rc<Cell<Option<Instant>>>;
 
@@ -227,6 +228,12 @@ impl Link {
 		}
 	}
 
+	pub(super) fn plugins_apply(&self, state: &state::State) {
+		self.plugins
+			.slots
+			.share_activity(state.status_settings().shares_activity());
+	}
+
 	pub(super) fn plugin_input(&self) {
 		self.plugins.activated();
 	}
@@ -313,6 +320,20 @@ impl Link {
 		zgx::timer::sleep(capture::SETTLE).await;
 		let (x, y) = capture::TEXT_REPLACE_SETTINGS;
 		self.press_at(x, y).await;
+	}
+
+	pub(super) async fn drive_game_activity(&self) {
+		self.until_capture(|link| link.plugins.slots.is_mounted(GAME_ACTIVITY_TOGGLE))
+			.await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		let (x, y) = capture::GAME_ACTIVITY_BUTTON;
+		self.press_at(x, y).await;
+		self.until_capture(|link| {
+			link.state()
+				.is_some_and(|state| !state.read().status_settings().shares_activity())
+		})
+		.await;
+		tracing::info!("the GameActivityToggle button was clicked");
 	}
 
 	fn plugin(&self, id: &str) -> Option<PluginInfo> {

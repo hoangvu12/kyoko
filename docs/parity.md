@@ -636,3 +636,9 @@ Kyoko only (`--apps kyoko`): oxidcord has no plugins. No Midnight mockup, check 
 |---|---|---|---|
 | `name-decorations` | 49 | With `KYOKO_CAPTURE_PLUGINS=platform-indicators,force-owner-crown`. As `member-list`: each author in the timeline and each member shows a monitor, phone or globe per platform in their status colour (mockcord spreads people over desktop, mobile, both, and web), and the owner shows the yellow crown after their name. | yes |
 | `name-decorations-profile` | 49 | With `KYOKO_CAPTURE_PLUGINS=platform-indicators,force-owner-crown`. As `profile-popout`: the author's platform icons come first in the badge row. | yes |
+
+### 56 GameActivityToggle
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `user-panel-game-activity` | 56 | With `KYOKO_CAPTURE_PLUGINS=game-activity-toggle`. Default selection; kyoko waits for the plugin's controller button to mount in the user panel and clicks it at (194, 760) through the window, so sharing turns off: the crossed-out controller in red and the "Game activity is hidden" toast. Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |

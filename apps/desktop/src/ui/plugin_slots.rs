@@ -1,9 +1,9 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use plugins::{Permission, PluginInfo, Slot, Status};
+use plugins::{Action, Permission, PluginInfo, Slot, Status};
 use serde_json::{Map, Value as Json};
 use zgx_script::{Capability, Plugin, ScriptHost, Shared, Value};
 
@@ -30,6 +30,7 @@ struct Mount {
 	id: String,
 	entry: PathBuf,
 	slots: Vec<Slot>,
+	activity: bool,
 	generation: u64,
 }
 
@@ -47,6 +48,7 @@ impl Mount {
 			id: info.id.clone(),
 			entry,
 			slots,
+			activity: info.grants.contains(&Permission::Action(Action::Activity)),
 			generation: info.generation,
 		})
 	}
@@ -67,6 +69,8 @@ pub struct PluginSlots {
 	handler: Rc<dyn Fn(Request)>,
 	mounted: Mounted,
 	settings: RefCell<BTreeMap<String, Shared>>,
+	activity: RefCell<BTreeMap<String, Shared>>,
+	shares_activity: Cell<bool>,
 }
 
 impl PluginSlots {
@@ -79,6 +83,8 @@ impl PluginSlots {
 			handler: Rc::new(handler),
 			mounted,
 			settings: RefCell::default(),
+			activity: RefCell::default(),
+			shares_activity: Cell::new(true),
 		}
 	}
 
@@ -86,6 +92,9 @@ impl PluginSlots {
 		let mounts: Vec<Mount> = plugins.iter().filter_map(Mount::of).collect();
 		for mount in &mounts {
 			self.expose(script, &mount.id);
+			if mount.activity {
+				self.expose_activity(script, &mount.id);
+			}
 		}
 		for info in plugins {
 			if let Some(shared) = self.settings.borrow().get(&info.id) {
@@ -101,8 +110,28 @@ impl PluginSlots {
 		true
 	}
 
+	pub fn share_activity(&self, shared: bool) {
+		if self.shares_activity.replace(shared) == shared {
+			return;
+		}
+		for value in self.activity.borrow().values() {
+			value.set(Value::Bool(shared));
+		}
+	}
+
 	pub fn is_mounted(&self, id: &str) -> bool {
 		!slots_of(&self.mounted, id).is_empty()
+	}
+
+	fn expose_activity(&self, script: &ScriptHost, id: &str) {
+		if self.activity.borrow().contains_key(id) {
+			return;
+		}
+		let name = format!("plugin.{id}.activity");
+		let shared = script.shared(&name, Value::Bool(self.shares_activity.get()));
+		shared.set(Value::Bool(self.shares_activity.get()));
+		script.expose_shared(name, Some(capability(id)));
+		self.activity.borrow_mut().insert(id.to_owned(), shared);
 	}
 
 	fn expose(&self, script: &ScriptHost, id: &str) {

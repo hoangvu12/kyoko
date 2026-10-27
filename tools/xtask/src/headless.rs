@@ -57,6 +57,9 @@ const EXPRESSION_CLONER: &str = "expression-cloner";
 const MESSAGE_LOGGER: &str = "message-logger";
 const SHOW_HIDDEN_CHANNELS: &str = "show-hidden-channels";
 const SHOW_HIDDEN_THINGS: &str = "show-hidden-things";
+const GAME_ACTIVITY_TOGGLE: &str = "game-activity-toggle";
+const SETTINGS_PROTO: &str = "/users/@me/settings-proto/1";
+const SETTINGS_WAIT: Duration = Duration::from_secs(25);
 const READ_ALL_NOTIFICATIONS: &str = "read-all-notifications";
 const READ_ALL_KEY: &str = "read_all";
 const PLATFORM_INDICATORS: &str = "platform-indicators";
@@ -209,6 +212,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		READ_ALL_NOTIFICATIONS,
 		PLATFORM_INDICATORS,
 		FORCE_OWNER_CROWN,
+		GAME_ACTIVITY_TOGGLE,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -744,11 +748,49 @@ impl Harness {
 			.count() - before)
 	}
 
+	async fn toggles_activity(&self, plugins: &PluginHost, server: &Server) -> Result<bool> {
+		let click = [
+			("source".to_owned(), "slot".to_owned()),
+			("slot".to_owned(), "panel.buttons".to_owned()),
+		];
+		for shared in [false, true] {
+			let before = server
+				.control()
+				.inspect(|recording| activity_writes(recording).len());
+			plugins
+				.gesture(GAME_ACTIVITY_TOGGLE, "toggle", &click)
+				.map_err(|error| anyhow::anyhow!("the GameActivityToggle click failed: {error}"))?;
+			self.until("the activity sharing to flip", |state| {
+				state.status_settings().shares_activity() == shared
+			})
+			.await?;
+			let saved = server
+				.control()
+				.wait_for(SETTINGS_WAIT, |recording| {
+					activity_writes(recording).into_iter().nth(before)
+				})
+				.await;
+			ensure!(
+				saved == Some(Some(shared)),
+				"GameActivityToggle saved {saved:?} after {before} writes, wanted {shared}"
+			);
+		}
+		Ok(true)
+	}
+
 	async fn stop(self) -> Result<()> {
 		tokio::task::spawn_blocking(move || self.session.shutdown())
 			.await
 			.context("session shutdown panicked")
 	}
+}
+
+fn activity_writes(recording: &mockcord::Recording) -> Vec<Option<bool>> {
+	recording
+		.requests_to("PATCH", SETTINGS_PROTO)
+		.filter_map(|request| protocol::decode_status_settings(request.json()?["settings"].as_str()?))
+		.map(|settings| settings.show_current_game)
+		.collect()
 }
 
 fn shows_username(state: &State, guild_id: Snowflake, entry: &bridge::MessageEntry) -> bool {
@@ -1135,6 +1177,7 @@ async fn scenario(
 	let clone_ok = harness.clones(&plugins, server, root).await?;
 	let hidden_quiet = harness.leaves_hidden_channels_alone(&plugins, server).await?;
 	let read_all_acks = harness.reads_everything(&plugins, server).await?;
+	let activity_toggled = harness.toggles_activity(&plugins, server).await?;
 
 	sleep_until(started + Duration::from_secs(args.duration)).await;
 	harness
@@ -1160,6 +1203,7 @@ async fn scenario(
 			"clone_ok": clone_ok,
 			"hidden_quiet": hidden_quiet,
 			"read_all_acks": read_all_acks,
+			"activity_toggled": activity_toggled,
 			"display_calls": display_calls,
 			"kept_calls": kept_calls,
 			"decoration_calls": decoration_calls,

@@ -16,6 +16,7 @@ pub const BUG_TITLE_TEXT: &str = "Reaction tooltip wraps to three lines";
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
+pub const GAME_ACTIVITY_BUTTON: (f32, f32) = (194., 760.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
@@ -112,6 +113,7 @@ pub enum Screen {
 	Components(ComponentShot),
 	Polls(PollShot),
 	AppsLauncher,
+	GameActivity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,6 +305,7 @@ impl Screen {
 			"apps-launcher" => Some(Screen::AppsLauncher),
 			"name-decorations" => Some(Screen::MemberList),
 			"name-decorations-profile" => Some(Screen::ProfilePopout),
+			"user-panel-game-activity" => Some(Screen::GameActivity),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -369,7 +372,8 @@ impl Screen {
 			| Screen::VoiceMessage
 			| Screen::Components(_)
 			| Screen::Polls(_)
-			| Screen::AppsLauncher => Some(Opening::First),
+			| Screen::AppsLauncher
+			| Screen::GameActivity => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

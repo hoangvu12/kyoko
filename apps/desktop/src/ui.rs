@@ -875,6 +875,7 @@ impl Link {
 			}
 			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
 			capture::Screen::HiddenChannel => self.drive_hidden_channel().await,
+			capture::Screen::GameActivity => self.drive_game_activity().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
 			| capture::Screen::MemberNotes => self.until_members(&capture).await,
@@ -1177,6 +1178,7 @@ impl Link {
 			self.connection_apply(&state, changes);
 			self.toasts_apply(&state, changes);
 			self.inbox_apply(&state, changes);
+			self.plugins_apply(&state);
 		});
 		let opening = self.opening.get()?;
 		if self.sidebar.sidebar().guilds().is_empty() {
