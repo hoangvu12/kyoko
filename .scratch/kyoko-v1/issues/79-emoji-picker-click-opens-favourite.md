@@ -14,7 +14,7 @@
 
 ## Answer
 
-Merged to main as `f96ce99`, `139b706` (worker `474a9e38`, lane C; checks re-run by the orchestrator: all green; parity emoji-picker 20.7%, sticker-picker 22.4%, at or below Midnight 08's). Docs: `docs/ui.md` (pickers, hover bar), `docs/testing.md` (mockcord flags).
+Merged to main as `eec19a5`, `7426ef7` (worker `474a9e38`, lane C; checks re-run by the orchestrator: all green; parity emoji-picker 20.7%, sticker-picker 22.4%, at or below Midnight 08's). Docs: `docs/ui.md` (pickers, hover bar), `docs/testing.md` (mockcord flags).
 
 - Left click: zgx's `menu` treats an element with its own handlers as a menu button (a left press opens the menu and cancels the click). The Favorite menu now has its own empty anchor behind the cell and is built on the first right click (`ExpressionPicker::expression_menu`). Left click picks (composer or reaction), Shift keeps the picker open, right click offers Favorite/Unfavorite plus plugin items. GIF tiles got the same right-click Favorite; stickers have none.
 - Hover: a message counts as hovered while the reaction picker opened from it is open (`MessageActions::holds_hover`, effect in `TimelineView::row`).
