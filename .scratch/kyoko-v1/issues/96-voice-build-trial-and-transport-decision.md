@@ -9,7 +9,7 @@ Plan ticket V0 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Scratch `crates/voice` with oxidcord's deps compiles; libopus builds with `HOST_CMAKE_TOOLCHAIN_FILE` set (SSE kept, `/MD`), or a fix is written down
 - [ ] `cargo deny check` passes; `cargo tree -p kyoko -e normal` shows no rustls, aws-lc-sys or tokio-tungstenite TLS features
