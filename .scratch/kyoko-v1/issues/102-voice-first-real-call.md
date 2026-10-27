@@ -6,7 +6,7 @@ Plan ticket V6 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 99, 100, 101
 
-**Status:** open
+**Status:** ready-for-human
 
 - [ ] Audio both ways, with DAVE on (the web client shows the call as end-to-end encrypted)
 - [ ] Findings recorded in `docs/fingerprint.md` ("Voice") and as new tickets
