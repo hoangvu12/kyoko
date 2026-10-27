@@ -1,18 +1,15 @@
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
+use net::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderName, HeaderValue, ORIGIN, USER_AGENT};
+use net::ws::{self, ConnectError, Limits, Message};
+use net::{Client, Destination};
 use protocol::fingerprint::LOGIN_REFERER;
 use protocol::{Snowflake, Token};
 use rest::{Request, RestClient, RestConfig};
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
 use tokio::time::{Instant, MissedTickBehavior, interval_at, sleep_until, timeout};
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::http::header::{ORIGIN, USER_AGENT};
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
-use tokio_tungstenite::tungstenite::{Error as SocketError, Message};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
 use url::{Host, Url};
 
 use super::crypto::{SessionKey, nonce_proof};
@@ -21,7 +18,7 @@ use super::{QrConfig, QrEvent, Scanner};
 use crate::error::{LoginError, Result};
 use crate::token_login::without_retries;
 
-type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+type Socket = ws::WebSocket;
 
 const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -63,16 +60,19 @@ fn check_gateway_url(url: &Url) -> Result<()> {
 	}
 }
 
-fn socket_failure(error: &SocketError) -> String {
-	match error {
-		SocketError::Http(response) => format!("gateway refused the connection with {}", response.status()),
-		SocketError::Capacity(_) => "gateway message too large".to_owned(),
-		_ => "connection failed".to_owned(),
-	}
+fn connect_error(error: &ConnectError) -> LoginError {
+	LoginError::Network(match error {
+		ConnectError::Refused(status) => format!("gateway refused the connection with {status}"),
+		ConnectError::TimedOut => "connect timed out".to_owned(),
+		ConnectError::Failed(_) => "connection failed".to_owned(),
+	})
 }
 
-fn network_error(error: &SocketError) -> LoginError {
-	LoginError::Network(socket_failure(error))
+fn network_error(error: &net::Error) -> LoginError {
+	if ws::is_oversized(error) {
+		return LoginError::Network("gateway message too large".to_owned());
+	}
+	LoginError::Network("connection failed".to_owned())
 }
 
 fn close_error(code: u16) -> LoginError {
@@ -84,31 +84,40 @@ fn close_error(code: u16) -> LoginError {
 	}
 }
 
+fn client(config: &QrConfig) -> Result<Client> {
+	net::client_builder(Destination::Fetch, &config.trust)
+		.and_then(|builder| builder.build())
+		.map_err(|_| LoginError::Network("connection failed".to_owned()))
+}
+
+fn insert(headers: &mut HeaderMap, name: HeaderName, value: &str) {
+	if let Ok(value) = HeaderValue::from_str(value) {
+		headers.insert(name, value);
+	}
+}
+
 async fn connect(config: &QrConfig) -> Result<Socket> {
 	check_gateway_url(&config.gateway_url)?;
-	let mut request = config
-		.gateway_url
-		.as_str()
-		.into_client_request()
-		.map_err(|_| LoginError::Protocol("invalid gateway url".to_owned()))?;
 	let origin = HeaderValue::from_str(&config.origin)
 		.map_err(|_| LoginError::Protocol("invalid origin".to_owned()))?;
-	request.headers_mut().insert(ORIGIN, origin);
-	if let Ok(user_agent) = HeaderValue::from_str(config.identity.fingerprint().user_agent()) {
-		request.headers_mut().insert(USER_AGENT, user_agent);
-	}
-	let socket_config = WebSocketConfig::default()
-		.max_frame_size(Some(MAX_MESSAGE_BYTES))
-		.max_message_size(Some(MAX_MESSAGE_BYTES));
-	let attempt = timeout(
+	let fingerprint = config.identity.fingerprint();
+	let mut headers = HeaderMap::new();
+	insert(&mut headers, USER_AGENT, fingerprint.user_agent());
+	headers.insert(ORIGIN, origin);
+	insert(&mut headers, ACCEPT_LANGUAGE, &fingerprint.accept_language());
+	let limits = Limits {
+		max_frame: MAX_MESSAGE_BYTES,
+		max_message: MAX_MESSAGE_BYTES,
+	};
+	ws::connect(
+		&client(config)?,
+		config.gateway_url.as_str(),
+		headers,
+		limits,
 		CONNECT_TIMEOUT,
-		connect_async_with_config(request, Some(socket_config), true),
 	)
 	.await
-	.map_err(|_| LoginError::Network("connect timed out".to_owned()))?;
-	attempt
-		.map(|(socket, _)| socket)
-		.map_err(|error| network_error(&error))
+	.map_err(|error| connect_error(&error))
 }
 
 async fn next_incoming(socket: &mut Socket) -> Result<Incoming> {
@@ -167,6 +176,7 @@ async fn run(config: &QrConfig, events: &Sender<QrEvent>) -> Result<Token> {
 	.await?;
 	let rest = RestClient::new(RestConfig {
 		tuning: without_retries(),
+		trust: config.trust.clone(),
 		..RestConfig::new(config.rest_base.clone(), config.identity.clone())
 	});
 	rest.set_referer(LOGIN_REFERER);

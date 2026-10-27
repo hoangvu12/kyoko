@@ -187,4 +187,6 @@ The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` featur
 - a completed gateway upgrade over TLS: ALPN `http/1.1`, the web client's `User-Agent`, `Origin` and `Accept-Language`;
 - against plain mockcord, that no request (API, upload, message post, gateway upgrade) carries a navigation-only header: `upgrade-insecure-requests`, `sec-fetch-user`, `sec-fetch-mode: navigate` or `accept: text/html...`.
 
+`kyoko-bridge`'s tests turn the feature on too: `crates/bridge/tests/bridge/qr_login.rs` points `QrConfig.gateway_url` (and `QrConfig.trust`) at a listener to check the remote-auth socket's wss ClientHello against the same fixture, and that a refused upgrade over TLS (the listener's 404) ends the code with a network error naming the status, after an upgrade with ALPN `http/1.1`, the web client's `User-Agent`, `Origin` and `Accept-Language`.
+
 A new `CHROME_MAJOR` without recorded fixtures fails these tests (`docs/fingerprint.md`, "Bumping Chrome"). Fixtures must hold no secrets: the page sets its own test cookies, and a capture runs on a fresh profile. Results and the Chrome-against-wreq comparison are in `docs/fingerprint.md`, "TLS and HTTP/2 handshake".

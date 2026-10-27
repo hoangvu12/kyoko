@@ -100,6 +100,7 @@ impl Gate {
 			origin: protocol::fingerprint::WEB_ORIGIN.to_owned(),
 			rest_base: self.rest_base.clone(),
 			identity: self.identity.clone(),
+			trust: session::Trust::default(),
 		}
 	}
 

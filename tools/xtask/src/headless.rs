@@ -896,6 +896,7 @@ async fn qr_sign_in(server: &Server, store: &Store) -> Result<Token> {
 		origin: protocol::fingerprint::WEB_ORIGIN.to_owned(),
 		rest_base: Url::parse(server.rest_base_url()).context("rest url is invalid")?,
 		identity: session::client_identity(store),
+		trust: session::Trust::default(),
 	});
 	let mut events = login.events().context("the QR login has no events")?;
 	let mut code_shown = false;

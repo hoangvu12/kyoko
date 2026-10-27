@@ -1,6 +1,10 @@
 use bridge::{QrEnd, QrEvents, QrSignIn, QrStage, Screen, Status};
+use login::{LoginError, QrConfig, QrEvent, QrLogin};
+use mockcord::hello::{Capture, Connection, HelloListener, Mode, TlsSummary, chrome_fixture, differences};
 use mockcord::{Reply, RestRequest};
+use protocol::fingerprint::{CHROME_MAJOR, WEB_ORIGIN};
 use protocol::{Snowflake, Token};
+use session::Trust;
 use tokio::time::timeout;
 use url::Url;
 
@@ -251,5 +255,99 @@ async fn leaving_the_login_screen_stops_the_code() {
 		control.qr_codes_shown() == 0
 	})
 	.await;
+	desk.stop().await;
+}
+
+async fn listen(mode: Mode) -> HelloListener {
+	HelloListener::start(mode)
+		.await
+		.expect("the hello listener starts")
+}
+
+fn tls_config(desk: &Desk, listener: &HelloListener, trust: Trust) -> QrConfig {
+	let gateway = Url::parse(&format!("wss://localhost:{}/?v=2", listener.port())).expect("a wss url");
+	QrConfig {
+		trust,
+		..desk.flow.gate().qr_config(gateway)
+	}
+}
+
+async fn first_connection(listener: &HelloListener, found: impl Fn(&Connection) -> bool) -> Connection {
+	eventually("the remote auth socket to reach the listener", || {
+		listener.connections().iter().any(&found)
+	})
+	.await;
+	listener
+		.connections()
+		.into_iter()
+		.find(|connection| found(connection))
+		.expect("a recorded connection")
+}
+
+fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+	headers
+		.iter()
+		.find(|(key, _)| key.eq_ignore_ascii_case(name))
+		.map(|(_, value)| value.as_str())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_remote_auth_socket_presents_chromes_websocket_client_hello() {
+	let mut desk = Desk::open("qr-tls-hello").await;
+	desk.flow.launch(None);
+	desk.acknowledge();
+	let listener = listen(Mode::HelloOnly).await;
+	let mut qr = QrSignIn::new(tls_config(&desk, &listener, Trust::default()));
+	let mut events = qr.follow(&desk.flow).expect("a code is asked for");
+	let connection = first_connection(&listener, |connection| connection.hello.is_some()).await;
+	let expected = chrome_fixture(CHROME_MAJOR, "wss").expect("a recorded fixture for CHROME_MAJOR");
+	let actual = Capture {
+		client: "kyoko".to_owned(),
+		kind: "wss".to_owned(),
+		negotiated_alpn: None,
+		tls: TlsSummary::of(connection.hello.as_ref().expect("a client hello")),
+		http2: None,
+		http1: None,
+	};
+	let found = differences(&expected, &actual);
+	assert!(
+		found.is_empty(),
+		"the remote auth client hello differs from chrome {CHROME_MAJOR}: {found:?}"
+	);
+	assert_eq!(until_ended(&mut qr, &mut events).await, QrEnd::Network);
+	desk.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refused_remote_auth_upgrade_over_tls_names_the_http_status() {
+	let mut desk = Desk::open("qr-tls-refused").await;
+	desk.flow.launch(None);
+	let listener = listen(Mode::Complete).await;
+	let mut login = QrLogin::start(tls_config(&desk, &listener, Trust::only(listener.root_pem())));
+	let mut events = login.events().expect("the login hands out its events");
+	let event = timeout(STEP_TIMEOUT, events.recv())
+		.await
+		.expect("the QR login ends in time")
+		.expect("the QR login reports how it ended");
+	let QrEvent::Failed(LoginError::Network(reason)) = event else {
+		panic!("expected a network failure, got {event:?}");
+	};
+	assert!(reason.contains("404"), "the reason names the status: {reason}");
+	let connection = first_connection(&listener, |connection| connection.http1.is_some()).await;
+	assert_eq!(connection.alpn.as_deref(), Some("http/1.1"));
+	let upgrade = connection.http1.expect("an upgrade request");
+	let chrome = chrome_fixture(CHROME_MAJOR, "wss")
+		.expect("a recorded fixture for CHROME_MAJOR")
+		.http1
+		.expect("the fixture recorded the upgrade");
+	assert!(upgrade.request_line.starts_with("GET /?v=2 "));
+	assert_eq!(
+		header(&upgrade.headers, "user-agent"),
+		header(&chrome.headers, "user-agent")
+	);
+	assert_eq!(header(&upgrade.headers, "origin"), Some(WEB_ORIGIN));
+	assert!(header(&upgrade.headers, "accept-language").is_some());
+	assert_eq!(header(&upgrade.headers, "upgrade"), Some("websocket"));
+	assert_eq!(header(&upgrade.headers, "authorization"), None);
 	desk.stop().await;
 }

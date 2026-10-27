@@ -3190,6 +3190,7 @@ version = "0.2.0-beta.1"
 dependencies = [
  "base64 0.23.1",
  "futures-util",
+ "kyoko-net",
  "kyoko-protocol",
  "kyoko-rest",
  "kyoko-store",
@@ -3200,7 +3201,6 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "tokio",
- "tokio-tungstenite 0.30.0",
  "tracing",
  "url",
  "zeroize",

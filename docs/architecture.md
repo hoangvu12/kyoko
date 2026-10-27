@@ -18,7 +18,7 @@ crates/bridge       core to UI bridge without a UI dependency: the Changes inbox
 crates/login        token, QR and web login
 crates/plugins      the Luau plugin runtime: sandboxed VMs on worker threads behind SessionHooks (docs/plugins.md)
 crates/platform     Windows tray, notifications, hotkeys, clipboard, autostart, URL scheme (docs/desktop.md)
-crates/net          wreq clients and websockets with Chrome's TLS and HTTP/2 handshake, used by rest and gateway (docs/fingerprint.md)
+crates/net          wreq clients and websockets with Chrome's TLS and HTTP/2 handshake, used by rest, gateway and login's QR socket (docs/fingerprint.md)
 tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
 tools/xtask         test, headless-run, the first party theme check, release notes, the Twemoji pack, tls-capture
 ```

@@ -99,7 +99,7 @@ The QR column (`shell/login_qr.luau`, styled to the Midnight mockups `login.html
 
 The handshake, from docs.discord.food's Remote Authentication page (read 2026-10-26; protocol facts only):
 
-1. Open `wss://remote-auth-gateway.discord.gg/?v=2` with `Origin: https://discord.com` and the web client's user agent. The server sends `hello` with `heartbeat_interval` and `timeout_ms`.
+1. Open `wss://remote-auth-gateway.discord.gg/?v=2` with `Origin: https://discord.com`, the web client's user agent and `Accept-Language`. The server sends `hello` with `heartbeat_interval` and `timeout_ms`.
 2. Make a 2048-bit RSA key (off the async threads) and send `init` with the base64 SPKI DER public key. Heartbeat from then on, the first beat jittered; a missed `heartbeat_ack` ends the attempt.
 3. `nonce_proof`: decrypt `encrypted_nonce` with RSA-OAEP (SHA-256) and send it back base64url without padding.
 4. `pending_remote_init`: the fingerprint must be the base64url SHA-256 of the public key; the code is `https://discord.com/ra/<fingerprint>`.
@@ -108,6 +108,8 @@ The handshake, from docs.discord.food's Remote Authentication page (read 2026-10
 7. The token goes through `Flow::redeem`, which is `Gate::check` (validate, save to Credential Manager, make current) like a pasted token, so `login.adding` and "Back to your account" work the same. `Flow::redeemed` hands a failed check back to the QR column instead of the token form.
 
 Nothing of the exchange is logged: not the token, the ticket, the keys or any payload.
+
+The socket is a `wreq` websocket opened by `net::ws::connect` on its own client from `net::client_builder(Destination::Fetch, trust)`, with `net::websocket_emulation()` on the upgrade, so its ClientHello is Chrome's wss hello like the gateway's (`docs/fingerprint.md`, "TLS and HTTP/2 handshake"; `docs/gateway.md`, "Transport"). Inbound frames and messages are capped at 64 KiB, connecting times out after 30 s, and an upgrade answered with anything but 101 fails as a network error that names the HTTP status. The upgrade headers are lowercase in wreq's order, without `Pragma`, `Cache-Control` or `Sec-WebSocket-Extensions` (ticket 74). `QrConfig::trust` is `Trust::Bundled` in the app; the ticket exchange's REST client takes the same trust. `ws://` is accepted on loopback only, for mockcord. Tested in `crates/bridge/tests/bridge/qr_login.rs`: the remote-auth ClientHello against `chrome-156-wss.json`, and a refused upgrade over TLS that names its 404.
 
 `QrSignIn::follow(&Flow)` starts a code whenever the login screen is up and the notice is accepted, and stops it when the screen leaves. A code that ends stays ended until Refresh (`login.qr_refresh`, also "Not me, start over" after a scan) asks for a new one with a new key. Events of an older code are ignored by generation.
 

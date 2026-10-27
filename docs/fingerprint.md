@@ -1,6 +1,6 @@
 # Client fingerprint
 
-Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST and the gateway also present Chrome's TLS and HTTP/2 handshake through `crates/net`; media, theme links and the QR socket do not yet. See "TLS and HTTP/2 handshake".
+Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST, the gateway and the QR socket also present Chrome's TLS and HTTP/2 handshake through `crates/net`; media and theme links do not yet. See "TLS and HTTP/2 handshake".
 
 ## What is sent
 
@@ -28,13 +28,14 @@ REST (the API, uploads, the build-number scrape and the email login) and the gat
 
 `net::profile(major)` maps a Chrome major to the newest wreq-util profile whose handshake was captured equal: 154 and 156 map to `Profile::Chrome154`. `net::CHROME_PROFILE` is `profile(CHROME_MAJOR)`, evaluated at compile time, so bumping `CHROME_MAJOR` to a major with no captured profile fails the build (see "Bumping Chrome" below). `net::chrome_emulation(destination)` takes that profile and clears its headers and original-header map, because the profile's headers are a navigation's (`upgrade-insecure-requests`, `sec-fetch-user: ?1`, `accept: text/html...`) and would leak into kyoko's requests. Kyoko stays the only source of headers. `Destination::Fetch` sets the HEADERS priority weight to 220, as Chrome's `fetch()`; `Destination::Document` keeps the profile's 256, as a page load. `net::websocket_emulation()` is the fetch emulation with `alps_protocols` removed, for websocket requests (below).
 
-`net::client_builder(destination, trust)` builds a client from that emulation, with no proxy. `net::Trust::Bundled` (the default) keeps wreq's bundled roots; `Trust::Only(roots)` trusts only the given PEM roots. Only tests use it, through `SessionConfig.trust`, `RestConfig.trust` and `GatewayConfig.trust`. Certificate checks are never turned off.
+`net::client_builder(destination, trust)` builds a client from that emulation, with no proxy. `net::Trust::Bundled` (the default) keeps wreq's bundled roots; `Trust::Only(roots)` trusts only the given PEM roots. Only tests use it, through `SessionConfig.trust`, `RestConfig.trust`, `GatewayConfig.trust` and `QrConfig.trust`. Certificate checks are never turned off.
 
 Who uses what:
 
 - **API and uploads** (`RestClient`): `Destination::Fetch`, so every API request goes out with weight 220, as the web client's `fetch()` calls do. Kyoko's default headers, no redirects, kyoko's `CookieJar`.
 - **Build-number scrape** (`rest::api::build::discovery_client`): `Destination::Document`, weight 256, as the `/app` page load. Its script fetches share the client, so they carry 256 too, where Chrome gives scripts a lower weight; it runs once per launch.
 - **Gateway**: one client per gateway, `Destination::Fetch`, with the websocket emulation on each upgrade (`net::ws::connect`). REST and the gateway build separate clients from the same function. They talk to different hosts (discord.com and gateway.discord.gg), so Chrome would not share a connection or a TLS session between them either.
+- **QR socket** (`login::qr`): its own client per attempt, `Destination::Fetch`, with the websocket emulation on the upgrade, as the gateway (remote-auth-gateway.discord.gg is another host again). Its ticket exchange is a `RestClient` like the API's.
 - **Cookies**: `rest::CookieJar` implements wreq's `CookieStore`. On HTTP/2 it returns one `cookie` field per cookie, as Chrome does; on HTTP/1.1 one `Cookie` line. It persists, restores and adopts the web login page's cookies as before.
 
 ### What Chrome 156 sends

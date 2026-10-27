@@ -31,7 +31,7 @@ thiserror.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
-mockcord.workspace = true
+mockcord = { workspace = true, features = ["tls"] }
 reqwest.workspace = true
 plugins.workspace = true
 serde_json.workspace = true

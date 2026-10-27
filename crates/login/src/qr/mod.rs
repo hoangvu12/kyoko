@@ -2,6 +2,7 @@ mod crypto;
 mod flow;
 mod messages;
 
+use net::Trust;
 use rest::ClientIdentity;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::JoinHandle;
@@ -18,6 +19,7 @@ pub struct QrConfig {
 	pub origin: String,
 	pub rest_base: Url,
 	pub identity: ClientIdentity,
+	pub trust: Trust,
 }
 
 impl Default for QrConfig {
@@ -27,6 +29,7 @@ impl Default for QrConfig {
 			origin: ORIGIN.to_owned(),
 			rest_base: Url::parse(REST_BASE).expect("default rest base is valid"),
 			identity: ClientIdentity::default(),
+			trust: Trust::default(),
 		}
 	}
 }
