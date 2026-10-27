@@ -179,8 +179,9 @@ impl Pictures {
 		attachment: &Attachment,
 		channel_id: Snowflake,
 		message_id: Snowflake,
+		tile: (f32, f32),
 	) -> Option<ImageName> {
-		let (width, height) = bridge::fit_box(attachment.width, attachment.height, ATTACHMENT_BOX);
+		let (width, height) = bridge::cover_box(attachment.width, attachment.height, tile);
 		let request = bridge::attachment_request(
 			attachment,
 			channel_id,
@@ -293,13 +294,11 @@ impl Pictures {
 			self.collect_emoji(&document.nodes, size, &mut names);
 		}
 		if inline_media {
-			names.extend(
-				message
-					.attachments
-					.iter()
-					.filter(|attachment| bridge::is_image(attachment))
-					.filter_map(|attachment| self.attachment(attachment, message.channel_id, message.id)),
-			);
+			let images = bridge::mosaic_images(&message.attachments);
+			let mosaic = bridge::image_mosaic(&images);
+			names.extend(images.iter().zip(&mosaic.tiles).filter_map(|(attachment, tile)| {
+				self.attachment(attachment, message.channel_id, message.id, tile.size())
+			}));
 		}
 		if !message.flags.contains(MessageFlags::SUPPRESS_EMBEDS) {
 			for embed in message.embeds.iter() {

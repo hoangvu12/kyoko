@@ -670,3 +670,14 @@ Kyoko only (`--apps kyoko`); compare by eye with Discord. Mockcord gives a user 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `profile-menu` | 92 | Default selection, then open the profile menu of the newest other author at (348, 404), as the DM column's More button does: View Full Profile, Share Profile, Invite to Server (when there is a server to invite to), Ignore, Block, Report User Profile, Copy User ID. | yes |
+
+### 82 Image grid
+
+Kyoko only (`--apps kyoko`): oxidcord shows each image alone. No Midnight mockup has image attachments; compare by eye with Discord and the rules in `docs/ui.md` ("Image grid"). The sections open `#showcase`, before `-# showcase: markdown`, so the sections oxidcord reaches without paging back stay where they were (`IMAGE_GRID_SECTIONS` in mockcord's showcase fixture); mockcord serves every image at 400 by 300, so tiles show crops of its gradient.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `timeline-image-grid` | 82 | As `timeline-markdown`, jump to `-# showcase: image grid`: two 11:1 screenshots stacked at full width, then a wide and a tall image side by side. | yes |
+| `timeline-image-grid-three` | 82 | As above, jump to `-# showcase: image grid of three`: a large square and two stacked, then five images (2+3). | yes |
+| `timeline-image-grid-four` | 82 | As above, jump to `-# showcase: image grid of four`: four mixed shapes in a 2 by 2 grid. | yes |
+| `timeline-image-grid-ten` | 82 | As above, jump to `-# showcase: image grid of ten`: one full-width tile, then rows of three. | yes |

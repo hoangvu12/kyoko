@@ -24,6 +24,7 @@ mod lightbox;
 mod login_column;
 mod member_list;
 mod message;
+mod mosaic;
 mod password_login;
 mod playback;
 mod polls;
@@ -134,6 +135,10 @@ pub use message::{
 	ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, Span, SystemIcon, SystemLine, UNKNOWN_CHANNEL, UNKNOWN_ROLE,
 	UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name, reaction_key,
 	snippet, snippet_spans, system_line, timestamp_in, timestamp_text, user_display,
+};
+pub use mosaic::{
+	MOSAIC_GAP, MOSAIC_WIDTH, Mosaic, Shape as MosaicShape, Tile, WIDE_PAIR_RATIO, cover_box, image_mosaic,
+	mosaic, mosaic_images, row_counts,
 };
 pub use password_login::{
 	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,

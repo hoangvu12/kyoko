@@ -178,6 +178,25 @@ impl Server {
 		parse_id(&message["id"]).map(Snowflake)
 	}
 
+	pub fn post_images(&self, channel_id: Snowflake, images: &[(&str, (u32, u32))]) -> Option<Snowflake> {
+		let author = self.shared.fixtures.someone_in(channel_id.0)?.clone();
+		let draft = Draft {
+			files: images
+				.iter()
+				.map(|(filename, _)| UploadedFile {
+					filename: (*filename).to_owned(),
+					content_type: None,
+					size: 0,
+				})
+				.collect(),
+			sizes: images.iter().map(|(_, size)| *size).collect(),
+			hosted: Some(Signature::Fresh),
+			..Draft::default()
+		};
+		let message = self.shared.post_message(channel_id.0, &author, draft).ok()?;
+		parse_id(&message["id"]).map(Snowflake)
+	}
+
 	pub fn post_audio(
 		&self,
 		channel_id: Snowflake,

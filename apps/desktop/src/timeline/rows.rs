@@ -5,8 +5,7 @@ use std::rc::Rc;
 use std::f32::consts::FRAC_PI_2;
 
 use bridge::{
-	ATTACHMENT_BOX, EMBED_MEDIA_BOX, Highlight, MessageEntry, ReplyPreview, ReplyState, Row, STICKER_SIDE,
-	SystemIcon,
+	EMBED_MEDIA_BOX, Highlight, MessageEntry, ReplyPreview, ReplyState, Row, STICKER_SIDE, SystemIcon,
 };
 use chrono::NaiveDate;
 use media::cdn::Quality;
@@ -246,21 +245,24 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 
 fn rich_height(entry: &MessageEntry) -> f32 {
 	let message = &entry.message;
-	let attachments: f32 = message
-		.attachments
-		.iter()
-		.map(|attachment| {
-			if bridge::is_image(attachment) {
-				bridge::fit_box(attachment.width, attachment.height, ATTACHMENT_BOX).1 + 4.
-			} else if bridge::is_voice_message(message, attachment) {
-				VOICE_MESSAGE
-			} else if bridge::is_audio(attachment) {
-				AUDIO_CARD
-			} else {
-				FILE_CARD
-			}
-		})
-		.sum();
+	let mosaic = bridge::image_mosaic(&bridge::mosaic_images(&message.attachments));
+	let grid = if mosaic.is_empty() { 0. } else { mosaic.height + 4. };
+	let attachments: f32 = grid
+		+ message
+			.attachments
+			.iter()
+			.map(|attachment| {
+				if bridge::is_image(attachment) {
+					0.
+				} else if bridge::is_voice_message(message, attachment) {
+					VOICE_MESSAGE
+				} else if bridge::is_audio(attachment) {
+					AUDIO_CARD
+				} else {
+					FILE_CARD
+				}
+			})
+			.sum::<f32>();
 	let embeds: f32 = message
 		.embeds
 		.iter()

@@ -25,6 +25,7 @@ mod media_fetch;
 mod members;
 mod message;
 mod message_logger;
+mod mosaic;
 mod password_login;
 mod playback;
 mod popouts;

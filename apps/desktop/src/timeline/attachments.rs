@@ -2,13 +2,14 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, STICKER_SIDE};
+use bridge::{EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, STICKER_SIDE};
 use media::ImageName;
 use protocol::{Attachment, Embed, EmbedKind, EmbedMedia, FavoriteGif};
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::image::ImageData;
 use zgx::input::{EventPhase, InputEvent, PointerButton};
+use zgx::layout::Length;
 use zgx::reactive::Signal;
 
 use super::actions::aimed;
@@ -54,32 +55,65 @@ pub fn picture(
 
 pub fn attachments(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 	let message = &entry.message;
+	let inline = env.prefs.get().inline_media;
+	let mut grid = inline.then(|| image_grid(entry, env)).flatten();
 	message
 		.attachments
 		.iter()
-		.map(|attachment| {
-			if env.prefs.get().inline_media && bridge::is_image(attachment) {
-				image_attachment(entry, attachment, env)
+		.filter_map(|attachment| {
+			if inline && bridge::is_image(attachment) {
+				grid.take()
 			} else if bridge::is_voice_message(message, attachment) {
-				voice::voice_message(message, attachment, env).unwrap_or_else(|| file_card(attachment, env))
+				Some(
+					voice::voice_message(message, attachment, env)
+						.unwrap_or_else(|| file_card(attachment, env)),
+				)
 			} else if bridge::is_audio(attachment) {
-				voice::audio_card(message, attachment, env).unwrap_or_else(|| file_card(attachment, env))
+				Some(
+					voice::audio_card(message, attachment, env).unwrap_or_else(|| file_card(attachment, env)),
+				)
 			} else {
-				file_card(attachment, env)
+				Some(file_card(attachment, env))
 			}
 		})
 		.collect()
 }
 
-fn image_attachment(entry: &MessageEntry, attachment: &Attachment, env: &Rc<RowEnv>) -> View {
-	let (width, height) = bridge::fit_box(attachment.width, attachment.height, ATTACHMENT_BOX);
+fn image_grid(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
+	let images = bridge::mosaic_images(&entry.message.attachments);
+	let mosaic = bridge::image_mosaic(&images);
+	if mosaic.is_empty() {
+		return None;
+	}
+	let (width, height) = (mosaic.width, mosaic.height);
+	Some(
+		div()
+			.id(format!("image-grid-{}", entry.id))
+			.relative()
+			.mt(4.)
+			.w(width)
+			.max_w_percent(100.)
+			.aspect_ratio(width / height)
+			.children(images.iter().zip(&mosaic.tiles).map(|(attachment, tile)| {
+				div()
+					.absolute()
+					.left(Length::Percent(tile.x / width))
+					.top(Length::Percent(tile.y / height))
+					.w_percent(tile.width / width * 100.)
+					.h_percent(tile.height / height * 100.)
+					.child(image_tile(entry, attachment, tile.size(), env))
+			})),
+	)
+}
+
+fn image_tile(entry: &MessageEntry, attachment: &Attachment, size: (f32, f32), env: &Rc<RowEnv>) -> View {
 	let name = env
 		.pictures
-		.attachment(attachment, entry.message.channel_id, entry.message.id);
+		.attachment(attachment, entry.message.channel_id, entry.message.id, size);
 	let target = bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.message.id);
 	let frame = div()
-		.mt(4.)
-		.size(width, height)
+		.w_full()
+		.h_full()
 		.rounded(tok("radius_md"))
 		.overflow_hidden()
 		.child(picture(

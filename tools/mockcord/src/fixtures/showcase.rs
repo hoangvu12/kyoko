@@ -37,6 +37,30 @@ pub const SECTIONS: [(&str, &str); 8] = [
 	("timeline-system", "showcase: system messages"),
 ];
 
+pub const IMAGE_GRID_SECTIONS: [(&str, &str); 4] = [
+	("timeline-image-grid", "showcase: image grid"),
+	("timeline-image-grid-three", "showcase: image grid of three"),
+	("timeline-image-grid-four", "showcase: image grid of four"),
+	("timeline-image-grid-ten", "showcase: image grid of ten"),
+];
+const WIDE_PAIR: [(i64, i64); 2] = [(1650, 144), (1650, 150)];
+const MIXED_PAIR: [(i64, i64); 2] = [(1280, 720), (720, 1280)];
+const MIXED_THREE: [(i64, i64); 3] = [(1920, 1080), (1080, 1920), (1000, 1000)];
+const MIXED_FOUR: [(i64, i64); 4] = [(1600, 900), (900, 1600), (800, 800), (2400, 600)];
+const MIXED_FIVE: [(i64, i64); 5] = [(1600, 900), (900, 1600), (800, 800), (2400, 600), (600, 2400)];
+const TEN: [(i64, i64); 10] = [
+	(1920, 1080),
+	(1080, 1920),
+	(1000, 1000),
+	(1600, 900),
+	(900, 1600),
+	(2400, 600),
+	(600, 2400),
+	(1280, 720),
+	(720, 1280),
+	(800, 800),
+];
+
 pub const COMPONENTS_SECTION: &str = "showcase: components";
 pub const RELEASE_QUESTION: &str = "did the release post go out";
 pub const REACTIONS_SECTION: &str = "showcase: reactions";
@@ -61,6 +85,7 @@ pub const LISTED_EMOJI: &str = "\u{1f525}";
 pub fn screen_section(screen: &str) -> Option<&'static str> {
 	SECTIONS
 		.iter()
+		.chain(IMAGE_GRID_SECTIONS.iter())
 		.find(|(name, _)| *name == screen)
 		.map(|(_, section)| *section)
 }
@@ -196,6 +221,23 @@ fn attachment(
 		flags: Some(0),
 		..Attachment::default()
 	}
+}
+
+fn images(base: u64, channel: u64, prefix: &str, shapes: &[(i64, i64)]) -> Vec<Attachment> {
+	shapes
+		.iter()
+		.zip(1..)
+		.map(|(shape, index)| {
+			attachment(
+				base + index,
+				channel,
+				&format!("{prefix}-{index}.png"),
+				"image/png",
+				64_000,
+				Some(*shape),
+			)
+		})
+		.collect()
 }
 
 fn voice_attachment(id: u64, channel: u64, name: &str, seconds: f64) -> Attachment {
@@ -365,6 +407,41 @@ pub fn build(spec: &Showcase) -> Built {
 	let moving = spec.emojis.iter().find(|emoji| emoji.animated == Some(true));
 	let channel = spec.channel_id;
 	let unix = spec.anchor.timestamp();
+
+	writer.section(IMAGE_GRID_SECTIONS[0].1);
+	let grid = writer.time().timestamp_millis() as u64;
+	writer.post(1, |message| {
+		message.content = "task manager before and after".to_owned();
+		message.attachments = LenientVec::from(images(grid, channel, "task-manager", &WIDE_PAIR));
+	});
+	writer.post(2, |message| {
+		message.content = "a wide one and a tall one".to_owned();
+		message.attachments = LenientVec::from(images(grid + 10, channel, "shapes", &MIXED_PAIR));
+	});
+
+	writer.section(IMAGE_GRID_SECTIONS[1].1);
+	let grid = writer.time().timestamp_millis() as u64;
+	writer.post(1, |message| {
+		message.content = "three from the trip".to_owned();
+		message.attachments = LenientVec::from(images(grid, channel, "trip", &MIXED_THREE));
+	});
+	writer.post(2, |message| {
+		message.attachments = LenientVec::from(images(grid + 10, channel, "five", &MIXED_FIVE));
+	});
+
+	writer.section(IMAGE_GRID_SECTIONS[2].1);
+	let grid = writer.time().timestamp_millis() as u64;
+	writer.post(2, |message| {
+		message.content = "four mixed shapes".to_owned();
+		message.attachments = LenientVec::from(images(grid, channel, "four", &MIXED_FOUR));
+	});
+
+	writer.section(IMAGE_GRID_SECTIONS[3].1);
+	let grid = writer.time().timestamp_millis() as u64;
+	writer.post(1, |message| {
+		message.content = "the whole album".to_owned();
+		message.attachments = LenientVec::from(images(grid, channel, "album", &TEN));
+	});
 
 	writer.section(SECTIONS[0].1);
 	writer.say(

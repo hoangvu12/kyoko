@@ -33,6 +33,7 @@ pub struct Draft {
 	pub descriptors: Vec<AttachmentDescriptor>,
 	pub files: Vec<UploadedFile>,
 	pub hosted: Option<Signature>,
+	pub sizes: Vec<(u32, u32)>,
 	pub interaction: Value,
 	pub components: Vec<Value>,
 }
@@ -59,6 +60,7 @@ impl Draft {
 			descriptors: create.attachments,
 			files,
 			hosted: None,
+			sizes: Vec::new(),
 			interaction: Value::Null,
 			components: Vec::new(),
 		}
@@ -250,6 +252,10 @@ impl Shared {
 				uploaded_attachment(channel_id, attachment_id, index, file, &draft.descriptors);
 			if let Some(signature) = draft.hosted {
 				host_attachment(&mut attachment, &self.urls.origin, channel_id, signature);
+				if let Some((width, height)) = draft.sizes.get(index) {
+					attachment.width = Some(i64::from(*width));
+					attachment.height = Some(i64::from(*height));
+				}
 			}
 			attachments.push(attachment);
 		}
