@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Find what kyoko fetches on channel open for authors; no profile request goes out until a profile popout, full profile or member-list click opens it (session test)
 - [ ] The popout shows what's already known (name, avatar, roles from the member) at once and fills in bio, banner and connections when the profile arrives; a short cache avoids refetching while it's fresh
