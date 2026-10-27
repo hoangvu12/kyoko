@@ -221,7 +221,18 @@ async fn media_fetches_present_chromes_client_hello_and_image_request() {
 		.expect("the image request");
 	assert_eq!(request.priority, chrome_fetch.priority);
 	assert_eq!(request.pseudo_order, chrome_fetch.pseudo_order);
-	assert_eq!(header(&request.headers, "sec-fetch-dest"), Some("image"));
+	let chrome_image = chrome_fixture(CHROME_MAJOR, "image")
+		.expect("a recorded image fixture for CHROME_MAJOR")
+		.http2
+		.and_then(|summary| summary.requests.into_iter().next())
+		.expect("the fixture recorded chrome's <img> request");
+	for name in ["accept", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site"] {
+		assert_eq!(
+			header(&request.headers, name),
+			header(&chrome_image.headers, name),
+			"{name}"
+		);
+	}
 	assert_eq!(header(&request.headers, "authorization"), None);
 	assert_eq!(request.cookie_fields, 0);
 }

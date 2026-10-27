@@ -31,7 +31,7 @@ The on-disk cache (`<cache>/media/<2 hex>/<sha256>`) is pruned by the store, see
 - Decoding runs on the blocking pool, at most 2 at a time (`DEFAULT_DECODE_WORKERS`). PNG and APNG, JPEG, GIF, WebP and animated WebP decode with the `image` crate. Images larger than twice the hint are shrunk to it.
 - A failed load is not retried for 60 s, unless it is a refreshable attachment (below).
 
-Headers are Chrome's for an `<img>` on discord.com, from `Fingerprint::image_headers` (see `docs/fingerprint.md`): the Chrome user agent, `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform`, `Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8`, `Accept-Encoding`, `Accept-Language`, `Referer: https://discord.com/`, `Sec-Fetch-Dest: image`, `Sec-Fetch-Mode: no-cors`, `Sec-Fetch-Site: cross-site` and `Priority: i`. There is no Authorization header and no cookie. Discord's cookies are scoped to discord.com, so a browser never sends them to `cdn.discordapp.com` or `media.discordapp.net`, and kyoko's jar stays with the API client.
+Headers are Chrome's for an `<img>` on discord.com, from `Fingerprint::image_headers` (see `docs/fingerprint.md`): the Chrome user agent, `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform`, `Accept: image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8`, `Accept-Encoding`, `Accept-Language`, `Referer: https://discord.com/`, `Sec-Fetch-Dest: image`, `Sec-Fetch-Mode: no-cors`, `Sec-Fetch-Site: cross-site` and `Priority: i`. There is no Authorization header and no cookie. Discord's cookies are scoped to discord.com, so a browser never sends them to `cdn.discordapp.com` or `media.discordapp.net`, and kyoko's jar stays with the API client.
 
 ## Sizes
 

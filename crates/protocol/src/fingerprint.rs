@@ -17,7 +17,7 @@ pub const APP_URL: &str = "https://discord.com/app";
 pub const HOME_REFERER: &str = "https://discord.com/channels/@me";
 pub const LOGIN_REFERER: &str = "https://discord.com/login";
 pub const MAX_INSTALLATION_ID_LEN: usize = 128;
-pub const IMAGE_ACCEPT: &str = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+pub const IMAGE_ACCEPT: &str = "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 pub const IMAGE_REFERER: &str = "https://discord.com/";
 pub const AUDIO_ACCEPT: &str = "*/*";
 pub const AUDIO_ACCEPT_ENCODING: &str = "identity;q=1, *;q=0";
