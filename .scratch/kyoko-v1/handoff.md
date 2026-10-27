@@ -1,5 +1,11 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: eighth orchestrator (roboco chat `a5bca87c`, same machine)
+
+- Resolved: Midnight 14, v1 54, 49, 56. Every ticket is resolved except v1 39 translations and 58 packaging (`ready-for-human`, skipped by the user). All three lanes sit on main, idle; no workers running.
+- Side research for the user (2026-10-27, read-only, no Discord requests): kyoko compared with discordo (+ ayn2op arikawa/ningen forks) and endcord on ban risk. Kyoko is ahead on one consistent super-properties identity, live build number, safe 429 handling, pacing, 401 stop, delayed acks. Gaps, by likely impact: rustls TLS/HTTP-2 fingerprint while claiming Chrome (discordo added a Chrome TLS fingerprint after "account disabled" reports, PR #824); email/password login as the default form; capabilities 509 matches no official client; minimal message send body; tungstenite gateway handshake headers; no op 41/QoS heartbeat. The TLS change conflicts with AGENTS.md's "nothing more" rule, so it needs the user's decision. Clones are in `nguyenvu/.research/`.
+- Open questions put to the user: open tickets for the TLS fingerprint and QR/web login as default; whether 49's "hide the crown above 1000 members" assumption is fine; what's next (39, 58, a real-account look test).
+
 ## Latest: seventh orchestrator hands off (main `a2a64e5` + this note)
 
 Written by the seventh orchestrator (roboco chat `375a5e1b`, "kyoko orchestrator 7", same machine) when the user asked to hand off. Everything below still applies unless this section says otherwise.
