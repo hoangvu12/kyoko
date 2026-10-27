@@ -1,5 +1,16 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: tenth orchestrator (roboco chat `223bd24d`, "kyoko orchestrator 10", same machine)
+
+Everything below still applies unless this section says otherwise.
+
+- Resolved this session: v1 70+71 (REST and gateway on wreq), 72 (QR socket on wreq), 73 (media and theme links on wreq; reqwest, rustls and aws-lc out of the shipped exe, release exe 78,870,528 bytes). 74 part 1 merged (capture of Chrome 156's API/image/websocket header order, `IMAGE_ACCEPT` with `image/jxl`, the "Bumping Chrome" runbook in `docs/fingerprint.md`); read 74's "Progress" section.
+- AGENTS.md has the user-approved wording (merged with 70).
+- Left: **74 part 2 only**, waiting on (a) Chrome 157's full stable (2026-11-03) installed locally and (b) the user's two yes/no answers, asked 2026-10-27 in chat `223bd24d`: send Chrome's recorded REST header order; match Chrome's websocket upgrade (names, case, order, `Pragma`, `Cache-Control`, `Accept-Encoding`; no deflate offer; lowercase `upgrade` value left). Orchestrator recommended yes to both; no answer yet. Also fold in the two image fixes (`sec-fetch-storage-access: active`, `priority: u=1, i`) unless the user objects.
+- No workers running; lanes A, B, C idle on main. Lanes B and C use the shared BoringSSL prebuilt: every shell that runs cargo there (worker or orchestrator, including verify.sh runs) sets `BORING_BSSL_PATH='C:\Users\HP MEDIA\Desktop\nguyenvu\.cache\boringssl-129887582a53'` and `BORING_BSSL_ASSUME_PATCHED=1`; lane A built its own (don't set them there). Lane C's target was deleted by orchestrator 8 (cold). Lane A target ~55 GB: clean it before its next ticket. Disk ~135 GB free.
+- Verification addition for network tickets: after verify.sh, `cargo xtask tls-capture --client wreq --h2 --compare chrome-<major>` must show 0 and 0 differences.
+- Gotchas: workers ended their turn while checks ran three times this session; resend "continue, poll within the turn". In Python heredocs a `\t` in a Windows path became a tab once; use forward slashes in ticket text.
+
 ## Latest: ninth orchestrator hands off (roboco chat `2be6a038`, "kyoko orchestrator 9", same machine)
 
 Everything below still applies unless this section says otherwise. The user went to sleep (2026-10-27) after saying "ok just do ur thing, handoff to new orchestrator chat if u need": keep working through the list without waiting for them, and stop only for things that need them (below).
