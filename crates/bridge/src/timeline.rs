@@ -11,7 +11,8 @@ use state::{
 };
 
 use crate::display::{Display, person};
-use crate::message::{Body, Names, ReplyPreview, SystemLine, person_name, system_line};
+use crate::images::Avatar;
+use crate::message::{Body, Names, ReplyPreview, SystemLine, author_avatar, person_name, system_line};
 use crate::sidebar::ChannelKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,6 +42,7 @@ pub struct MessageEntry {
 	pub author: String,
 	pub author_extra: Option<String>,
 	pub author_color: Option<u32>,
+	pub avatar: Avatar,
 	pub decorations: Vec<Badge>,
 	pub content: String,
 	pub sent_at: DateTime<Utc>,
@@ -163,6 +165,7 @@ impl PartialEq for MessageEntry {
 			&& self.author == other.author
 			&& self.author_extra == other.author_extra
 			&& self.author_color == other.author_color
+			&& self.avatar == other.avatar
 			&& self.decorations == other.decorations
 			&& self.content == other.content
 			&& self.sent_at == other.sent_at
@@ -650,6 +653,7 @@ fn entry(
 		author_extra: shown.as_ref().and_then(|shown| shown.extra.clone()),
 		author: shown.map_or(view.author_display, |shown| shown.name),
 		author_color: view.author_color,
+		avatar: author_avatar(state, guild_id, &message),
 		decorations,
 		content: message.content.clone(),
 		sent_at: message.timestamp.unwrap_or_else(|| message.id.timestamp()),

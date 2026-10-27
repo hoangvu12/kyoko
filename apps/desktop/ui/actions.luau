@@ -489,4 +489,8 @@ function M.composer_choose_result(index: number, area: string?)
 	ui.invoke(area_of(area) .. ".choose_result", index)
 end
 
+function M.member_avatar_hover(name: string, inside: boolean)
+	ui.call_sync("members.avatar_hover", { name = name, inside = inside })
+end
+
 return M

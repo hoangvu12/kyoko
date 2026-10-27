@@ -235,6 +235,12 @@ impl TimelineView {
 				view.images_changed();
 			}
 		});
+		let images = Rc::downgrade(&view);
+		view.pictures.on_avatar_hover(move || {
+			if let Some(view) = images.upgrade() {
+				view.images_changed();
+			}
+		});
 		view
 	}
 
@@ -559,6 +565,7 @@ impl TimelineView {
 		names.extend(self.actions.picker.images());
 		names.extend(self.lightbox.images());
 		names.extend(self.actions.popout.images());
+		names.extend(self.pictures.hovered_avatar());
 		names
 	}
 
@@ -696,10 +703,20 @@ impl TimelineView {
 			_ => None,
 		};
 		let (shown, holder) = (hovered.clone(), self.actions.clone());
+		let (moving, pictures) = (signal.clone(), self.pictures.clone());
 		cx.retain(self.runtime.effect(move || {
 			let over = pointer.get() || held.is_some_and(|id| holder.holds_hover(id));
 			if shown.with_untracked(|shown| *shown != over) {
 				shown.set(over);
+				let name = moving.with_untracked(|row| match row.as_ref() {
+					Row::Message(entry) if entry.is_plain() && !entry.grouped => {
+						pictures.moving_avatar(&entry.avatar, pictures::AVATAR)
+					}
+					_ => None,
+				});
+				if let Some(name) = name {
+					pictures.hover_avatar(&name, over);
+				}
 			}
 		}));
 		let env = self.env.clone();

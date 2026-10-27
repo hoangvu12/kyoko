@@ -86,6 +86,13 @@ impl Link {
 		}
 	}
 
+	pub(crate) fn hover_member_avatar(&self, name: &str, inside: bool) {
+		if self.members.hover_avatar(name, inside) {
+			self.images.gallery.set_hovered(inside.then_some(name));
+			self.refresh_visible();
+		}
+	}
+
 	pub(crate) fn open_member_profile(&self, user_id: Snowflake, at: (f32, f32)) {
 		self.open_profile(user_id, at, Anchor::TopRight);
 	}

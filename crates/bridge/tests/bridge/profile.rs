@@ -200,7 +200,7 @@ async fn a_loaded_profile_shows_its_guild_tag_and_connections_and_missing_parts_
 		let bare = ProfileCard::of(&state, plain, Some(guild_id), Utc::now()).expect("the plain card");
 		assert!(bare.tag.is_none());
 		assert_eq!(bare.badges.is_empty(), !plain.0.is_multiple_of(2));
-		assert!(bare.banner.is_none() && bare.banner_request().is_none());
+		assert!(bare.banner.is_none() && bare.banner_request("https://cdn.discordapp.com").is_none());
 		assert!(bare.pronouns.is_none());
 		assert!(bare.accent.is_none());
 		let without_guild =

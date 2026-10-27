@@ -353,9 +353,11 @@ impl Link {
 			.skip((page - 1) * bridge::RESULTS_PAGE)
 			.take(bridge::RESULTS_PAGE)
 			.map(|hit| {
-				let avatar = pictures
-					.avatar(&hit.entry.message.author, AVATAR_POINTS)
-					.map(|name| name.to_string());
+				let avatar = Some(
+					pictures
+						.member_avatar(&hit.entry.avatar, AVATAR_POINTS, false)
+						.to_string(),
+				);
 				avatars.extend(avatar.clone());
 				let group = if previous == Some(hit.channel_id) {
 					String::new()

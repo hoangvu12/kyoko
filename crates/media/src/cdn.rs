@@ -167,8 +167,12 @@ pub fn sticker_url(id: u64, format: StickerFormat) -> Option<String> {
 	}
 }
 
-pub fn banner_url(owner_id: u64, hash: &str, size: u32, animate: bool) -> String {
-	format!("{CDN}/banners/{owner_id}/{}", webp(hash, size, animate))
+pub fn banner_url(cdn: &str, owner_id: u64, hash: &str, size: u32, animate: bool) -> String {
+	format!(
+		"{}/banners/{owner_id}/{}",
+		cdn.trim_end_matches('/'),
+		webp(hash, size, animate)
+	)
 }
 
 pub fn role_icon_url(role_id: u64, hash: &str, size: u32) -> String {
@@ -266,6 +270,21 @@ pub fn guild_member_avatar_url(
 ) -> String {
 	format!(
 		"{}/guilds/{guild_id}/users/{user_id}/avatars/{}",
+		cdn.trim_end_matches('/'),
+		webp(hash, size, animate)
+	)
+}
+
+pub fn guild_member_banner_url(
+	cdn: &str,
+	guild_id: u64,
+	user_id: u64,
+	hash: &str,
+	size: u32,
+	animate: bool,
+) -> String {
+	format!(
+		"{}/guilds/{guild_id}/users/{user_id}/banners/{}",
 		cdn.trim_end_matches('/'),
 		webp(hash, size, animate)
 	)

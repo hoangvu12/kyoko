@@ -91,7 +91,7 @@ impl DmPanelView {
 					.map(|request| self.image(request, icons));
 				let banner = profile
 					.card
-					.banner_request()
+					.banner_request(icons.cdn)
 					.map(|request| self.image(request, icons));
 				let tag = profile
 					.card

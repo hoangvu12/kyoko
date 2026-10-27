@@ -841,12 +841,11 @@ impl Link {
 				draft.author = entry.author.clone();
 				draft.time = bridge::message_time(entry.sent_at, today());
 				draft.text = bridge::snippet(&entry.body.content, &entry.names, STARTER_TEXT);
-				draft.avatar = self
-					.timeline_view
-					.pictures()
-					.avatar(&message.author, STARTER_AVATAR)
-					.map(|name| format!("host:{name}"))
-					.unwrap_or_default();
+				let avatar =
+					self.timeline_view
+						.pictures()
+						.member_avatar(&entry.avatar, STARTER_AVATAR, false);
+				draft.avatar = format!("host:{avatar}");
 			}
 			draft
 		};

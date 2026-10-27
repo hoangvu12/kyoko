@@ -226,6 +226,11 @@ impl Link {
 					self.open_full_profile(author);
 				}
 			}
+			capture::Screen::ServerProfile => {
+				if let Some(member) = self.server_styled_member() {
+					self.open_profile(member, capture::PROFILE_ANCHOR, Anchor::TopLeft);
+				}
+			}
 			_ => return,
 		}
 		let started = Instant::now();
@@ -244,7 +249,9 @@ impl Link {
 
 	fn profiles_settled(&self, screen: capture::Screen) -> bool {
 		let loaded = match screen {
-			capture::Screen::ProfilePopout | capture::Screen::FullProfile => self
+			capture::Screen::ProfilePopout
+			| capture::Screen::FullProfile
+			| capture::Screen::ServerProfile => self
 				.profile
 				.target()
 				.zip(self.state())
@@ -252,6 +259,21 @@ impl Link {
 			_ => true,
 		};
 		loaded && self.profile.settled()
+	}
+
+	fn server_styled_member(&self) -> Option<Snowflake> {
+		let shared = self.state()?;
+		let state = shared.read();
+		let guild = state.guild(self.open_guild()?)?;
+		let me = state.current_user_id();
+		let mut styled: Vec<(bool, Snowflake)> = guild
+			.members
+			.iter()
+			.filter(|(id, member)| Some(**id) != me && member.banner.is_some() && state.user(**id).is_some())
+			.map(|(id, member)| (member.avatar.is_none(), *id))
+			.collect();
+		styled.sort_unstable();
+		styled.first().map(|(_, id)| *id)
 	}
 
 	pub(super) fn newest_other_author(&self) -> Option<Snowflake> {

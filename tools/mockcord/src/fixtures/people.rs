@@ -15,6 +15,8 @@ pub struct People {
 }
 
 const FRIEND_COUNT: usize = 8;
+const ANIMATED_AVATAR_EVERY: usize = 5;
+const BANNER_EVERY: usize = 4;
 const GROUP_NAME: &str = "weekend crew";
 
 pub fn generate(rng: &mut StdRng, ids: &mut EntityIds, size: usize, nitro: bool) -> People {
@@ -50,12 +52,24 @@ fn pool_user(rng: &mut StdRng, ids: &mut EntityIds, index: usize) -> User {
 		format!("{adjective}{noun}{index}")
 	};
 	let global_name = format!("{} {}", capitalized(adjective), capitalized(noun));
+	let avatar = rng.random_bool(0.7).then(|| corpus::hex_hash(rng)).map(|hash| {
+		if index % ANIMATED_AVATAR_EVERY == ANIMATED_AVATAR_EVERY - 1 {
+			format!("a_{hash}")
+		} else {
+			hash
+		}
+	});
+	let banner = (index % BANNER_EVERY == 1)
+		.then(|| avatar.clone())
+		.flatten()
+		.map(|hash| hash.trim_start_matches("a_").to_owned());
 	User {
 		id: Snowflake(ids.next()),
 		username,
 		discriminator: Some("0".to_owned()),
 		global_name: Some(global_name),
-		avatar: rng.random_bool(0.7).then(|| corpus::hex_hash(rng)),
+		avatar,
+		banner,
 		bot: Some(is_bot),
 		public_flags: UserFlags::empty(),
 		..User::default()

@@ -32,6 +32,7 @@ mod qr_login;
 mod rail;
 mod reorder;
 mod search;
+mod server_profiles;
 mod settings;
 mod sidebar;
 mod sign_in;

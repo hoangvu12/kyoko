@@ -6,6 +6,8 @@ export type Props = {
 	size: number,
 	status: string?,
 	cutout: any?,
+	moving: string?,
+	playing: (() -> boolean)?,
 }
 
 local function badge(props: Props, status: string)
@@ -44,6 +46,12 @@ return function(props: Props)
 				props.src ~= "",
 				ui.image { src = props.src, w = size, h = size, fit = "cover" }
 			),
+			if props.moving and props.moving ~= "" and props.playing
+				then ui.show(
+					props.playing,
+					ui.image { src = props.moving, absolute = true, top = 0, left = 0, w = size, h = size, fit = "cover" }
+				)
+				else nil,
 		},
 		if status then badge(props, status) else nil,
 	}

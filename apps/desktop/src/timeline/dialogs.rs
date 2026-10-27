@@ -231,23 +231,20 @@ impl Dialogs {
 	}
 
 	fn avatar(&self, entry: &MessageEntry) -> View {
-		let circle = div()
+		let name = self
+			.pictures
+			.member_avatar(&entry.avatar, f64::from(PREVIEW_AVATAR), false);
+		let picture = self.pictures.picture(&name);
+		div()
 			.size(PREVIEW_AVATAR, PREVIEW_AVATAR)
 			.shrink_0()
 			.rounded(PREVIEW_AVATAR / 2.)
 			.overflow_hidden()
-			.bg(tok("bg_2"));
-		let picture = self
-			.pictures
-			.avatar(&entry.message.author, f64::from(PREVIEW_AVATAR))
-			.map(|name| self.pictures.picture(&name));
-		match picture {
-			Some(picture) => circle.reactive_style(move || match picture.get() {
+			.bg(tok("bg_2"))
+			.reactive_style(move || match picture.get() {
 				Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
 				None => Styles::new(),
-			}),
-			None => circle,
-		}
+			})
 	}
 }
 

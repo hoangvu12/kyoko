@@ -64,7 +64,11 @@ impl Core {
 		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
 			let outcome = match rest.user_profile(user_id, guild_id).await {
-				Ok(raw) => ProfileOutcome::Loaded(Loaded::Profile { user_id, raw }),
+				Ok(raw) => ProfileOutcome::Loaded(Loaded::Profile {
+					user_id,
+					guild_id,
+					raw,
+				}),
 				Err(RestError::NotFound | RestError::Forbidden | RestError::MissingPermissions) => {
 					ProfileOutcome::Unavailable
 				}

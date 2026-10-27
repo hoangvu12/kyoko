@@ -21,6 +21,8 @@ const MAX_SIDE: u32 = 2048;
 const AVATAR_DEFAULT_SIZE: u32 = 128;
 const AVATAR_MIN_SIZE: u32 = 16;
 const AVATAR_MAX_SIZE: u32 = 512;
+const BANNER_WIDTH_PARTS: u32 = 5;
+const BANNER_HEIGHT_PARTS: u32 = 2;
 pub const ANIMATION_FRAMES: usize = 4;
 pub const FRAME_DELAY_MS: u32 = 100;
 const JPEG_QUALITY: u8 = 85;
@@ -224,6 +226,56 @@ pub async fn avatar(
 		return StatusCode::NOT_FOUND.into_response();
 	};
 	sized(&format!("{user_id}/{hash}"), hash, kind, &query)
+}
+
+pub async fn member_avatar(
+	Path((guild_id, user_id, file)): Path<(String, String, String)>,
+	Query(query): Query<SizedQuery>,
+) -> Response {
+	let Some((hash, kind)) = split_file(&file) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	sized(&format!("guilds/{guild_id}/{user_id}/{hash}"), hash, kind, &query)
+}
+
+fn banner(seed_name: &str, stem: &str, kind: Kind, query: &SizedQuery) -> Response {
+	let width = query
+		.size
+		.unwrap_or(AVATAR_DEFAULT_SIZE)
+		.clamp(AVATAR_MIN_SIZE, AVATAR_MAX_SIZE);
+	let height = (width * BANNER_HEIGHT_PARTS / BANNER_WIDTH_PARTS).max(1);
+	let animated = stem.starts_with("a_")
+		&& match kind {
+			Kind::Gif => true,
+			Kind::Webp => query.animated.unwrap_or(false),
+			Kind::Png | Kind::Jpeg => false,
+		};
+	respond(kind, frames(seed_of(seed_name), width, height, animated))
+}
+
+pub async fn user_banner(
+	Path((user_id, file)): Path<(String, String)>,
+	Query(query): Query<SizedQuery>,
+) -> Response {
+	let Some((hash, kind)) = split_file(&file) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	banner(&format!("banners/{user_id}/{hash}"), hash, kind, &query)
+}
+
+pub async fn member_banner(
+	Path((guild_id, user_id, file)): Path<(String, String, String)>,
+	Query(query): Query<SizedQuery>,
+) -> Response {
+	let Some((hash, kind)) = split_file(&file) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	banner(
+		&format!("guilds/{guild_id}/{user_id}/banners/{hash}"),
+		hash,
+		kind,
+		&query,
+	)
 }
 
 pub async fn default_avatar(Path(file): Path<String>, Query(query): Query<SizedQuery>) -> Response {

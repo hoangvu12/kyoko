@@ -546,7 +546,11 @@ fn interaction_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 			.h(REPLY_LINE)
 			.mb(REPLY_GAP)
 			.child(spine())
-			.child(small_avatar(&line.user, &line.name, env))
+			.child(small_avatar(
+				&bridge::Avatar::of_user(&line.user),
+				&line.name,
+				env,
+			))
 			.child(
 				words(line.name.clone(), 500, color_or(line.color, "text_2"))
 					.cursor(Cursor::Pointer)
@@ -616,7 +620,7 @@ fn reply_header(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 						.cursor(Cursor::Pointer)
 						.on_click(move || actions.jump(target))
 				})
-				.child(small_avatar(&quote.author, &quote.name, env))
+				.child(small_avatar(&quote.avatar, &quote.name, env))
 				.child(
 					text(format!("@{}", quote.name))
 						.shrink_0()
@@ -700,7 +704,7 @@ fn first_of_group(
 		.when_some(reply, |row, reply| row.child(reply))
 		.child({
 			let (actions, author) = (env.actions.clone(), entry.message.author.id);
-			avatar(entry, env)
+			avatar(entry, env, hovered)
 				.absolute()
 				.left(AVATAR_LEFT)
 				.top(avatar_top)
@@ -829,13 +833,12 @@ fn initial_of(name: &str) -> String {
 		.unwrap_or_default()
 }
 
-fn small_avatar(user: &protocol::User, name: &str, env: &Rc<RowEnv>) -> View {
+fn small_avatar(avatar: &bridge::Avatar, name: &str, env: &Rc<RowEnv>) -> View {
 	let size = REPLY_AVATAR as f32;
 	let picture = env
 		.pictures
-		.avatar(user, REPLY_AVATAR)
-		.map(|name| env.pictures.picture(&name));
-	let circle = div()
+		.picture(&env.pictures.member_avatar(avatar, REPLY_AVATAR, false));
+	div()
 		.size(size, size)
 		.shrink_0()
 		.rounded(size / 2.)
@@ -848,42 +851,41 @@ fn small_avatar(user: &protocol::User, name: &str, env: &Rc<RowEnv>) -> View {
 				.text_size(size * 0.5)
 				.font_weight(600)
 				.text_color(tok("text_on_brand")),
-		);
-	match picture {
-		Some(picture) => circle.reactive_style(move || match picture.get() {
+		)
+		.reactive_style(move || match picture.get() {
 			Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
 			None => Styles::new(),
-		}),
-		None => circle,
-	}
+		})
 }
 
-fn avatar(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
+fn avatar(entry: &MessageEntry, env: &Rc<RowEnv>, hovered: &Signal<bool>) -> View {
 	let size = AVATAR as f32;
 	let fallback = color_or(entry.author_color, "brand");
 	let initial = initial_of(&entry.author);
-	let picture = env
+	let still = env
 		.pictures
-		.avatar(&entry.message.author, AVATAR)
+		.picture(&env.pictures.member_avatar(&entry.avatar, AVATAR, false));
+	let moving = env
+		.pictures
+		.moving_avatar(&entry.avatar, AVATAR)
 		.map(|name| env.pictures.picture(&name));
-	let circle = div()
+	let over = hovered.clone();
+	let shown = Rc::new(move || {
+		moving
+			.as_ref()
+			.filter(|_| over.get())
+			.and_then(|moving| moving.get())
+			.or_else(|| still.get())
+	});
+	let covered = shown.clone();
+	div()
 		.size(size, size)
 		.rounded(size / 2.)
 		.overflow_hidden()
 		.bg(fallback)
 		.items_center()
-		.justify_center();
-	let Some(picture) = picture else {
-		return circle.child(
-			text(initial)
-				.text_size(size * 0.42)
-				.font_weight(600)
-				.text_color(tok("text_on_brand")),
-		);
-	};
-	let shown = picture.clone();
-	circle
-		.reactive_style(move || match shown.get() {
+		.justify_center()
+		.reactive_style(move || match shown() {
 			Some(image) => Styles::new().bg_image(image, ObjectFit::Cover),
 			None => Styles::new(),
 		})
@@ -893,7 +895,7 @@ fn avatar(entry: &MessageEntry, env: &Rc<RowEnv>) -> View {
 				.font_weight(600)
 				.text_color(tok("text_on_brand"))
 				.reactive_style(move || {
-					if picture.with(Option::is_some) {
+					if covered().is_some() {
 						Styles::new().invisible()
 					} else {
 						Styles::new().visible()

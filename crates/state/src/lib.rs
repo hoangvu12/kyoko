@@ -48,8 +48,8 @@ pub use favorites::{EmojiCandidate, EmojiRanking, command_frecency, command_used
 pub use guild::GuildState;
 pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{
-	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, BanList, ConnectedAccount, InviteInfo,
-	InvitePreview, Loaded, ProfileBadge, Reactors, UserProfile, audit_action_label,
+	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, BanList, ConnectedAccount, GuildProfile,
+	InviteInfo, InvitePreview, Loaded, ProfileBadge, Reactors, UserProfile, audit_action_label,
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};

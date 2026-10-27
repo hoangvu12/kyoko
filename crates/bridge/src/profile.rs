@@ -12,7 +12,7 @@ use state::{ConnectionStatus, CustomStatus, RiskyLock, State};
 
 use crate::display::Display;
 use crate::dm_list::DmStatus;
-use crate::images::{avatar_request, device_pixels, emoji_request, guild_icon_request};
+use crate::images::{Avatar, emoji_request, guild_icon_request, guild_member};
 
 pub const BANNER_PIXELS: (u32, u32) = (600, 300);
 pub const BADGE_PIXELS: u32 = 64;
@@ -66,6 +66,44 @@ impl GuildTag {
 			cdn::guild_tag_badge_url(guild_id.0, badge, TAG_BADGE_PIXELS),
 			Variant::new(SizeHint::square(TAG_BADGE_PIXELS), Shape::Square),
 		))
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProfileBanner {
+	pub user_id: Snowflake,
+	pub guild_id: Option<Snowflake>,
+	pub hash: String,
+}
+
+impl ProfileBanner {
+	fn global(user_id: Snowflake, hash: Option<&str>) -> Option<Self> {
+		Some(Self {
+			user_id,
+			guild_id: None,
+			hash: hash.filter(|hash| !hash.is_empty())?.to_owned(),
+		})
+	}
+
+	pub fn is_animated(&self) -> bool {
+		cdn::is_animated(&self.hash)
+	}
+
+	pub fn url(&self, cdn_base: &str, width: u32, animate: bool) -> String {
+		match self.guild_id {
+			Some(guild_id) => {
+				cdn::guild_member_banner_url(cdn_base, guild_id.0, self.user_id.0, &self.hash, width, animate)
+			}
+			None => cdn::banner_url(cdn_base, self.user_id.0, &self.hash, width, animate),
+		}
+	}
+
+	pub fn request(&self, cdn_base: &str) -> ImageRequest {
+		let (width, height) = BANNER_PIXELS;
+		ImageRequest::new(
+			self.url(cdn_base, width, true),
+			Variant::new(SizeHint::new(width, height), Shape::Square),
+		)
 	}
 }
 
@@ -161,8 +199,8 @@ pub struct ProfileCard {
 	pub name_extra: Option<String>,
 	pub username: String,
 	pub handle: String,
-	pub member_avatar: Option<String>,
-	pub banner: Option<String>,
+	pub avatar: Avatar,
+	pub banner: Option<ProfileBanner>,
 	pub accent: Option<u32>,
 	pub pronouns: Option<String>,
 	pub tag: Option<GuildTag>,
@@ -198,14 +236,19 @@ impl ProfileCard {
 	) -> Option<Self> {
 		let user = state.user(user_id)?.as_ref().clone();
 		let profile = state.profile(user_id);
-		let member = guild_id
-			.and_then(|id| state.guild(id))
-			.and_then(|guild| guild.members.get(&user_id))
-			.or_else(|| {
-				guild_id
-					.and(profile)
-					.and_then(|profile| profile.guild_member.as_ref())
-			});
+		let member = guild_member(state, guild_id, user_id);
+		let server = guild_id.and_then(|guild_id| state.guild_profile(user_id, guild_id));
+		let server_banner = guild_id.and_then(|guild_id| {
+			let hash = server
+				.and_then(|server| server.banner.clone())
+				.or_else(|| member?.banner.clone())
+				.filter(|hash| !hash.is_empty())?;
+			Some(ProfileBanner {
+				user_id,
+				guild_id: Some(guild_id),
+				hash,
+			})
+		});
 		let mine = state.current_user_id() == Some(user_id);
 		let handle = match user.discriminator.as_deref() {
 			Some(tag) if tag != "0" && !tag.is_empty() => format!("{}#{tag}", user.username),
@@ -243,26 +286,36 @@ impl ProfileCard {
 			decorations: Vec::new(),
 			id: user_id,
 			guild_id,
-			name: state.display_name(guild_id, user_id),
+			name: member
+				.and_then(|member| member.nick.clone())
+				.filter(|nick| !nick.is_empty())
+				.unwrap_or_else(|| state.display_name(guild_id, user_id)),
 			name_extra: None,
 			username: user.username.clone(),
 			handle,
-			member_avatar: member.and_then(|member| member.avatar.clone()),
-			banner: profile
-				.and_then(|profile| profile.banner.clone())
-				.or_else(|| user.banner.clone()),
+			avatar: Avatar::of_member(&user, guild_id, member),
+			banner: server_banner.or_else(|| {
+				ProfileBanner::global(
+					user_id,
+					profile
+						.and_then(|profile| profile.banner.as_deref())
+						.or(user.banner.as_deref()),
+				)
+			}),
 			accent: profile
 				.and_then(|profile| profile.accent_color)
 				.or(user.accent_color)
 				.and_then(|color| u32::try_from(color).ok()),
-			pronouns: profile
-				.and_then(|profile| profile.pronouns.clone())
+			pronouns: server
+				.and_then(|server| server.pronouns.clone())
+				.or_else(|| profile.and_then(|profile| profile.pronouns.clone()))
 				.filter(|pronouns| !pronouns.is_empty()),
 			tag: profile
 				.and_then(|profile| GuildTag::of(&profile.user))
 				.or_else(|| GuildTag::of(&user)),
-			bio: profile
-				.and_then(|profile| profile.bio.clone())
+			bio: server
+				.and_then(|server| server.bio.clone())
+				.or_else(|| profile.and_then(|profile| profile.bio.clone()))
 				.filter(|bio| !bio.trim().is_empty()),
 			badges: profile
 				.map(|profile| {
@@ -318,21 +371,11 @@ impl ProfileCard {
 	}
 
 	pub fn avatar_request(&self, cdn_base: &str, points: f64, scale: f64) -> Option<ImageRequest> {
-		match (self.guild_id, self.member_avatar.as_deref()) {
-			(Some(guild_id), Some(hash)) => {
-				let pixels = device_pixels(points, scale);
-				let url = cdn::guild_member_avatar_url(cdn_base, guild_id.0, self.id.0, hash, pixels, false);
-				Some(ImageRequest::new(
-					url,
-					Variant::new(SizeHint::square(pixels), Shape::Circle),
-				))
-			}
-			_ => avatar_request(cdn_base, &self.user, points, scale, false),
-		}
+		Some(self.avatar.request(cdn_base, points, scale, true))
 	}
 
-	pub fn banner_request(&self) -> Option<ImageRequest> {
-		banner_request(self.id, self.banner.as_deref()?)
+	pub fn banner_request(&self, cdn_base: &str) -> Option<ImageRequest> {
+		Some(self.banner.as_ref()?.request(cdn_base))
 	}
 
 	pub fn badge_requests(&self) -> Vec<ImageRequest> {
@@ -378,14 +421,6 @@ impl ProfileCard {
 	pub fn mutual_server_count(&self) -> usize {
 		self.mutual_guilds.len()
 	}
-}
-
-fn banner_request(user_id: Snowflake, hash: &str) -> Option<ImageRequest> {
-	let (width, height) = BANNER_PIXELS;
-	Some(ImageRequest::new(
-		cdn::banner_url(user_id.0, hash, width, false),
-		Variant::new(SizeHint::new(width, height), Shape::Square),
-	))
 }
 
 fn presence_of(
@@ -591,8 +626,12 @@ impl PanelUser {
 		})
 	}
 
-	pub fn banner_request(&self) -> Option<ImageRequest> {
-		banner_request(self.user.id, self.user.banner.as_deref()?)
+	pub fn banner_request(&self, cdn_base: &str) -> Option<ImageRequest> {
+		Some(ProfileBanner::global(self.user.id, self.user.banner.as_deref())?.request(cdn_base))
+	}
+
+	pub fn avatar_request(&self, cdn_base: &str, points: f64, scale: f64) -> ImageRequest {
+		Avatar::of_user(&self.user).request(cdn_base, points, scale, true)
 	}
 
 	pub fn accent(&self) -> Option<u32> {

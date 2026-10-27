@@ -643,3 +643,11 @@ Kyoko only (`--apps kyoko`): oxidcord has no plugins. No Midnight mockup, check 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `user-panel-game-activity` | 56 | With `KYOKO_CAPTURE_PLUGINS=game-activity-toggle`. Default selection; kyoko waits for the plugin's controller button to mount in the user panel and clicks it at (194, 760) through the window, so sharing turns off: the crossed-out controller in red and the "Game activity is hidden" toast. Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
+
+### 81 Server profiles
+
+Kyoko only (`--apps kyoko`). Mockcord gives every sixth member of a server (from the third) a server avatar, every twelfth an animated one, and every eighth (from the third) an animated server banner; those members' profiles carry a server bio ("<username>, server edition") in `guild_member_profile`. Every fifth pool user has an animated global avatar and every fourth a global banner.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `server-profile` | 81 | Default selection, then open the profile popout of the open server's member with a server banner (one with a server avatar first) at (348, 404), anchored top left: the server banner, the server avatar, the server nick and the server bio. | yes |

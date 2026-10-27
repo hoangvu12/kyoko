@@ -309,6 +309,8 @@ A profile is fetched only when one is opened: the profile popout (timeline avata
 
 While a fetch is in flight, `State::profile_loading(user_id)` is true (`LocalEvent::ProfileRequested` and `ProfileSettled`). `bridge::ProfileCard` shows what is already known at once (user, member name, avatar, roles, join date, presence). Its `loading` flag is set until the profile arrives or fails, and the popout and full profile draw placeholder bars for About Me, Bio and Connections in the meantime (`profile::parts::placeholder`). A profile already in memory shows straight away while a stale one refreshes.
 
+The response's global part (`user`, `user_profile`, badges, mutuals, connections) is kept once per user (`State::profile`). Its server part, `guild_member` and `guild_member_profile` (bio, banner and pronouns for that server), is kept per user and server in `UserProfile.guilds` (`State::guild_profile(user_id, guild_id)`), so opening the same person in another server or a DM never shows the wrong server's look. `ProfileCard` prefers the server's nick, avatar, banner, bio and pronouns and falls back to the global ones. `theme_colors` and `profile_effect` are not read yet.
+
 ## Relationships
 
 Friends arrive in READY (`relationships`) and change with RELATIONSHIP_ADD, RELATIONSHIP_REMOVE and RELATIONSHIP_UPDATE (a partial relationship: `type` and `nickname` when present, `nickname: null` clears it; an update for someone not listed is ignored). The requests are the web client's (`crates/session/src/task/commands.rs`, `crates/rest/src/api/users.rs`):

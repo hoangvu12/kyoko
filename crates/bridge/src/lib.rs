@@ -105,9 +105,9 @@ pub use hidden::{
 	HiddenChannel, ModeratorNotes, Overwriter, channel_kind_label, hidden_channel, moderator_notes,
 };
 pub use images::{
-	app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url, device_pixels,
-	embed_icon_request, embed_request, emoji_request, gif_still_request, guild_icon_request, is_image,
-	is_video, local_audio, local_media, media_fetcher, media_fetcher_builder, refresh_command,
+	Avatar, app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url,
+	device_pixels, embed_icon_request, embed_request, emoji_request, gif_still_request, guild_icon_request,
+	is_image, is_video, local_audio, local_media, media_fetcher, media_fetcher_builder, refresh_command,
 	sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
@@ -139,7 +139,8 @@ pub use playback::{
 pub use polls::{PollChoice, PollOutcome, PollSummary, can_create_polls, time_left};
 pub use profile::{
 	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
-	ProfileCard, ProfileConnection, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel,
+	ProfileBanner, ProfileCard, ProfileConnection, Relation, RoleChip, StatusChoice, StatusLine,
+	activity_line, dm_channel,
 };
 pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{

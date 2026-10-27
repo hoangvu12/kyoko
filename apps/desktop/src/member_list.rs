@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Instant;
 
-use bridge::{Inbox, MemberChange, MemberEntry, MemberHeights, MemberListEntry, MemberPanel, OpenMembers};
+use bridge::{
+	Avatar, Inbox, MemberChange, MemberEntry, MemberHeights, MemberListEntry, MemberPanel, OpenMembers,
+};
 use chrono::Utc;
 use media::ImageName;
 use protocol::Snowflake;
@@ -20,7 +22,8 @@ const FAR_END: f64 = 1e9;
 
 pub(crate) struct MemberListView {
 	panel: RefCell<MemberPanel>,
-	avatars: RefCell<HashMap<(Snowflake, Option<String>), ImageName>>,
+	avatars: RefCell<HashMap<(Avatar, bool), ImageName>>,
+	hovered: RefCell<Option<String>>,
 	wakes: Inbox<()>,
 	jumps: Cell<u32>,
 	heights: Shared,
@@ -34,6 +37,7 @@ impl MemberListView {
 		Self {
 			panel: RefCell::new(MemberPanel::default()),
 			avatars: RefCell::new(HashMap::new()),
+			hovered: RefCell::new(None),
 			wakes: Inbox::new(),
 			jumps: Cell::new(0),
 			heights: host.shared("members.heights", Value::List(Rc::new([]))),
@@ -46,6 +50,7 @@ impl MemberListView {
 	pub(crate) fn reset(&self) {
 		self.panel.borrow_mut().reset();
 		self.avatars.borrow_mut().clear();
+		self.hovered.borrow_mut().take();
 		self.stable.forget();
 		self.heights.set(Value::List(Rc::new([])));
 		self.window.set(empty_window());
@@ -121,6 +126,7 @@ impl MemberListView {
 			self.heights.set(Value::List(heights));
 		}
 		let mut names = Vec::new();
+		let guild_id = panel.open().map(|open| open.guild_id);
 		let rows: Vec<Value> = panel
 			.entries()
 			.iter()
@@ -134,9 +140,16 @@ impl MemberListView {
 						("title", group.title().as_str().into()),
 					]),
 					MemberListEntry::Member(member) => {
-						let avatar = self.avatar(state, member.user_id, icons);
-						names.extend(avatar.clone());
-						member_value(member, avatar.as_deref())
+						let avatar = state
+							.user(member.user_id)
+							.map(|user| Avatar::of(state, guild_id, user));
+						let still = avatar.as_ref().map(|avatar| self.avatar(avatar, false, icons));
+						let moving = avatar
+							.as_ref()
+							.filter(|avatar| avatar.is_animated())
+							.map(|avatar| self.avatar(avatar, true, icons));
+						names.extend(still.clone());
+						member_value(member, still.as_deref(), moving.as_deref())
 					}
 					MemberListEntry::Placeholder => record([
 						("kind", "placeholder".into()),
@@ -153,18 +166,37 @@ impl MemberListView {
 		names
 	}
 
-	fn avatar(&self, state: &State, user_id: Snowflake, icons: &Icons<'_>) -> Option<String> {
-		let user = state.user(user_id)?;
-		let key = (user_id, user.avatar.clone());
+	fn avatar(&self, avatar: &Avatar, animate: bool, icons: &Icons<'_>) -> String {
+		let key = (avatar.clone(), animate);
 		let mut avatars = self.avatars.borrow_mut();
 		if let Some(name) = avatars.get(&key) {
-			return Some(name.as_str().to_owned());
+			return name.as_str().to_owned();
 		}
-		let request = bridge::avatar_request(icons.cdn, user, AVATAR_POINTS, icons.scale, false)?;
-		let name = icons.gallery.request(request);
+		let name = icons
+			.gallery
+			.request(avatar.request(icons.cdn, AVATAR_POINTS, icons.scale, animate));
 		let text = name.as_str().to_owned();
 		avatars.insert(key, name);
-		Some(text)
+		text
+	}
+
+	pub(crate) fn hover_avatar(&self, name: &str, inside: bool) -> bool {
+		let mut hovered = self.hovered.borrow_mut();
+		match (inside, hovered.as_deref() == Some(name)) {
+			(true, false) => {
+				*hovered = Some(name.to_owned());
+				true
+			}
+			(false, true) => {
+				*hovered = None;
+				true
+			}
+			_ => false,
+		}
+	}
+
+	pub(crate) fn hovered_avatar(&self) -> Option<String> {
+		self.hovered.borrow().clone()
 	}
 }
 
@@ -193,6 +225,18 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 		Value::Nil
 	});
 	let actions = Rc::downgrade(link);
+	host.function("members.avatar_hover", move |argument| {
+		let name = match field(&argument, "name") {
+			Some(Value::Str(text)) => text.strip_prefix("host:").map(str::to_owned),
+			_ => None,
+		};
+		let inside = matches!(field(&argument, "inside"), Some(Value::Bool(true)));
+		if let (Some(link), Some(name)) = (actions.upgrade(), name) {
+			link.hover_member_avatar(&name, inside);
+		}
+		Value::Nil
+	});
+	let actions = Rc::downgrade(link);
 	host.action("members.open_profile", move |argument| {
 		let user_id = match field(&argument, "id") {
 			Some(Value::Str(text)) => text.parse::<u64>().ok().map(Snowflake),
@@ -208,8 +252,9 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 	});
 }
 
-fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
+fn member_value(member: &MemberEntry, avatar: Option<&str>, moving: Option<&str>) -> Value {
 	let avatar = avatar.map(|name| format!("host:{name}")).unwrap_or_default();
+	let moving = moving.map(|name| format!("host:{name}")).unwrap_or_default();
 	let timeout = member.notes.timeout_text(Utc::now()).unwrap_or_default();
 	let notes = member.notes.flag_text().unwrap_or_default();
 	let color = member
@@ -228,6 +273,7 @@ fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
 		("bot", member.bot.into()),
 		("badge", member.badge.as_deref().unwrap_or_default().into()),
 		("avatar", avatar.as_str().into()),
+		("avatar_moving", moving.as_str().into()),
 		("timeout", timeout.as_str().into()),
 		("notes", notes.as_str().into()),
 		("crown", member.crown.into()),

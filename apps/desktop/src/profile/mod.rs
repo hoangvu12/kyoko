@@ -286,7 +286,7 @@ impl ProfileLayer {
 		self.custom.close();
 		let avatar = self.own_avatar(&panel);
 		let banner = panel
-			.banner_request()
+			.banner_request(self.pictures.cdn())
 			.map(|request| self.pictures.request(request));
 		self.menu_size.set((0., 0.));
 		self.submenu.set(Submenu::None);
@@ -301,14 +301,12 @@ impl ProfileLayer {
 	}
 
 	fn own_avatar(&self, panel: &PanelUser) -> Option<ImageName> {
-		bridge::avatar_request(
+		let request = panel.avatar_request(
 			self.pictures.cdn(),
-			&panel.user,
 			self.points("avatar_size_lg"),
 			self.pictures.scale(),
-			false,
-		)
-		.map(|request| self.pictures.request(request))
+		);
+		Some(self.pictures.request(request))
 	}
 
 	pub fn show_submenu(&self, submenu: Submenu) {
@@ -466,7 +464,7 @@ impl ProfileLayer {
 		};
 		CardImages {
 			avatar: request(card.avatar_request(&cdn, points, scale)),
-			banner: request(card.banner_request()),
+			banner: request(card.banner_request(&cdn)),
 			badges: card
 				.badge_requests()
 				.into_iter()

@@ -3,8 +3,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use media::cdn::{self, ProxyFormat, ProxySize, Quality, StickerFormat};
 use media::{ImageRequest, MediaFetcher, MediaFetcherBuilder, Origin, Shape, SizeHint, Variant};
 use protocol::fingerprint::Fingerprint;
-use protocol::{Attachment, EmbedMedia, Snowflake, StickerItem, User};
+use protocol::{Attachment, EmbedMedia, Member, Snowflake, StickerItem, User};
 use session::Command;
+use state::State;
 use url::Url;
 
 const ANIMATED_ATTACHMENT: u64 = 1 << 5;
@@ -42,15 +43,79 @@ pub fn avatar_request(
 	scale: f64,
 	animate: bool,
 ) -> Option<ImageRequest> {
-	let pixels = device_pixels(points, scale);
-	let url = match user.avatar.as_deref() {
-		Some(hash) => cdn::avatar_url(cdn, user.id.0, hash, pixels, animate),
-		None => cdn::default_avatar_url(cdn, user.id.0, user.discriminator.as_deref()),
-	};
-	Some(ImageRequest::new(
-		url,
-		Variant::new(SizeHint::square(pixels), Shape::Circle),
-	))
+	Some(Avatar::of_user(user).request(cdn, points, scale, animate))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Avatar {
+	pub user_id: Snowflake,
+	pub guild_id: Option<Snowflake>,
+	pub hash: Option<String>,
+	pub discriminator: Option<String>,
+}
+
+impl Avatar {
+	pub fn of_user(user: &User) -> Self {
+		Self {
+			user_id: user.id,
+			guild_id: None,
+			hash: user.avatar.clone().filter(|hash| !hash.is_empty()),
+			discriminator: user.discriminator.clone(),
+		}
+	}
+
+	pub fn of_member(user: &User, guild_id: Option<Snowflake>, member: Option<&Member>) -> Self {
+		let hash = member
+			.and_then(|member| member.avatar.clone())
+			.filter(|hash| !hash.is_empty());
+		match (guild_id, hash) {
+			(Some(guild_id), Some(hash)) => Self {
+				guild_id: Some(guild_id),
+				hash: Some(hash),
+				..Self::of_user(user)
+			},
+			_ => Self::of_user(user),
+		}
+	}
+
+	pub fn of(state: &State, guild_id: Option<Snowflake>, user: &User) -> Self {
+		Self::of_member(user, guild_id, guild_member(state, guild_id, user.id))
+	}
+
+	pub fn is_animated(&self) -> bool {
+		self.hash.as_deref().is_some_and(cdn::is_animated)
+	}
+
+	pub fn url(&self, cdn_base: &str, pixels: u32, animate: bool) -> String {
+		match (self.guild_id, self.hash.as_deref()) {
+			(Some(guild_id), Some(hash)) => {
+				cdn::guild_member_avatar_url(cdn_base, guild_id.0, self.user_id.0, hash, pixels, animate)
+			}
+			(None, Some(hash)) => cdn::avatar_url(cdn_base, self.user_id.0, hash, pixels, animate),
+			(_, None) => cdn::default_avatar_url(cdn_base, self.user_id.0, self.discriminator.as_deref()),
+		}
+	}
+
+	pub fn request(&self, cdn_base: &str, points: f64, scale: f64, animate: bool) -> ImageRequest {
+		let pixels = device_pixels(points, scale);
+		ImageRequest::new(
+			self.url(cdn_base, pixels, animate),
+			Variant::new(SizeHint::square(pixels), Shape::Circle),
+		)
+	}
+
+	pub fn moving_request(&self, cdn_base: &str, points: f64, scale: f64) -> Option<ImageRequest> {
+		self.is_animated()
+			.then(|| self.request(cdn_base, points, scale, true))
+	}
+}
+
+pub fn guild_member(state: &State, guild_id: Option<Snowflake>, user_id: Snowflake) -> Option<&Member> {
+	let guild_id = guild_id?;
+	state
+		.guild(guild_id)
+		.and_then(|guild| guild.members.get(&user_id))
+		.or_else(|| state.guild_profile(user_id, guild_id)?.member.as_ref())
 }
 
 pub fn guild_icon_request(

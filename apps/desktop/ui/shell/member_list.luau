@@ -203,6 +203,9 @@ local member = ui.component(function(props: { row: any })
 			end,
 			on_hover = function(inside: boolean)
 				hovered:set(inside)
+				if row.avatar_moving ~= nil and row.avatar_moving ~= "" then
+					actions.member_avatar_hover(row.avatar_moving, inside)
+				end
 			end,
 			on_press = function(point: any)
 				actions.open_member_profile(row.id, point.x, point.y)
@@ -211,7 +214,16 @@ local member = ui.component(function(props: { row: any })
 				actions.member_menu(row.id, point.x, point.y)
 				return nil
 			end,
-			avatar { src = row.avatar, size = avatar_sm(), status = row.status, cutout = theme.color.bg_4 },
+			avatar {
+				src = row.avatar,
+				size = avatar_sm(),
+				status = row.status,
+				cutout = theme.color.bg_4,
+				moving = row.avatar_moving,
+				playing = function()
+					return hovered:get()
+				end,
+			},
 			ui.column {
 				min_w = 0,
 				name_line(row),

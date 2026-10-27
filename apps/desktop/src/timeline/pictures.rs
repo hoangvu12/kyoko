@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use bridge::{ATTACHMENT_BOX, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, ReplyPreview, STICKER_SIDE};
+use bridge::{
+	ATTACHMENT_BOX, Avatar, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, ReplyPreview, STICKER_SIDE,
+};
 use markdown::Node;
 use media::cdn::Quality;
 use media::{Gallery, ImageName, ImageRequest, Shape, SizeHint, Status, Variant};
@@ -34,7 +36,9 @@ pub struct Pictures {
 	mock_origin: Option<String>,
 	scale: Cell<f64>,
 	quality: Cell<Quality>,
-	avatars: RefCell<HashMap<(Snowflake, String, u32), ImageName>>,
+	avatars: RefCell<HashMap<(Avatar, u32, bool), ImageName>>,
+	hovered_avatar: RefCell<Option<ImageName>>,
+	hover_watchers: RefCell<Vec<Rc<dyn Fn()>>>,
 	pictures: RefCell<HashMap<ImageName, Picture>>,
 	placeholders: RefCell<HashMap<String, Option<Arc<ImageData>>>>,
 }
@@ -50,6 +54,8 @@ impl Pictures {
 			scale: Cell::new(1.),
 			quality: Cell::new(Quality::Fitted),
 			avatars: RefCell::default(),
+			hovered_avatar: RefCell::default(),
+			hover_watchers: RefCell::default(),
 			pictures: RefCell::default(),
 			placeholders: RefCell::default(),
 		}
@@ -87,14 +93,56 @@ impl Pictures {
 	}
 
 	pub fn avatar(&self, user: &User, points: f64) -> Option<ImageName> {
-		let key = (user.id, user.avatar.clone().unwrap_or_default(), points as u32);
+		Some(self.member_avatar(&Avatar::of_user(user), points, false))
+	}
+
+	pub fn member_avatar(&self, avatar: &Avatar, points: f64, animate: bool) -> ImageName {
+		let key = (avatar.clone(), points as u32, animate && avatar.is_animated());
 		if let Some(name) = self.avatars.borrow().get(&key) {
-			return Some(name.clone());
+			return name.clone();
 		}
-		let request = bridge::avatar_request(&self.cdn, user, points, self.scale.get(), false)?;
-		let name = self.request(request);
+		let name = self.request(avatar.request(&self.cdn, points, self.scale.get(), key.2));
 		self.avatars.borrow_mut().insert(key, name.clone());
-		Some(name)
+		name
+	}
+
+	pub fn moving_avatar(&self, avatar: &Avatar, points: f64) -> Option<ImageName> {
+		avatar
+			.is_animated()
+			.then(|| self.member_avatar(avatar, points, true))
+	}
+
+	pub fn hover_avatar(&self, name: &ImageName, over: bool) {
+		let changed = {
+			let mut hovered = self.hovered_avatar.borrow_mut();
+			match (over, hovered.as_ref() == Some(name)) {
+				(true, false) => {
+					*hovered = Some(name.clone());
+					true
+				}
+				(false, true) => {
+					*hovered = None;
+					true
+				}
+				_ => false,
+			}
+		};
+		if !changed {
+			return;
+		}
+		self.gallery.set_hovered(over.then_some(name.as_str()));
+		let watchers: Vec<Rc<dyn Fn()>> = self.hover_watchers.borrow().clone();
+		for watcher in watchers {
+			watcher();
+		}
+	}
+
+	pub fn hovered_avatar(&self) -> Option<ImageName> {
+		self.hovered_avatar.borrow().clone()
+	}
+
+	pub fn on_avatar_hover(&self, watcher: impl Fn() + 'static) {
+		self.hover_watchers.borrow_mut().push(Rc::new(watcher));
 	}
 
 	pub fn emoji(&self, id: u64, animated: bool, points: f64) -> ImageName {
@@ -224,10 +272,10 @@ impl Pictures {
 		let message = &entry.message;
 		let mut names = Vec::new();
 		if entry.is_plain() && !entry.grouped {
-			names.extend(self.avatar(&message.author, AVATAR));
+			names.push(self.member_avatar(&entry.avatar, AVATAR, false));
 		}
 		if let Some(ReplyPreview::Message(quote) | ReplyPreview::Deleted(quote)) = &entry.reply {
-			names.extend(self.avatar(&quote.author, REPLY_AVATAR));
+			names.push(self.member_avatar(&quote.avatar, REPLY_AVATAR, false));
 		}
 		let size = if entry.body.jumbo { JUMBO_EMOJI } else { EMOJI };
 		for document in entry.body.documents() {

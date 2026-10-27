@@ -91,6 +91,7 @@ fn quote(original: &Message) -> bridge::Quote {
 	bridge::Quote {
 		id: original.id,
 		author: original.author.clone(),
+		avatar: bridge::Avatar::of_user(&original.author),
 		name: original.author.username.clone(),
 		text: original.content.clone(),
 	}

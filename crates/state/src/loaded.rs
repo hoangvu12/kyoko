@@ -41,6 +41,7 @@ pub enum Loaded {
 	},
 	Profile {
 		user_id: Snowflake,
+		guild_id: Option<Snowflake>,
 		raw: Value,
 	},
 	InviteCreated {
@@ -153,8 +154,16 @@ pub struct UserProfile {
 	pub mutual_friends: Vec<Snowflake>,
 	pub mutual_friends_count: u32,
 	pub connected_accounts: Vec<ConnectedAccount>,
-	pub guild_member: Option<Member>,
+	pub guilds: HashMap<Snowflake, GuildProfile>,
 	pub premium_since: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct GuildProfile {
+	pub member: Option<Member>,
+	pub bio: Option<String>,
+	pub banner: Option<String>,
+	pub pronouns: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,6 +327,7 @@ struct RawProfile {
 	mutual_friends_count: Option<u32>,
 	connected_accounts: Option<LenientVec<RawConnection>>,
 	guild_member: Option<Member>,
+	guild_member_profile: Option<RawMeta>,
 	#[serde(deserialize_with = "timestamp")]
 	premium_since: Option<DateTime<Utc>>,
 }
@@ -450,6 +460,17 @@ pub fn audit_action_label(action_type: i64) -> &'static str {
 	}
 }
 
+fn guild_profile(member: Option<Member>, meta: Option<RawMeta>) -> GuildProfile {
+	let meta = meta.unwrap_or_default();
+	let filled = |value: Option<String>| value.filter(|value| !value.trim().is_empty());
+	GuildProfile {
+		banner: filled(meta.banner).or_else(|| filled(member.as_ref()?.banner.clone())),
+		bio: filled(meta.bio),
+		pronouns: filled(meta.pronouns),
+		member,
+	}
+}
+
 fn invite_info(raw: RawInvite) -> InviteInfo {
 	InviteInfo {
 		code: raw.code,
@@ -526,8 +547,17 @@ impl State {
 				page.has_more = *has_more;
 				changes.loaded.insert(*channel_id);
 			}
-			Loaded::Profile { user_id, raw } => {
-				if let Some(profile) = self.parse_profile(raw) {
+			Loaded::Profile {
+				user_id,
+				guild_id,
+				raw,
+			} => {
+				if let Some(mut profile) = self.parse_profile(raw, *guild_id) {
+					if let Some(known) = self.lazy.profiles.remove(user_id) {
+						for (id, guild) in known.guilds {
+							profile.guilds.entry(id).or_insert(guild);
+						}
+					}
 					self.lazy.profiles.insert(*user_id, profile);
 					changes.loaded.insert(*user_id);
 				}
@@ -720,7 +750,7 @@ impl State {
 		changes
 	}
 
-	fn parse_profile(&mut self, raw: &Value) -> Option<UserProfile> {
+	fn parse_profile(&mut self, raw: &Value, guild_id: Option<Snowflake>) -> Option<UserProfile> {
 		let parsed = RawProfile::deserialize(raw).ok()?;
 		let user = User::deserialize(&parsed.user).ok()?;
 		intern_user(&mut self.users, &user);
@@ -768,10 +798,22 @@ impl State {
 					verified: account.verified,
 				})
 				.collect(),
-			guild_member: parsed.guild_member,
+			guilds: guild_id
+				.map(|guild_id| {
+					(
+						guild_id,
+						guild_profile(parsed.guild_member, parsed.guild_member_profile),
+					)
+				})
+				.into_iter()
+				.collect(),
 			premium_since: parsed.premium_since,
 			user,
 		})
+	}
+
+	pub fn guild_profile(&self, user_id: Snowflake, guild_id: Snowflake) -> Option<&GuildProfile> {
+		self.lazy.profiles.get(&user_id)?.guilds.get(&guild_id)
 	}
 
 	fn parse_audit_log(&mut self, raw: &Value) -> Vec<AuditEntry> {

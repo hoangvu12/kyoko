@@ -230,6 +230,15 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/cdn/emojis/{file}", get(cdn::emoji))
 		.route("/cdn/embed/avatars/{file}", get(cdn::default_avatar))
 		.route(
+			"/cdn/guilds/{guild_id}/users/{user_id}/avatars/{file}",
+			get(cdn::member_avatar),
+		)
+		.route(
+			"/cdn/guilds/{guild_id}/users/{user_id}/banners/{file}",
+			get(cdn::member_banner),
+		)
+		.route("/cdn/banners/{user_id}/{file}", get(cdn::user_banner))
+		.route(
 			"/cdn/attachments/{channel_id}/{attachment_id}/{file}",
 			get(cdn::attachment),
 		)

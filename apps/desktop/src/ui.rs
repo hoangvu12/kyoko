@@ -976,7 +976,8 @@ impl Link {
 			| capture::Screen::AccountSwitcher
 			| capture::Screen::CustomStatus
 			| capture::Screen::ProfilePopout
-			| capture::Screen::FullProfile => self.drive_profiles(capture.screen).await,
+			| capture::Screen::FullProfile
+			| capture::Screen::ServerProfile => self.drive_profiles(capture.screen).await,
 			capture::Screen::UserPanel => {}
 			capture::Screen::QuickSwitcher => {
 				self.open_switcher();
@@ -1410,6 +1411,7 @@ impl Link {
 		names.extend(self.sidebar_avatars.borrow().iter().cloned());
 		names.extend(self.dm_avatars.borrow().iter().cloned());
 		names.extend(self.member_avatars.borrow().iter().cloned());
+		names.extend(self.members.hovered_avatar());
 		names.extend(self.settings_images());
 		names.extend(self.profile_images());
 		names.extend(self.search_images());

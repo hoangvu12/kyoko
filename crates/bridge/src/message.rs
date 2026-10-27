@@ -6,6 +6,8 @@ use protocol::{Message, MessageType, Snowflake, User};
 use state::{RenderedMessage, ReplyTarget, State};
 use url::Url;
 
+use crate::images::{Avatar, guild_member};
+
 pub const UNKNOWN_USER: &str = "@unknown-user";
 pub const UNKNOWN_ROLE: &str = "@deleted-role";
 pub const UNKNOWN_CHANNEL: &str = "#unknown";
@@ -380,6 +382,7 @@ pub enum ReplyPreview {
 pub struct Quote {
 	pub id: Snowflake,
 	pub author: User,
+	pub avatar: Avatar,
 	pub name: String,
 	pub text: String,
 }
@@ -388,6 +391,11 @@ impl Quote {
 	pub fn attachment_only(&self) -> bool {
 		self.text.is_empty()
 	}
+}
+
+pub fn author_avatar(state: &State, guild_id: Option<Snowflake>, message: &Message) -> Avatar {
+	let member = guild_member(state, guild_id, message.author.id).or(message.member.as_ref());
+	Avatar::of_member(&message.author, guild_id, member)
 }
 
 impl ReplyPreview {
@@ -410,6 +418,7 @@ impl ReplyPreview {
 			Quote {
 				id: original.id,
 				author: original.author.clone(),
+				avatar: author_avatar(state, guild_id, original),
 				name: person_name(state, guild_id, &original.author),
 				text: snippet(&document, &names, SNIPPET_LENGTH),
 			}

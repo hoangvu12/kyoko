@@ -84,11 +84,9 @@ pub async fn profile(
 			Some(json!({ "id": guild.id.to_string(), "nick": member.nick }))
 		})
 		.collect();
-	let extras = admin::profile_extras(
-		&shared,
-		id,
-		params.get("guild_id").and_then(|guild| guild.parse().ok()),
-	);
+	let guild_id: Option<u64> = params.get("guild_id").and_then(|guild| guild.parse().ok());
+	let extras = admin::profile_extras(&shared, id, guild_id);
+	let guild_member_profile = guild_member_profile(&extras["guild_member"], guild_id, &user.username);
 	let mut meta = json!({
 		"bio": format!("hi, i am {}", user.username),
 		"accent_color": null,
@@ -114,11 +112,27 @@ pub async fn profile(
 		"mutual_friends_count": friends,
 		"connected_accounts": extras["connected_accounts"],
 		"guild_member": extras["guild_member"],
+		"guild_member_profile": guild_member_profile,
 		"premium_since": null,
 		"premium_type": null,
 		"badges": extras["badges"],
 		"legacy_username": null,
 	})))
+}
+
+fn guild_member_profile(member: &Value, guild_id: Option<u64>, username: &str) -> Value {
+	let Some(guild_id) = guild_id.filter(|_| member.is_object()) else {
+		return Value::Null;
+	};
+	let styled = !member["avatar"].is_null() || !member["banner"].is_null();
+	json!({
+		"guild_id": guild_id.to_string(),
+		"bio": if styled { json!(format!("{username}, server edition")) } else { Value::Null },
+		"banner": member["banner"],
+		"pronouns": "",
+		"accent_color": null,
+		"theme_colors": null,
+	})
 }
 
 pub async fn create_dm(State(shared): State<Arc<Shared>>, Json(body): Json<Value>) -> ApiResult {

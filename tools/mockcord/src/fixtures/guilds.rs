@@ -528,8 +528,11 @@ fn build_members(builder: &mut Builder, index: usize, guild_id: u64, roles: &Rol
 		let nick =
 			(offset % 4 == 1).then(|| format!("{} [{offset}]", user.global_name.as_deref().unwrap_or("")));
 		let timed_out = timed_out_index == Some(offset);
+		let (avatar, banner) = server_look(user.id.0, offset);
 		members.push(Member {
 			nick,
+			avatar,
+			banner,
 			roles: member_roles.into_iter().map(Snowflake).collect(),
 			joined_at: Some(anchor - Duration::days(builder.rng.random_range(30..800))),
 			premium_since: (offset % 11 == 0).then(|| anchor - Duration::days(60)),
@@ -542,6 +545,23 @@ fn build_members(builder: &mut Builder, index: usize, guild_id: u64, roles: &Rol
 		});
 	}
 	members
+}
+
+const SERVER_AVATAR_EVERY: usize = 6;
+const SERVER_BANNER_EVERY: usize = 8;
+const SERVER_LOOK_SALT: u128 = 0x5e2f_0a11_c0de_cafe_f00d_beef_1234_5678;
+
+fn server_look(user_id: u64, offset: usize) -> (Option<String>, Option<String>) {
+	let hash = format!("{:032x}", u128::from(user_id) ^ SERVER_LOOK_SALT);
+	let avatar = (offset % SERVER_AVATAR_EVERY == 2).then(|| {
+		if offset % (SERVER_AVATAR_EVERY * 2) == 2 {
+			format!("a_{hash}")
+		} else {
+			hash.clone()
+		}
+	});
+	let banner = (offset % SERVER_BANNER_EVERY == 2).then(|| format!("a_{hash}"));
+	(avatar, banner)
 }
 
 const GUILD_EMOJIS: [(&str, bool); 3] = [("pepe_ok", false), ("blob_wave", false), ("party_parrot", true)];
