@@ -3,15 +3,10 @@ use zgx::compose::{Placement, PlacementEdge, PlacementSide};
 use zgx::reactive::Signal;
 
 use crate::kit::{self, Variant, menu_icon, menu_row};
-pub use crate::kit::{MENU_BORDER, MENU_MARGIN, field, menu_panel, separator, switch};
-use crate::timeline::TypeSize;
+pub use crate::kit::{MENU_BORDER, MENU_MARGIN, field, menu_panel, separator};
 use crate::timeline::tok;
 
 const CHIP_MIN: f32 = 120.;
-
-pub fn label(value: impl Into<String>, size: &str) -> View {
-	text(value.into()).type_size(size)
-}
 
 pub fn hint(value: impl Into<String>) -> View {
 	kit::note(value)

@@ -228,6 +228,7 @@ fn channel_value(channel: &ChannelEntry, voice: Value) -> Value {
 		("locked", channel.locked.into()),
 		("joined", channel.joined.into()),
 		("selectable", channel.selectable().into()),
+		("manageable", channel.manageable.into()),
 		("hidden", channel.opens_info().into()),
 		("thread", channel.thread.into()),
 		("last_thread", channel.last_thread.into()),

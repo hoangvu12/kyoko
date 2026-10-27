@@ -1,5 +1,6 @@
 mod actions;
 mod alerts;
+mod channel_admin;
 mod clock;
 mod cloner;
 mod community;
@@ -49,6 +50,12 @@ pub use actions::{
 	toolbar_actions,
 };
 pub use alerts::{ToastText, toast_text};
+pub use channel_admin::{
+	CANDIDATE_LIMIT, ChannelAccess, ChannelForm, ChannelPage, ChannelRight, ChannelRightGroup,
+	ChannelSettings, OverwriteCandidate, OverwriteRow, SLOWMODE_CHOICES, channel_right_groups,
+	channel_settings, invite_uses, overwrite_candidates, overwrite_from, overwrite_rows, right_flags,
+	short_kind_label,
+};
 pub use clock::{clock_text, day_label, full_time, message_time, today};
 pub use cloner::{
 	CAN_CREATE_EXPRESSIONS, CUSTOM_EMOJI, CloneTarget, IMAGE_STICKER, MenuFacts, PluginMenuItem,

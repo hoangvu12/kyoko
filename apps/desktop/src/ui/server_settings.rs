@@ -10,14 +10,14 @@ use bridge::{
 };
 use chrono::Utc;
 use media::ImageName;
-use protocol::{ChannelType, Permissions, Snowflake};
+use protocol::{Permissions, Snowflake};
 use session::Command;
 use state::{Changes, State};
 use zgx::reactive::{Runtime, Signal};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use super::{Link, field, number, record, text};
-use crate::moderation::{ChannelDraft, Confirm, ConfirmAction, MemberMenu, Request};
+use crate::moderation::{Confirm, ConfirmAction, MemberMenu, Request};
 
 const ROW_AVATAR: f64 = 32.;
 const ICON_SIDE: u32 = 512;
@@ -147,13 +147,6 @@ fn rights_value() -> Value {
 	)
 }
 
-fn right_flags() -> Vec<Permissions> {
-	RIGHT_GROUPS
-		.iter()
-		.flat_map(|group| group.rights.iter().map(|right| right.flag))
-		.collect()
-}
-
 fn audit_filters_value() -> Value {
 	Value::List(AUDIT_FILTERS.iter().map(|(_, label)| (*label).into()).collect())
 }
@@ -228,7 +221,7 @@ impl Link {
 		let actions = Rc::downgrade(link);
 		host.action("sidebar.edit_channel", move |argument| {
 			if let (Some(link), Some(channel_id)) = (actions.upgrade(), snowflake_of(&argument)) {
-				link.edit_channel(channel_id);
+				link.open_channel_settings(channel_id, None);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -522,50 +515,7 @@ impl Link {
 		}
 	}
 
-	fn edit_channel(&self, channel_id: Snowflake) {
-		let Some(shared) = self.state() else {
-			return;
-		};
-		let draft = {
-			let state = shared.read();
-			let Some(channel) = state.channel(channel_id) else {
-				return;
-			};
-			let categories = channel
-				.guild_id
-				.and_then(|guild_id| state.guild(guild_id))
-				.map(|guild| {
-					let mut categories: Vec<(i64, Snowflake, String)> = guild
-						.channels
-						.values()
-						.filter(|found| found.kind == ChannelType::GuildCategory)
-						.map(|found| {
-							(
-								found.position.unwrap_or(0),
-								found.id,
-								found.name.clone().unwrap_or_default(),
-							)
-						})
-						.collect();
-					categories.sort();
-					categories.into_iter().map(|(_, id, name)| (id, name)).collect()
-				})
-				.unwrap_or_default();
-			ChannelDraft {
-				channel_id,
-				kind: channel.kind,
-				name: channel.name.clone().unwrap_or_default(),
-				topic: channel.topic.clone().unwrap_or_default(),
-				slowmode: u32::try_from(channel.rate_limit_per_user.unwrap_or(0)).unwrap_or(0),
-				nsfw: channel.nsfw == Some(true),
-				parent_id: channel.parent_id,
-				categories,
-			}
-		};
-		self.moderation.edit_channel(draft);
-	}
-
-	fn confirm_delete_channel(&self, channel_id: Snowflake) {
+	pub(super) fn confirm_delete_channel(&self, channel_id: Snowflake) {
 		let name = self
 			.state()
 			.and_then(|shared| shared.read().channel(channel_id)?.name.clone())
@@ -859,7 +809,7 @@ impl Link {
 		};
 		let permissions = match field(argument, "granted") {
 			Some(Value::List(granted)) => {
-				let flags = right_flags();
+				let flags = bridge::right_flags();
 				let mut permissions = role.permissions;
 				for (index, flag) in flags.iter().enumerate() {
 					permissions.remove(*flag);
@@ -1401,7 +1351,7 @@ impl Link {
 			self.server.role.set(Value::Nil);
 			return;
 		};
-		let granted: Vec<Value> = right_flags()
+		let granted: Vec<Value> = bridge::right_flags()
 			.iter()
 			.enumerate()
 			.filter(|(_, flag)| role.permissions.contains(**flag))
@@ -1454,7 +1404,7 @@ impl Link {
 		open.audit_people.clone()
 	}
 
-	fn server_avatar(&self, state: &State, user_id: Snowflake) -> Option<String> {
+	pub(super) fn server_avatar(&self, state: &State, user_id: Snowflake) -> Option<String> {
 		let user = state.user(user_id)?;
 		let key = (user_id, user.avatar.clone());
 		let mut avatars = self.server.avatars.borrow_mut();

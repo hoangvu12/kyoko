@@ -461,6 +461,18 @@ function M.server_action(name: string, argument: any?)
 	ui.invoke("server." .. name, argument)
 end
 
+function M.open_channel_page(page: string?)
+	ui.invoke("channel.open", page or "")
+end
+
+function M.close_channel_settings()
+	ui.invoke("channel.close")
+end
+
+function M.channel_action(name: string, argument: any?)
+	ui.invoke("channel." .. name, argument)
+end
+
 function M.friends_tab(key: string)
 	return ui.action("friends.select_tab", key)
 end

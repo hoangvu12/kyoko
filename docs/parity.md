@@ -615,6 +615,17 @@ Kyoko only (`--apps kyoko`): oxidcord's member menu has no Roles submenu to comp
 |---|---|---|---|
 | `moderation-roles-submenu` | 62 | As `member-list`, then right-click, through `Ui::dispatch`, the name of the first member whose roles the current user can change (at the window's right edge), and hover the menu's Roles item: the submenu opens to the left of the member menu, inside the window, with a checked box on the roles the member holds. | yes |
 
+### 95 Channel settings
+
+Kyoko only (`--apps kyoko`): oxidcord has no channel settings page. No Midnight mockup; compare by eye with Discord's (Midnight's server settings look, Discord's fields). Mockcord's first server is boost tier 1, so a voice channel's bitrate goes up to 128 kbps; its regions come from mockcord's `GET /guilds/{id}/regions`.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `channel-settings-overview` | 95 | Default selection, then open channel settings for the open text channel (`Link::drive_channel_settings`): name, topic, slowmode, Age-Restricted Channel, Announcement Channel, Hide After Inactivity and Category. | yes |
+| `channel-settings-voice` | 95 | Default selection, then open channel settings for the server's first voice channel: name, slowmode, Content Visibility, Bitrate (8 to 128 kbps), Video Quality, User Limit, Region Override, once the regions have loaded. | yes |
+| `channel-settings-permissions` | 95 | As `channel-settings-overview`, on Permissions: the roles and members with overwrites, @everyone first. | yes |
+| `channel-settings-invites` | 95 | As `channel-settings-overview`, on Invites, once `GET /channels/{id}/invites` has answered. | yes |
+
 ### Midnight 27 Inbox
 
 Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no inbox. The mentions are mockcord's recent mentions of the mock user (`GET /users/@me/mentions`), so the channels, authors and texts differ from the mockup's.

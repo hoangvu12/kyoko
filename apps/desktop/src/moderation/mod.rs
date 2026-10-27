@@ -8,12 +8,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use bridge::{BAN_HISTORY_CHOICES, DEFAULT_TIMEOUT, ModerationItem, TIMEOUT_CHOICES};
-use protocol::{ChannelType, Snowflake};
+use protocol::Snowflake;
 use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::{Runtime, Signal};
-
-pub use self::dialogs::SLOWMODES;
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 
@@ -40,6 +38,10 @@ pub enum ConfirmAction {
 		guild_id: Snowflake,
 		code: String,
 	},
+	RevokeChannelInvite {
+		channel_id: Snowflake,
+		code: String,
+	},
 	DeleteEmoji {
 		guild_id: Snowflake,
 		emoji_id: Snowflake,
@@ -57,6 +59,9 @@ impl ConfirmAction {
 			Self::DeleteRole { guild_id, role_id } => Command::DeleteRole { guild_id, role_id },
 			Self::Unban { guild_id, user_id } => Command::UnbanMember { guild_id, user_id },
 			Self::RevokeInvite { guild_id, code } => Command::RevokeInvite { guild_id, code },
+			Self::RevokeChannelInvite { channel_id, code } => {
+				Command::RevokeChannelInvite { channel_id, code }
+			}
 			Self::DeleteEmoji { guild_id, emoji_id } => Command::DeleteEmoji { guild_id, emoji_id },
 			Self::DeleteSticker { guild_id, sticker_id } => Command::DeleteSticker { guild_id, sticker_id },
 		}
@@ -70,18 +75,6 @@ pub struct Confirm {
 	pub label: &'static str,
 	pub danger: bool,
 	pub action: ConfirmAction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChannelDraft {
-	pub channel_id: Snowflake,
-	pub kind: ChannelType,
-	pub name: String,
-	pub topic: String,
-	pub slowmode: u32,
-	pub nsfw: bool,
-	pub parent_id: Option<Snowflake>,
-	pub categories: Vec<(Snowflake, String)>,
 }
 
 #[derive(Clone)]
@@ -124,14 +117,6 @@ pub enum Dialog {
 		name: Signal<String>,
 		description: Signal<String>,
 		tags: Signal<String>,
-	},
-	EditChannel {
-		draft: Rc<ChannelDraft>,
-		name: Signal<String>,
-		topic: Signal<String>,
-		slowmode: Signal<usize>,
-		nsfw: Signal<bool>,
-		parent: Signal<Option<Snowflake>>,
 	},
 }
 
@@ -308,21 +293,6 @@ impl ModerationLayer {
 			parent_id,
 			kind: self.runtime.signal(0),
 			name: self.runtime.signal(String::new()),
-		});
-	}
-
-	pub fn edit_channel(&self, draft: ChannelDraft) {
-		let slowmode = SLOWMODES
-			.iter()
-			.position(|(_, seconds)| *seconds >= draft.slowmode)
-			.unwrap_or(0);
-		self.open(Dialog::EditChannel {
-			name: self.runtime.signal(draft.name.clone()),
-			topic: self.runtime.signal(draft.topic.clone()),
-			slowmode: self.runtime.signal(slowmode),
-			nsfw: self.runtime.signal(draft.nsfw),
-			parent: self.runtime.signal(draft.parent_id),
-			draft: Rc::new(draft),
 		});
 	}
 

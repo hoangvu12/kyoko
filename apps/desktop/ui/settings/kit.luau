@@ -5,7 +5,7 @@ local icon = require("@components/icon")
 local avatar = require("@components/avatar")
 local search = require("./search")
 
-export type Option = { label: string, value: any }
+export type Option = { label: string, value: any, note: string? }
 
 export type Row = {
 	kind: string?,
@@ -333,11 +333,24 @@ function M.radios(options: { Option }, current: () -> any, choose: (any) -> (), 
 				on_click = function()
 					choose(option.value)
 				end,
+				items = if option.note then "start" else "center",
 				radio_mark(chosen),
-				M.text(option.label, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_3, {
-					wrap = true,
-					min_w = 0,
-				}),
+				if option.note
+					then ui.column {
+						grow = 1,
+						min_w = 0,
+						gap = theme.size.space_2,
+						M.text(option.label, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_2, {
+							weight = theme.weight.medium,
+							wrap = true,
+							min_w = 0,
+						}),
+						M.hint(option.note),
+					}
+					else M.text(option.label, theme.size.font_size_md, theme.size.line_height_label, theme.color.text_3, {
+						wrap = true,
+						min_w = 0,
+					}),
 			}
 		)
 	end
@@ -457,6 +470,113 @@ M.slider = ui.component(function(props: Row)
 				end,
 			}
 			else nil,
+	}
+end)
+
+M.range = ui.component(function(props: {
+	id: string?,
+	label: string,
+	value: any,
+	min: number,
+	max: number,
+	step: number?,
+	marks: { string },
+})
+	local track = ui.ref()
+	local dragging = ui.use_state(false)
+	local step = props.step or 1
+	local function fraction(): number
+		if props.max <= props.min then
+			return 0
+		end
+		return math.clamp((props.value:get() - props.min) / (props.max - props.min), 0, 1)
+	end
+	local function pick(x: number)
+		local width = track.width or 0
+		if width <= 0 then
+			return
+		end
+		local raw = props.min + math.clamp(x / width, 0, 1) * (props.max - props.min)
+		local stepped = props.min + math.floor((raw - props.min) / step + 0.5) * step
+		props.value:set(math.clamp(stepped, props.min, props.max))
+	end
+	local grabber = theme.number(theme.size.slider_grabber_size)
+	local bar = theme.number(theme.size.slider_track_height)
+	local marks = {}
+	for _, mark in props.marks do
+		table.insert(
+			marks,
+			M.text(mark, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4, {
+				weight = theme.weight.medium,
+				shrink = 0,
+			})
+		)
+	end
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_6,
+		ui.row { w_full = true, justify = "between", table.unpack(marks) },
+		ui.div {
+			id = props.id,
+			ref = track,
+			relative = true,
+			w_full = true,
+			h = theme.size.slider_grabber_size,
+			cursor = "pointer",
+			label = props.label,
+			on_press = function(event: any)
+				dragging:set(true)
+				pick(event.local_x)
+			end,
+			on_pointer_move = function(event: any)
+				if dragging:get() then
+					pick(event.local_x)
+				end
+			end,
+			on_release = function()
+				dragging:set(false)
+			end,
+			on_hover = function(inside: boolean)
+				if not inside then
+					dragging:set(false)
+				end
+			end,
+			ui.div {
+				absolute = true,
+				left = 0,
+				right = 0,
+				top = function()
+					return (grabber() - bar()) / 2
+				end,
+				h = theme.size.slider_track_height,
+				rounded = theme.size.slider_track_height,
+				bg = theme.color.bg_2,
+			},
+			ui.div {
+				absolute = true,
+				left = 0,
+				top = function()
+					return (grabber() - bar()) / 2
+				end,
+				w = function()
+					return (track.width or 0) * fraction()
+				end,
+				h = theme.size.slider_track_height,
+				rounded = theme.size.slider_track_height,
+				bg = theme.color.accent_2,
+			},
+			ui.div {
+				absolute = true,
+				top = 0,
+				left = function()
+					return (track.width or 0) * fraction() - grabber() / 2
+				end,
+				w = theme.size.slider_grabber_size,
+				h = theme.size.slider_grabber_size,
+				rounded = theme.size.slider_grabber_size,
+				bg = theme.color.text_1,
+			},
+		},
 	}
 end)
 

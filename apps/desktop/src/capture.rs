@@ -95,6 +95,7 @@ pub enum Screen {
 	ForumPostCreate,
 	Community(Community),
 	ServerSettings(&'static str),
+	ChannelSettings(&'static str),
 	Moderation(&'static str),
 	Toast,
 	Disconnected,
@@ -316,6 +317,7 @@ impl Screen {
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
+				.or_else(|| channel_page(other).map(Screen::ChannelSettings))
 				.or_else(|| moderation_dialog(other).map(Screen::Moderation))
 				.or_else(|| mockcord::fixtures::showcase::screen_section(other).map(Screen::Showcase)),
 		}
@@ -361,6 +363,7 @@ impl Screen {
 			| Screen::ForumPostCreate
 			| Screen::Community(_)
 			| Screen::ServerSettings(_)
+			| Screen::ChannelSettings(_)
 			| Screen::Moderation(_)
 			| Screen::Toast
 			| Screen::Disconnected
@@ -455,6 +458,16 @@ fn server_page(name: &str) -> Option<&'static str> {
 		"invites" => Some("invites"),
 		"bans" => Some("bans"),
 		"audit-log" => Some("audit-log"),
+		_ => None,
+	}
+}
+
+fn channel_page(name: &str) -> Option<&'static str> {
+	match name.strip_prefix("channel-settings-")? {
+		"overview" => Some("overview"),
+		"voice" => Some("voice"),
+		"permissions" => Some("permissions"),
+		"invites" => Some("invites"),
 		_ => None,
 	}
 }

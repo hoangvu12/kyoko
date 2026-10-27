@@ -2,6 +2,7 @@ mod actions;
 mod apps;
 mod built_ins;
 mod channel_open;
+mod channel_settings;
 mod cloner;
 mod composer;
 mod connection;

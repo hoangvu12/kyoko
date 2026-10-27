@@ -551,6 +551,27 @@ impl Shared {
 		if body.get("parent_id").is_some() {
 			channel.parent_id = parse_id(&body["parent_id"]).map(Snowflake);
 		}
+		if let Some(bitrate) = body["bitrate"].as_i64() {
+			channel.bitrate = Some(bitrate);
+		}
+		if let Some(user_limit) = body["user_limit"].as_i64() {
+			channel.user_limit = Some(user_limit);
+		}
+		if body.get("rtc_region").is_some() {
+			channel.rtc_region = body["rtc_region"].as_str().map(str::to_owned);
+		}
+		if let Some(quality) = body["video_quality_mode"].as_i64() {
+			channel.video_quality_mode = Some(quality);
+		}
+		if let Some(minutes) = body["default_auto_archive_duration"].as_i64() {
+			channel.default_auto_archive_duration = Some(minutes);
+		}
+		if let Some(flags) = body["flags"].as_u64() {
+			channel.flags = protocol::ChannelFlags::from_bits_retain(flags);
+		}
+		if let Some(kind) = body["type"].as_i64() {
+			channel.kind = ChannelType::from(kind);
+		}
 		if let Some(metadata) = channel.thread_metadata.as_mut() {
 			if let Some(archived) = body["archived"].as_bool() {
 				metadata.archived = archived;
@@ -1115,6 +1136,19 @@ impl Shared {
 		drop(store);
 		self.hub.broadcast("INVITE_DELETE", &invite);
 		Ok(invite)
+	}
+
+	pub fn channel_invites_json(&self, channel_id: u64) -> Result<Value, ApiError> {
+		let store = self.store.lock();
+		if !store.channels.contains_key(&channel_id) {
+			return Err(ApiError::unknown_channel());
+		}
+		let invites: Vec<&Value> = store
+			.invites
+			.values()
+			.filter(|invite| parse_id(&invite["channel"]["id"]) == Some(channel_id))
+			.collect();
+		Ok(json!(invites))
 	}
 
 	pub fn guild_invites_json(&self, guild_id: u64) -> Result<Value, ApiError> {

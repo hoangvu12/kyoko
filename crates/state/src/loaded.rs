@@ -77,6 +77,14 @@ pub enum Loaded {
 		guild_id: Snowflake,
 		raw: Value,
 	},
+	ChannelInvites {
+		channel_id: Snowflake,
+		raw: Value,
+	},
+	VoiceRegions {
+		guild_id: Snowflake,
+		raw: Value,
+	},
 	AuditLog {
 		guild_id: Snowflake,
 		raw: Value,
@@ -183,6 +191,16 @@ pub struct InviteInfo {
 	pub expires_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct VoiceRegion {
+	pub id: String,
+	pub name: String,
+	pub optimal: bool,
+	pub deprecated: bool,
+	pub custom: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvitePreview {
 	pub code: String,
@@ -279,6 +297,8 @@ pub(crate) struct Lazy {
 	pub(crate) invites_created: HashMap<Snowflake, InviteInfo>,
 	pub(crate) invite_previews: HashMap<String, InvitePreview>,
 	pub(crate) guild_invites: HashMap<Snowflake, Vec<InviteInfo>>,
+	pub(crate) channel_invites: HashMap<Snowflake, Vec<InviteInfo>>,
+	pub(crate) voice_regions: HashMap<Snowflake, Vec<VoiceRegion>>,
 	pub(crate) audit_logs: HashMap<Snowflake, AuditLog>,
 	pub(crate) bans: HashMap<Snowflake, BanList>,
 	pub(crate) auth_sessions: Option<Vec<AuthSession>>,
@@ -646,6 +666,22 @@ impl State {
 					.insert(*guild_id, invites.into_iter().map(invite_info).collect());
 				changes.loaded.insert(*guild_id);
 			}
+			Loaded::ChannelInvites { channel_id, raw } => {
+				let invites = LenientVec::<RawInvite>::deserialize(raw).unwrap_or_default();
+				self.lazy
+					.channel_invites
+					.insert(*channel_id, invites.into_iter().map(invite_info).collect());
+				changes.loaded.insert(*channel_id);
+			}
+			Loaded::VoiceRegions { guild_id, raw } => {
+				let regions = LenientVec::<VoiceRegion>::deserialize(raw).unwrap_or_default();
+				let regions = regions
+					.into_iter()
+					.filter(|region| !region.id.is_empty() && !region.deprecated)
+					.collect();
+				self.lazy.voice_regions.insert(*guild_id, regions);
+				changes.loaded.insert(*guild_id);
+			}
 			Loaded::AuditLog {
 				guild_id,
 				raw,
@@ -912,6 +948,14 @@ impl State {
 			.guild_invites
 			.get(&guild_id)
 			.map_or(&[][..], Vec::as_slice)
+	}
+
+	pub fn channel_invites(&self, channel_id: Snowflake) -> Option<&[InviteInfo]> {
+		self.lazy.channel_invites.get(&channel_id).map(Vec::as_slice)
+	}
+
+	pub fn voice_regions(&self, guild_id: Snowflake) -> Option<&[VoiceRegion]> {
+		self.lazy.voice_regions.get(&guild_id).map(Vec::as_slice)
 	}
 
 	pub fn audit_log(&self, guild_id: Snowflake) -> Option<&AuditLog> {

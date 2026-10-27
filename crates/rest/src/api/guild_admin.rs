@@ -103,6 +103,16 @@ impl RestClient {
 			.await
 	}
 
+	pub async fn channel_invites(&self, channel_id: Snowflake) -> Result<Value> {
+		self.send(Request::get(format!("/channels/{channel_id}/invites")))
+			.await
+	}
+
+	pub async fn guild_voice_regions(&self, guild_id: Snowflake) -> Result<Value> {
+		self.send(Request::get(format!("/guilds/{guild_id}/regions")))
+			.await
+	}
+
 	pub async fn kick_member(
 		&self,
 		guild_id: Snowflake,

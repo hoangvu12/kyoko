@@ -35,6 +35,7 @@ export type Spec = {
 	extras: { Extra }?,
 	footer: (() -> any)?,
 	overlay: ((string) -> any)?,
+	searchable: boolean?,
 }
 
 local M = {}
@@ -568,7 +569,7 @@ function M.frame(spec: Spec)
 			border_sides = { 0, 1, 0, 0 },
 			border_color = theme.color.border,
 			spec.card(),
-			search_field(),
+			if spec.searchable == false then nil else search_field(),
 			nav_list(),
 		}
 	end

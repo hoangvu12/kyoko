@@ -48,35 +48,10 @@ impl Core {
 					self.queue_guild_write(guild_id, Write::new("create channel", Call::CreateChannel(body)));
 				}
 			}
-			Command::EditChannel {
-				channel_id,
-				name,
-				topic,
-				nsfw,
-				slowmode,
-				position,
-				parent_id,
-			} => {
-				let Some(guild_id) =
-					self.channel_guild_allows(channel_id, Permissions::MANAGE_CHANNELS, "Manage Channels")
-				else {
-					return;
-				};
-				let body = fields([
-					("name", some(name)),
-					("topic", some(topic)),
-					("nsfw", some(nsfw)),
-					("rate_limit_per_user", some(slowmode)),
-					("position", some(position)),
-					("parent_id", parent_id.map(|id| json!(id))),
-				]);
-				let undo = self.edit_channel_locally(channel_id, &body);
-				let write = Write::new("edit channel", Call::ModifyChannel(channel_id, body)).undo(undo);
-				self.queue_guild_write(guild_id, write);
-			}
+			Command::EditChannel { channel_id, changes } => self.edit_channel(channel_id, changes),
 			Command::DeleteChannel { channel_id } => {
 				if let Some(guild_id) =
-					self.channel_guild_allows(channel_id, Permissions::MANAGE_CHANNELS, "Manage Channels")
+					self.channel_manage_allows(channel_id, Permissions::MANAGE_CHANNELS, "Manage Channels")
 				{
 					self.queue_guild_write(
 						guild_id,
@@ -155,33 +130,11 @@ impl Core {
 				kind,
 				allow,
 				deny,
-			} => {
-				if let Some(guild_id) =
-					self.channel_guild_allows(channel_id, Permissions::MANAGE_ROLES, "Manage Roles")
-				{
-					let body = json!({ "type": i64::from(kind), "allow": allow, "deny": deny });
-					let call = Call::SetOverwrite {
-						channel_id,
-						target_id,
-						body,
-					};
-					self.queue_guild_write(guild_id, Write::new("channel permissions", call));
-				}
-			}
+			} => self.set_channel_overwrite(channel_id, target_id, kind, allow, deny),
 			Command::DeleteChannelOverwrite {
 				channel_id,
 				target_id,
-			} => {
-				if let Some(guild_id) =
-					self.channel_guild_allows(channel_id, Permissions::MANAGE_ROLES, "Manage Roles")
-				{
-					let call = Call::DeleteOverwrite {
-						channel_id,
-						target_id,
-					};
-					self.queue_guild_write(guild_id, Write::new("channel permissions", call));
-				}
-			}
+			} => self.delete_channel_overwrite(channel_id, target_id),
 			Command::DeleteEmoji { guild_id, emoji_id } => {
 				if self.guild_allows(
 					guild_id,
@@ -237,6 +190,9 @@ impl Core {
 					self.queue_guild_write(guild_id, Write::new("revoke invite", Call::RevokeInvite(code)));
 				}
 			}
+			Command::LoadChannelInvites { channel_id } => self.load_channel_invites(channel_id),
+			Command::RevokeChannelInvite { channel_id, code } => self.revoke_channel_invite(channel_id, code),
+			Command::LoadVoiceRegions { guild_id } => self.load_voice_regions(guild_id),
 			command => self.on_moderation_command(command),
 		}
 	}
@@ -610,7 +566,7 @@ impl Core {
 		Some(Undo::Member(Box::new(before)))
 	}
 
-	fn edit_channel_locally(&mut self, channel_id: Snowflake, body: &Fields) -> Option<Undo> {
+	pub(super) fn edit_channel_locally(&mut self, channel_id: Snowflake, body: &Fields) -> Option<Undo> {
 		let before: Channel = self.state.read().channel(channel_id)?.clone();
 		let mut channel = before.clone();
 		if let Some(name) = body.get("name").and_then(Value::as_str) {
@@ -630,6 +586,27 @@ impl Core {
 		}
 		if let Some(position) = body.get("position").and_then(Value::as_i64) {
 			channel.position = Some(position);
+		}
+		if let Some(bitrate) = body.get("bitrate").and_then(Value::as_i64) {
+			channel.bitrate = Some(bitrate);
+		}
+		if let Some(user_limit) = body.get("user_limit").and_then(Value::as_i64) {
+			channel.user_limit = Some(user_limit);
+		}
+		if let Some(region) = body.get("rtc_region") {
+			channel.rtc_region = region.as_str().map(str::to_owned);
+		}
+		if let Some(quality) = body.get("video_quality_mode").and_then(Value::as_i64) {
+			channel.video_quality_mode = Some(quality);
+		}
+		if let Some(minutes) = body.get("default_auto_archive_duration").and_then(Value::as_i64) {
+			channel.default_auto_archive_duration = Some(minutes);
+		}
+		if let Some(flags) = body.get("flags").and_then(Value::as_u64) {
+			channel.flags = protocol::ChannelFlags::from_bits_retain(flags);
+		}
+		if let Some(kind) = body.get("type").and_then(Value::as_i64) {
+			channel.kind = protocol::ChannelType::from(kind);
 		}
 		if let Some(parent) = body
 			.get("parent_id")

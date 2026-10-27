@@ -4,6 +4,7 @@ mod backfill;
 mod caches;
 mod capabilities;
 mod channel_open;
+mod channel_settings;
 mod collapse;
 mod command_options;
 mod command_replies;

@@ -7,32 +7,13 @@ use session::Command;
 use zgx::compose::prelude::*;
 use zgx::reactive::Signal;
 
-use super::kit::{self, button, chips, field, footer, hint, input, label};
+use super::kit::{self, button, chips, field, footer, hint, input};
 use super::{Dialog, ModerationLayer, Request};
 use crate::motion;
 use crate::timeline::tok;
 
 const WIDTH: f32 = 440.;
-const WIDE: f32 = 540.;
 const NAME_LIMIT: usize = 100;
-const TOPIC_LIMIT: usize = 1024;
-
-pub const SLOWMODES: [(&str, u32); 14] = [
-	("Off", 0),
-	("5s", 5),
-	("10s", 10),
-	("15s", 15),
-	("30s", 30),
-	("1m", 60),
-	("2m", 120),
-	("5m", 300),
-	("10m", 600),
-	("15m", 900),
-	("30m", 1800),
-	("1h", 3600),
-	("2h", 7200),
-	("6h", 21_600),
-];
 
 pub const CHANNEL_KINDS: [(&str, ChannelType); 5] = [
 	("Text", ChannelType::GuildText),
@@ -65,22 +46,6 @@ const KIND_LABELS: [&str; 5] = [
 	CHANNEL_KINDS[2].0,
 	CHANNEL_KINDS[3].0,
 	CHANNEL_KINDS[4].0,
-];
-const SLOWMODE_LABELS: [&str; 14] = [
-	SLOWMODES[0].0,
-	SLOWMODES[1].0,
-	SLOWMODES[2].0,
-	SLOWMODES[3].0,
-	SLOWMODES[4].0,
-	SLOWMODES[5].0,
-	SLOWMODES[6].0,
-	SLOWMODES[7].0,
-	SLOWMODES[8].0,
-	SLOWMODES[9].0,
-	SLOWMODES[10].0,
-	SLOWMODES[11].0,
-	SLOWMODES[12].0,
-	SLOWMODES[13].0,
 ];
 
 struct Act {
@@ -202,18 +167,6 @@ pub fn view(layer: &Rc<ModerationLayer>, dialog: &Rc<Dialog>, open: Signal<bool>
 			"Edit Sticker".to_owned(),
 			edit_sticker(&act, (*guild_id, *sticker_id), [name, description, tags]),
 			WIDTH,
-		),
-		Dialog::EditChannel {
-			draft,
-			name,
-			topic,
-			slowmode,
-			nsfw,
-			parent,
-		} => (
-			format!("Edit #{}", draft.name),
-			edit_channel(&act, draft, [name, topic], slowmode, nsfw, parent, layer),
-			WIDE,
 		),
 	};
 	let close = act.clone();
@@ -453,123 +406,4 @@ fn create_channel(
 				});
 			}),
 		))
-}
-
-fn edit_channel(
-	act: &Rc<Act>,
-	draft: &Rc<super::ChannelDraft>,
-	[name, topic]: [&Signal<String>; 2],
-	slowmode: &Signal<usize>,
-	nsfw: &Signal<bool>,
-	parent: &Signal<Option<Snowflake>>,
-	layer: &Rc<ModerationLayer>,
-) -> View {
-	let texted = !matches!(draft.kind, ChannelType::GuildVoice | ChannelType::GuildStageVoice);
-	let save = {
-		let (act, draft) = (act.clone(), draft.clone());
-		let (name, topic, slowmode, nsfw, parent) = (
-			name.clone(),
-			topic.clone(),
-			slowmode.clone(),
-			nsfw.clone(),
-			parent.clone(),
-		);
-		move || {
-			let new_name = name.with_untracked(|text| trimmed(text, NAME_LIMIT));
-			let new_topic: String =
-				topic.with_untracked(|text| text.trim().chars().take(TOPIC_LIMIT).collect());
-			let seconds = SLOWMODES
-				.get(slowmode.with_untracked(|index| *index))
-				.map_or(0, |(_, seconds)| *seconds);
-			let flagged = nsfw.with_untracked(|on| *on);
-			let moved = parent.with_untracked(|parent| *parent);
-			act.send(Command::EditChannel {
-				channel_id: draft.channel_id,
-				name: new_name.filter(|name| *name != draft.name),
-				topic: (texted && new_topic != draft.topic).then_some(new_topic),
-				nsfw: (flagged != draft.nsfw).then_some(flagged),
-				slowmode: (texted && seconds != draft.slowmode).then_some(seconds),
-				position: None,
-				parent_id: moved.filter(|moved| Some(*moved) != draft.parent_id),
-			});
-		}
-	};
-	let categories: Vec<View> = draft
-		.categories
-		.iter()
-		.map(|(id, category)| {
-			let (pick, chosen, id) = (parent.clone(), parent.clone(), *id);
-			kit::choice(category)
-				.menu_checked_when(move || chosen.get() == Some(id))
-				.on_click(move || {
-					pick.set(Some(id));
-				})
-		})
-		.collect();
-	let shown_parent = parent.clone();
-	let names: Vec<(Snowflake, String)> = draft.categories.clone();
-	let category_open = layer.runtime.signal(false);
-	let category_anchor = kit::select_anchor(
-		text_signal(move || {
-			let chosen = shown_parent.get();
-			names
-				.iter()
-				.find(|(id, _)| Some(*id) == chosen)
-				.map_or_else(|| "No category".to_owned(), |(_, name)| name.clone())
-		}),
-		category_open.clone(),
-	);
-	let mut form = column()
-		.w_full()
-		.gap(tok("space_16"))
-		.p(tok("space_16"))
-		.child(field("Channel name", input("Channel name", name.clone(), "")));
-	if texted {
-		form = form
-			.child(field(
-				"Channel topic",
-				input(
-					"Channel topic",
-					topic.clone(),
-					"Let everyone know how to use this channel",
-				),
-			))
-			.child(field(
-				"Slowmode",
-				kit::select(
-					"Slowmode",
-					&SLOWMODE_LABELS,
-					slowmode,
-					layer.runtime.signal(false),
-				),
-			));
-	}
-	form.child(
-		row()
-			.w_full()
-			.items_center()
-			.justify_between()
-			.gap(16.)
-			.child(
-				column()
-					.grow()
-					.min_w(0.)
-					.child(
-						label("Age-restricted channel", "font_md")
-							.font_weight(600)
-							.text_color(tok("text_2")),
-					)
-					.child(hint(
-						"Users must confirm they are of legal age to view this channel.",
-					)),
-			)
-			.child(kit::switch(nsfw.clone())),
-	)
-	.child(field(
-		"Category",
-		kit::menu_panel(menu("Category", category_open, category_anchor).match_anchor_width())
-			.w_full()
-			.children(categories),
-	))
-	.child(footer(act.cancel(), button("Save Changes", Some("brand"), save)))
 }

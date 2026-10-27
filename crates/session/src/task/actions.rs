@@ -81,22 +81,6 @@ impl Core {
 		allowed
 	}
 
-	pub(super) fn channel_guild_allows(
-		&mut self,
-		channel_id: Snowflake,
-		needed: Permissions,
-		what: &str,
-	) -> Option<Snowflake> {
-		let guild_id = self.state.read().channel_guild(channel_id);
-		match guild_id {
-			Some(guild_id) => self.guild_allows(guild_id, needed, what).then_some(guild_id),
-			None => {
-				self.reject("This only works in a server");
-				None
-			}
-		}
-	}
-
 	pub(super) fn spawn_action<F, Fut>(&self, what: &'static str, call: F)
 	where
 		F: FnOnce(RestClient) -> Fut,

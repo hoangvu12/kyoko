@@ -1,5 +1,6 @@
 mod caps;
 mod changes;
+mod channel_limits;
 mod community;
 mod composer;
 mod deletions;
@@ -34,6 +35,10 @@ mod voice;
 
 pub use caps::{CacheLimits, Recent};
 pub use changes::{Changes, IdSet};
+pub use channel_limits::{
+	ARCHIVE_DURATIONS, BITRATE_MIN, CHANNEL_NAME_MAX, CHANNEL_TOPIC_MAX, SLOWMODE_MAX, STAGE_USER_LIMIT_MAX,
+	VIDEO_QUALITY_AUTO, VIDEO_QUALITY_FULL, VOICE_USER_LIMIT_MAX, bitrate_limit, user_limit_range,
+};
 pub use community::{
 	FieldKind, Join, MemberVerification, Onboarding, OnboardingOption, OnboardingPrompt, PromptKind,
 	VerificationField,
@@ -49,7 +54,7 @@ pub use guild::GuildState;
 pub use kept::{DeletedInfo, KeptWrite, MessageVersion, replaced_version};
 pub use loaded::{
 	AuditChange, AuditEntry, AuditLog, AuthSession, BanEntry, BanList, ConnectedAccount, GuildProfile,
-	InviteInfo, InvitePreview, Loaded, ProfileBadge, Reactors, UserProfile, audit_action_label,
+	InviteInfo, InvitePreview, Loaded, ProfileBadge, Reactors, UserProfile, VoiceRegion, audit_action_label,
 };
 pub use locks::{RiskyLock, RiskyReason, RiskyTarget};
 pub use member_list::{MemberList, MemberSlot};

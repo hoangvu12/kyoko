@@ -46,6 +46,29 @@ pub enum InviteSource {
 	},
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChannelChanges {
+	pub name: Option<String>,
+	pub topic: Option<String>,
+	pub nsfw: Option<bool>,
+	pub slowmode: Option<u32>,
+	pub position: Option<i64>,
+	pub parent_id: Option<Snowflake>,
+	pub announcement: Option<bool>,
+	pub spoiler: Option<bool>,
+	pub bitrate: Option<u32>,
+	pub user_limit: Option<u32>,
+	pub rtc_region: Option<Option<String>>,
+	pub video_quality: Option<i64>,
+	pub auto_archive: Option<u32>,
+}
+
+impl ChannelChanges {
+	pub fn is_empty(&self) -> bool {
+		*self == Self::default()
+	}
+}
+
 #[derive(Debug)]
 pub enum Command {
 	SelectChannel {
@@ -344,12 +367,7 @@ pub enum Command {
 	},
 	EditChannel {
 		channel_id: Snowflake,
-		name: Option<String>,
-		topic: Option<String>,
-		nsfw: Option<bool>,
-		slowmode: Option<u32>,
-		position: Option<i64>,
-		parent_id: Option<Snowflake>,
+		changes: ChannelChanges,
 	},
 	DeleteChannel {
 		channel_id: Snowflake,
@@ -417,6 +435,16 @@ pub enum Command {
 	RevokeInvite {
 		guild_id: Snowflake,
 		code: String,
+	},
+	LoadChannelInvites {
+		channel_id: Snowflake,
+	},
+	RevokeChannelInvite {
+		channel_id: Snowflake,
+		code: String,
+	},
+	LoadVoiceRegions {
+		guild_id: Snowflake,
 	},
 	KickMember {
 		guild_id: Snowflake,

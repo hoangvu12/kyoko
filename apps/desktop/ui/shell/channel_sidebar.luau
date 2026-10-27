@@ -10,6 +10,8 @@ local dm_sidebar = require("./dm_sidebar")
 local MENU_WIDTH = theme.size.context_menu_width
 local CATEGORY_PLUS = 16
 local CATEGORY_PLUS_HIT = 18
+local ROW_GEAR = 16
+local ROW_GEAR_HIT = 18
 local LOCK_BADGE = 11
 local LOCK_ICON = 9
 local LOCK_OFFSET = -3
@@ -201,7 +203,7 @@ local function channel_menu(channel: state.SidebarRow): { any }
 			)
 		)
 	end
-	if not channel.thread and header.can_manage_channels then
+	if not channel.thread and channel.manageable == true then
 		table.insert(items, separator())
 		table.insert(items, item("Edit Channel", later("edit_channel", channel.id)))
 		table.insert(items, item("Delete Channel", later("delete_channel", channel.id)))
@@ -588,6 +590,24 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 						count = function()
 							return badge(row.id).mentions
 						end,
+					}
+				),
+				ui.show(
+					row.manageable == true and row.thread ~= true,
+					ui.row {
+						shrink = 0,
+						items = "center",
+						opacity = function()
+							return if hovered:get() or selected() then 1 else 0
+						end,
+						icon_button {
+							id = `channel_gear_{row.id}`,
+							name = "settings",
+							icon_size = ROW_GEAR,
+							hit_size = ROW_GEAR_HIT,
+							tooltip = "Edit Channel",
+							on_click = later("edit_channel", row.id),
+						},
 					}
 				),
 			},

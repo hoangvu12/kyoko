@@ -38,6 +38,7 @@ mod accounts;
 mod actions;
 mod alerts;
 mod backfill;
+mod channel_settings;
 mod collapse;
 mod commands;
 mod community;

@@ -18,6 +18,7 @@ local dm_profile = require("./dm_profile")
 local dm_members = require("./dm_members")
 local settings = require("./settings")
 local server_settings = require("./server_settings")
+local channel_settings = require("./channel_settings")
 local search_panel = require("./search_panel")
 local forum = require("./forum")
 local hidden_channel = require("./hidden_channel")
@@ -149,6 +150,7 @@ return function()
 		},
 		settings(),
 		server_settings(),
+		channel_settings(),
 	}
 	return ui.column {
 		ref = root,

@@ -88,6 +88,10 @@ pub(super) enum Call {
 	},
 	DeleteSticker(Snowflake),
 	RevokeInvite(String),
+	RevokeChannelInvite {
+		channel_id: Snowflake,
+		code: String,
+	},
 	RemoveReaction {
 		channel_id: Snowflake,
 		message_id: Snowflake,
@@ -243,7 +247,9 @@ impl Call {
 				.await
 				.map(drop),
 			Self::DeleteSticker(id) => rest.delete_guild_sticker(guild_id, id).await,
-			Self::RevokeInvite(code) => rest.delete_invite(&code, None).await,
+			Self::RevokeInvite(code) | Self::RevokeChannelInvite { code, .. } => {
+				rest.delete_invite(&code, None).await
+			}
 			Self::RemoveReaction {
 				channel_id,
 				message_id,
@@ -304,6 +310,7 @@ enum FollowUp {
 	None,
 	Unbanned(Snowflake),
 	InvitesChanged,
+	ChannelInvitesChanged(Snowflake),
 }
 
 pub(super) struct GuildWrites {
@@ -395,6 +402,7 @@ impl GuildWrites {
 			let follow_up = match &write.call {
 				Call::Unban(user_id) => FollowUp::Unbanned(*user_id),
 				Call::RevokeInvite(_) => FollowUp::InvitesChanged,
+				Call::RevokeChannelInvite { channel_id, .. } => FollowUp::ChannelInvitesChanged(*channel_id),
 				_ => FollowUp::None,
 			};
 			self.in_flight.insert(
@@ -461,6 +469,7 @@ impl Core {
 			Settled::Saved => match follow_up {
 				FollowUp::Unbanned(user_id) => self.apply_local(LocalEvent::BanRevoked { guild_id, user_id }),
 				FollowUp::InvitesChanged => self.load_guild_invites(guild_id),
+				FollowUp::ChannelInvitesChanged(channel_id) => self.load_channel_invites(channel_id),
 				FollowUp::None => {}
 			},
 			Settled::Failed { reason, undo } => {

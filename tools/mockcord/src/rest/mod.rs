@@ -125,6 +125,7 @@ pub fn router(shared: Arc<Shared>) -> Router {
 		.route("/guilds/{id}/bans", get(admin::bans))
 		.route("/guilds/{id}/bans/{uid}", put(admin::ban).delete(admin::unban))
 		.route("/guilds/{id}/invites", get(admin::guild_invites))
+		.route("/guilds/{id}/regions", get(admin::voice_regions))
 		.route("/guilds/{id}/onboarding", get(admin::onboarding))
 		.route(
 			"/guilds/{id}/onboarding-responses",
@@ -192,7 +193,10 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			"/channels/{id}/recipients/{uid}",
 			put(admin::add_recipient).delete(admin::remove_recipient),
 		)
-		.route("/channels/{id}/invites", post(admin::create_invite))
+		.route(
+			"/channels/{id}/invites",
+			get(admin::channel_invites).post(admin::create_invite),
+		)
 		.route("/channels/{id}/polls/{mid}/answers/@me", put(admin::vote))
 		.route("/channels/{id}/polls/{mid}/expire", post(admin::expire_poll))
 		.route("/channels/{id}/typing", post(channels::typing))

@@ -57,6 +57,7 @@ bitflags! {
 		const PINNED = 1 << 1;
 		const REQUIRE_TAG = 1 << 4;
 		const HIDE_MEDIA_DOWNLOAD_OPTIONS = 1 << 15;
+		const IS_SPOILER_CHANNEL = 1 << 21;
 	}
 }
 
@@ -138,6 +139,7 @@ pub struct Channel {
 	#[serde(deserialize_with = "timestamp")]
 	pub last_pin_timestamp: Option<DateTime<Utc>>,
 	pub rtc_region: Option<String>,
+	pub video_quality_mode: Option<i64>,
 	pub message_count: Option<i64>,
 	pub member_count: Option<i64>,
 	pub thread_metadata: Option<ThreadMetadata>,

@@ -278,6 +278,22 @@ pub async fn guild_invites(State(shared): Mock, Path(id): Path<u64>) -> ApiResul
 	shared.guild_invites_json(id).map(Json)
 }
 
+pub async fn channel_invites(State(shared): Mock, Path(id): Path<u64>) -> ApiResult {
+	shared.channel_invites_json(id).map(Json)
+}
+
+pub async fn voice_regions(Path(_id): Path<u64>) -> Json<Value> {
+	Json(serde_json::json!([
+		{ "id": "us-east", "name": "US East", "optimal": true, "deprecated": false, "custom": false },
+		{ "id": "us-west", "name": "US West", "optimal": false, "deprecated": false, "custom": false },
+		{ "id": "rotterdam", "name": "Rotterdam", "optimal": false, "deprecated": false, "custom": false },
+		{ "id": "singapore", "name": "Singapore", "optimal": false, "deprecated": false, "custom": false },
+		{ "id": "japan", "name": "Japan", "optimal": false, "deprecated": false, "custom": false },
+		{ "id": "brazil", "name": "Brazil", "optimal": false, "deprecated": false, "custom": false },
+		{ "id": "europe", "name": "Europe", "optimal": false, "deprecated": true, "custom": false }
+	]))
+}
+
 #[derive(serde::Deserialize)]
 pub struct AuditParams {
 	before: Option<u64>,

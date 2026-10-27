@@ -73,6 +73,7 @@ export type SidebarRow = {
 	locked: boolean?,
 	joined: boolean?,
 	selectable: boolean?,
+	manageable: boolean?,
 	hidden: boolean?,
 	thread: boolean?,
 	last_thread: boolean?,
@@ -649,6 +650,67 @@ M.server = {
 		upload: ServerUpload?,
 	}?),
 	invites = ui.shared("server.invites", nil :: { rows: { ServerInviteRow } }?),
+}
+
+export type ChannelInfo = { id: string, name: string, label: string, icon: string, pages: { ServerPageEntry } }
+export type ChannelOverview = {
+	id: string,
+	name: string,
+	topic: string,
+	slowmode: number,
+	visibility: string,
+	nsfw: boolean,
+	announcement: boolean,
+	archive: number,
+	bitrate: number,
+	bitrate_min: number,
+	bitrate_max: number,
+	user_limit: number,
+	user_limit_max: number,
+	video_quality: number,
+	region: number,
+	regions: { string },
+	category: number,
+	categories: { string },
+	audio: boolean,
+	has_topic: boolean,
+	archives: boolean,
+	announces: boolean,
+}
+export type ChannelOverwriteRow = {
+	key: string,
+	id: string,
+	name: string,
+	color: string,
+	member: boolean,
+	everyone: boolean,
+	editable: boolean,
+}
+export type ChannelOverwrite = {
+	id: string,
+	name: string,
+	color: string,
+	member: boolean,
+	everyone: boolean,
+	editable: boolean,
+	choices: { [string]: number },
+	serial: string,
+}
+export type ChannelCandidate = { id: string, name: string, color: string, member: boolean }
+
+M.channel = {
+	page = ui.shared("channel.page", ""),
+	info = ui.shared("channel.info", nil :: ChannelInfo?),
+	overview = ui.shared("channel.overview", nil :: ChannelOverview?),
+	overwrites = ui.shared("channel.overwrites", nil :: {
+		rows: { ChannelOverwriteRow },
+		groups: { ServerRightGroup },
+		editing: string,
+	}?),
+	overwrite = ui.shared("channel.overwrite", nil :: ChannelOverwrite?),
+	candidates = ui.shared("channel.candidates", {} :: { ChannelCandidate }),
+	invites = ui.shared("channel.invites", nil :: { loaded: boolean, rows: { ServerInviteRow } }?),
+	choices = ui.shared("channel.choices", { slowmode = {}, archive = {} } :: { slowmode: { string }, archive: { string } }),
 }
 
 export type HiddenOverwrite = { key: string, name: string, member: boolean, color: string }

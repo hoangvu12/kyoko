@@ -1,4 +1,5 @@
 mod apps;
+mod channel_settings;
 mod cloner;
 mod community;
 mod component_shots;
@@ -215,6 +216,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_display());
 			cx.tasks.spawn(link.clone().follow_gif_search());
 			cx.tasks.spawn(link.clone().follow_server_settings());
+			cx.tasks.spawn(link.clone().follow_channel_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
@@ -487,6 +489,7 @@ pub(crate) struct Link {
 	moderation_effect: RefCell<Option<Effect>>,
 	hidden: hidden::HiddenPane,
 	server: server_settings::ServerSettingsView,
+	channel_settings: channel_settings::ChannelSettingsView,
 	luau_visible: RefCell<Vec<String>>,
 	rail: RailView,
 	rail_icons: RefCell<Vec<String>>,
@@ -573,6 +576,7 @@ impl Link {
 		let friend_dialog = FriendDialog::new(&window.runtime);
 		let motion = Motion::new(window.runtime.signal(false));
 		let server = server_settings::ServerSettingsView::new(host, &window.runtime);
+		let channel_settings = channel_settings::ChannelSettingsView::new(host, &window.runtime);
 		let inbox_popout = crate::inbox::InboxLayer::new(&window.runtime, timeline_view.pictures());
 		let link = Rc::new(Link {
 			window,
@@ -636,6 +640,7 @@ impl Link {
 			moderation_effect: RefCell::new(None),
 			hidden,
 			server,
+			channel_settings,
 			luau_visible: RefCell::new(Vec::new()),
 			rail: RailView::new(host),
 			rail_icons: RefCell::new(Vec::new()),
@@ -665,6 +670,7 @@ impl Link {
 		Link::install_message_actions(&link);
 		member_list::install_actions(host, &link);
 		Link::install_server_settings(host, &link);
+		Link::install_channel_settings(host, &link);
 		Link::install_settings(host, &link);
 		Link::install_plugins(host, &link);
 		Link::install_cloner(&link);
@@ -1024,6 +1030,10 @@ impl Link {
 				self.open_server_settings(bridge::ServerPage::named(page));
 				self.until_capture(|link| link.server_settled()).await;
 			}
+			capture::Screen::ChannelSettings(page) => {
+				self.drive_channel_settings(page);
+				self.until_capture(|link| link.channel_settings_settled()).await;
+			}
 			capture::Screen::Moderation("roles-submenu") => self.drive_roles_submenu(&capture).await,
 			capture::Screen::Moderation(kind) => {
 				if let Some(author) = self.newest_other_author() {
@@ -1229,6 +1239,7 @@ impl Link {
 			self.search_apply(&state, changes);
 			self.threads_apply(&state, changes);
 			self.server_settings_apply(&state, changes);
+			self.channel_settings_apply(&state, changes);
 			self.connection_apply(&state, changes);
 			self.toasts_apply(&state, changes);
 			self.inbox_apply(&state, changes);
@@ -1430,6 +1441,7 @@ impl Link {
 		names.extend(self.thread_images());
 		names.extend(self.community_images());
 		names.extend(self.server_images());
+		names.extend(self.channel_settings_images());
 		names.extend(self.friends_images());
 		names.extend(self.dm_panel.images());
 		names.extend(self.composer_layer.images().iter().map(|name| name.to_string()));

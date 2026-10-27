@@ -106,6 +106,7 @@ pub struct ChannelEntry {
 	pub joined: bool,
 	pub thread: bool,
 	pub last_thread: bool,
+	pub manageable: bool,
 	pub voice: Vec<VoiceMember>,
 }
 
@@ -461,6 +462,10 @@ fn channel_entry(state: &State, guild_id: Snowflake, row: &ChannelRow) -> Channe
 		joined: row.member,
 		thread: kind == ChannelKind::Thread,
 		last_thread: false,
+		manageable: kind != ChannelKind::Thread && {
+			let held = state.my_permissions(row.id);
+			held.contains(Permissions::ADMINISTRATOR) || held.contains(Permissions::MANAGE_CHANNELS)
+		},
 		voice: if matches!(kind, ChannelKind::Voice | ChannelKind::Stage) {
 			voice_members(state, guild_id, row.id)
 		} else {

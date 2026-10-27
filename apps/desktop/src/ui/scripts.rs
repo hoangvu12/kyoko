@@ -10,13 +10,14 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
+mod channel_settings;
 mod decorations;
 mod hidden;
 mod login;
 mod plugins;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
-const TALL: f32 = 1400.;
+pub(super) const TALL: f32 = 1400.;
 
 #[test]
 fn every_script_compiles() {
@@ -886,9 +887,9 @@ fn theme_list() -> serde_json::Value {
 	])
 }
 
-type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
+pub(super) type Calls = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
 
-fn recording_app(calls: &Calls, level: &'static str) -> TestApp {
+pub(super) fn recording_app(calls: &Calls, level: &'static str) -> TestApp {
 	let calls = calls.clone();
 	TestApp::new(move |runtime| {
 		Catalog::load(&[themes_dir()]).install(runtime, crate::theme::DEFAULT);
@@ -905,7 +906,7 @@ fn recording_app(calls: &Calls, level: &'static str) -> TestApp {
 	})
 }
 
-fn last_call(calls: &Calls, name: &str) -> Option<serde_json::Value> {
+pub(super) fn last_call(calls: &Calls, name: &str) -> Option<serde_json::Value> {
 	calls
 		.borrow()
 		.iter()
@@ -914,7 +915,7 @@ fn last_call(calls: &Calls, name: &str) -> Option<serde_json::Value> {
 		.and_then(|(_, argument)| serde_json::from_str(argument).ok())
 }
 
-fn server_values(muted: bool) -> Vec<(&'static str, serde_json::Value)> {
+pub(super) fn server_values(muted: bool) -> Vec<(&'static str, serde_json::Value)> {
 	vec![
 		("login.screen", json!("main")),
 		("rail.items", rail_items()),
