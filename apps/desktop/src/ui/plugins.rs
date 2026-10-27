@@ -244,8 +244,10 @@ impl Link {
 				}
 			});
 			self.until_capture(|link| {
-				link.plugin(id)
-					.is_some_and(|plugin| plugin.status == Status::Running)
+				link.plugin(id).is_some_and(|plugin| {
+					plugin.status == Status::Running
+						&& (plugin.ui_entry.is_none() || link.plugins.slots.is_mounted(id))
+				})
 			})
 			.await;
 			tracing::info!(plugin = %id, "the capture turned a plugin on");

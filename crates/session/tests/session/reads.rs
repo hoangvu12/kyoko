@@ -14,6 +14,7 @@ const BULK_GAP: Duration = Duration::from_millis(400);
 const BURST: usize = 5;
 const BURST_SPACING: Duration = Duration::from_millis(60);
 const ACK_BULK_LIMIT: usize = 100;
+const MANY_CHANNELS: usize = 70;
 
 pub fn tuning() -> RestTuning {
 	RestTuning {
@@ -220,10 +221,18 @@ async fn hidden_window_defers_the_ack_until_visible() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn mark_all_read_clears_badges_with_bulk_acks() {
-	let running = Running::start_with(Options::new("mark-all-read").rest(tuning())).await;
+	let running = Running::start_with(
+		Options::new("mark-all-read")
+			.channels(MANY_CHANNELS)
+			.rest(tuning()),
+	)
+	.await;
 	running.connected().await;
 	let unread = unread_channels(&running.session().state().read());
-	assert!(!unread.is_empty(), "the fixtures start with unread channels");
+	assert!(
+		unread.len() > ACK_BULK_LIMIT,
+		"the fixtures start with more unread channels than one request takes"
+	);
 	let began = Instant::now();
 	running.session().send(Command::MarkAllRead);
 	running
@@ -252,6 +261,7 @@ async fn mark_all_read_clears_badges_with_bulk_acks() {
 			.iter()
 			.all(|(_, channels)| channels.len() <= ACK_BULK_LIMIT)
 	);
+	assert_eq!(requests.len(), unread.len().div_ceil(ACK_BULK_LIMIT));
 	assert!(
 		spaced_from(began, requests.iter().map(|(at, _)| *at), BULK_GAP),
 		"bulk acks are paced"

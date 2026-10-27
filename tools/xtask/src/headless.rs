@@ -57,6 +57,8 @@ const EXPRESSION_CLONER: &str = "expression-cloner";
 const MESSAGE_LOGGER: &str = "message-logger";
 const SHOW_HIDDEN_CHANNELS: &str = "show-hidden-channels";
 const SHOW_HIDDEN_THINGS: &str = "show-hidden-things";
+const READ_ALL_NOTIFICATIONS: &str = "read-all-notifications";
+const READ_ALL_KEY: &str = "read_all";
 const CLONE_KEY: &str = "clone_emoji";
 const CLONE_NAME: &str = "headless_clone";
 const REDRAWS: usize = 100;
@@ -202,6 +204,7 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		MESSAGE_LOGGER,
 		SHOW_HIDDEN_CHANNELS,
 		SHOW_HIDDEN_THINGS,
+		READ_ALL_NOTIFICATIONS,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -642,6 +645,44 @@ impl Harness {
 		Ok(true)
 	}
 
+	async fn reads_everything(&self, plugins: &PluginHost, server: &Server) -> Result<usize> {
+		let before = server
+			.control()
+			.recording()
+			.requests_to("POST", "/read-states/ack-bulk")
+			.count();
+		plugins
+			.gesture(
+				READ_ALL_NOTIFICATIONS,
+				READ_ALL_KEY,
+				&[
+					("source".to_owned(), "slot".to_owned()),
+					("slot".to_owned(), "rail.buttons".to_owned()),
+				],
+			)
+			.map_err(|error| anyhow::anyhow!("the Read All click failed: {error}"))?;
+		self.until("every server and DM to be read", |state| {
+			state
+				.guild_summaries()
+				.iter()
+				.all(|guild| !guild.unread && guild.mentions == 0)
+				&& state.dm_rows().iter().all(|dm| !dm.unread && dm.mentions == 0)
+		})
+		.await?;
+		let control = server.control();
+		self.wait("the bulk acks", || {
+			control
+				.recording()
+				.requests_to("POST", "/read-states/ack-bulk")
+				.count() > before
+		})
+		.await?;
+		Ok(control
+			.recording()
+			.requests_to("POST", "/read-states/ack-bulk")
+			.count() - before)
+	}
+
 	async fn stop(self) -> Result<()> {
 		tokio::task::spawn_blocking(move || self.session.shutdown())
 			.await
@@ -825,6 +866,7 @@ async fn mock_run(args: Args, root: &Path, retries: Arc<AtomicU64>) -> Result<()
 	let server = Server::start(MockConfig {
 		seed: args.seed,
 		chaos: args.chaos,
+		record: true,
 		..MockConfig::default()
 	})
 	.await
@@ -1030,6 +1072,7 @@ async fn scenario(
 		.await?;
 	let clone_ok = harness.clones(&plugins, server, root).await?;
 	let hidden_quiet = harness.leaves_hidden_channels_alone(&plugins, server).await?;
+	let read_all_acks = harness.reads_everything(&plugins, server).await?;
 
 	sleep_until(started + Duration::from_secs(args.duration)).await;
 	harness
@@ -1054,6 +1097,7 @@ async fn scenario(
 			"community_ok": text.community_ok,
 			"clone_ok": clone_ok,
 			"hidden_quiet": hidden_quiet,
+			"read_all_acks": read_all_acks,
 			"display_calls": display_calls,
 			"kept_calls": kept_calls,
 			"plugins": plugins

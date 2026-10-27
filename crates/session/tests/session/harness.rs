@@ -118,6 +118,11 @@ impl Options {
 		self
 	}
 
+	pub fn channels(mut self, per_guild: usize) -> Self {
+		self.mock.channels_per_guild = per_guild;
+		self
+	}
+
 	pub fn rest(mut self, tuning: RestTuning) -> Self {
 		self.rest = tuning;
 		self

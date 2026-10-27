@@ -493,3 +493,127 @@ fn the_silent_typing_button_switches_its_setting_and_unmounts_with_the_plugin() 
 	drop(app);
 	drop(runtime);
 }
+
+fn mock_session(server: &mockcord::Server, root: &Path) -> session::Session {
+	let paths = store::Paths::at(root.join("session")).expect("scratch paths");
+	let mut settings = store::Settings::load(&paths);
+	settings.storage.plaintext_token = true;
+	settings.save(&paths).expect("settings save");
+	let store = store::Store::open(paths).expect("store opens");
+	session::Session::start(session::SessionConfig {
+		identity: session::client_identity(&store),
+		build_source: None,
+		store: std::sync::Arc::new(store),
+		rest_base: url::Url::parse(server.rest_base_url()).expect("rest url"),
+		gateway_url: server.gateway_url().to_owned(),
+		token: protocol::Token::new(server.token()),
+		runtime: None,
+		notify: bridge::changes_notifier(bridge::Inbox::new()),
+		hooks: None,
+		gateway: Default::default(),
+		rest: Default::default(),
+		caches: Default::default(),
+		alerts: Default::default(),
+		retention: Default::default(),
+		remember_account: false,
+		theme_links: Default::default(),
+	})
+	.expect("session starts")
+}
+
+fn anything_unread(state: &state::State) -> bool {
+	state
+		.guild_summaries()
+		.iter()
+		.any(|guild| guild.unread || guild.mentions > 0)
+		|| state.dm_rows().iter().any(|dm| dm.unread || dm.mentions > 0)
+}
+
+#[test]
+fn the_read_all_button_on_the_rail_marks_everything_read_only_when_clicked() {
+	const READ_ALL: &str = "read-all-notifications";
+	const BUTTON: &str = "read_all_notifications_rail";
+	let runtime = tokio::runtime::Builder::new_multi_thread()
+		.worker_threads(2)
+		.enable_all()
+		.build()
+		.expect("a runtime");
+	let server = runtime
+		.block_on(mockcord::Server::start(mockcord::MockConfig {
+			record: true,
+			..mockcord::MockConfig::default()
+		}))
+		.expect("mockcord starts");
+	let plugins_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+	let lab = Lab::new("read-all", &[plugins_dir]);
+	let session = {
+		let _entered = runtime.enter();
+		mock_session(&server, &lab.root)
+	};
+	wait_for("the mock session to load unread servers", || {
+		let state = session.state().read();
+		state.session().connected && anything_unread(&state)
+	});
+	lab.host.scan();
+	lab.host.attach(session.state().clone(), session.commander());
+	let shown = lab
+		.host
+		.snapshot()
+		.into_iter()
+		.find(|plugin| plugin.id == READ_ALL)
+		.expect("ReadAllNotificationsButton loads")
+		.permissions;
+	lab.host.approve(READ_ALL, &shown).expect("approved");
+	let handle = runtime.handle().clone();
+	let (mut app, lab) = app_with(lab, move |lab, host| {
+		lab.view = Some(PluginsView::new(host, lab.host.clone(), handle));
+	});
+	shows(
+		&mut app,
+		"a server with the read-all button",
+		"general",
+		&channel_values(),
+	);
+	assert!(app.find(BUTTON).is_some(), "the button is on the server rail");
+	let acks = || {
+		server
+			.control()
+			.recording()
+			.requests_to("POST", "/read-states/ack-bulk")
+			.count()
+	};
+
+	app.click(BUTTON);
+	std::thread::sleep(Duration::from_millis(500));
+	assert_eq!(acks(), 0, "without a real click or key press nothing is sent");
+	assert!(anything_unread(&session.state().read()));
+
+	lab.borrow().view.as_ref().expect("the view").activated();
+	app.click(BUTTON);
+	wait_for("the click to mark every server read", || {
+		!anything_unread(&session.state().read()) && acks() > 0
+	});
+	assert_eq!(
+		server
+			.control()
+			.recording()
+			.requests_to("POST", "/channels/*/messages/*/ack")
+			.count(),
+		0,
+		"the click goes through the bulk ack path"
+	);
+
+	lab.borrow().host.disable(READ_ALL);
+	{
+		let lab = lab.borrow();
+		let view = lab.view.as_ref().expect("the view");
+		assert!(view.publish(), "disabling unmounts the button");
+		view.remount();
+	}
+	app.frames(2);
+	assert!(app.find(BUTTON).is_none(), "the rail is back to Home alone");
+	drop(app);
+	drop(session);
+	drop(server);
+	drop(runtime);
+}

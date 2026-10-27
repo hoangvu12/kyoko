@@ -13,6 +13,7 @@ mod hidden_views;
 mod message_logger;
 mod one_ping_per_dm;
 mod permissions;
+mod read_all_notifications;
 mod silent_typing;
 mod storage;
 mod support;

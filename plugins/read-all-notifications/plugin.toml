@@ -1,0 +1,7 @@
+id = "read-all-notifications"
+name = "ReadAllNotificationsButton"
+version = "1.0.0"
+api = 1
+description = "Adds a button under Home in the server list that marks every server and direct message as read."
+authors = ["Kyoko"]
+permissions = ["action:mark_read", "ui:rail.buttons"]

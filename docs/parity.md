@@ -39,7 +39,7 @@ Both apps take the same hidden flags:
 
 Kyoko's capture mode lives in `apps/desktop/src/capture.rs`. It is only active when `--capture-screen` is passed, and it refuses to run without `--mock` or `--mock-server`. For a screen it has no steps for, kyoko exits with code 3 before opening a window, and the capture command draws a "not built yet" placeholder in its place. Oxidcord's capture mode is `crates/ui/src/shell/capture.rs` in the reference patch. When a step fails, oxidcord exits with code 4 and the pair shows "capture failed".
 
-`KYOKO_CAPTURE_PLUGINS=<id>,<id>` in the environment of `cargo xtask parity capture` turns those bundled plugins on in kyoko before any screen's steps (approved in-process, as the Allow button does), and kyoko signals ready only once the display hooks have answered (`Display::pending`). Use it with `--out` to keep a plugin-on run apart: `KYOKO_CAPTURE_PLUGINS=show-me-your-name` with `timeline,member-list,profile-popout` shows ShowMeYourName's usernames (ticket 48). Oxidcord ignores it.
+`KYOKO_CAPTURE_PLUGINS=<id>,<id>` in the environment of `cargo xtask parity capture` turns those bundled plugins on in kyoko before any screen's steps (approved in-process, as the Allow button does, and waited on until a plugin with a UI half has it mounted), and kyoko signals ready only once the display hooks have answered (`Display::pending`). Use it with `--out` to keep a plugin-on run apart: `KYOKO_CAPTURE_PLUGINS=show-me-your-name` with `timeline,member-list,profile-popout` shows ShowMeYourName's usernames (ticket 48). Oxidcord ignores it.
 
 `KYOKO_CAPTURE_THEMES=<file>,<file>` copies those theme files (`.css` or `.json`) into the capture's themes folder and turns them on, in order, before the screen settles. `KYOKO_CAPTURE_THEMES=crates/bridge/tests/bridge/fixtures/discord-variables.theme.css` with `--out` shows a theme that sets only Discord's variables over Midnight (Midnight 25). Oxidcord ignores it.
 
@@ -621,3 +621,9 @@ Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no inbox. The ment
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `inbox` | 27 | Default selection, then open the inbox from the channel header's inbox button at (1137, 37) (`Link::toggle_inbox`): the Mentions tab, fetched when it opens, with the newest mentions grouped by channel under their server, once every avatar and server icon has loaded. | yes |
+
+### 54 ReadAllNotificationsButton
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `server-rail-read-all` | 54 | With `KYOKO_CAPTURE_PLUGINS=read-all-notifications`. As `server-rail`; kyoko waits for the plugin's UI half to mount, so the Read All Notifications tile shows under Home. Oxidcord has no plugins: capture it with `--apps kyoko` and check it by eye; `server-rail` without the variable shows the rail unchanged. | yes |

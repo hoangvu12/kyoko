@@ -138,7 +138,26 @@ const SHOW_HIDDEN_THINGS: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 11] = [
+const READ_ALL_NOTIFICATIONS: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/read-all-notifications/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/read-all-notifications/logic.luau"),
+	),
+	(
+		"ui.luau",
+		include_str!("../../../plugins/read-all-notifications/ui.luau"),
+	),
+	(
+		"check_check.svg",
+		include_str!("../../../plugins/read-all-notifications/check_check.svg"),
+	),
+];
+
+const PACKAGES: [Embedded; 12] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -150,6 +169,7 @@ const PACKAGES: [Embedded; 11] = [
 	MESSAGE_LOGGER,
 	SHOW_HIDDEN_CHANNELS,
 	SHOW_HIDDEN_THINGS,
+	READ_ALL_NOTIFICATIONS,
 ];
 
 pub fn packages() -> Vec<Package> {

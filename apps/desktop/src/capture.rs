@@ -286,6 +286,7 @@ impl Screen {
 			"built-in-thread" => Some(Screen::ComposerShot(ComposerShot::BuiltInThread)),
 			"hidden-channel" => Some(Screen::HiddenChannel),
 			"member-notes" => Some(Screen::MemberNotes),
+			"server-rail-read-all" => Some(Screen::FirstChannel),
 			"reactions" => Some(Screen::Reactions(ReactionShot::Chips)),
 			"reactions-list" => Some(Screen::Reactions(ReactionShot::List)),
 			"friend-remove-dialog" => Some(Screen::FriendConfirm(FriendShot::Remove)),

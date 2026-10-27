@@ -162,4 +162,4 @@ Fixtures come from `MockConfig::seed`. The same seed and anchor always give the 
 
 ## The headless driver
 
-`cargo xtask headless-run --mock` runs a longer scripted session against mockcord and checks counts and features. It can also run with `--chaos`. It complements the behaviour tests and should keep passing. Use the behaviour tests for assertions about specific traffic.
+`cargo xtask headless-run --mock` runs a longer scripted session against mockcord and checks counts and features. It can also run with `--chaos`. Its mockcord records traffic, so its wire checks (no typing request while SilentTyping is on, nothing naming a hidden channel, the bulk ack from ReadAllNotificationsButton) see real requests. It complements the behaviour tests and should keep passing. Use the behaviour tests for assertions about specific traffic.
