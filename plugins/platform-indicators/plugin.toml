@@ -1,0 +1,35 @@
+id = "platform-indicators"
+name = "PlatformIndicators"
+version = "1.0.0"
+api = 1
+description = "Shows whether people are on desktop, mobile or the web, beside their names, in their status colour."
+authors = ["Kyoko"]
+permissions = ["read:users", "ui:member.decoration", "ui:user.decoration"]
+
+[[settings]]
+key = "members"
+type = "boolean"
+label = "Show in the member list"
+description = "Show the icons after names in the member list."
+default = true
+
+[[settings]]
+key = "messages"
+type = "boolean"
+label = "Show in messages"
+description = "Show the icons after the author's name in the chat."
+default = true
+
+[[settings]]
+key = "profiles"
+type = "boolean"
+label = "Show in profiles"
+description = "Show the icons first among the badges of profiles."
+default = true
+
+[[settings]]
+key = "color_mobile"
+type = "boolean"
+label = "Colour the mobile icon by status"
+description = "Draw the mobile icon in the person's status colour, like the others. Off, it stays grey."
+default = true

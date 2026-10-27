@@ -22,6 +22,8 @@ use crate::permission::{Hook, Permission, Slot};
 use crate::requests::{PluginRequest, RequestSink};
 use crate::worker::{Setup, Worker};
 
+mod decorations;
+
 const STATE_FILE: &str = "plugins.json";
 const DATA_DIR: &str = "plugin-data";
 const STORAGE_FILE: &str = "storage.json";
@@ -647,13 +649,15 @@ impl PluginHost {
 	}
 
 	pub(crate) fn formatters(&self, hook: Hook, name: &str) -> Vec<String> {
+		self.formatters_where(|grants| grants.contains(&Permission::Hook(hook)), name)
+	}
+
+	fn formatters_where(&self, allowed: impl Fn(&BTreeSet<Permission>) -> bool, name: &str) -> Vec<String> {
 		let registry = self.inner.registry.lock();
 		registry
 			.entries
 			.values()
-			.filter(|entry| {
-				entry.status() == Status::Running && entry.grants().contains(&Permission::Hook(hook))
-			})
+			.filter(|entry| entry.status() == Status::Running && allowed(&entry.grants()))
 			.filter(|entry| entry.worker.as_ref().is_some_and(|worker| worker.defines(name)))
 			.map(|entry| format!("{}/{}/{}", entry.package.id(), entry.generation, entry.revision))
 			.collect()
@@ -817,6 +821,7 @@ struct Target {
 	name: String,
 	worker: Arc<Worker>,
 	accessory: bool,
+	grants: BTreeSet<Permission>,
 }
 
 impl Inner {
@@ -863,6 +868,15 @@ impl Inner {
 	}
 
 	fn targets(self: &Arc<Self>, hook: Hook, name: &str, revive: bool) -> Vec<Target> {
+		self.targets_where(|grants| grants.contains(&Permission::Hook(hook)), name, revive)
+	}
+
+	fn targets_where(
+		self: &Arc<Self>,
+		allowed: impl Fn(&BTreeSet<Permission>) -> bool,
+		name: &str,
+		revive: bool,
+	) -> Vec<Target> {
 		let mut registry = self.registry.lock();
 		let now = Instant::now();
 		let mut revived = false;
@@ -873,7 +887,8 @@ impl Inner {
 				if revive {
 					revived |= self.revive(entry, now);
 				}
-				if entry.status() != Status::Running || !entry.grants().contains(&Permission::Hook(hook)) {
+				let grants = entry.grants();
+				if entry.status() != Status::Running || !allowed(&grants) {
 					return None;
 				}
 				let worker = entry.worker.clone().filter(|worker| worker.defines(name))?;
@@ -881,7 +896,8 @@ impl Inner {
 					id: entry.package.id().to_owned(),
 					name: entry.name().to_owned(),
 					worker,
-					accessory: entry.grants().contains(&Permission::Ui(Slot::MessageAccessory)),
+					accessory: grants.contains(&Permission::Ui(Slot::MessageAccessory)),
+					grants,
 				})
 			})
 			.collect();

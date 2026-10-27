@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use protocol::Snowflake;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -5,6 +7,7 @@ pub enum Formatting {
 	Names,
 	RelativeTimes,
 	Messages,
+	Decorations,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -97,6 +100,59 @@ impl MessageLook {
 	}
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct Platforms {
+	pub desktop: Option<&'static str>,
+	pub mobile: Option<&'static str>,
+	pub web: Option<&'static str>,
+}
+
+impl Platforms {
+	pub fn listed(&self) -> impl Iterator<Item = (&'static str, &'static str)> + '_ {
+		[
+			("desktop", self.desktop),
+			("mobile", self.mobile),
+			("web", self.web),
+		]
+		.into_iter()
+		.filter_map(|(platform, status)| status.map(|status| (platform, status)))
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DecoratedUser {
+	pub user_id: Snowflake,
+	pub guild_id: Option<Snowflake>,
+	pub bot: bool,
+	pub mine: bool,
+	pub owner: bool,
+	pub status: &'static str,
+	pub platforms: Platforms,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Badge {
+	pub plugin: String,
+	pub key: String,
+	pub icon: Option<Arc<str>>,
+	pub color: String,
+	pub tooltip: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct Decorations {
+	pub members: Vec<Badge>,
+	pub messages: Vec<Badge>,
+	pub profiles: Vec<Badge>,
+	pub crown: bool,
+}
+
+impl Decorations {
+	pub fn is_plain(&self) -> bool {
+		self.members.is_empty() && self.messages.is_empty() && self.profiles.is_empty() && !self.crown
+	}
+}
+
 pub trait DisplayHooks: Send + Sync {
 	fn formatters(&self, formatting: Formatting) -> Vec<String>;
 
@@ -105,4 +161,6 @@ pub trait DisplayHooks: Send + Sync {
 	fn format_relative(&self, time: &RelativeTime) -> Option<String>;
 
 	fn render_message(&self, message: &KeptMessage) -> Option<MessageLook>;
+
+	fn decorate_user(&self, user: &DecoratedUser) -> Option<Decorations>;
 }

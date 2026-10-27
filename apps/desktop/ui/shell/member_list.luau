@@ -16,6 +16,7 @@ local group_height = theme.number(theme.size.group_header_height)
 local space_16 = theme.number(theme.size.space_16)
 local avatar_sm = theme.number(theme.size.avatar_size_sm)
 local icon_xs = theme.number(theme.size.icon_size_xs)
+local icon_sm = theme.number(theme.size.icon_size_sm)
 
 local function heights(): { number }
 	local list = table.clone(state.members.heights:get())
@@ -84,6 +85,40 @@ local function note(kind: string, id: string, text: string?, glyph: string, colo
 	}
 end
 
+local function crown(row: any)
+	if not row.crown then
+		return nil
+	end
+	return ui.div {
+		id = `member_crown_{row.id}`,
+		shrink = 0,
+		tooltip = "Server Owner",
+		icon { name = "crown", size = icon_sm(), color = theme.color.yellow_2 },
+	}
+end
+
+local function decorations(row: any)
+	local list = row.decorations or {}
+	if #list == 0 then
+		return nil
+	end
+	local marks = {}
+	for _, mark in list do
+		if mark.src ~= "" then
+			table.insert(
+				marks,
+				ui.div {
+					id = `member_decoration_{mark.key}_{row.id}`,
+					shrink = 0,
+					tooltip = if mark.tooltip ~= "" then mark.tooltip else nil,
+					ui.svg { src = mark.src, w = icon_sm(), h = icon_sm(), shrink = 0, tint = mark.color },
+				}
+			)
+		end
+	end
+	return ui.row { shrink = 0, items = "center", gap = theme.size.space_2, table.unpack(marks) }
+end
+
 local function name_line(row: any)
 	local offline = row.status == "offline"
 	local color = if row.color ~= ""
@@ -140,6 +175,8 @@ local function name_line(row: any)
 				nil
 			)
 			else nil,
+		crown(row),
+		decorations(row),
 		note("timeout", row.id, row.timeout, "timer", theme.color.red_3),
 		note("flags", row.id, row.notes, "shield", theme.color.yellow_3),
 	}

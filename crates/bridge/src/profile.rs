@@ -7,6 +7,7 @@ use media::{ImageRequest, Shape, SizeHint, Variant};
 use protocol::{
 	Activity, ActivityKind, ChannelType, PrimaryGuild, RelationshipKind, Snowflake, StatusKind, User,
 };
+use session::Badge;
 use state::{ConnectionStatus, CustomStatus, RiskyLock, State};
 
 use crate::display::Display;
@@ -167,6 +168,7 @@ pub struct ProfileCard {
 	pub tag: Option<GuildTag>,
 	pub bio: Option<String>,
 	pub badges: Vec<ProfileBadge>,
+	pub decorations: Vec<Badge>,
 	pub roles: Vec<RoleChip>,
 	pub created: NaiveDate,
 	pub joined: Option<NaiveDate>,
@@ -237,6 +239,7 @@ impl ProfileCard {
 			})
 			.unwrap_or_default();
 		Some(Self {
+			decorations: Vec::new(),
 			id: user_id,
 			guild_id,
 			name: state.display_name(guild_id, user_id),
@@ -356,6 +359,9 @@ impl ProfileCard {
 		if let Some(shown) = display.person_name(state, self.guild_id, &self.user) {
 			self.name = shown.name;
 			self.name_extra = shown.extra;
+		}
+		if let Some(decorations) = display.decorations(state, self.guild_id, &self.user) {
+			self.decorations = decorations.profiles;
 		}
 		self
 	}

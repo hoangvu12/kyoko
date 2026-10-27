@@ -301,6 +301,8 @@ impl Screen {
 			"poll-in-messages" => Some(Screen::Polls(PollShot::Messages)),
 			"poll-in-messages-ended" => Some(Screen::Polls(PollShot::Ended)),
 			"apps-launcher" => Some(Screen::AppsLauncher),
+			"name-decorations" => Some(Screen::MemberList),
+			"name-decorations-profile" => Some(Screen::ProfilePopout),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))

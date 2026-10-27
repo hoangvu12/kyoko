@@ -157,7 +157,41 @@ const READ_ALL_NOTIFICATIONS: Embedded = &[
 	),
 ];
 
-const PACKAGES: [Embedded; 12] = [
+const PLATFORM_INDICATORS: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/platform-indicators/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/platform-indicators/logic.luau"),
+	),
+	(
+		"monitor.svg",
+		include_str!("../../../plugins/platform-indicators/monitor.svg"),
+	),
+	(
+		"smartphone.svg",
+		include_str!("../../../plugins/platform-indicators/smartphone.svg"),
+	),
+	(
+		"globe.svg",
+		include_str!("../../../plugins/platform-indicators/globe.svg"),
+	),
+];
+
+const FORCE_OWNER_CROWN: Embedded = &[
+	(
+		"plugin.toml",
+		include_str!("../../../plugins/force-owner-crown/plugin.toml"),
+	),
+	(
+		"logic.luau",
+		include_str!("../../../plugins/force-owner-crown/logic.luau"),
+	),
+];
+
+const PACKAGES: [Embedded; 14] = [
 	CLEAR_URLS,
 	SILENT_TYPING,
 	TEXT_REPLACE,
@@ -170,6 +204,8 @@ const PACKAGES: [Embedded; 12] = [
 	SHOW_HIDDEN_CHANNELS,
 	SHOW_HIDDEN_THINGS,
 	READ_ALL_NOTIFICATIONS,
+	PLATFORM_INDICATORS,
+	FORCE_OWNER_CROWN,
 ];
 
 pub fn packages() -> Vec<Package> {

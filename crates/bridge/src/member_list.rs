@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 
-use protocol::{MemberListGroup, Snowflake};
-use session::{Command, Formatting};
+use protocol::{MemberListGroup, Permissions, Snowflake};
+use session::{Badge, Command, Formatting};
 use state::{Changes, MemberList, MemberListRow, MemberSlot, State};
 
 use crate::display::{Display, person};
@@ -15,6 +15,7 @@ const OVERSCAN: usize = 12;
 const SHIFT_MARGIN: usize = 4;
 const INITIAL_ROWS: usize = 24;
 const MAX_ROWS: usize = 100_000;
+pub const CROWN_MEMBER_LIMIT: i64 = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemberRowKind {
@@ -70,6 +71,8 @@ pub struct MemberEntry {
 	pub bot: bool,
 	pub badge: Option<String>,
 	pub notes: ModeratorNotes,
+	pub crown: bool,
+	pub decorations: Vec<Badge>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,7 +321,8 @@ impl MemberPanel {
 		mut entries: Vec<MemberListEntry>,
 	) -> Vec<MemberListEntry> {
 		let names = self.display.formats(Formatting::Names);
-		if !names && !self.moderator_notes {
+		let decorated = self.display.formats(Formatting::Decorations);
+		if !names && !decorated && !self.moderator_notes {
 			return entries;
 		}
 		let now = Utc::now();
@@ -329,9 +333,16 @@ impl MemberPanel {
 			if self.moderator_notes {
 				member.notes = moderator_notes(state, guild_id, member.user_id, now);
 			}
-			let Some(user) = state.user(member.user_id).filter(|_| names) else {
+			let Some(user) = state.user(member.user_id) else {
 				continue;
 			};
+			if let Some(decorations) = self.display.decorations(state, Some(guild_id), user) {
+				member.crown |= decorations.crown;
+				member.decorations = decorations.members;
+			}
+			if !names {
+				continue;
+			}
 			if let Some(shown) = self.display.name(&person(state, Some(guild_id), user)) {
 				member.name = shown.name;
 				member.extra = shown.extra;
@@ -378,7 +389,7 @@ fn listed_entries(
 	let rows = state.member_list_rows(guild_id, first, last);
 	(first..=last)
 		.map(|index| match rows.get(index - first).cloned().flatten() {
-			Some(row) => entry_of(state, row),
+			Some(row) => entry_of(state, guild_id, row),
 			None if layout.get(index) == Some(&MemberRowKind::Group) => {
 				inferred_group(state, guild_id, list, index)
 					.map_or(MemberListEntry::Placeholder, MemberListEntry::Group)
@@ -449,7 +460,7 @@ fn group_name(state: &State, guild_id: Snowflake, id: &str) -> String {
 	}
 }
 
-fn entry_of(state: &State, row: MemberListRow) -> MemberListEntry {
+fn entry_of(state: &State, guild_id: Snowflake, row: MemberListRow) -> MemberListEntry {
 	match row {
 		MemberListRow::Group { id, name, count } => MemberListEntry::Group(MemberGroup { id, name, count }),
 		MemberListRow::Member(member) => MemberListEntry::Member(MemberEntry {
@@ -462,8 +473,22 @@ fn entry_of(state: &State, row: MemberListRow) -> MemberListEntry {
 			bot: is_bot(state, member.user_id),
 			badge: member.badge,
 			notes: ModeratorNotes::default(),
+			crown: shows_crown(state, guild_id, member.user_id),
+			decorations: Vec::new(),
 		}),
 	}
+}
+
+pub fn shows_crown(state: &State, guild_id: Snowflake, user_id: Snowflake) -> bool {
+	let Some(guild) = state.guild(guild_id) else {
+		return false;
+	};
+	let large = guild.member_count.is_some_and(|count| count > CROWN_MEMBER_LIMIT);
+	let shown_admins = guild
+		.roles
+		.values()
+		.any(|role| role.hoist && role.permissions.contains(Permissions::ADMINISTRATOR));
+	guild.owner_id == Some(user_id) && !large && !shown_admins
 }
 
 fn is_bot(state: &State, user_id: Snowflake) -> bool {

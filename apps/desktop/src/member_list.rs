@@ -7,7 +7,7 @@ use bridge::{Inbox, MemberChange, MemberEntry, MemberHeights, MemberListEntry, M
 use chrono::Utc;
 use media::ImageName;
 use protocol::Snowflake;
-use session::Command;
+use session::{Badge, Command};
 use state::{Changes, State};
 use zgx_script::{ScriptHost, Shared, Value};
 
@@ -226,7 +226,33 @@ fn member_value(member: &MemberEntry, avatar: Option<&str>) -> Value {
 		("avatar", avatar.as_str().into()),
 		("timeout", timeout.as_str().into()),
 		("notes", notes.as_str().into()),
+		("crown", member.crown.into()),
+		("decorations", decorations_value(&member.decorations)),
 	])
+}
+
+pub(crate) fn decorations_value(badges: &[Badge]) -> Value {
+	Value::List(
+		badges
+			.iter()
+			.map(|badge| {
+				let source = badge
+					.icon
+					.as_deref()
+					.map(|icon| format!("code:{icon}"))
+					.unwrap_or_default();
+				record([
+					("key", format!("{}_{}", badge.plugin, badge.key).as_str().into()),
+					("src", source.as_str().into()),
+					(
+						"color",
+						format!("${}", crate::theme::token(&badge.color)).as_str().into(),
+					),
+					("tooltip", badge.tooltip.as_str().into()),
+				])
+			})
+			.collect(),
+	)
 }
 
 fn empty_window() -> Value {

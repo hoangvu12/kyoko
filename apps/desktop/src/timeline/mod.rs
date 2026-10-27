@@ -7,6 +7,7 @@ mod clone_tests;
 #[cfg(test)]
 mod component_tests;
 mod components;
+mod decorations;
 mod dialogs;
 #[cfg(test)]
 mod emoji_tests;

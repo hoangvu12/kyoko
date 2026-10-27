@@ -4,6 +4,7 @@ mod harness;
 
 mod clear_urls;
 mod deadlines;
+mod decorations;
 mod display;
 mod events;
 mod expression_cloner;

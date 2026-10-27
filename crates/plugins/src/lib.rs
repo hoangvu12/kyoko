@@ -3,6 +3,7 @@ mod bundled;
 mod calls;
 mod context;
 mod convert;
+mod decorate;
 mod hooks;
 mod host;
 mod limits;

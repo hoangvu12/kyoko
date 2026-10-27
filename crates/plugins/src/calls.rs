@@ -1,5 +1,7 @@
 use protocol::{DispatchEvent, Message, Snowflake};
-use session::{DeletedLook, HistoryLook, KeptMessage, Person, RankedEmoji, RelativeTime, ShownName};
+use session::{
+	DecoratedUser, DeletedLook, HistoryLook, KeptMessage, Person, RankedEmoji, RelativeTime, ShownName,
+};
 use state::Expression;
 
 use crate::permission::Scope;
@@ -67,6 +69,10 @@ pub(crate) enum Call {
 	SettingsChanged,
 	RenderMessage(Box<KeptMessage>),
 	ShowDeleted,
+	DecorateUser {
+		user: Box<DecoratedUser>,
+		presence: bool,
+	},
 }
 
 impl Call {
@@ -83,6 +89,7 @@ impl Call {
 			Call::SettingsChanged => "on_settings_changed",
 			Call::RenderMessage(_) => RENDER_MESSAGE,
 			Call::ShowDeleted => SHOW_DELETED,
+			Call::DecorateUser { .. } => DECORATE_USER,
 		}
 	}
 
@@ -105,6 +112,7 @@ pub(crate) enum Reply {
 	Allow(bool),
 	Order(Option<Vec<String>>),
 	Look(Option<Look>),
+	Decor(Option<Decor>),
 	Done,
 }
 
@@ -113,6 +121,21 @@ pub(crate) struct Look {
 	pub deleted: Option<DeletedLook>,
 	pub history: Option<HistoryLook>,
 	pub accessory: Option<(String, Option<String>)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Mark {
+	pub icon: String,
+	pub color: String,
+	pub tooltip: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Decor {
+	pub members: Vec<Mark>,
+	pub messages: Vec<Mark>,
+	pub profiles: Vec<Mark>,
+	pub crown: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -138,6 +161,7 @@ pub(crate) const ON_EVENT: &str = "on_event";
 pub(crate) const RANK_EMOJI: &str = "rank_emoji";
 pub(crate) const RENDER_MESSAGE: &str = "render_message";
 pub(crate) const SHOW_DELETED: &str = "show_deleted";
+pub(crate) const DECORATE_USER: &str = "decorate_user";
 
 #[derive(Clone, Debug)]
 pub(crate) enum PluginEvent {

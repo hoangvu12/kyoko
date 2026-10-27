@@ -4,7 +4,7 @@ use std::sync::Arc;
 use chrono::{DateTime, NaiveDate, Utc};
 use markdown::Document;
 use protocol::{Message, MessageType, Snowflake, User};
-use session::{Command, DeletedLook, Formatting, MessageLook, ShownName};
+use session::{Badge, Command, DeletedLook, Formatting, MessageLook, ShownName};
 use state::{
 	Changes, CommandStage, DEFERRED_REPLY_WINDOW, MessageRow, MessageVersion, MessageView, RenderedMessage,
 	State, UploadProgress,
@@ -39,6 +39,7 @@ pub struct MessageEntry {
 	pub author: String,
 	pub author_extra: Option<String>,
 	pub author_color: Option<u32>,
+	pub decorations: Vec<Badge>,
 	pub content: String,
 	pub sent_at: DateTime<Utc>,
 	pub kind: MessageType,
@@ -160,6 +161,7 @@ impl PartialEq for MessageEntry {
 			&& self.author == other.author
 			&& self.author_extra == other.author_extra
 			&& self.author_color == other.author_color
+			&& self.decorations == other.decorations
 			&& self.content == other.content
 			&& self.sent_at == other.sent_at
 			&& self.kind == other.kind
@@ -426,6 +428,7 @@ impl Timeline {
 			&& !changes.members.contains(guild)
 			&& !changes.channel_lists.contains(guild)
 			&& !changes.current_user
+			&& !self.decorated_presence(changes)
 		{
 			return false;
 		}
@@ -438,6 +441,14 @@ impl Timeline {
 		self.rows = fresh;
 		self.pending.merge(delta);
 		true
+	}
+
+	fn decorated_presence(&self, changes: &Changes) -> bool {
+		!changes.presence.is_empty()
+			&& self.display.formats(Formatting::Decorations)
+			&& self
+				.messages()
+				.any(|entry| changes.presence.contains(entry.message.author.id))
 	}
 
 	fn record_reset(&mut self) {
@@ -575,6 +586,21 @@ fn author_name(
 	display.name(&author)
 }
 
+fn author_decorations(
+	state: &State,
+	guild_id: Option<Snowflake>,
+	message: &Message,
+	display: &Display,
+) -> Vec<Badge> {
+	if !is_plain(message.kind) || !display.formats(Formatting::Decorations) {
+		return Vec::new();
+	}
+	display
+		.decorations(state, guild_id, &message.author)
+		.map(|decorations| decorations.messages)
+		.unwrap_or_default()
+}
+
 fn entry(
 	state: &State,
 	guild_id: Option<Snowflake>,
@@ -586,6 +612,7 @@ fn entry(
 	let message = view.message;
 	crate::components::note_unknown(&message.components);
 	let shown = author_name(state, guild_id, &message, display);
+	let decorations = author_decorations(state, guild_id, &message, display);
 	let names = Names::of(state, guild_id, &message, body.documents());
 	let reply = ReplyPreview::of(state, guild_id, &message);
 	let interaction = interaction_line(state, guild_id, &message);
@@ -608,6 +635,7 @@ fn entry(
 		author_extra: shown.as_ref().and_then(|shown| shown.extra.clone()),
 		author: shown.map_or(view.author_display, |shown| shown.name),
 		author_color: view.author_color,
+		decorations,
 		content: message.content.clone(),
 		sent_at: message.timestamp.unwrap_or_else(|| message.id.timestamp()),
 		kind: message.kind,

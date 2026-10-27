@@ -9,9 +9,11 @@ use zgx::theme::{Themed, Themes};
 
 use crate::emoji;
 use crate::kit;
-use crate::timeline::icons::icon;
+use crate::timeline::icons::{icon, plugin_icon};
 use crate::timeline::pictures::Pictures;
 use crate::timeline::tok;
+
+const DECORATION: f32 = 20.;
 
 pub fn size(runtime: &Runtime, name: &str) -> f32 {
 	Themes::of(runtime).get(tok(name)).number().unwrap_or(0.)
@@ -242,23 +244,31 @@ pub fn tag_chip(pictures: &Rc<Pictures>, value: &str, badge: Option<&ImageName>)
 }
 
 pub fn badges(pictures: &Rc<Pictures>, card: &ProfileCard, names: &[ImageName]) -> Option<View> {
-	(!card.badges.is_empty()).then(|| {
-		row().items_center().gap(tok("space_4")).children(
-			card.badges
-				.iter()
-				.zip(names)
-				.map(|(badge, name)| {
-					picture_box(
-						pictures,
-						Some(name),
-						div().w(tok("icon_size_md")).h(tok("icon_size_md")),
-						ObjectFit::Contain,
-					)
-					.tooltip(badge.description.clone())
-				})
-				.collect::<Vec<_>>(),
+	let decorations = card
+		.decorations
+		.iter()
+		.filter(|badge| badge.icon.is_some())
+		.map(|badge| {
+			let mark = div()
+				.id(format!("profile-decoration-{}-{}", badge.plugin, badge.key))
+				.child(plugin_icon(badge.icon.as_ref(), DECORATION, &badge.color));
+			if badge.tooltip.is_empty() {
+				mark
+			} else {
+				mark.tooltip(badge.tooltip.clone())
+			}
+		});
+	let discord = card.badges.iter().zip(names).map(|(badge, name)| {
+		picture_box(
+			pictures,
+			Some(name),
+			div().w(tok("icon_size_md")).h(tok("icon_size_md")),
+			ObjectFit::Contain,
 		)
-	})
+		.tooltip(badge.description.clone())
+	});
+	let marks: Vec<View> = decorations.chain(discord).collect();
+	(!marks.is_empty()).then(|| row().items_center().gap(tok("space_4")).children(marks))
 }
 
 pub fn role_chip(role: &RoleChip) -> View {

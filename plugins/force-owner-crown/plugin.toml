@@ -1,0 +1,7 @@
+id = "force-owner-crown"
+name = "ForceOwnerCrown"
+version = "1.0.0"
+api = 1
+description = "Shows the server owner's crown in the member list, even in large servers and servers that show their admins apart."
+authors = ["Kyoko"]
+permissions = ["ui:member.decoration"]

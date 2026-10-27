@@ -4,6 +4,7 @@ mod built_ins;
 mod cloner;
 mod composer;
 mod connection;
+mod decorations;
 mod deep_links;
 mod display;
 mod dm_panel;

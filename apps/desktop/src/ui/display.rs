@@ -21,7 +21,8 @@ impl Link {
 		while let Some(batch) = self.display_wakes.next().await {
 			let times = batch.contains(&Formatting::RelativeTimes);
 			let names = batch.contains(&Formatting::Names);
-			self.display_changed(names, times);
+			let people = names || batch.contains(&Formatting::Decorations);
+			self.display_changed(people, times);
 		}
 	}
 

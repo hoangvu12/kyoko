@@ -627,3 +627,12 @@ Kyoko only (`--apps kyoko`, or `parity mockup`): oxidcord has no inbox. The ment
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `server-rail-read-all` | 54 | With `KYOKO_CAPTURE_PLUGINS=read-all-notifications`. As `server-rail`; kyoko waits for the plugin's UI half to mount, so the Read All Notifications tile shows under Home. Oxidcord has no plugins: capture it with `--apps kyoko` and check it by eye; `server-rail` without the variable shows the rail unchanged. | yes |
+
+### 49 PlatformIndicators and ForceOwnerCrown
+
+Kyoko only (`--apps kyoko`): oxidcord has no plugins. No Midnight mockup, check them by eye. With both plugins off, `member-list` and `timeline` stay as they were: no icons beside names and no crown (mockcord's servers show their Admin role apart, which hides the owner's crown as Discord does).
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `name-decorations` | 49 | With `KYOKO_CAPTURE_PLUGINS=platform-indicators,force-owner-crown`. As `member-list`: each author in the timeline and each member shows a monitor, phone or globe per platform in their status colour (mockcord spreads people over desktop, mobile, both, and web), and the owner shows the yellow crown after their name. | yes |
+| `name-decorations-profile` | 49 | With `KYOKO_CAPTURE_PLUGINS=platform-indicators,force-owner-crown`. As `profile-popout`: the author's platform icons come first in the badge row. | yes |

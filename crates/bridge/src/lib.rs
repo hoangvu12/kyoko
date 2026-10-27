@@ -72,7 +72,7 @@ pub use composer::{
 pub use composer::{AppSearch, AppsLauncher, LauncherApp, RECENT_TILES, apps_launcher, search_apps};
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
-pub use display::{Display, person, relative_text, relative_time};
+pub use display::{Display, decorated_user, person, relative_text, relative_time};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
 pub use dm_panel::{DmPanel, DmProfile, GroupMember, since_label};
 pub use emoji_picker::{

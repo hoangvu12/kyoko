@@ -161,7 +161,13 @@ impl Slot {
 				| Slot::MessageAccessory
 				| Slot::HiddenChannels
 				| Slot::ModeratorNotes
+				| Slot::UserDecoration
+				| Slot::MemberDecoration
 		)
+	}
+
+	pub fn is_decoration(self) -> bool {
+		matches!(self, Slot::UserDecoration | Slot::MemberDecoration)
 	}
 
 	pub fn is_menu(self) -> bool {
@@ -212,6 +218,12 @@ impl Permission {
 			Permission::Ui(Slot::HiddenChannels) => {
 				"Show channels you cannot open in the channel list, with what Kyoko already knows about them. Nothing about them is fetched."
 					.to_owned()
+			}
+			Permission::Ui(Slot::UserDecoration) => {
+				"Add small icons beside people's names in messages and profiles.".to_owned()
+			}
+			Permission::Ui(Slot::MemberDecoration) => {
+				"Add small icons beside names in the member list, and show the owner's crown.".to_owned()
 			}
 			Permission::Ui(Slot::ModeratorNotes) => {
 				"Show moderator details Kyoko already has, such as timeouts, in the member list.".to_owned()

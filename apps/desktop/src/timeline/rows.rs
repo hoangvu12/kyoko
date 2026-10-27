@@ -22,6 +22,7 @@ use zgx::theme::{Themed, TokenId};
 use super::actions::MessageActions;
 use super::attachments;
 use super::body::{self, Look};
+use super::decorations;
 use super::extras;
 use super::icons::icon;
 use super::kept;
@@ -682,6 +683,9 @@ fn first_of_group(
 			)
 		})
 		.when(entry.bot, |header| header.child(bot_tag()))
+		.when_some(decorations::author_decorations(entry), |header, marks| {
+			header.child(marks)
+		})
 		.child(
 			text(time)
 				.text_size(tok("font_size_xs"))

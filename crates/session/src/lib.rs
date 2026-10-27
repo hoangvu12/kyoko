@@ -17,8 +17,8 @@ pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use command::{Command, FriendSource, InviteSource, ModalAnswer, ModalValue};
 pub use config::{NotifyFn, SessionConfig};
 pub use display::{
-	Accessory, DeletedLook, DisplayHooks, Formatting, HistoryLook, KeptMessage, KeptVersion, MessageLook,
-	Person, RelativeTime, ShownName,
+	Accessory, Badge, DecoratedUser, Decorations, DeletedLook, DisplayHooks, Formatting, HistoryLook,
+	KeptMessage, KeptVersion, MessageLook, Person, Platforms, RelativeTime, ShownName,
 };
 pub use gateway::{Backoff, GatewayTuning, SendBudget};
 pub use hooks::{EmojiRankRequest, RankedEmoji, Rewrite, SessionHooks};

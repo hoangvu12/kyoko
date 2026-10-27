@@ -59,6 +59,8 @@ const SHOW_HIDDEN_CHANNELS: &str = "show-hidden-channels";
 const SHOW_HIDDEN_THINGS: &str = "show-hidden-things";
 const READ_ALL_NOTIFICATIONS: &str = "read-all-notifications";
 const READ_ALL_KEY: &str = "read_all";
+const PLATFORM_INDICATORS: &str = "platform-indicators";
+const FORCE_OWNER_CROWN: &str = "force-owner-crown";
 const CLONE_KEY: &str = "clone_emoji";
 const CLONE_NAME: &str = "headless_clone";
 const REDRAWS: usize = 100;
@@ -205,6 +207,8 @@ fn plugin_host(root: &Path) -> Result<PluginHost> {
 		SHOW_HIDDEN_CHANNELS,
 		SHOW_HIDDEN_THINGS,
 		READ_ALL_NOTIFICATIONS,
+		PLATFORM_INDICATORS,
+		FORCE_OWNER_CROWN,
 		BROKEN_PLUGIN,
 	] {
 		let declared = host
@@ -474,6 +478,63 @@ impl Harness {
 		ensure!(
 			display.look_calls() == calls && display.pending() == 0,
 			"redrawing the timeline asked MessageLogger again"
+		);
+		Ok(calls)
+	}
+
+	async fn decorates_people(
+		&self,
+		plugins: &PluginHost,
+		guild_id: Snowflake,
+		channel_id: Snowflake,
+	) -> Result<u64> {
+		let wake = self.wake.clone();
+		let display = bridge::Display::new(Arc::new(plugins.clone()), move |_| wake.notify_one());
+		let timeline = RefCell::new(bridge::Timeline::default());
+		timeline.borrow_mut().set_display(display.clone());
+		timeline
+			.borrow_mut()
+			.select(&self.state.read(), Some(guild_id), channel_id);
+		let owner = self
+			.state
+			.read()
+			.guild(guild_id)
+			.and_then(|guild| guild.owner_id)
+			.context("the mock server has no owner")?;
+		self.wait(
+			"PlatformIndicators and ForceOwnerCrown to decorate people",
+			|| {
+				let state = self.state.read();
+				let mut timeline = timeline.borrow_mut();
+				timeline.redraw(&state, Formatting::Decorations);
+				let authors = timeline.messages().filter(|entry| entry.is_plain()).all(|entry| {
+					let author = entry.message.author.id;
+					let online = entry.message.author.bot != Some(true)
+						&& state
+							.presence(author)
+							.and_then(|presence| presence.client_status.as_ref())
+							.is_some();
+					online == !entry.decorations.is_empty()
+				});
+				let decorated = timeline.messages().any(|entry| !entry.decorations.is_empty());
+				let crowned = state.user(owner).is_some_and(|user| {
+					display
+						.decorations(&state, Some(guild_id), user)
+						.is_some_and(|decorations| decorations.crown)
+				});
+				authors && decorated && crowned && display.pending() == 0
+			},
+		)
+		.await?;
+		let calls = display.decoration_calls();
+		for _ in 0..REDRAWS {
+			timeline
+				.borrow_mut()
+				.redraw(&self.state.read(), Formatting::Decorations);
+		}
+		ensure!(
+			display.decoration_calls() == calls && display.pending() == 0,
+			"redrawing the timeline asked PlatformIndicators again"
 		);
 		Ok(calls)
 	}
@@ -987,6 +1048,7 @@ async fn scenario(
 	let kept_calls = harness
 		.logs_kept_messages(&plugins, server, guild_id, channel_id, typo_id)
 		.await?;
+	let decoration_calls = harness.decorates_people(&plugins, guild_id, channel_id).await?;
 	harness.round_trip(channel_id, BROKEN_HOOK_TEXT).await?;
 	harness.session.send(Command::Typing { channel_id });
 	tokio::time::sleep(TYPING_QUIET).await;
@@ -1100,6 +1162,7 @@ async fn scenario(
 			"read_all_acks": read_all_acks,
 			"display_calls": display_calls,
 			"kept_calls": kept_calls,
+			"decoration_calls": decoration_calls,
 			"plugins": plugins
 				.snapshot()
 				.iter()

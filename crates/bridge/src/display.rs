@@ -6,9 +6,10 @@ use std::sync::{Arc, Weak};
 use chrono::{DateTime, TimeDelta, Utc};
 use markdown::TimestampStyle;
 use parking_lot::Mutex;
-use protocol::{Snowflake, User};
+use protocol::{Snowflake, StatusKind, User};
 use session::{
-	DisplayHooks, Formatting, KeptMessage, KeptVersion, MessageLook, Person, RelativeTime, ShownName,
+	DecoratedUser, Decorations, DisplayHooks, Formatting, KeptMessage, KeptVersion, MessageLook, Person,
+	Platforms, RelativeTime, ShownName,
 };
 use state::{MessageView, State};
 
@@ -17,6 +18,7 @@ use crate::message::timestamp_text;
 const NAME_CACHE: usize = 4096;
 const TIME_CACHE: usize = 1024;
 const LOOK_CACHE: usize = 2048;
+const DECORATION_CACHE: usize = 4096;
 const UNITS: [(&str, u64, u64); 6] = [
 	("second", 1, 60),
 	("minute", 60, 60),
@@ -32,6 +34,7 @@ enum Request {
 	Name(Person, u64),
 	Time(i64, RelativeTime, u64),
 	Look(LookKey, Box<KeptMessage>, u64),
+	Decorate(DecoratedUser, u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -108,10 +111,12 @@ struct Inner {
 	names: Mutex<Memo<Person, ShownName>>,
 	times: Mutex<Memo<i64, String>>,
 	looks: Mutex<Memo<LookKey, MessageLook>>,
+	decorations: Mutex<Memo<DecoratedUser, Decorations>>,
 	requests: Mutex<Option<Sender<Request>>>,
 	notify: Notify,
 	calls: AtomicU64,
 	look_calls: AtomicU64,
+	decoration_calls: AtomicU64,
 }
 
 #[derive(Clone, Default)]
@@ -135,10 +140,12 @@ impl Display {
 			names: Mutex::new(Memo::new(NAME_CACHE)),
 			times: Mutex::new(Memo::new(TIME_CACHE)),
 			looks: Mutex::new(Memo::new(LOOK_CACHE)),
+			decorations: Mutex::new(Memo::new(DECORATION_CACHE)),
 			requests: Mutex::new(None),
 			notify: Box::new(notify),
 			calls: AtomicU64::new(0),
 			look_calls: AtomicU64::new(0),
+			decoration_calls: AtomicU64::new(0),
 		});
 		let display = Self { inner: Some(inner) };
 		display.refresh();
@@ -164,6 +171,8 @@ impl Display {
 		let names = inner.names.lock().renew(names);
 		let times = inner.times.lock().renew(times);
 		let looks = inner.looks.lock().renew(looks);
+		let decorators = inner.hooks.formatters(Formatting::Decorations);
+		let decorations = inner.decorations.lock().renew(decorators);
 		if names {
 			(inner.notify)(Formatting::Names);
 		}
@@ -172,6 +181,9 @@ impl Display {
 		}
 		if looks {
 			(inner.notify)(Formatting::Messages);
+		}
+		if decorations {
+			(inner.notify)(Formatting::Decorations);
 		}
 	}
 
@@ -187,9 +199,18 @@ impl Display {
 			.map_or(0, |inner| inner.look_calls.load(Ordering::Relaxed))
 	}
 
+	pub fn decoration_calls(&self) -> u64 {
+		self.inner
+			.as_ref()
+			.map_or(0, |inner| inner.decoration_calls.load(Ordering::Relaxed))
+	}
+
 	pub fn pending(&self) -> usize {
 		self.inner.as_ref().map_or(0, |inner| {
-			inner.names.lock().asked.len() + inner.times.lock().asked.len() + inner.looks.lock().asked.len()
+			inner.names.lock().asked.len()
+				+ inner.times.lock().asked.len()
+				+ inner.looks.lock().asked.len()
+				+ inner.decorations.lock().asked.len()
 		})
 	}
 
@@ -198,7 +219,30 @@ impl Display {
 			Formatting::Names => !inner.names.lock().active.is_empty(),
 			Formatting::RelativeTimes => !inner.times.lock().active.is_empty(),
 			Formatting::Messages => !inner.looks.lock().active.is_empty(),
+			Formatting::Decorations => !inner.decorations.lock().active.is_empty(),
 		})
+	}
+
+	pub fn decorations(
+		&self,
+		state: &State,
+		guild_id: Option<Snowflake>,
+		user: &User,
+	) -> Option<Decorations> {
+		let inner = self.inner.as_ref()?;
+		if inner.decorations.lock().active.is_empty() {
+			return None;
+		}
+		let user = decorated_user(state, guild_id, user);
+		let (shown, ask, generation) = {
+			let mut decorations = inner.decorations.lock();
+			let (shown, ask) = decorations.look(&user);
+			(shown, ask, decorations.generation)
+		};
+		if ask {
+			self.ask(Request::Decorate(user, generation));
+		}
+		shown
 	}
 
 	pub fn look(
@@ -330,7 +374,7 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 		let Some(inner) = weak.upgrade() else {
 			return;
 		};
-		let (mut names, mut times, mut looks) = (false, false, false);
+		let (mut names, mut times, mut looks, mut decorations) = (false, false, false, false);
 		for request in batch {
 			match request {
 				Request::Name(person, generation) => {
@@ -358,6 +402,14 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 					let look = inner.hooks.render_message(&message);
 					looks |= inner.looks.lock().answer(key, look, generation);
 				}
+				Request::Decorate(user, generation) => {
+					if inner.decorations.lock().generation != generation {
+						continue;
+					}
+					inner.decoration_calls.fetch_add(1, Ordering::Relaxed);
+					let shown = inner.hooks.decorate_user(&user);
+					decorations |= inner.decorations.lock().answer(user, shown, generation);
+				}
 			}
 		}
 		tracing::debug!(
@@ -372,6 +424,9 @@ fn answer(weak: &Weak<Inner>, receiver: &Receiver<Request>) {
 		}
 		if looks {
 			(inner.notify)(Formatting::Messages);
+		}
+		if decorations {
+			(inner.notify)(Formatting::Decorations);
 		}
 	}
 }
@@ -399,6 +454,44 @@ fn kept(state: &State, guild_id: Option<Snowflake>, view: &MessageView) -> KeptM
 				embeds: version.embeds.len(),
 			})
 			.collect(),
+	}
+}
+
+pub fn decorated_user(state: &State, guild_id: Option<Snowflake>, user: &User) -> DecoratedUser {
+	let presence = state.presence(user.id);
+	let mine = state.current_user_id() == Some(user.id);
+	let status = match presence {
+		Some(presence) => status_word(&presence.status),
+		None if mine => status_word(&state.own_status()),
+		None => "offline",
+	};
+	let platforms = presence
+		.and_then(|presence| presence.client_status.as_ref())
+		.map(|client| Platforms {
+			desktop: client.desktop.as_ref().map(status_word),
+			mobile: client.mobile.as_ref().map(status_word),
+			web: client.web.as_ref().map(status_word),
+		})
+		.unwrap_or_default();
+	DecoratedUser {
+		user_id: user.id,
+		guild_id,
+		bot: user.bot == Some(true),
+		mine,
+		owner: guild_id
+			.and_then(|guild_id| state.guild(guild_id))
+			.is_some_and(|guild| guild.owner_id == Some(user.id)),
+		status,
+		platforms,
+	}
+}
+
+fn status_word(status: &StatusKind) -> &'static str {
+	match status {
+		StatusKind::Online => "online",
+		StatusKind::Idle => "idle",
+		StatusKind::Dnd => "dnd",
+		_ => "offline",
 	}
 }
 

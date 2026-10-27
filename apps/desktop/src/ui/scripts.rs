@@ -10,6 +10,7 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
+mod decorations;
 mod hidden;
 mod plugins;
 

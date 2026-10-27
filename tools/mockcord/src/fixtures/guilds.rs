@@ -182,6 +182,29 @@ fn text_channel_name(index: usize) -> String {
 	}
 }
 
+fn client_status(status: StatusKind, variant: usize) -> ClientStatus {
+	let on = |shown: bool| shown.then(|| status.clone());
+	match variant % 5 {
+		2 => ClientStatus {
+			mobile: on(true),
+			..ClientStatus::default()
+		},
+		3 => ClientStatus {
+			desktop: on(true),
+			mobile: on(true),
+			web: None,
+		},
+		4 => ClientStatus {
+			web: on(true),
+			..ClientStatus::default()
+		},
+		_ => ClientStatus {
+			desktop: on(true),
+			..ClientStatus::default()
+		},
+	}
+}
+
 fn presence_for(rng: &mut StdRng, user_id: u64, status: StatusKind, variant: usize, now_ms: i64) -> Presence {
 	let activities = if status == StatusKind::Offline {
 		Vec::new()
@@ -200,11 +223,7 @@ fn presence_for(rng: &mut StdRng, user_id: u64, status: StatusKind, variant: usi
 		guild_id: None,
 		status,
 		activities: LenientVec::from(activities),
-		client_status: platform.map(|status| ClientStatus {
-			desktop: Some(status),
-			mobile: None,
-			web: None,
-		}),
+		client_status: platform.map(|status| client_status(status, variant)),
 	}
 }
 

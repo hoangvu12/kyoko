@@ -7,7 +7,7 @@ The runtime is `crates/plugins` (`PluginHost`). It has no UI dependency and buil
 ## The two halves
 
 - **Logic half** (`logic.luau`): data hooks, events, storage and actions. Each enabled plugin gets its own sandboxed Luau VM on a worker thread of its own, with a call deadline on every hook, so a per-message hook never runs on the UI thread or blocks the session for long. This half is built.
-- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code, and so are `message.menu` items and `message.accessory` lines. See "UI slots".
+- **UI half** (`ui.luau`): a zgx plugin contributing to named UI slots, reaching nothing of the app's but the `plugin.<id>.*` values and actions the app exposes to it. It runs on the UI thread in its own sandboxed zgx VM, mounted while the plugin runs. The placed slots are `composer.buttons`, `panel.buttons` and `rail.buttons`; the settings pane is generated from the manifest and needs no UI code, and so are `message.menu` items, `message.accessory` lines and the `user.decoration` and `member.decoration` icons beside names. See "UI slots".
 
 ## Where plugins come from
 
@@ -120,9 +120,11 @@ The user approves every permission the manifest asks for before the plugin runs,
 | `ui:composer.buttons`, `ui:panel.buttons`, `ui:rail.buttons` | show its UI half in that slot | yes |
 | `ui:message.menu` | add its `[[menu]]` items to the message menu and the expression menus | yes |
 | `ui:message.accessory` | add the `accessory` line its `render_message` returns under a message | yes |
+| `ui:user.decoration` | add the `messages` and `profiles` icons its `decorate_user` returns beside names in the timeline and the thread pane, and among profile badges | yes |
+| `ui:member.decoration` | add the `members` icons its `decorate_user` returns after names in the member list, and show the owner's crown there (`crown`) | yes |
 | `ui:sidebar.hidden_channels` | while it runs, kyoko lists the channels the user cannot view and opens their details on a click (ShowHiddenChannels) | yes |
 | `ui:members.moderator_notes` | while it runs, kyoko marks timeouts and moderator flags it already has in the member list (ShowHiddenThings) | yes |
-| `ui:settings`, `ui:user.decoration`, `ui:member.decoration` | contribute to that UI slot | reserved (see UI slots) |
+| `ui:settings` | contribute to that UI slot | reserved (see UI slots) |
 | `network:<host>` | contact that host | reserved; v1 has no network API at all |
 
 Reserved permissions parse, show in the prompt with "Not used yet", and grant nothing until their ticket adds the call path (`Permission::available`). The prompt marks sensitive ones (`hook:send`, `hook:edit`, `hook:notify`, `hook:message_render`, `read:messages`, `read:dms`, actions, network). Granted permissions are `declared ∩ approved`.
@@ -146,6 +148,7 @@ return {
 	rank_emoji = function(request) return nil end,
 	render_message = function(message) return nil end,
 	show_deleted = function() return false end,
+	decorate_user = function(user) return nil end,
 	on_event = function(event) end,
 	on_action = function(key, context) end,
 	on_settings_changed = function() end,
@@ -167,6 +170,7 @@ Ids are strings of digits. Every table the host passes is a fresh copy: writing 
 | `rank_emoji(request)` | `hook:emoji_rank` | after typing pauses on a `:` query (below) | `{ query, guild_id?, emojis }` | an array of keys to put first, or `nil` | 100 ms |
 | `render_message(message)` | `hook:message_render` | off the UI thread, once per kept message and revision, then cached ("Message looks") | `{ id, channel_id, guild_id?, author_id, bot, mine, content, deleted, deleted_at?, edited_at?, versions }`; times are Unix seconds, `versions` the earlier versions oldest first, each `{ content, edited_at?, replaced_at?, attachments, embeds }` (counts) | `{ deleted?, history?, accessory? }`, or `nil` for kyoko's own look | 50 ms |
 | `show_deleted()` | `hook:message_render` | whenever the set of running plugins or one's settings change, and when a session attaches | nothing | `true` to show kept deleted messages in the timeline; anything else does not | 50 ms |
+| `decorate_user(user)` | `ui:user.decoration` or `ui:member.decoration` | off the UI thread, once per person, server and presence, then cached ("Name decorations") | `{ user_id, guild_id?, bot, mine, owner }`, plus `status` and `platforms` (`{ desktop?, mobile?, web? }`, each that platform's status) with `read:users` | `{ members?, messages?, profiles?, crown? }`: lists of `{ icon, color?, tooltip? }`, or `nil` | 50 ms |
 | `on_event(event)` | the event's read scope | after each listed gateway event is applied to state | see Events | nothing | 200 ms |
 | `on_action(key, context)` | none | when the user clicks the plugin's `action` setting, one of its slot buttons or one of its menu items | the key, and `{ source = "settings" }`, `{ source = "slot", slot = "composer.buttons" }` or `{ source = "menu", slot = "message.menu", target?, id?, name?, animated?, format?, channel_id?, message_id? }` ("Menu items") | nothing | 500 ms |
 | `on_settings_changed()` | none | after the user changes one of its settings | nothing | nothing | 200 ms |
@@ -248,6 +252,20 @@ A full mock session (`cargo xtask headless-run --mock`, 150 messages of one chan
 - It fails open: an error, an overrun or `nil` is kyoko's own look (deleted messages muted with a red "(deleted)", no history); errors and overruns count strikes as for every hook, and the cached fallback means a broken plugin is asked once per message. A `"hide"` answer arrives after the first frame, so a hidden deleted message can show for a moment.
 - Earlier versions are drawn from their text only, with mentions resolved as in the message; their attachments and embeds are not drawn.
 
+## Name decorations
+
+`decorate_user` (ticket 49) lets a plugin put small icons beside people's names, and show the server owner's crown. Kyoko draws them from the data the hook returns; a plugin ships no UI code for them.
+
+- It runs on the `display-hooks` thread through `bridge::Display`, like the name hooks (`Formatting::Decorations`, `Display::decorations`): a miss draws the name alone at once, and the answer redraws the timeline, the thread pane, the member list and an open profile. Answers are cached per `DecoratedUser`: the user, the server, bot, mine, owner, the status and each platform's status, so a person going idle or opening the mobile app is a new question and nothing else is; up to 4096, dropped when a decorating plugin starts, stops, restarts or has a setting changed. Scrolling and redrawing never ask again. With no running plugin granted a decoration slot nothing is asked, and a row costs one atomic check.
+- Who is asked about: the author of every plain message in the timeline and the thread pane, every member row, and the person on the profile popout and full profile. The timeline re-projects when the presence of one of its authors changes, but only while a plugin decorates.
+- The answer: `members`, `messages` and `profiles` are the icons for the member list, beside the author's name in the chat, and in profiles; each is a list of at most 4 `{ icon, color, tooltip }`. `icon` is an SVG file of the plugin's own folder (as menu icons: at most 64 KiB, drawn in `currentColor`), `color` a theme token as a string (`"$kyoko.status_online"` or `"status_online"`; anything else is `text_4`), `tooltip` up to 100 characters. `members` and `crown` need `ui:member.decoration`, `messages` and `profiles` need `ui:user.decoration`; the rest of the answer is dropped. `crown = true` shows kyoko's own crown, and only on the server's owner.
+- `status` and `platforms` come from presence (`client_status`) and are passed only with `read:users`; without it a plugin sees who someone is, not where they are.
+- Several plugins chain in id order: every plugin's icons are drawn, in id order, and any plugin may turn the crown on.
+- It fails open: an error, an overrun or `nil` is the plain name; errors and overruns count strikes, and the cached fallback means a broken plugin is asked once per person.
+- The member list uses the same answers as the timeline and profiles rather than a zgx slot per row: the data (presence, ownership) lives in Rust, the timeline and profiles are Rust and need it as data anyway, and one cache then serves all three places. The member row draws each icon from its SVG source (`code:` in `ui.svg`).
+
+**The owner's crown.** The member list shows a crown (`crown`, `yellow_2`, "Server Owner") after the owner's name, as Discord does, except where Discord hides it (`bridge::shows_crown`): in a server that shows a role with Administrator apart from online members (Discord's documented rule) or with more than 1000 members (`CROWN_MEMBER_LIMIT`, kyoko's reading of Discord hiding it in large servers; the exact threshold is not documented). ForceOwnerCrown turns it on regardless. Group DMs keep their own crown.
+
 ## Actions and the gesture rule
 
 A Discord action runs only inside a user gesture:
@@ -268,6 +286,7 @@ A Discord action runs only inside a user gesture:
 | typing and notification vetoes | 100 ms |
 | `format_name`, `format_relative` (`name_deadline`, `time_deadline`) | 50 ms each |
 | `render_message`, `show_deleted` (`render_deadline`) | 50 ms |
+| `decorate_user` (`decoration_deadline`) | 50 ms |
 | emoji ranking | 100 ms |
 | events, `on_settings_changed` | 200 ms |
 | `on_action` | 500 ms |
@@ -295,7 +314,8 @@ A Discord action runs only inside a user gesture:
 | `composer.buttons` | the composer's button row, left of GIF, sticker and emoji, in the main and thread composers | placed (47) |
 | `panel.buttons` | the user panel, between the user area and mute | placed, empty until 56 |
 | `rail.buttons` | the server rail, under Home | placed (54) |
-| `user.decoration`, `member.decoration` | beside names in the timeline, member list and profiles | reserved for 49 |
+| `user.decoration` | icons after the author's name in the timeline and the thread pane, and first among a profile's badges (popout and full profile), from `decorate_user`'s `messages` and `profiles` | placed (49), drawn by Rust |
+| `member.decoration` | icons after a member's name in the member list, and the owner's crown, from `decorate_user`'s `members` and `crown` | placed (49), drawn by the member list from the same data |
 | `message.menu` | items appended to the message context menu (`bridge::append_plugin_entries` after `bridge::message_menu`, drawn by `MessageActions` for the timeline, the thread pane, the hover bar's More menu and search results), and the menu of a custom emoji or sticker cell in the expression pickers | placed (53), from the manifest's `[[menu]]` |
 | `message.accessory` | lines of small muted text under a message in the timeline and the thread pane, after its reactions, from `render_message`'s `accessory` | placed (52), drawn by Rust |
 | `sidebar.hidden_channels` | the channel sidebar's hidden channels and their details in the chat panel; the plugin contributes nothing but the grant | placed (55), drawn by kyoko |
@@ -475,6 +495,19 @@ Nothing about a hidden channel is ever fetched, subscribed to, acknowledged or t
 
 That is the whole list: nothing is fetched and nothing else is shown. A timeout that ends while the list is open goes away at the next redraw of that row. Vencord's ShowHiddenThings is the behaviour reference; no code is shared. Its discovery, invite and mod view options need data kyoko does not have, so they are left out.
 
+## PlatformIndicators
+
+`plugins/platform-indicators/` (`read:users`, `ui:member.decoration`, `ui:user.decoration`, ships disabled). Its `decorate_user` shows a monitor, a phone or a globe for each platform someone is on (desktop, mobile, web, from presence's `client_status`), in that platform's status colour (`status_online`, `status_idle`, `status_dnd`), with "Idle on Mobile" as the tooltip. Bots get none, and nor does anyone kyoko has no presence for.
+
+- "Show in the member list", "Show in messages", "Show in profiles" (all on): where the icons show; in profiles they come first among the badges.
+- "Colour the mobile icon by status" (on): off, the phone stays grey (`text_4`).
+
+The icons are Lucide's `monitor`, `smartphone` and `globe`, shipped in the plugin's folder. Vencord's PlatformIndicators is the behaviour reference; no code is shared. Its embedded (console) and VR platforms are left out, since kyoko decodes only desktop, mobile and web; your own platforms come from your presence as Discord sends it, not from your session list.
+
+## ForceOwnerCrown
+
+`plugins/force-owner-crown/` (`ui:member.decoration`, ships disabled). Its `decorate_user` answers `crown = true` for the server's owner, so the member list shows the crown even where Discord would hide it (above). Vencord's ForceOwnerCrown is the behaviour reference; no code is shared.
+
 ## Adding a bundled plugin
 
 1. Create `plugins/<id>/` with `plugin.toml`, `logic.luau` and its modules. Ask for the fewest permissions that work.
@@ -495,6 +528,8 @@ ExpressionCloner: `crates/plugins/tests/plugins/expression_cloner.rs` (it ships 
 MessageLogger: `crates/plugins/tests/plugins/message_logger.rs` (the hook only with its permission and an accessory only with `ui:message.accessory`; every setting's look; Remove from log hiding a message and surviving a restart; `ShowDeletedMessages` sent on enabling, a settings change, disabling, enabling again and a new start; a failing and an endless renderer falling back to kyoko's look, being suspended and turning deleted messages off); `crates/bridge/tests/bridge/message_logger.rs` with the real host against mockcord (`Control::edit_message` and `delete_message`: the timeline hides the deleted message on its own, then shows it in red with the accessory and the edit's earlier version once the plugin runs, one call per kept message and none on redraw, the tint setting, Remove from log, kyoko's look again once off; edit history only keeps deleted messages hidden). `headless-run` deletes another author's message and checks it and the edited typo through `bridge::Display` (`kept_calls`), and the `message-logger-deleted` and `message-logger-edits` captures show both in the window.
 
 Display hooks: `display.rs` covers each hook only with its own permission, ShowMeYourName's modes and its hide setting, DontRoundMyTimestamps' rounding, a failing and an endless formatter falling back and being suspended, and the formatter list changing with settings, restarts and disabling. `crates/bridge/tests/bridge/display.rs` drives the real host through `bridge::Display` against mockcord: the timeline's authors, the member list and a profile card show the username, redrawing asks no plugin again, a mode change and turning the plugin off redraw the rows, a stuck plugin never holds up a projection, and only rows with a relative time redraw for DontRoundMyTimestamps. The load check builds a member row with a dimmed username.
+
+Name decorations: `crates/plugins/tests/plugins/decorations.rs` (the hook only with a decoration slot, each place only with its slot, presence only with `read:users`, the crown only on the owner and only with the member slot, icons from the plugin's folder, bad icons and colours dropped; PlatformIndicators' icons, colours, tooltips and every setting, nothing for bots; ForceOwnerCrown on the owner only; a failing and an endless decorator leaving names plain and being suspended). `crates/bridge/tests/bridge/decorations.rs` runs both bundled plugins against mockcord through `bridge::Display`: with them off nothing is drawn and the mock server's hoisted Admin role hides the crown; on, every author and member shows exactly the platforms in their presence and only the owner a crown, a profile lists them among its badges, about one call per person and none on 50 redraws, and turning them off clears it all. The load check builds a member row with the crown and a platform icon (`ui::scripts::decorations`). `headless-run` runs both and reports `decoration_calls`; the `name-decorations` and `name-decorations-profile` captures show them in the window.
 
 Hidden channels: `crates/session/tests/session/hidden.rs` sends every reading command for mockcord's `staff-only` channel (hidden from everyone but Admin) and asserts that no request, query, body or gateway frame names it, before and after a restart. `crates/bridge/tests/bridge/hidden.rs` does the same through the real bundled plugins and `bridge::Sidebar`: the channel is not listed while ShowHiddenChannels is off, is listed locked and opens its details (topic, last activity from `last_message_id`, Admin allowed, @everyone denied) while it runs, nothing reaches mockcord, again after a restart, and turning the plugin off closes the details; ShowHiddenThings shows a timeout and pending screening that arrived in a member update without one more request or frame. `crates/plugins/tests/plugins/hidden_views.rs` checks that both ship disabled and that only a running plugin granted the slot turns its view on. The load check builds the details and a member row with notes, and `ui::scripts::hidden` clicks a hidden row (`sidebar.open_hidden`, never `sidebar.select_channel`). `headless-run` runs both plugins and reports `hidden_quiet` after opening the details and sending a select, typing and a subscription for the hidden channel.
 

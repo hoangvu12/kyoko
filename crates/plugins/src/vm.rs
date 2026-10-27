@@ -9,7 +9,8 @@ use session::{DeletedLook, HistoryLook, KeptMessage, ShownName};
 
 use crate::api;
 use crate::calls::{
-	Call, Fault, Look, MessageView, ON_EVENT, PluginEvent, RANK_EMOJI, RENDER_MESSAGE, Reply, SHOW_DELETED,
+	Call, DECORATE_USER, Fault, Look, MessageView, ON_EVENT, PluginEvent, RANK_EMOJI, RENDER_MESSAGE, Reply,
+	SHOW_DELETED,
 };
 use crate::context::Context;
 use crate::manifest::clip;
@@ -20,7 +21,7 @@ const TEXT_LIMIT: usize = 4000;
 const LABEL_LIMIT: usize = 100;
 const ORDER_LIMIT: usize = 512;
 const ACTION_KEY_LIMIT: usize = 48;
-const HOOK_NAMES: [&str; 12] = [
+const HOOK_NAMES: [&str; 13] = [
 	"before_send",
 	"before_edit",
 	"allow_typing",
@@ -33,6 +34,7 @@ const HOOK_NAMES: [&str; 12] = [
 	ON_EVENT,
 	RENDER_MESSAGE,
 	SHOW_DELETED,
+	DECORATE_USER,
 ];
 
 pub(crate) struct LogicVm {
@@ -133,6 +135,7 @@ impl LogicVm {
 			Call::RankEmoji { .. } => Reply::Order(order(&value)),
 			Call::RenderMessage(_) => Reply::Look(look(&value)),
 			Call::ShowDeleted => Reply::Allow(matches!(value, Value::Boolean(true))),
+			Call::DecorateUser { .. } => Reply::Decor(crate::decorate::decor(&value)),
 			Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 		})
 	}
@@ -261,6 +264,9 @@ impl LogicVm {
 				vec![Value::String(lua.create_string(key)?), Value::Table(details)]
 			}
 			Call::RenderMessage(message) => vec![Value::Table(kept_table(lua, message)?)],
+			Call::DecorateUser { user, presence } => {
+				vec![Value::Table(crate::decorate::user_table(lua, user, *presence)?)]
+			}
 			Call::SettingsChanged | Call::ShowDeleted => Vec::new(),
 		};
 		Ok(mlua::MultiValue::from_iter(values))
@@ -337,7 +343,7 @@ impl LogicVm {
 	}
 }
 
-fn table(lua: &Lua, fields: &[(&str, Option<String>)]) -> mlua::Result<Table> {
+pub(crate) fn table(lua: &Lua, fields: &[(&str, Option<String>)]) -> mlua::Result<Table> {
 	let table = lua.create_table_with_capacity(0, fields.len())?;
 	for (key, value) in fields {
 		if let Some(value) = value {
@@ -404,6 +410,7 @@ fn default_reply(call: &Call) -> Reply {
 		Call::RankEmoji { .. } => Reply::Order(None),
 		Call::RenderMessage(_) => Reply::Look(None),
 		Call::ShowDeleted => Reply::Allow(false),
+		Call::DecorateUser { .. } => Reply::Decor(None),
 		Call::Action { .. } | Call::SettingsChanged => Reply::Done,
 	}
 }
@@ -437,7 +444,7 @@ fn kept_table(lua: &Lua, message: &KeptMessage) -> mlua::Result<Table> {
 	Ok(argument)
 }
 
-fn word(table: &Table, key: &str) -> Option<String> {
+pub(crate) fn word(table: &Table, key: &str) -> Option<String> {
 	match table.raw_get::<Value>(key).ok()? {
 		Value::String(text) => text.to_str().ok().map(|text| text.to_owned()),
 		_ => None,
@@ -480,7 +487,7 @@ fn look(value: &Value) -> Option<Look> {
 	(look != Look::default()).then_some(look)
 }
 
-fn label(value: &Value) -> Option<String> {
+pub(crate) fn label(value: &Value) -> Option<String> {
 	let Value::String(text) = value else {
 		return None;
 	};
