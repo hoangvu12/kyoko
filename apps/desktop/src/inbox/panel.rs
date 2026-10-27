@@ -159,8 +159,8 @@ fn square_button(
 		.text_color(tok("text_4"))
 		.hover(|style| style.text_color(tok("text_3")))
 		.child(crate::timeline::icons::glyph(glyph, glyph_size))
-		.tooltip(tip)
 		.on_click(on_click)
+		.tooltip(tip)
 }
 
 fn circle_button(glyph: &'static str, tip: &'static str, on_click: impl FnMut() + 'static) -> View {
@@ -177,8 +177,8 @@ fn circle_button(glyph: &'static str, tip: &'static str, on_click: impl FnMut() 
 		.text_color(tok("text_4"))
 		.hover(|style| style.text_color(tok("text_3")))
 		.child(crate::timeline::icons::glyph(glyph, SMALL_GLYPH))
-		.tooltip(tip)
 		.on_click(on_click)
+		.tooltip(tip)
 }
 
 fn body(layer: &Rc<InboxLayer>) -> View {

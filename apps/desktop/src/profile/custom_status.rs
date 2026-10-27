@@ -343,11 +343,11 @@ fn status_field(layer: &Rc<ProfileLayer>) -> View {
 					.text_color(tok("text_4"))
 					.hover(|style| style.text_color(tok("text_3")))
 					.child(glyph("close", CLEAR_GLYPH))
-					.tooltip("Clear")
 					.on_click(move || {
 						text.set(String::new());
 						emoji.set(None);
 					})
+					.tooltip("Clear")
 			},
 		))
 }

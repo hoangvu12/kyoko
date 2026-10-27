@@ -516,12 +516,12 @@ impl AppsLauncherView {
 		tile(self, app, TILE, "radius_md")
 			.id(format!("apps-recent-{}", id.map_or(0, |id| id.0)))
 			.cursor(Cursor::Pointer)
-			.tooltip(app.app.name.clone())
 			.on_click(move || {
 				if let Some(id) = id {
 					this.choose(Pick::App(id));
 				}
 			})
+			.tooltip(app.app.name.clone())
 	}
 
 	fn app_row(self: &Rc<Self>, app: &LauncherApp) -> View {

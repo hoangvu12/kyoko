@@ -449,13 +449,13 @@ fn pin_card(
 					.text_color(tok("text_4"))
 					.hover(|style| style.text_color(tok("text_3")))
 					.child(crate::timeline::icons::glyph("close", SEARCH_GLYPH))
-					.tooltip("Unpin Message")
 					.on_click(move || {
 						unpin.request(Request::Unpin {
 							channel_id,
 							message_id,
 						})
-					}),
+					})
+					.tooltip("Unpin Message"),
 			)
 		});
 	let body = text(entry.text.clone())
