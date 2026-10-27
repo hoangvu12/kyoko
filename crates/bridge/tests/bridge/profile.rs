@@ -210,3 +210,83 @@ async fn a_loaded_profile_shows_its_guild_tag_and_connections_and_missing_parts_
 	}
 	running.stop().await;
 }
+
+fn member_with_roles(state: &State, guild_id: Snowflake, me: Snowflake) -> Option<Snowflake> {
+	let guild = state.guild(guild_id)?;
+	let mut ids: Vec<Snowflake> = guild
+		.members
+		.iter()
+		.filter(|(id, member)| **id != me && !member.roles.is_empty() && state.user(**id).is_some())
+		.map(|(id, _)| *id)
+		.filter(|id| state.profile(*id).is_none())
+		.collect();
+	ids.sort_unstable();
+	ids.first().copied()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_opened_profile_shows_the_member_at_once_and_fills_in_when_it_arrives() {
+	let mut running = Running::start("profile-fills-in").await;
+	let open = {
+		let state = running.session().state().clone();
+		bridge::first_channel(&state.read()).expect("a channel to open")
+	};
+	let guild_id = open.guild_id.expect("the first channel is in a guild");
+	if let Some(command) = running.select_guild(guild_id) {
+		running.session().send(command);
+	}
+	let command = running.open_channel(open.channel_id).expect("the channel opens");
+	running.session().send(command);
+	let me = running.server.fixtures().current_user.id;
+	running
+		.until_state("a member with roles", |state| {
+			member_with_roles(state, guild_id, me).is_some()
+		})
+		.await;
+	let user_id = {
+		let state = running.session().state().read();
+		member_with_roles(&state, guild_id, me).expect("a member with roles")
+	};
+	running
+		.server
+		.control()
+		.hold_requests("GET", &format!("/users/{user_id}/profile"));
+	running.session().send(Command::LoadProfile {
+		user_id,
+		guild_id: Some(guild_id),
+	});
+	running
+		.until_state("the profile to be requested", |state| {
+			state.profile_loading(user_id)
+		})
+		.await;
+	{
+		let state = running.session().state().read();
+		let card = ProfileCard::of(&state, user_id, Some(guild_id), Utc::now()).expect("a card at once");
+		assert!(card.loading);
+		assert!(!card.loaded);
+		assert_eq!(card.name, state.display_name(Some(guild_id), user_id));
+		assert!(!card.roles.is_empty());
+		assert!(card.bio.is_none());
+		assert!(card.connections.is_empty());
+		assert!(
+			card.avatar_request("https://cdn.discordapp.com", 80., 1.)
+				.is_some()
+		);
+	}
+	running.server.control().release_requests();
+	running
+		.until_state("the profile to arrive", |state| {
+			state.profile(user_id).is_some() && !state.profile_loading(user_id)
+		})
+		.await;
+	{
+		let state = running.session().state().read();
+		let card = ProfileCard::of(&state, user_id, Some(guild_id), Utc::now()).expect("a card");
+		assert!(card.loaded);
+		assert!(!card.loading);
+		assert!(card.bio.is_some());
+		assert!(!card.roles.is_empty());
+	}
+	running.stop().await;
+}

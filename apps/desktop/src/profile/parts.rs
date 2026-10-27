@@ -357,6 +357,9 @@ pub fn activities(card: &ProfileCard) -> Option<View> {
 }
 
 pub fn about(card: &ProfileCard, title: &str) -> Option<View> {
+	if card.loading {
+		return Some(section(title, "space_8", placeholder(&[200., 140.])));
+	}
 	card.bio.clone().map(|bio| {
 		section(
 			title,
@@ -367,6 +370,20 @@ pub fn about(card: &ProfileCard, title: &str) -> Option<View> {
 				.text_color(tok("text_3")),
 		)
 	})
+}
+
+pub fn placeholder(widths: &[f32]) -> View {
+	column()
+		.id("profile-loading")
+		.w_full()
+		.gap(tok("space_8"))
+		.opacity(0.6)
+		.children(
+			widths
+				.iter()
+				.map(|width| div().h(10.).w(*width).rounded(5.).bg(tok("interactive_muted")))
+				.collect::<Vec<_>>(),
+		)
 }
 
 pub fn since_line(card: &ProfileCard) -> String {
@@ -404,6 +421,9 @@ pub fn roles(card: &ProfileCard) -> Option<View> {
 }
 
 pub fn connections(card: &ProfileCard) -> Option<View> {
+	if card.loading {
+		return Some(section("Connections", "space_8", placeholder(&[180.])));
+	}
 	(!card.connections.is_empty()).then(|| {
 		section(
 			"Connections",

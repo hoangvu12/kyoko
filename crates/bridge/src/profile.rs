@@ -186,6 +186,7 @@ pub struct ProfileCard {
 	pub dm_channel: Option<Snowflake>,
 	pub dm_lock: Option<RiskyLock>,
 	pub loaded: bool,
+	pub loading: bool,
 }
 
 impl ProfileCard {
@@ -311,6 +312,7 @@ impl ProfileCard {
 			dm_channel: dm_channel(state, user_id),
 			dm_lock: (!mine).then(|| state.dm_lock(user_id)).flatten(),
 			loaded: profile.is_some(),
+			loading: profile.is_none() && state.profile_loading(user_id),
 			user,
 		})
 	}

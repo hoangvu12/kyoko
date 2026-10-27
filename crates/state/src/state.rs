@@ -128,6 +128,7 @@ pub struct State {
 	pub(crate) autocomplete: Option<crate::composer::Autocomplete>,
 	pub(crate) app_modal: Option<crate::modal::AppModal>,
 	pub(crate) history_failures: HashMap<Snowflake, String>,
+	pub(crate) profiles_loading: HashSet<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,6 +208,10 @@ impl State {
 
 	pub fn history_failure(&self, channel_id: Snowflake) -> Option<&str> {
 		self.history_failures.get(&channel_id).map(String::as_str)
+	}
+
+	pub fn profile_loading(&self, user_id: Snowflake) -> bool {
+		self.profiles_loading.contains(&user_id)
 	}
 
 	pub fn current_user(&self) -> Option<&User> {
@@ -609,6 +614,16 @@ impl State {
 			LocalEvent::HistoryRequested { channel_id } => {
 				if self.history_failures.remove(channel_id).is_some() {
 					changes.messages.insert(*channel_id);
+				}
+			}
+			LocalEvent::ProfileRequested { user_id } => {
+				if self.profiles_loading.insert(*user_id) {
+					changes.loaded.insert(*user_id);
+				}
+			}
+			LocalEvent::ProfileSettled { user_id } => {
+				if self.profiles_loading.remove(user_id) {
+					changes.loaded.insert(*user_id);
 				}
 			}
 			LocalEvent::Connection(status) => {

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use protocol::Snowflake;
 use rest::RestError;
-use state::Loaded;
+use state::{Loaded, LocalEvent};
 use tokio::time::Instant;
 
 use super::{Core, Internal};
@@ -35,9 +35,15 @@ impl Profiles {
 		true
 	}
 
-	fn finished(&mut self, key: Key, now: Instant) {
+	fn finished(&mut self, key: Key, now: Instant, outcome: &ProfileOutcome) {
 		self.in_flight.remove(&key);
-		self.fetched.insert(key, now);
+		if !matches!(outcome, ProfileOutcome::Failed) {
+			self.fetched.insert(key, now);
+		}
+	}
+
+	fn fetching(&self, user_id: Snowflake) -> bool {
+		self.in_flight.iter().any(|(user, _)| *user == user_id)
 	}
 }
 
@@ -53,6 +59,7 @@ impl Core {
 		if !self.profiles.wanted(key, Instant::now()) {
 			return;
 		}
+		self.apply_local(LocalEvent::ProfileRequested { user_id });
 		let rest = self.rest.clone();
 		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
@@ -80,13 +87,17 @@ impl Core {
 		guild_id: Option<Snowflake>,
 		outcome: ProfileOutcome,
 	) {
-		self.profiles.finished((user_id, guild_id), Instant::now());
+		self.profiles
+			.finished((user_id, guild_id), Instant::now(), &outcome);
 		match outcome {
 			ProfileOutcome::Loaded(loaded) => self.on_loaded(loaded),
 			ProfileOutcome::Unavailable => {
 				tracing::debug!("the profile is not available, showing what is known")
 			}
 			ProfileOutcome::Failed => {}
+		}
+		if !self.profiles.fetching(user_id) {
+			self.apply_local(LocalEvent::ProfileSettled { user_id });
 		}
 	}
 }

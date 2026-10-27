@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use mockcord::{Recording, Reply, RestRequest};
 use protocol::{ChannelType, Opcode, Snowflake};
-use session::Command;
+use session::{Command, RestTuning};
 use state::{ConnectionStatus, MessageRow, State};
 
 use crate::harness::Running;
@@ -180,5 +180,172 @@ async fn a_failed_first_page_shows_in_the_pane_only_and_retry_loads_it() {
 		.mock()
 		.inspect(|recording| history_pages(&recording.requests, channel_id));
 	assert_eq!(pages, 2, "the failed page and the retry");
+	running.stop().await;
+}
+
+fn profile_fetches(requests: &[RestRequest], user_id: Snowflake) -> Vec<RestRequest> {
+	let path = format!("/users/{user_id}/profile");
+	requests
+		.iter()
+		.filter(|request| request.method == "GET" && request.path.ends_with(&path))
+		.cloned()
+		.collect()
+}
+
+fn all_profile_fetches(requests: &[RestRequest]) -> Vec<RestRequest> {
+	requests
+		.iter()
+		.filter(|request| request.method == "GET" && request.path.ends_with("/profile"))
+		.cloned()
+		.collect()
+}
+
+fn others(running: &Running, count: usize) -> Vec<Snowflake> {
+	let me = running.fixtures().current_user.id;
+	let mut ids: Vec<Snowflake> = running
+		.fixtures()
+		.users
+		.keys()
+		.copied()
+		.map(Snowflake)
+		.filter(|id| *id != me)
+		.collect();
+	ids.sort_unstable();
+	ids.truncate(count);
+	assert_eq!(ids.len(), count, "enough other users in the fixtures");
+	ids
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn profiles_load_only_when_opened_once_while_fresh_and_paced() {
+	let running = Running::start("channel-open-profiles").await;
+	running.connected().await;
+	let (guild_id, channels) = text_channels(&running.session().state().read());
+	let dm = running
+		.session()
+		.state()
+		.read()
+		.private_channels()
+		.find(|channel| channel.kind == ChannelType::Dm)
+		.map(|channel| channel.id)
+		.expect("a DM in the fixtures");
+
+	let (before, _) = quiet(&running).await;
+	open(&running, guild_id, channels[0]).await;
+	let (after_guild, _) = quiet(&running).await;
+	let routes = running
+		.mock()
+		.inspect(|recording| routes_after(recording, before));
+	assert_only_history_and_acks(&routes, channels[0]);
+
+	running.session().send(Command::SelectChannel {
+		guild_id: None,
+		channel_id: dm,
+	});
+	running
+		.until_wire("the DM's first page", |recording| {
+			(history_pages(&recording.requests[after_guild..], dm) > 0).then_some(())
+		})
+		.await;
+	let (after_dm, _) = quiet(&running).await;
+	let routes = running
+		.mock()
+		.inspect(|recording| routes_after(recording, after_guild));
+	assert_only_history_and_acks(&routes, dm);
+	assert!(
+		running
+			.mock()
+			.inspect(|recording| all_profile_fetches(&recording.requests).is_empty()),
+		"no profile is fetched before one is opened"
+	);
+
+	let users = others(&running, 4);
+	let author = users[0];
+	for _ in 0..2 {
+		running.session().send(Command::LoadProfile {
+			user_id: author,
+			guild_id: Some(guild_id),
+		});
+	}
+	running
+		.until("the opened profile", |state| {
+			state.profile(author).is_some() && !state.profile_loading(author)
+		})
+		.await;
+	running.session().send(Command::LoadProfile {
+		user_id: author,
+		guild_id: Some(guild_id),
+	});
+	quiet(&running).await;
+	let fetched = running
+		.mock()
+		.inspect(|recording| profile_fetches(&recording.requests[after_dm..], author));
+	assert_eq!(fetched.len(), 1, "opening the same profile twice fetches once");
+	let query = fetched[0].query.as_deref().unwrap_or_default();
+	for part in [
+		"with_mutual_guilds=true",
+		"with_mutual_friends=true",
+		&format!("guild_id={guild_id}"),
+	] {
+		assert!(query.contains(part), "{part} in {query}");
+	}
+
+	let (before_burst, _) = quiet(&running).await;
+	for user_id in &users[1..] {
+		running.session().send(Command::LoadProfile {
+			user_id: *user_id,
+			guild_id: Some(guild_id),
+		});
+	}
+	running
+		.until("every opened profile", |state| {
+			users[1..].iter().all(|user_id| state.profile(*user_id).is_some())
+		})
+		.await;
+	let burst = running
+		.mock()
+		.inspect(|recording| all_profile_fetches(&recording.requests[before_burst..]));
+	assert_eq!(burst.len(), 3);
+	running.assert_released_apart(&burst, RestTuning::default().profile_gap, "profile");
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_profile_stops_loading_and_the_next_open_tries_again() {
+	let running = Running::start("channel-open-profile-failure").await;
+	running.connected().await;
+	let user_id = others(&running, 1)[0];
+	running.mock().respond_once(
+		"GET",
+		&format!("/users/{user_id}/profile"),
+		Reply::error(500, 0, "500: Internal Server Error"),
+	);
+	running.session().send(Command::LoadProfile {
+		user_id,
+		guild_id: None,
+	});
+	running
+		.until_wire("the profile request", |recording| {
+			(!profile_fetches(&recording.requests, user_id).is_empty()).then_some(())
+		})
+		.await;
+	running
+		.until("the failure to settle", |state| !state.profile_loading(user_id))
+		.await;
+	assert!(running.session().state().read().profile(user_id).is_none());
+
+	running.session().send(Command::LoadProfile {
+		user_id,
+		guild_id: None,
+	});
+	running
+		.until("the profile on the second open", |state| {
+			state.profile(user_id).is_some()
+		})
+		.await;
+	let fetched = running
+		.mock()
+		.inspect(|recording| profile_fetches(&recording.requests, user_id).len());
+	assert_eq!(fetched, 2, "a failed fetch is not cached");
 	running.stop().await;
 }

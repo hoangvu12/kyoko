@@ -327,10 +327,10 @@ fn tab_button(
 fn tab_body(layer: &Rc<ProfileLayer>, shown: &Shown, tab: Option<FullTab>) -> View {
 	let card = &shown.card;
 	match tab {
-		None => empty(if card.loaded {
-			"Nothing to show here yet."
-		} else {
+		None => empty(if card.loading {
 			"Loading profile..."
+		} else {
+			"Nothing to show here yet."
 		}),
 		Some(FullTab::Activity) => row().w_full().flex_wrap().gap(tok("space_16")).children(
 			card.activities

@@ -26,7 +26,7 @@ Over plain `http://127.0.0.1` (mockcord) the same clients speak HTTP/1.1 without
 
 ## Pacing
 
-Pacing works on slots reserved in request order. A request sleeps until its slot, then sends. GET and HEAD are never paced. The client keeps the last 64 paced requests' method, path and slot (`RestClient::releases()`, `Session::releases()`, `rest::Release`), so tests check the spacing kyoko chose rather than arrival times a busy machine distorts.
+Pacing works on slots reserved in request order. A request sleeps until its slot, then sends. GET and HEAD are never paced, except profile reads (`profile_gap`). The client keeps the last 64 paced requests' method, path and slot (`RestClient::releases()`, `Session::releases()`, `rest::Release`), so tests check the spacing kyoko chose rather than arrival times a busy machine distorts.
 
 | Field | Default | Applies to |
 |---|---|---|
@@ -39,6 +39,7 @@ Pacing works on slots reserved in request order. A request sleeps until its slot
 | `settings_gap` | 10 s | between two server-order saves |
 | `collapse_gap` | 2 s | between two saves of collapsed categories |
 | `guild_write_gap` | 500 ms | after one server write before the next in the same server |
+| `profile_gap` | 500 ms | between two `GET /users/{id}/profile` requests, in their own lane |
 
 A message send is `POST /channels/<id>/messages`, and creating a thread or a forum post (`POST /channels/<id>/threads` and `POST /channels/<id>/messages/<message>/threads`) counts as one. The defaults sit between how fast a person acts and what Discord tolerates:
 
@@ -299,6 +300,14 @@ The requests follow the web client, read against discord-userdoccers (docs.disco
 - `Command::CreateGuild { name, icon }`: `POST /guilds` with `{"name", "icon", "channels": [], "system_channel_id": null, "guild_template_code": "2TffvPucqHkN"}`, the web client's "Create My Own" template.
 
 Not confirmed against live traffic yet: whether the web client adds `inputValue` to the invite lookup, `flags: 0` to invite creation, and the exact accept body outside guest invites.
+
+## Profiles
+
+A profile is fetched only when one is opened: the profile popout (timeline avatar, author or mention, member row, friends row, thread member), the full profile, and the DM profile column when a DM opens (Discord's DM side panel fetches it too). Each sends `Command::LoadProfile { user_id, guild_id }`; nothing else does. Opening a channel, hovering, READY and READY_SUPPLEMENTAL fetch no profile. The request is `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=true`, plus `guild_id` in a server (docs.discord.food, "Get User Profile"). The web client's `type` (popout, panel) is an analytics location and is left out.
+
+`crates/session/src/task/profiles.rs` keys requests by user and guild. A key in flight or fetched in the last 5 minutes (`PROFILE_TTL`) is not requested again, so opening the same popout twice sends one request. A 404, 403 or missing permission counts as fetched and fails quietly. Any other failure is forgotten, so the next open retries. Requests to different users go out `profile_gap` apart in their own pacer lane, which never waits on mutations or delays them.
+
+While a fetch is in flight, `State::profile_loading(user_id)` is true (`LocalEvent::ProfileRequested` and `ProfileSettled`). `bridge::ProfileCard` shows what is already known at once (user, member name, avatar, roles, join date, presence). Its `loading` flag is set until the profile arrives or fails, and the popout and full profile draw placeholder bars for About Me, Bio and Connections in the meantime (`profile::parts::placeholder`). A profile already in memory shows straight away while a stale one refreshes.
 
 ## Relationships
 

@@ -45,6 +45,10 @@ impl RouteKey {
 	pub fn is_bulk_ack(&self) -> bool {
 		self.key == "POST /read-states/ack-bulk"
 	}
+
+	pub fn is_user_profile(&self) -> bool {
+		self.key == "GET /users/{id}/profile"
+	}
 }
 
 impl fmt::Display for RouteKey {

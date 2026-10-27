@@ -126,6 +126,12 @@ pub enum LocalEvent {
 	HistoryRequested {
 		channel_id: Snowflake,
 	},
+	ProfileRequested {
+		user_id: Snowflake,
+	},
+	ProfileSettled {
+		user_id: Snowflake,
+	},
 	LatencyMeasured(Duration),
 	SecretStorage(SecretStorage),
 	VoiceConnection {

@@ -15,6 +15,7 @@ pub(crate) enum Pace {
 	Mutation,
 	Delete,
 	BulkAck,
+	Profile,
 	Send(String),
 }
 
@@ -28,6 +29,8 @@ impl Pace {
 			Self::Delete
 		} else if route.is_bulk_ack() {
 			Self::BulkAck
+		} else if route.is_user_profile() {
+			Self::Profile
 		} else if method == Method::GET || method == Method::HEAD {
 			Self::Free
 		} else {
@@ -42,6 +45,7 @@ struct Slots {
 	send: Option<Instant>,
 	delete: Option<Instant>,
 	bulk_ack: Option<Instant>,
+	profile: Option<Instant>,
 	channels: HashMap<String, Instant>,
 }
 
@@ -51,6 +55,7 @@ pub(crate) struct Pacer {
 	channel_send_gap: Duration,
 	delete_gap: Duration,
 	bulk_ack_gap: Duration,
+	profile_gap: Duration,
 	slots: Mutex<Slots>,
 }
 
@@ -66,6 +71,7 @@ impl Pacer {
 			channel_send_gap: tuning.channel_send_gap,
 			delete_gap: tuning.delete_gap,
 			bulk_ack_gap: tuning.bulk_ack_gap,
+			profile_gap: tuning.profile_gap,
 			slots: Mutex::default(),
 		}
 	}
@@ -73,9 +79,15 @@ impl Pacer {
 	pub fn reserve(&self, pace: &Pace) -> Option<Instant> {
 		let now = Instant::now();
 		let mut slots = self.slots.lock();
+		if let Pace::Profile = pace {
+			let at = later(now, slots.profile);
+			slots.profile = Some(at + self.profile_gap);
+			return Some(at);
+		}
 		let mut at = later(now, slots.mutation);
 		match pace {
 			Pace::Free => return None,
+			Pace::Profile => {}
 			Pace::Mutation => {}
 			Pace::Delete => {
 				at = later(at, slots.delete);
