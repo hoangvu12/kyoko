@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Find why animation doesn't play on real data (format mismatch such as mp4 GIFs, playback setting, visibility, decoder); fix
 - [ ] GIF attachments and GIF embeds animate (mp4/webm GIFs need a video path: if 91's video decoder isn't there yet, use the `.gif` or animated `.webp` the media proxy offers via `format=`), respecting the playback setting and reduced motion
