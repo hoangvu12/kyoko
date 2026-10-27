@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 30 (User panel, status and profiles)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A panel button slot exists and hosts the toggle
 - [ ] The toggle's state persists and presence updates honour it

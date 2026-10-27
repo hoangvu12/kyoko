@@ -4,12 +4,24 @@
 
 **Blocked by:** 10; 08 for the GIF and sticker strips
 
-**Status:** claimed
+**Status:** resolved
 
 **Mockups:** `docs/design/mockups/command-picker-built-in.html`, `docs/design/mockups/built-in-gif.html`, `docs/design/mockups/built-in-sticker.html`, `docs/design/mockups/built-in-thread.html`
 
 **Spec:** `docs/design/midnight.md`, Command picker and options
 
-- [ ] Every built-in except possibly `/schedule` works against mockcord, with a session-seam test where it reaches the network
-- [ ] Moderation built-ins appear only with the permission and confirm as the dialogs do
-- [ ] `/schedule` is either built the web client's way or documented as left out
+- [x] Every built-in except possibly `/schedule` works against mockcord, with a session-seam test where it reaches the network
+- [x] Moderation built-ins appear only with the permission and confirm as the dialogs do
+- [x] `/schedule` is either built the web client's way or documented as left out
+
+## Answer
+
+Merged to main as `d5a1e82`. Docs: `docs/rest.md` ("Built-in commands", `/schedule` left out), `docs/ui.md`, `docs/testing.md`, `docs/parity.md`.
+
+- Protocol (Discord's public web bundle `web.ad0b95d8568e0f6b.js` and en-US chunk `f391670acfbbe1bb.js`, fetched with UA `kyoko-dev`, no cookie or identity): frecency keys are the bare negative ids shrug -1, tableflip -2, unflip -3, me -5, spoiler -6, nick -7, thread -10, kick -11, ban -12, timeout -13, msg -14, gif -16, sticker -17, schedule -19 (M10's guesses were partly wrong). `/sticker`'s option is `query` (the mockup says `sticker`); `/me` and `/spoiler` require `message`; `/ban` has a required `delete_messages` with seven choices, `/timeout` a required `duration` from 60 s to 1 week, both an optional `reason`; `/thread` takes `name` (100) and `message`; `/nick` takes `new_nick` (32). `/shrug` sends `¯\_(ツ)_/¯` with a single backslash (M10 sent three; fixed). `/gif` and `/sticker` have no execute function, their option feeds a results strip. Gating: `/nick` needs Change or Manage Nicknames; `/thread` a text or announcement channel with Create Public Threads and Read Message History.
+- `/schedule` is left out: the web client posts to `/users/@me/scheduled-messages` (with list, edit, cancel and send-now routes) only for accounts in the experiment `2026-08-scheduled-messages`; kyoko doesn't evaluate experiments and has no scheduled-messages list.
+- Behaviour: text built-ins change the message as the web client does. `/msg` opens or creates the DM (new `Command::MessageUser`), selects it and sends there. `/nick` uses `SetNickname` (empty resets). `/thread` sends `CreateThread`, then the first message through the thread panel's first-message path. `/ban`, `/kick`, `/timeout` are listed only with the permission and open kyoko's moderation dialogs prefilled (duration, history, reason) through `ModerationLayer::ask`, so only the dialog's confirm reaches Discord. `/gif` (search 300 ms after typing pauses) and `/sticker` show a strip joined above the composer; Up/Down move, Enter or a click sends. In the picker only `/gif` shows an option chip (`CommandEntry::chips()`). User options accept a mention, an id, or a username, global name or server nickname; an unknown name shows red in its chip.
+- Tests: nine bridge tests in `crates/bridge/tests/bridge/built_ins.rs` driving the composer through the real session against mockcord (`/msg`, `/nick` set and reset, `/thread` with first message, `/ban`/`/kick`/`/timeout` send nothing before confirm, `/gif` debounced search and Down+Enter, `/sticker` click sends `sticker_ids`, text built-ins' content and frecency keys, `moderation_built_ins_appear_only_with_the_permission`); session tests in `dms.rs` for `MessageUser` sent and refused; load check `the_built_in_result_strips_load`. Mockcord: GIF search returns matching GIFs first, then the rest; the `hello` and `bye` stickers carry the tag `wave`.
+- Checks re-run by the orchestrator in lane A after rebasing onto `a2a64e5` (union conflicts in `composer/mod.rs`, `bridge/src/lib.rs`, `tests/bridge/main.rs`, `docs/testing.md`, `docs/parity.md`, `MOCKUPS`): fmt, clippy, build, `test --workspace`, `xtask test`, `headless-run --mock`, deny all exit 0; luau0-src `0.22.0+luau740`. Mockup parity (port 8494, `pair.png` checked by eye): command-picker-built-in 12.6%, built-in-gif 18.9%, built-in-sticker 16.2%, built-in-thread 13.3%, apps-launcher 12.4% and command-picker 11.7% unchanged. Every mockup page now has a kyoko screen.
+- Deviations: sticker chip reads `query:`; on the picker screen `/gif` scrolls into view at the bottom (M10's rail-jump scroll) rather than the Built-In header at the top; moderation built-ins confirm through dialogs (the web runs them at once), as the ticket asks; `/nick` uses `PATCH .../members/@me` (the web uses `.../members/@me/nick`); `/thread` sends no `location: "Slash Command"` and opens the new thread (the web doesn't); no local bot confirmation messages; `/tts`, `/leave`, `/roll-dice` weren't on the captured list and aren't built.
+- For later work: `Composer::results`/`choose_result` with the Luau `command_picker.results` strip fit any horizontal result list above the composer; `Outcome` gained `moderate` and `thread_message`; `CommandPicker::jump(section)` scrolls the jumped-to row in at the bottom.
