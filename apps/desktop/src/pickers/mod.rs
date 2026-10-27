@@ -2,15 +2,17 @@ mod emoji;
 pub(crate) use emoji::CELL_IMAGE;
 mod gif;
 mod sticker;
+#[cfg(test)]
+mod tests;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use bridge::{EmojiCell, EmojiPicker, GifView, MenuEntry, StickerCell, StickerPicker};
 use media::ImageName;
 use protocol::{FavoriteGif, Gif};
 use zgx::compose::prelude::*;
-use zgx::compose::{Placement, PlacementEdge, PlacementSide};
+use zgx::compose::{Placement, PlacementEdge, PlacementSide, VariableHeights};
 use zgx::decoration::Corners;
 use zgx::input::{EventPhase, InputEvent, Key, PointerButton};
 use zgx::reactive::{Effect, Runtime, Signal};
@@ -42,6 +44,8 @@ pub(crate) const RAIL: f32 = 48.;
 pub(crate) const RAIL_ITEM: f32 = 32.;
 pub(crate) const RAIL_ICON: f32 = 24.;
 pub(crate) const RAIL_PILL: f32 = 4.;
+const RAIL_GAP: f32 = 8.;
+const RAIL_OVERSCAN: usize = 2;
 pub(crate) const FOOTER: f32 = 47.;
 pub(crate) const FOOTER_IMAGE: f32 = 28.;
 pub(crate) const SECTION_HEADER: f32 = 28.;
@@ -108,6 +112,7 @@ pub enum Favorite {
 }
 
 type Handler<T> = RefCell<Option<Box<dyn Fn(T)>>>;
+type MenuParts = (Rc<PluginMenu>, crate::plugin_menu::Shown, Vec<MenuEntry>);
 
 pub struct ExpressionPicker {
 	pictures: Rc<crate::timeline::Pictures>,
@@ -130,6 +135,7 @@ pub struct ExpressionPicker {
 	images_changed: RefCell<Option<Box<dyn Fn()>>>,
 	watcher: RefCell<Option<Effect>>,
 	plugin_menu: RefCell<Option<Rc<PluginMenu>>>,
+	keep_open: Cell<bool>,
 }
 
 impl ExpressionPicker {
@@ -155,6 +161,7 @@ impl ExpressionPicker {
 			images_changed: RefCell::new(None),
 			watcher: RefCell::new(None),
 			plugin_menu: RefCell::new(None),
+			keep_open: Cell::new(false),
 		});
 		let watched = Rc::downgrade(&picker);
 		let (query, tab, open) = (picker.query.clone(), picker.tab.clone(), picker.open.clone());
@@ -170,6 +177,7 @@ impl ExpressionPicker {
 		});
 		*picker.watcher.borrow_mut() = Some(effect);
 		picker.emoji.watch(&picker);
+		picker.sticker.watch(&picker);
 		picker
 	}
 
@@ -177,35 +185,74 @@ impl ExpressionPicker {
 		*self.plugin_menu.borrow_mut() = Some(menu);
 	}
 
+	fn plugin_entries(&self, target: Option<state::Expression>) -> Option<MenuParts> {
+		let menu = self.plugin_menu.borrow().clone()?;
+		let shown = menu.shown(target);
+		shown.facts.target.as_ref()?;
+		let entries = shown.entries();
+		(!entries.is_empty()).then_some((menu, shown, entries))
+	}
+
 	fn expression_menu(
 		self: &Rc<Self>,
 		cell: View,
+		size: (f32, f32),
 		target: Option<state::Expression>,
 		favorite: Option<Favorite>,
 	) -> View {
 		let favorite = favorite.filter(|_| self.on_favorite.borrow().is_some());
-		let plugins = self.plugin_menu.borrow().clone().and_then(|menu| {
-			let shown = menu.shown(target);
-			shown.facts.target.as_ref()?;
-			let entries = shown.entries();
-			(!entries.is_empty()).then_some((menu, shown, entries))
-		});
-		if favorite.is_none() && plugins.is_none() {
+		let plugins = self
+			.plugin_menu
+			.borrow()
+			.as_ref()
+			.is_some_and(|menu| menu.has_items());
+		if favorite.is_none() && !plugins {
 			return cell;
 		}
-		let open = self.pictures.runtime().signal(false);
-		let opener = open.clone();
-		let anchor = cell.on_event(move |event| {
+		let runtime = self.pictures.runtime();
+		let (open, presses) = (runtime.signal(false), runtime.signal(None::<u64>));
+		let parts: Rc<RefCell<Option<MenuParts>>> = Rc::default();
+		let (opener, pressing, this) = (open.clone(), presses.clone(), self.clone());
+		let (found, pressed_favorite) = (parts.clone(), favorite.clone());
+		let cell = cell.on_event(move |event| {
 			if event.phase != EventPhase::Capture
 				&& let InputEvent::PointerDown {
 					button: PointerButton::Secondary,
 					..
 				} = event.event
 			{
-				opener.set(true);
 				event.prevent_default();
+				let plugins = this.plugin_entries(target.clone());
+				if pressed_favorite.is_none() && plugins.is_none() {
+					return;
+				}
+				*found.borrow_mut() = plugins;
+				pressing.update(|serial| *serial = Some(serial.map_or(0, |serial| serial + 1)));
+				opener.set(true);
 			}
 		});
+		let this = self.clone();
+		let host = div().absolute().left(0.).top(0.).w(0.).h(0.).child_when(
+			move || presses.get(),
+			move |_, _| this.menu_panel_at(size, open.clone(), favorite.clone(), parts.borrow().clone()),
+		);
+		div().relative().shrink_0().child(host).child(cell)
+	}
+
+	fn menu_panel_at(
+		self: &Rc<Self>,
+		(width, height): (f32, f32),
+		open: Signal<bool>,
+		favorite: Option<Favorite>,
+		plugins: Option<MenuParts>,
+	) -> View {
+		let anchor = div()
+			.absolute()
+			.left(0.)
+			.top(0.)
+			.w(width)
+			.h(height)
+			.pointer_events(false);
 		let mut items: Vec<View> = Vec::new();
 		if let Some(favorite) = favorite {
 			let label = match &favorite {
@@ -306,6 +353,10 @@ impl ExpressionPicker {
 		self.set_images(Vec::new());
 	}
 
+	pub fn showing(&self) -> bool {
+		self.open.get()
+	}
+
 	pub fn is_open(&self) -> bool {
 		self.open.with_untracked(|open| *open)
 	}
@@ -393,14 +444,14 @@ impl ExpressionPicker {
 		if let Some(pick) = self.on_emoji.borrow().as_ref() {
 			pick(cell);
 		}
-		self.close();
+		self.picked();
 	}
 
 	fn chose_gif(&self, gif: Gif) {
 		if let Some(pick) = self.on_gif.borrow().as_ref() {
 			pick(gif);
 		}
-		self.close();
+		self.picked();
 	}
 
 	fn chose_sticker(&self, cell: StickerCell) {
@@ -410,10 +461,17 @@ impl ExpressionPicker {
 		if let Some(pick) = self.on_sticker.borrow().as_ref() {
 			pick(cell);
 		}
-		self.close();
+		self.picked();
+	}
+
+	fn picked(&self) {
+		if !self.keep_open.replace(false) {
+			self.close();
+		}
 	}
 
 	fn submitted(&self) -> bool {
+		self.keep_open.set(false);
 		let tab = self.tab();
 		match tab {
 			Tab::Emoji => match self.emoji.first() {
@@ -456,6 +514,7 @@ impl ExpressionPicker {
 		let this = self.clone();
 		let tab = self.tab.clone();
 		let body = self.body_height();
+		let keeper = self.clone();
 		motion::popover(label, self.open.clone(), spot)
 			.placement(placement)
 			.w(WIDTH)
@@ -469,14 +528,27 @@ impl ExpressionPicker {
 			.text_color(tok("text_3"))
 			.overflow_hidden()
 			.child(self.header())
-			.child(column().w(INNER_WIDTH).h(body).min_h(0.).child(switch(
-				move || tab.get(),
-				move |tab: Tab, _| match tab {
-					Tab::Emoji => this.emoji_pane(),
-					Tab::Gif => this.gif_pane(),
-					Tab::Sticker => this.sticker_pane(),
-				},
-			)))
+			.child(
+				column()
+					.w(INNER_WIDTH)
+					.h(body)
+					.min_h(0.)
+					.on_event(move |event| {
+						if event.phase == EventPhase::Capture
+							&& matches!(event.event, InputEvent::PointerDown { .. })
+						{
+							keeper.keep_open.set(event.pointer_modifiers().shift);
+						}
+					})
+					.child(switch(
+						move || tab.get(),
+						move |tab: Tab, _| match tab {
+							Tab::Emoji => this.emoji_pane(),
+							Tab::Gif => this.gif_pane(),
+							Tab::Sticker => this.sticker_pane(),
+						},
+					)),
+			)
 	}
 
 	fn header(self: &Rc<Self>) -> View {
@@ -721,6 +793,64 @@ pub(crate) fn rail_frame(active: impl FnMut() -> bool + 'static, content: View) 
 
 pub(crate) fn rail_divider() -> View {
 	div().shrink_0().w(24.).h(BORDER).bg(tok("border"))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RailRow {
+	Item(usize),
+	Divider,
+}
+
+fn rail_row_height(row: Option<&RailRow>) -> f32 {
+	RAIL_GAP
+		+ match row {
+			Some(RailRow::Item(_)) => RAIL_ITEM,
+			Some(RailRow::Divider) => BORDER,
+			None => 0.,
+		}
+}
+
+pub(crate) fn rail_list(
+	runtime: &Runtime,
+	offset: Signal<f32>,
+	height: f32,
+	rows: Vec<RailRow>,
+	item: impl Fn(usize) -> View + 'static,
+) -> View {
+	let heights = VariableHeights::new(runtime, rows.len() + 1, RAIL_ITEM + RAIL_GAP);
+	let _ = heights.replace((0..=rows.len()).map(|index| rail_row_height(rows.get(index))));
+	variable_virtual_list(
+		offset,
+		heights,
+		RAIL_OVERSCAN,
+		|index| index,
+		move |_, index: usize, _| {
+			let shown = match rows.get(index) {
+				Some(RailRow::Item(item_index)) => item(*item_index),
+				Some(RailRow::Divider) => rail_divider(),
+				None => div(),
+			};
+			column()
+				.w(RAIL)
+				.h(rail_row_height(rows.get(index)))
+				.pt(RAIL_GAP)
+				.items_center()
+				.child(shown)
+		},
+	)
+	.w(RAIL)
+	.h(height)
+	.shrink_0()
+	.bg(tok("bg_4"))
+}
+
+pub(crate) fn rail_beside(rail: View, content: View, width: f32, height: f32) -> View {
+	div()
+		.relative()
+		.w(width)
+		.h(height)
+		.child(div().w(width).h(height).pl(RAIL).child(content))
+		.child(div().absolute().left(0.).top(0.).child(rail))
 }
 
 pub(crate) fn section_header(icon_view: View, title: String, locked: bool, collapsed: bool) -> View {

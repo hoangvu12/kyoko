@@ -3,9 +3,10 @@ use std::collections::HashSet;
 use std::rc::{Rc, Weak};
 
 use bridge::{
-	EmojiCell, EmojiPicker, EmojiSection, PickerSection, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE,
-	TONES,
+	CustomEmoji, EmojiCell, EmojiPicker, EmojiSection, PickerSection, RailGroup, RailIcon, SEARCH_SECTION,
+	TONE_SAMPLE, TONES,
 };
+use media::ImageName;
 use protocol::EmojiCategory;
 use zgx::compose::VariableHeights;
 use zgx::compose::prelude::*;
@@ -13,9 +14,9 @@ use zgx::input::InputEvent;
 use zgx::reactive::{Effect, Runtime, Signal};
 
 use super::{
-	ExpressionPicker, FOOTER, FOOTER_IMAGE, Favorite, INNER_WIDTH, RAIL, RAIL_ICON, RAIL_ITEM,
-	SECTION_HEADER, SECTION_ICON, footer_frame, footer_text, greyed, portrait_shaped, rail_divider,
-	rail_frame, section_header,
+	ExpressionPicker, FOOTER, FOOTER_IMAGE, Favorite, INNER_WIDTH, RAIL, RAIL_ICON, RAIL_ITEM, RailRow,
+	SECTION_HEADER, SECTION_ICON, footer_frame, footer_text, greyed, portrait_shaped, rail_beside,
+	rail_frame, rail_list, section_header,
 };
 use crate::emoji;
 use crate::timeline::{icon, tok};
@@ -26,7 +27,7 @@ pub(crate) const CELL_IMAGE: f32 = 40.;
 const GRID_PADDING: f32 = 8.;
 const GRID_WIDTH: f32 = INNER_WIDTH - RAIL;
 const TONE_GLYPH: f32 = 24.;
-const OVERSCAN: usize = 4;
+const OVERSCAN: usize = 1;
 const SEARCH_ICON: &str = "picker_search";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,24 +194,30 @@ impl EmojiState {
 
 	pub(super) fn watch(&self, picker: &Rc<ExpressionPicker>) {
 		let weak: Weak<ExpressionPicker> = Rc::downgrade(picker);
-		let (grid, offset) = (self.grid.clone(), self.offset.clone());
+		let (grid, offset, hovered) = (self.grid.clone(), self.offset.clone(), self.hovered.clone());
+		let (open, tab) = (picker.open.clone(), picker.tab.clone());
 		let height = picker.body_height() - FOOTER;
 		let effect = picker.pictures.runtime().effect(move || {
+			if !open.get() || tab.get() != super::Tab::Emoji {
+				return;
+			}
 			let top = offset.get();
-			let names: Vec<(u64, bool)> = grid.with(|grid| {
-				grid.cells_between(top - CELL * 2., top + height + CELL * 2.)
+			let mut shown: Vec<CustomEmoji> = grid.with(|grid| {
+				grid.cells_between(top, top + height)
 					.into_iter()
-					.filter_map(|cell| cell.custom.as_ref())
-					.map(|custom| (custom.id.get(), custom.animated))
+					.filter_map(|cell| cell.custom.clone())
 					.collect()
 			});
-			if let Some(picker) = weak.upgrade()
-				&& picker.tab() == super::Tab::Emoji
-			{
-				let names = names
-					.into_iter()
-					.map(|(id, animated)| picker.pictures.emoji(id, animated, f64::from(CELL_IMAGE)))
-					.collect();
+			let moving = hovered.with(|hovered| {
+				hovered
+					.as_ref()
+					.and_then(|cell| cell.custom.clone())
+					.filter(|custom| custom.animated)
+			});
+			if let Some(picker) = weak.upgrade() {
+				let mut names: Vec<ImageName> =
+					shown.drain(..).map(|custom| picker.cell_image(&custom)).collect();
+				names.extend(moving.map(|custom| picker.moving_image(&custom)));
 				picker.shown_images(names);
 			}
 		});
@@ -261,13 +268,12 @@ impl ExpressionPicker {
 		column()
 			.w(INNER_WIDTH)
 			.h(self.body_height())
-			.child(
-				row()
-					.w(INNER_WIDTH)
-					.h(main)
-					.child(self.emoji_rail(main))
-					.child(self.emoji_grid(main)),
-			)
+			.child(rail_beside(
+				self.emoji_rail(main),
+				self.emoji_grid(main),
+				INNER_WIDTH,
+				main,
+			))
 			.child(self.emoji_footer())
 	}
 
@@ -286,26 +292,27 @@ impl ExpressionPicker {
 	fn emoji_rail(self: &Rc<Self>, height: f32) -> View {
 		let this = self.clone();
 		let model = self.emoji.model.clone();
-		scroll(self.emoji.rail_scroll.clone())
-			.w(RAIL)
-			.h(height)
-			.shrink_0()
-			.bg(tok("bg_4"))
-			.child(switch(
-				move || model.get(),
-				move |model: Rc<EmojiPicker>, _| {
-					let mut items = Vec::new();
-					let mut last: Option<RailGroup> = None;
-					for entry in model.rail() {
-						if last.is_some_and(|group| group != entry.group) {
-							items.push(rail_divider());
-						}
-						last = Some(entry.group);
-						items.push(this.emoji_rail_item(entry.section, &entry.icon, &entry.title));
+		let (offset, runtime) = (self.emoji.rail_scroll.clone(), self.pictures.runtime().clone());
+		div().w(RAIL).h(height).child(switch(
+			move || model.get(),
+			move |model: Rc<EmojiPicker>, _| {
+				let entries = model.rail();
+				let mut rows = Vec::new();
+				let mut last: Option<RailGroup> = None;
+				for (index, entry) in entries.iter().enumerate() {
+					if last.is_some_and(|group| group != entry.group) {
+						rows.push(RailRow::Divider);
 					}
-					column().w(RAIL).items_center().gap(8.).py(8.).children(items)
-				},
-			))
+					last = Some(entry.group);
+					rows.push(RailRow::Item(index));
+				}
+				let this = this.clone();
+				rail_list(&runtime, offset.clone(), height, rows, move |index| {
+					let entry = &entries[index];
+					this.emoji_rail_item(entry.section, &entry.icon, &entry.title)
+				})
+			},
+		))
 	}
 
 	fn emoji_rail_item(self: &Rc<Self>, target: PickerSection, kind: &RailIcon, title: &str) -> View {
@@ -441,18 +448,21 @@ impl ExpressionPicker {
 
 	fn emoji_cell(self: &Rc<Self>, cell: EmojiCell) -> View {
 		let locked = cell.locked;
-		let visual = greyed(self.emoji_visual(&cell, CELL_IMAGE), locked);
+		let playing = self.emoji.hovered.clone();
+		let playing_key = cell.key.clone();
+		let visual = greyed(
+			self.cell_visual(&cell, move || {
+				playing.with(|hovered| hovered.as_ref().is_some_and(|over| over.key == playing_key))
+			}),
+			locked,
+		);
 		let (hovered, styled, chosen) = (
 			self.emoji.hovered.clone(),
 			self.emoji.hovered.clone(),
 			self.clone(),
 		);
 		let (shown, key) = (cell.clone(), cell.key.clone());
-		let hover_name = cell.custom.as_ref().map(|custom| {
-			self.pictures
-				.emoji(custom.id.get(), custom.animated, f64::from(CELL_IMAGE))
-		});
-		let pictures = self.pictures.clone();
+		let (pictures, namer) = (self.pictures.clone(), self.clone());
 		let target = bridge::cell_expression(&cell);
 		let favorite = Favorite::Emoji(cell.favorite_entry.clone(), !cell.favorite);
 		let view = div()
@@ -473,25 +483,31 @@ impl ExpressionPicker {
 			.on_event(move |event| match event.event {
 				InputEvent::PointerEnter => {
 					hovered.set(Some(shown.clone()));
-					pictures.hover(hover_name.as_ref());
+					let name = shown.custom.as_ref().map(|custom| namer.moving_image(custom));
+					pictures.hover(name.as_ref());
 				}
 				InputEvent::PointerLeave => pictures.hover(None),
 				_ => {}
 			})
 			.on_click(move || chosen.chose_emoji(cell.clone()))
 			.child(visual);
-		self.expression_menu(view, target, Some(favorite))
+		self.expression_menu(view, (CELL, CELL), target, Some(favorite))
+	}
+
+	pub(super) fn cell_image(&self, custom: &CustomEmoji) -> ImageName {
+		self.pictures.emoji(custom.id.get(), false, f64::from(CELL_IMAGE))
+	}
+
+	pub(super) fn moving_image(&self, custom: &CustomEmoji) -> ImageName {
+		self.pictures
+			.emoji(custom.id.get(), custom.animated, f64::from(CELL_IMAGE))
 	}
 
 	pub(crate) fn emoji_visual(&self, cell: &EmojiCell, side: f32) -> View {
 		match (&cell.glyph, &cell.custom) {
 			(Some(glyph), _) => emoji::glyph(glyph.clone(), side),
 			(None, Some(custom)) => {
-				let picture = self.pictures.picture(&self.pictures.emoji(
-					custom.id.get(),
-					custom.animated,
-					f64::from(CELL_IMAGE),
-				));
+				let picture = self.pictures.picture(&self.moving_image(custom));
 				div()
 					.size(side, side)
 					.shrink_0()
@@ -502,6 +518,26 @@ impl ExpressionPicker {
 			}
 			(None, None) => div(),
 		}
+	}
+
+	fn cell_visual(self: &Rc<Self>, cell: &EmojiCell, playing: impl Fn() -> bool + 'static) -> View {
+		let Some(custom) = cell.custom.clone() else {
+			return self.emoji_visual(cell, CELL_IMAGE);
+		};
+		let still = self.pictures.picture(&self.cell_image(&custom));
+		let this = self.clone();
+		div()
+			.size(CELL_IMAGE, CELL_IMAGE)
+			.shrink_0()
+			.reactive_style(move || {
+				let moving = (custom.animated && playing())
+					.then(|| this.pictures.picture(&this.moving_image(&custom)).get())
+					.flatten();
+				match moving.or_else(|| still.get()) {
+					Some(image) => Styles::new().bg_image(image, ObjectFit::Contain),
+					None => Styles::new(),
+				}
+			})
 	}
 
 	fn emoji_footer(self: &Rc<Self>) -> View {

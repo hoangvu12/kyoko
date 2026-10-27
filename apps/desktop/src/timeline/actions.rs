@@ -107,6 +107,7 @@ pub struct MessageActions {
 	acted_at: Cell<Option<Instant>>,
 	plugin_menu: RefCell<Option<Rc<PluginMenu>>>,
 	aimed: RefCell<Option<(Expression, (f32, f32))>>,
+	reacting: Signal<Option<Snowflake>>,
 }
 
 pub struct Wiring {
@@ -154,6 +155,7 @@ impl MessageActions {
 			acted_at: Cell::new(None),
 			plugin_menu: RefCell::new(None),
 			aimed: RefCell::new(None),
+			reacting: runtime.signal(None),
 		}
 	}
 
@@ -288,6 +290,10 @@ impl MessageActions {
 				.as_ref()
 				.is_some_and(|context| context.entry.id == message_id && context.open.get())
 		})
+	}
+
+	pub fn holds_hover(&self, message_id: Snowflake) -> bool {
+		self.picker.showing() && self.reacting.with(|reacting| *reacting == Some(message_id))
 	}
 
 	pub fn is_selected(&self, message_id: Snowflake) -> bool {
@@ -458,6 +464,7 @@ impl MessageActions {
 			return;
 		};
 		let actions = Rc::downgrade(self);
+		self.reacting.set(Some(entry.id));
 		let entry = Rc::new(entry.clone());
 		self.picker.set_emoji(model);
 		self.picker.on_emoji(move |cell| {

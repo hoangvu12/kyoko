@@ -276,7 +276,8 @@ impl ExpressionPicker {
 		let this = self.clone();
 		let star_hover = self.gif.hovered.clone();
 		let star = favorite_star(self, &gif, favorite);
-		div()
+		let menu_favorite = Favorite::Gif(favorite_of_gif(&gif), !favorite);
+		let tile = div()
 			.id(format!("picker-gif-{}", gif.id))
 			.relative()
 			.size(COLUMN, height)
@@ -345,7 +346,8 @@ impl ExpressionPicker {
 							.with(|hovered| hovered.as_ref().is_some_and(|(over, _)| *over == star_id))
 				},
 				move |shown: bool, _| if shown { star() } else { div() },
-			))
+			));
+		self.expression_menu(tile, (COLUMN, height), None, Some(menu_favorite))
 	}
 }
 

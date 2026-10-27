@@ -87,6 +87,10 @@ impl PluginMenu {
 		}
 	}
 
+	pub fn has_items(&self) -> bool {
+		!self.items.borrow().is_empty()
+	}
+
 	pub fn shown(&self, target: Option<Expression>) -> Shown {
 		let items = self.items.borrow().clone();
 		if items.is_empty() {

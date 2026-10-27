@@ -22,6 +22,8 @@ mod links;
 pub(crate) mod pictures;
 mod polls;
 mod popout;
+#[cfg(test)]
+mod react_tests;
 mod reactions;
 mod rows;
 mod scroll;
@@ -685,9 +687,21 @@ impl TimelineView {
 		let Some(signal) = self.rows.borrow().get(key).cloned() else {
 			return div();
 		};
+		let pointer = cx.state(false);
 		let hovered = cx.state(false);
 		let bump = cx.state(0u32);
-		let tracker = hovered.clone();
+		let tracker = pointer.clone();
+		let held = match key {
+			RowKey::Message(id) => Some(*id),
+			_ => None,
+		};
+		let (shown, holder) = (hovered.clone(), self.actions.clone());
+		cx.retain(self.runtime.effect(move || {
+			let over = pointer.get() || held.is_some_and(|id| holder.holds_hover(id));
+			if shown.with_untracked(|shown| *shown != over) {
+				shown.set(over);
+			}
+		}));
 		let env = self.env.clone();
 		let watched = bump.clone();
 		let pressed = signal.clone();
