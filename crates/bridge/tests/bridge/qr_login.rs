@@ -1,6 +1,9 @@
 use bridge::{QrEnd, QrEvents, QrSignIn, QrStage, Screen, Status};
 use login::{LoginError, QrConfig, QrEvent, QrLogin};
-use mockcord::hello::{Capture, Connection, HelloListener, Mode, TlsSummary, chrome_fixture, differences};
+use mockcord::hello::{
+	Capture, Connection, HelloListener, Mode, NameCase, TlsSummary, chrome_fixture, differences,
+	missing_names, order_difference,
+};
 use mockcord::{Reply, RestRequest};
 use protocol::fingerprint::{CHROME_MAJOR, WEB_ORIGIN};
 use protocol::{Snowflake, Token};
@@ -349,5 +352,36 @@ async fn a_refused_remote_auth_upgrade_over_tls_names_the_http_status() {
 	assert!(header(&upgrade.headers, "accept-language").is_some());
 	assert_eq!(header(&upgrade.headers, "upgrade"), Some("websocket"));
 	assert_eq!(header(&upgrade.headers, "authorization"), None);
+	let cross_site = chrome_fixture(CHROME_MAJOR, "wss-cross-site")
+		.expect("a recorded cross-site upgrade for CHROME_MAJOR")
+		.http1
+		.expect("the fixture recorded the upgrade");
+	let difference = order_difference(&cross_site.headers, &upgrade.headers, NameCase::Exact);
+	assert!(
+		difference.is_empty(),
+		"the upgrade differs from chrome's: {difference:?}"
+	);
+	assert_eq!(
+		upgrade.headers.first().map(|(name, _)| name.as_str()),
+		Some("Host")
+	);
+	assert_eq!(
+		missing_names(&cross_site.headers, &upgrade.headers, NameCase::Exact),
+		["Sec-WebSocket-Extensions"]
+	);
+	for name in [
+		"Pragma",
+		"Cache-Control",
+		"Accept-Encoding",
+		"Upgrade",
+		"Sec-WebSocket-Version",
+	] {
+		assert_eq!(
+			header(&upgrade.headers, name),
+			header(&cross_site.headers, name),
+			"{name}"
+		);
+	}
+	assert_eq!(header(&upgrade.headers, "Connection"), Some("upgrade"));
 	desk.stop().await;
 }

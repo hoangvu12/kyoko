@@ -4,6 +4,7 @@ use wreq::http2::{StreamDependency, StreamId};
 use wreq::{ClientBuilder, Emulation, IntoEmulation};
 use wreq_util::Profile;
 
+use crate::order::{API_ORDER, IMAGE_ORDER, UPGRADE_ORDER, orig_headers};
 use crate::trust::Trust;
 
 pub const CHROME_PROFILE: Profile = match profile(CHROME_MAJOR) {
@@ -13,6 +14,7 @@ pub const CHROME_PROFILE: Profile = match profile(CHROME_MAJOR) {
 
 const DOCUMENT_WEIGHT: u8 = 255;
 const FETCH_WEIGHT: u8 = 219;
+const IMAGE_WEIGHT: u8 = 146;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Destination {
@@ -31,11 +33,16 @@ pub const fn profile(major: u32) -> Option<Profile> {
 pub fn chrome_emulation(destination: Destination) -> Emulation {
 	let mut emulation = CHROME_PROFILE.into_emulation();
 	emulation.headers.clear();
-	emulation.orig_headers = OrigHeaderMap::new();
+	emulation.orig_headers = match destination {
+		Destination::Document => OrigHeaderMap::new(),
+		Destination::Fetch => orig_headers(&API_ORDER),
+		Destination::Image => orig_headers(&IMAGE_ORDER),
+	};
 	if let Some(options) = emulation.http2_options.as_mut() {
 		let weight = match destination {
 			Destination::Document => DOCUMENT_WEIGHT,
-			Destination::Fetch | Destination::Image => FETCH_WEIGHT,
+			Destination::Fetch => FETCH_WEIGHT,
+			Destination::Image => IMAGE_WEIGHT,
 		};
 		options.headers_stream_dependency = Some(StreamDependency::new(StreamId::zero(), weight, true));
 	}
@@ -44,6 +51,7 @@ pub fn chrome_emulation(destination: Destination) -> Emulation {
 
 pub fn websocket_emulation() -> Emulation {
 	let mut emulation = chrome_emulation(Destination::Fetch);
+	emulation.orig_headers = orig_headers(&UPGRADE_ORDER);
 	if let Some(options) = emulation.tls_options.as_mut() {
 		options.alps_protocols = None;
 	}

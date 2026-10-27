@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use wreq::header::HeaderMap;
+use protocol::fingerprint::ACCEPT_ENCODING;
+use wreq::header::{self, HeaderMap, HeaderValue};
 use wreq::{Client, StatusCode};
 
 pub use wreq::ws::WebSocket;
@@ -34,7 +35,7 @@ pub async fn connect(
 	let request = client
 		.websocket(url)
 		.emulation(websocket_emulation())
-		.headers(headers)
+		.headers(with_chrome_upgrade_headers(headers))
 		.max_frame_size(limits.max_frame)
 		.max_message_size(limits.max_message);
 	let upgrade = async {
@@ -48,6 +49,14 @@ pub async fn connect(
 	tokio::time::timeout(timeout, upgrade)
 		.await
 		.map_err(|_| ConnectError::TimedOut)?
+}
+
+fn with_chrome_upgrade_headers(mut headers: HeaderMap) -> HeaderMap {
+	headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+	headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+	headers.insert(header::ACCEPT_ENCODING, HeaderValue::from_static(ACCEPT_ENCODING));
+	headers.remove(header::SEC_WEBSOCKET_EXTENSIONS);
+	headers
 }
 
 fn failed(error: wreq::Error) -> ConnectError {

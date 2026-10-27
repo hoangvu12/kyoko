@@ -5,6 +5,7 @@ mod http1;
 mod ja4;
 mod listener;
 mod names;
+mod order;
 mod summary;
 
 pub use capture::{Capture, Difference, chrome_fixture, differences};
@@ -15,4 +16,5 @@ pub use listener::{
 	API_CALLS, ApiCall, Connection, DUMMY_API_HEADERS, FETCH_PATH, GATEWAY_HOST, GATEWAY_PATH, HelloListener,
 	IMAGE_HOST, IMAGE_PATH, Mode, WEBSOCKET_PATH,
 };
+pub use order::{NameCase, OrderDifference, header_names, missing_names, order_difference};
 pub use summary::{Alps, Ech, KeyShare, TlsSummary};

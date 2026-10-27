@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use media::{MediaError, MediaFetcher};
-use mockcord::hello::{Capture, Connection, HelloListener, Mode, TlsSummary, chrome_fixture, differences};
+use mockcord::hello::{
+	Capture, Connection, HelloListener, Mode, NameCase, TlsSummary, chrome_fixture, differences,
+	missing_names, order_difference,
+};
 use parking_lot::Mutex;
 use protocol::fingerprint::{CHROME_MAJOR, Fingerprint};
 use session::Trust;
@@ -219,14 +222,36 @@ async fn media_fetches_present_chromes_client_hello_and_image_request() {
 		.iter()
 		.find(|request| request.path() == Some("/fetch"))
 		.expect("the image request");
-	assert_eq!(request.priority, chrome_fetch.priority);
 	assert_eq!(request.pseudo_order, chrome_fetch.pseudo_order);
 	let chrome_image = chrome_fixture(CHROME_MAJOR, "image")
 		.expect("a recorded image fixture for CHROME_MAJOR")
 		.http2
 		.and_then(|summary| summary.requests.into_iter().next())
 		.expect("the fixture recorded chrome's <img> request");
-	for name in ["accept", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site"] {
+	assert_eq!(request.priority, chrome_image.priority);
+	assert_eq!(request.flags, chrome_image.flags);
+	let difference = order_difference(&chrome_image.headers, &request.headers, NameCase::Exact);
+	assert!(
+		difference.is_empty(),
+		"the image request differs from chrome's: {difference:?}"
+	);
+	assert_eq!(
+		missing_names(&chrome_image.headers, &request.headers, NameCase::Exact),
+		Vec::<String>::new()
+	);
+	for name in [
+		"accept",
+		"accept-encoding",
+		"sec-fetch-dest",
+		"sec-fetch-mode",
+		"sec-fetch-site",
+		"sec-fetch-storage-access",
+		"priority",
+		"user-agent",
+		"sec-ch-ua",
+		"sec-ch-ua-mobile",
+		"sec-ch-ua-platform",
+	] {
 		assert_eq!(
 			header(&request.headers, name),
 			header(&chrome_image.headers, name),

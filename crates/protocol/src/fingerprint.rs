@@ -17,6 +17,7 @@ pub const APP_URL: &str = "https://discord.com/app";
 pub const HOME_REFERER: &str = "https://discord.com/channels/@me";
 pub const LOGIN_REFERER: &str = "https://discord.com/login";
 pub const MAX_INSTALLATION_ID_LEN: usize = 128;
+pub const ACCEPT_ENCODING: &str = "gzip, deflate, br, zstd";
 pub const IMAGE_ACCEPT: &str = "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 pub const IMAGE_REFERER: &str = "https://discord.com/";
 pub const AUDIO_ACCEPT: &str = "*/*";
@@ -203,7 +204,7 @@ impl Fingerprint {
 	pub fn image_headers(&self) -> Vec<(&'static str, String)> {
 		vec![
 			("accept", IMAGE_ACCEPT.to_owned()),
-			("accept-encoding", "gzip, deflate, br, zstd".to_owned()),
+			("accept-encoding", ACCEPT_ENCODING.to_owned()),
 			("accept-language", self.accept_language()),
 			("priority", "i".to_owned()),
 			("referer", IMAGE_REFERER.to_owned()),
@@ -213,6 +214,7 @@ impl Fingerprint {
 			("sec-fetch-dest", "image".to_owned()),
 			("sec-fetch-mode", "no-cors".to_owned()),
 			("sec-fetch-site", "cross-site".to_owned()),
+			("sec-fetch-storage-access", "active".to_owned()),
 		]
 	}
 

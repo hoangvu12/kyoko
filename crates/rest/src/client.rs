@@ -23,7 +23,9 @@ use crate::route::{RouteKey, route_key};
 use crate::safety::{self, Admission, Pace, Release, Releases, Safety};
 use net::{Destination, Trust};
 use protocol::Fingerprint;
-use protocol::fingerprint::{HOME_REFERER, WEB_ORIGIN, sec_ch_ua, sec_ch_ua_platform};
+use protocol::fingerprint::{
+	ACCEPT_ENCODING as CHROME_ACCEPT_ENCODING, HOME_REFERER, WEB_ORIGIN, sec_ch_ua, sec_ch_ua_platform,
+};
 use wreq::multipart::{Form, Part};
 use wreq::redirect::Policy;
 use wreq::{Body as HttpBody, Method, Response, StatusCode};
@@ -65,10 +67,7 @@ struct Inner {
 fn default_headers(fingerprint: &Fingerprint) -> HeaderMap {
 	let mut headers = HeaderMap::new();
 	headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
-	headers.insert(
-		ACCEPT_ENCODING,
-		HeaderValue::from_static("gzip, deflate, br, zstd"),
-	);
+	headers.insert(ACCEPT_ENCODING, HeaderValue::from_static(CHROME_ACCEPT_ENCODING));
 	insert_text(&mut headers, ACCEPT_LANGUAGE, &fingerprint.accept_language());
 	insert_text(&mut headers, X_DISCORD_LOCALE, fingerprint.locale());
 	if let Some(timezone) = fingerprint.timezone() {
