@@ -11,3 +11,4 @@
 - [ ] Choosing a command that has options opens the options list right away (required first, then optional), as Discord does; the "+N options" hint follows the caret
 - [ ] Picking an option inserts its chip and moves the caret into its value; Esc and the close button still work
 - [ ] Parity against the Midnight command-picker mockups where one exists; kyoko-only capture otherwise
+- [ ] The command list and options list float over the messages as a popover (Discord, `C:/Users/HP MEDIA/Desktop/nguyenvu/.orchestrator/real-run/screens/b_Image_1.png`); today they take layout space and push the messages up (`C:/Users/HP MEDIA/Desktop/nguyenvu/.orchestrator/real-run/screens/b_Image_2.png`)
