@@ -10,3 +10,5 @@
 - [ ] Inline player for embed videos and video attachments: click to play, controls as in Discord (play/pause, time, seek, volume/mute, fullscreen), muted autoplay only where Discord does it (GIFV), pause when scrolled out of view
 - [ ] Video fetched through the media client (Chrome handshake, allow-list, size caps; streamed, not loaded whole into memory)
 - [ ] Bridge or desktop tests with a small mock mp4; capture checked by eye
+
+Note (2026-10-28): oxidcord (`oxidcord-ref`, MIT/Apache, reusable) has a Media Foundation video decoder in `crates/voice/src/video/decode/media_foundation.rs` (plus `mf.rs`, `convert.rs`); start from it. The voice plan (`nguyenvu/.research/voice-plan/plan.md`) ports the same code for calls, so coordinate: one shared decoder.
