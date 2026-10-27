@@ -7,9 +7,9 @@ use media::{
 	Gallery, ImageName, ImageRequest, Limits, MediaService, Playback, Shape, SizeHint, Status, Update,
 	Variant,
 };
-use mockcord::{ANIMATION_FRAMES, FRAME_DELAY_MS, MediaRequest, Signature};
+use mockcord::{ANIMATION_FRAMES, FRAME_DELAY_MS, MEDIA_FRAMES, MediaRequest, Signature};
 use protocol::fingerprint::{Fingerprint, IMAGE_ACCEPT, IMAGE_REFERER, sec_ch_ua};
-use protocol::{Attachment, Snowflake};
+use protocol::{Attachment, Embed, EmbedKind, EmbedMedia, Snowflake, StickerFormat, StickerItem};
 use tokio::sync::Notify;
 use tokio::time::timeout;
 
@@ -612,5 +612,260 @@ async fn the_lightbox_shows_the_original_attachment_fitted_to_the_window() {
 	);
 	assert_eq!(fetched[1].param("width"), None, "the original has no proxy size");
 	assert_eq!(fetched[1].param("format"), None);
+	running.stop().await;
+}
+
+fn mock_origin(running: &Running) -> String {
+	format!("http://127.0.0.1:{}", running.server.address().port())
+}
+
+fn mocked(running: &Running, mut request: ImageRequest) -> ImageRequest {
+	let origin = mock_origin(running);
+	request.url = bridge::local_media(&request.url, Some(&origin));
+	request.fallback = request
+		.fallback
+		.map(|url| bridge::local_media(&url, Some(&origin)));
+	request
+}
+
+async fn distinct_frames(images: &Images, name: &ImageName, wanted: usize) -> Vec<Arc<[u8]>> {
+	images.gallery.set_visible([name.as_str()]);
+	let mut seen: Vec<Arc<[u8]>> = Vec::new();
+	let deadline = Instant::now() + WAIT;
+	while seen.len() < wanted && Instant::now() < deadline {
+		for update in images.gallery.drain(Instant::now()) {
+			if let Update::Show { name: shown, pixels } = update
+				&& shown == *name
+				&& !seen.contains(&pixels.rgba)
+			{
+				seen.push(pixels.rgba);
+			}
+		}
+		tokio::time::sleep(Duration::from_millis(10)).await;
+	}
+	seen
+}
+
+fn proxied(path: &str, width: i64, height: i64) -> EmbedMedia {
+	EmbedMedia {
+		url: Some(format!("https://{path}")),
+		proxy_url: Some(format!(
+			"https://images-ext-1.discordapp.net/external/kyoko/https/{path}"
+		)),
+		width: Some(width),
+		height: Some(height),
+		..EmbedMedia::default()
+	}
+}
+
+fn gifv(thumbnail: EmbedMedia, video: EmbedMedia) -> Embed {
+	Embed {
+		kind: Some(EmbedKind::Gifv),
+		thumbnail: Some(thumbnail),
+		video: Some(video),
+		..Embed::default()
+	}
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_gif_attachment_beyond_its_animation_share_still_plays_every_frame() {
+	let mut running = Running::start("media-gif-stream").await;
+	let one_frame = 200 * 150 * 4;
+	let images = Images::new(&running, (MEDIA_FRAMES * one_frame - one_frame / 2) * 8);
+	let channel_id = open_first_channel(&mut running).await;
+	let (message_id, attachment) =
+		posted_attachment(&mut running, channel_id, "dance.gif", Signature::Fresh).await;
+	let request = bridge::attachment_request(
+		&attachment,
+		channel_id,
+		message_id,
+		(200., 150.),
+		1.,
+		Quality::Fitted,
+	)
+	.expect("a gif is an image");
+	let name = images.ready(request).await;
+	assert_eq!(
+		images.gallery.status(&name),
+		Some(Status::Ready { frames: MEDIA_FRAMES })
+	);
+	let fetched = media_requests(&running, "/cdn/attachments/");
+	assert_eq!(fetched[0].param("format"), None, "a gif keeps its format");
+	assert_eq!(fetched[0].param("width"), Some("200"));
+	assert!(
+		images.gallery.stats().bytes < MEDIA_FRAMES * one_frame,
+		"its frames are not all held in memory"
+	);
+
+	let frames = distinct_frames(&images, &name, MEDIA_FRAMES).await;
+	assert_eq!(frames.len(), MEDIA_FRAMES, "every frame reaches the window");
+
+	images.gallery.set_reduced_motion(true);
+	let rested = images.gallery.drain(Instant::now());
+	assert!(
+		shown(&rested, &name).is_none_or(|pixels| pixels.rgba == frames[0]),
+		"reduced motion rests on the first frame"
+	);
+	tokio::time::sleep(FRAME * 2).await;
+	assert!(images.gallery.drain(Instant::now()).is_empty());
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_animated_webp_embed_asks_the_proxy_for_its_animation() {
+	let running = Running::start("media-webp-embed").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let media = proxied("example.com/dance.webp", 320, 240);
+	let request = bridge::embed_request(&media, (320., 240.), 1.).expect("an embed image");
+	assert!(request.url.contains("format=webp"), "{}", request.url);
+	assert!(request.url.contains("animated=true"), "{}", request.url);
+	let name = images.ready(mocked(&running, request)).await;
+	assert_eq!(
+		images.gallery.status(&name),
+		Some(Status::Ready { frames: MEDIA_FRAMES })
+	);
+	assert!(distinct_frames(&images, &name, 3).await.len() >= 3, "it plays");
+
+	let still = proxied("example.com/photo.png", 320, 240);
+	let request = bridge::embed_request(&still, (320., 240.), 1.).expect("an embed image");
+	assert!(!request.url.contains("animated"), "{}", request.url);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn apng_and_gif_stickers_play_and_a_lottie_sticker_is_drawn() {
+	let running = Running::start("media-stickers").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let sticker = |id: u64, format: StickerFormat| StickerItem {
+		id: Snowflake(id),
+		name: format!("sticker {id}"),
+		format_type: Some(format),
+	};
+	let request = |item: &StickerItem| {
+		mocked(
+			&running,
+			bridge::sticker_request(item, 160., 1.).expect("a sticker that can be drawn"),
+		)
+	};
+
+	let apng = sticker(11, StickerFormat::Apng);
+	let raw = bridge::sticker_request(&apng, 160., 1.).expect("an apng sticker");
+	assert!(raw.url.starts_with("https://cdn.discordapp.com/stickers/11.png"));
+	assert!(raw.url.contains("passthrough=true"), "{}", raw.url);
+	let gif = sticker(12, StickerFormat::Gif);
+	let raw = bridge::sticker_request(&gif, 160., 1.).expect("a gif sticker");
+	assert!(
+		raw.url
+			.starts_with("https://media.discordapp.net/stickers/12.gif")
+	);
+	let lottie = sticker(13, StickerFormat::Lottie);
+	let raw = bridge::sticker_request(&lottie, 160., 1.).expect("a lottie sticker");
+	assert_eq!(raw.url, "https://cdn.discordapp.com/stickers/13.json");
+
+	for item in [&apng, &gif] {
+		let name = images.ready(request(item)).await;
+		assert_eq!(
+			images.gallery.status(&name),
+			Some(Status::Ready { frames: MEDIA_FRAMES }),
+			"{} animates",
+			item.name
+		);
+		assert!(distinct_frames(&images, &name, 3).await.len() >= 3);
+	}
+	let png = images.ready(request(&sticker(14, StickerFormat::Png))).await;
+	assert_eq!(images.gallery.status(&png), Some(Status::Ready { frames: 1 }));
+
+	let name = images.ready(request(&lottie)).await;
+	let Some(Status::Ready { frames }) = images.gallery.status(&name) else {
+		panic!("the lottie sticker is ready");
+	};
+	assert!(frames > 1, "the lottie sticker has its frames");
+	let first = images.gallery.pixels(&name).expect("the first frame is drawn");
+	assert_eq!((first.width, first.height), (160, 160));
+	let alpha = |x: usize, y: usize| first.rgba[(y * 160 + x) * 4 + 3];
+	assert_eq!(alpha(0, 0), 0, "outside the shapes stays clear");
+	assert_eq!(alpha(80, 80), u8::MAX, "the shapes are painted");
+	assert!(
+		distinct_frames(&images, &name, 3).await.len() >= 3,
+		"and it plays"
+	);
+
+	let fetched = media_requests(&running, "/media/");
+	assert!(
+		fetched
+			.iter()
+			.any(|request| request.path.ends_with(".png") && request.param("passthrough") == Some("true"))
+	);
+	assert!(fetched.iter().any(|request| request.path.ends_with(".json")));
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gif_embeds_play_a_gif_and_fall_back_to_their_still() {
+	let running = Running::start("media-gifv").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let tenor = gifv(
+		proxied("media.tenor.com/aBcDeFgHiJkAAAAe/cat-dance.png", 498, 280),
+		proxied("media.tenor.com/aBcDeFgHiJkAAAPo/cat-dance.mp4", 498, 280),
+	);
+	let request = bridge::gifv_request(&tenor, (400., 225.), 1.).expect("a gif embed");
+	assert_eq!(
+		request.url,
+		"https://media.tenor.com/aBcDeFgHiJkAAAAC/cat-dance.gif"
+	);
+	assert!(
+		request
+			.fallback
+			.as_deref()
+			.is_some_and(|still| still.contains("AAAAe/cat-dance.png"))
+	);
+	let name = images.ready(mocked(&running, request)).await;
+	assert_eq!(
+		images.gallery.status(&name),
+		Some(Status::Ready { frames: MEDIA_FRAMES })
+	);
+	assert!(
+		distinct_frames(&images, &name, 3).await.len() >= 3,
+		"the tenor gif plays"
+	);
+
+	images.gallery.set_playback(Playback::Never);
+	images.gallery.drain(Instant::now());
+	tokio::time::sleep(FRAME * 2).await;
+	assert!(
+		images.gallery.drain(Instant::now()).is_empty(),
+		"the animation setting holds it still"
+	);
+	images.gallery.set_playback(Playback::Always);
+
+	let klipy = gifv(
+		proxied("static.klipy.com/ii/cat/still.png", 498, 280),
+		proxied("static.klipy.com/ii/cat/clip.mp4", 498, 280),
+	);
+	let request = bridge::gifv_request(&klipy, (400., 225.), 1.).expect("a gif embed");
+	assert!(request.url.starts_with("https://images-ext-1.discordapp.net/"));
+	assert!(
+		request
+			.url
+			.contains("clip.mp4?format=webp&quality=lossless&animated=true"),
+		"{}",
+		request.url
+	);
+	let still = request.fallback.clone().expect("the still thumbnail backs it");
+	assert!(still.contains("still.png"), "{still}");
+	let name = images.ready(mocked(&running, request.clone())).await;
+	assert!(
+		distinct_frames(&images, &name, 3).await.len() >= 3,
+		"the proxy's webp plays"
+	);
+
+	let mut refused = mocked(&running, request);
+	refused.url = format!("{}/refused/clip.webp", mock_origin(&running));
+	let name = images.ready(refused).await;
+	assert_eq!(
+		images.gallery.status(&name),
+		Some(Status::Ready { frames: 1 }),
+		"a refused animation shows the still thumbnail"
+	);
 	running.stop().await;
 }

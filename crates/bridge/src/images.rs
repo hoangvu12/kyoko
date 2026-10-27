@@ -3,13 +3,20 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use media::cdn::{self, ProxyFormat, ProxySize, Quality, StickerFormat};
 use media::{ImageRequest, MediaFetcher, MediaFetcherBuilder, Origin, Shape, SizeHint, Variant};
 use protocol::fingerprint::Fingerprint;
-use protocol::{Attachment, EmbedMedia, Member, Snowflake, StickerItem, User};
+use protocol::{Attachment, Embed, EmbedMedia, Member, Snowflake, StickerItem, User};
 use session::Command;
 use state::State;
 use url::Url;
 
 const ANIMATED_ATTACHMENT: u64 = 1 << 5;
 const GIF: &str = "image/gif";
+const WEBP: &str = "image/webp";
+const ANIMATED_MEDIA: u64 = 1 << 5;
+const TENOR_HOSTS: [&str; 2] = ["media.tenor.com", "c.tenor.com"];
+const TENOR_FORMAT_CODE: usize = 5;
+const TENOR_GIF_CODE: &str = "AAAAC";
+const MOCK_MEDIA_EXTENSIONS: [&str; 4] = ["gif", "webp", "png", "json"];
+const MOCK_MEDIA_FLAGS: [&str; 2] = ["animated", "passthrough"];
 const IMAGE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
 
 pub fn media_fetcher_builder(fingerprint: &Fingerprint) -> MediaFetcherBuilder {
@@ -247,7 +254,32 @@ pub fn refresh_command(origin: Origin) -> Command {
 }
 
 pub fn local_media(url: &str, mock_origin: Option<&str>) -> String {
-	local(url, mock_origin, |_| "png".to_owned())
+	let mut flags: Vec<String> = Vec::new();
+	let local = local(url, mock_origin, |parsed| {
+		let format = parsed
+			.query_pairs()
+			.find(|(key, _)| key == "format")
+			.map(|(_, value)| value.to_ascii_lowercase());
+		let extension = format.or_else(|| {
+			parsed
+				.path()
+				.rsplit_once('.')
+				.map(|(_, extension)| extension.to_ascii_lowercase())
+		});
+		flags = parsed
+			.query_pairs()
+			.filter(|(key, value)| MOCK_MEDIA_FLAGS.contains(&key.as_ref()) && value == "true")
+			.map(|(key, _)| format!("{key}=true"))
+			.collect();
+		extension
+			.filter(|extension| MOCK_MEDIA_EXTENSIONS.contains(&extension.as_str()))
+			.unwrap_or_else(|| "png".to_owned())
+	});
+	if flags.is_empty() || local == url {
+		local
+	} else {
+		format!("{local}?{}", flags.join("&"))
+	}
 }
 
 pub fn local_audio(url: &str, mock_origin: Option<&str>) -> String {
@@ -288,19 +320,38 @@ fn is_gif_url(url: &str, content_type: Option<&str>) -> bool {
 		|| Url::parse(url).is_ok_and(|parsed| parsed.path().to_ascii_lowercase().ends_with(".gif"))
 }
 
+fn is_webp_url(url: &str, content_type: Option<&str>) -> bool {
+	content_type == Some(WEBP)
+		|| Url::parse(url).is_ok_and(|parsed| parsed.path().to_ascii_lowercase().ends_with(".webp"))
+}
+
+fn flagged_animated(media: &EmbedMedia) -> bool {
+	media.flags.unwrap_or(0) & ANIMATED_MEDIA != 0
+}
+
+fn surely_moving(media: &EmbedMedia) -> bool {
+	let url = media
+		.proxy_url
+		.as_deref()
+		.or(media.url.as_deref())
+		.unwrap_or_default();
+	flagged_animated(media) || is_gif_url(url, media.content_type.as_deref())
+}
+
 pub fn embed_request(media: &EmbedMedia, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
 	let url = media.proxy_url.as_deref().or(media.url.as_deref())?;
 	let width = cdn::device_pixels(box_points.0, scale);
 	let height = cdn::device_pixels(box_points.1, scale);
 	let url = if cdn::is_media_proxy(url) {
-		let gif = is_gif_url(url, media.content_type.as_deref());
+		let content_type = media.content_type.as_deref();
+		let gif = is_gif_url(url, content_type);
 		cdn::proxy_sized(
 			url,
 			ProxySize {
 				width,
 				height,
 				format: (!gif).then_some(ProxyFormat::Webp),
-				animated: false,
+				animated: !gif && (flagged_animated(media) || is_webp_url(url, content_type)),
 			},
 		)
 	} else {
@@ -310,6 +361,74 @@ pub fn embed_request(media: &EmbedMedia, box_points: (f64, f64), scale: f64) -> 
 		url,
 		Variant::new(SizeHint::new(width, height), Shape::Square),
 	))
+}
+
+pub fn gifv_request(embed: &Embed, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
+	let still_media = embed.image.as_ref().or(embed.thumbnail.as_ref());
+	let still = still_media.and_then(|media| embed_request(media, box_points, scale));
+	if still_media.is_some_and(surely_moving) {
+		return still;
+	}
+	let width = cdn::device_pixels(box_points.0, scale);
+	let height = cdn::device_pixels(box_points.1, scale);
+	let Some(motion) = embed
+		.video
+		.as_ref()
+		.and_then(|video| gifv_motion_url(video, width, height))
+	else {
+		return still.or_else(|| {
+			embed
+				.video
+				.as_ref()
+				.and_then(|video| embed_request(video, box_points, scale))
+		});
+	};
+	let request = ImageRequest::new(motion, Variant::new(SizeHint::new(width, height), Shape::Square));
+	Some(match still {
+		Some(still) => request.or_else(still.url),
+		None => request,
+	})
+}
+
+fn gifv_motion_url(video: &EmbedMedia, width: u32, height: u32) -> Option<String> {
+	if let Some(gif) = video.url.as_deref().and_then(tenor_gif_url) {
+		return Some(gif);
+	}
+	let proxied = video
+		.proxy_url
+		.as_deref()
+		.filter(|url| cdn::is_media_proxy(url))?;
+	Some(cdn::proxy_sized(
+		proxied,
+		ProxySize {
+			width,
+			height,
+			format: Some(ProxyFormat::Webp),
+			animated: true,
+		},
+	))
+}
+
+pub fn tenor_gif_url(video: &str) -> Option<String> {
+	let mut parsed = Url::parse(video).ok()?;
+	if !TENOR_HOSTS.contains(&parsed.host_str()?) || !crate::gif_picker::is_video_url(video) {
+		return None;
+	}
+	let segments: Vec<&str> = parsed.path_segments()?.collect();
+	let [id, file] = segments.as_slice() else {
+		return None;
+	};
+	if id.len() <= TENOR_FORMAT_CODE || !id.is_ascii() {
+		return None;
+	}
+	let stem = file.rsplit_once('.').map_or(*file, |(stem, _)| stem);
+	let path = format!(
+		"/{}{TENOR_GIF_CODE}/{stem}.gif",
+		&id[..id.len() - TENOR_FORMAT_CODE]
+	);
+	parsed.set_path(&path);
+	parsed.set_query(None);
+	Some(parsed.into())
 }
 
 pub fn embed_icon_request(url: &str, points: f64, scale: f64) -> ImageRequest {

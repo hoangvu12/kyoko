@@ -21,7 +21,7 @@ const START_BEFORE_ANCHOR_MINUTES: i64 = 180;
 const STEP_SECONDS: i64 = 40;
 const SEQUENCE: u64 = 7;
 const MISSING_ORIGINAL: u64 = 4_242;
-const STICKER_PNG: u64 = 816_087_792_291_282_944;
+const STICKER_APNG: u64 = 816_087_792_291_282_944;
 const STICKER_GIF: u64 = 1_166_440_446_734_381_076;
 const STICKER_LOTTIE: u64 = 749_054_660_769_218_631;
 const COMMAND_ID: u64 = 1_234_567_890_123_456_789;
@@ -171,6 +171,7 @@ fn media(url: &str, width: i64, height: i64) -> EmbedMedia {
 		height: Some(height),
 		content_type: None,
 		placeholder: None,
+		flags: None,
 	}
 }
 
@@ -520,8 +521,16 @@ pub fn build(spec: &Showcase) -> Built {
 		message.embeds = LenientVec::from(vec![Embed {
 			kind: Some(EmbedKind::Gifv),
 			url: Some("https://tenor.com/view/showcase-gif-1".to_owned()),
-			thumbnail: Some(media("https://media.tenor.com/showcase/thumb.png", 240, 135)),
-			video: Some(media("https://media.tenor.com/showcase/clip.mp4", 240, 135)),
+			thumbnail: Some(media(
+				"https://media.tenor.com/sHoWcAsEgIfAAAAe/showcase.png",
+				240,
+				135,
+			)),
+			video: Some(media(
+				"https://media.tenor.com/sHoWcAsEgIfAAAPo/showcase.mp4",
+				240,
+				135,
+			)),
 			..Embed::default()
 		}]);
 	});
@@ -584,9 +593,9 @@ pub fn build(spec: &Showcase) -> Built {
 	});
 	writer.post(2, |message| {
 		message.sticker_items = LenientVec::from(vec![StickerItem {
-			id: Snowflake(STICKER_PNG),
+			id: Snowflake(STICKER_APNG),
 			name: "Wave".to_owned(),
-			format_type: Some(StickerFormat::Png),
+			format_type: Some(StickerFormat::Apng),
 		}]);
 	});
 	writer.post(1, |message| {
@@ -597,7 +606,7 @@ pub fn build(spec: &Showcase) -> Built {
 		}]);
 	});
 	writer.post(2, |message| {
-		message.content = "a lottie sticker shows nothing, as oxidcord draws it".to_owned();
+		message.content = "a lottie sticker plays too".to_owned();
 		message.sticker_items = LenientVec::from(vec![StickerItem {
 			id: Snowflake(STICKER_LOTTIE),
 			name: "Lottie".to_owned(),

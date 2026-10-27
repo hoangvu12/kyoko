@@ -282,7 +282,7 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 | `timeline-embeds` | 26 | As above, jump to `-# showcase: embeds`: a rich embed with fields, an article and a link preview. | yes |
 | `timeline-embeds-media` | 26 | As above, jump to `-# showcase: embed media`: video, image and GIF embeds. | yes |
 | `timeline-attachments` | 26 | As above, jump to `-# showcase: attachments`: image attachments and a GIF. | yes |
-| `timeline-files` | 26 | As above, jump to `-# showcase: files and stickers`: file and video cards, PNG, GIF and Lottie stickers. | yes |
+| `timeline-files` | 26 | As above, jump to `-# showcase: files and stickers`: file and video cards, APNG, GIF and Lottie stickers (kyoko draws the Lottie one; oxidcord draws nothing). | yes |
 | `timeline-replies` | 26 | As above, jump to `-# showcase: replies, polls and reactions`: reply previews (one to a missing original), a poll, reactions and an edited message. | yes |
 | `timeline-system` | 26 | As above, jump to `-# showcase: system messages`: the unread divider and system messages with their icons. | yes |
 

@@ -147,6 +147,9 @@ fn gif_embed(link: &str, provider: &str, path: &str) -> Embed {
 	let host = provider.to_lowercase();
 	let media = |extension: &str| EmbedMedia {
 		url: Some(format!("https://static.{host}.com/{slug}.{extension}")),
+		proxy_url: Some(format!(
+			"https://images-ext-1.discordapp.net/external/mock/https/static.{host}.com/{slug}.{extension}"
+		)),
 		width: Some(GIF_WIDTH),
 		height: Some(GIF_HEIGHT),
 		..EmbedMedia::default()

@@ -413,8 +413,8 @@ impl<'a> Generator<'a, '_> {
 			}
 			Special::EmbedGifv => {
 				message.content = "https://tenor.com/view/mock-gif-1".to_owned();
-				let thumbnail = self.media("https://media.tenor.com/mock/thumb.png", 498, 280);
-				let video = self.media("https://media.tenor.com/mock/clip.mp4", 498, 280);
+				let thumbnail = self.media("https://media.tenor.com/mOcKgIfOnE1AAAAe/mock-gif.png", 498, 280);
+				let video = self.media("https://media.tenor.com/mOcKgIfOnE1AAAPo/mock-gif.mp4", 498, 280);
 				message.embeds = LenientVec::from(vec![Embed {
 					kind: Some(EmbedKind::Gifv),
 					url: Some("https://tenor.com/view/mock-gif-1".to_owned()),
@@ -628,6 +628,7 @@ impl<'a> Generator<'a, '_> {
 			height: Some(height),
 			content_type: None,
 			placeholder: Some(thumbhash(self.rng, width >= height)),
+			flags: None,
 		}
 	}
 

@@ -75,7 +75,7 @@ Wait on the effect you are about to assert. For example, wait for a RESUME frame
 - `connections`: every gateway WebSocket upgrade, with its `query` and handshake `headers`.
 - `frames`: every frame the client sent, as `connection`, `op`, decoded `data`, the `raw` JSON text of `d`, and `at`. `opcode()` maps to `protocol::Opcode`. `data` sorts object keys, so assert key order with `keys(path)`, which lists the keys of the object at `path` in `raw` in wire order (`keys(&[])` for `d` itself, `keys(&["properties"])` for IDENTIFY's properties).
 - `closes`: close frames the client sent, with the code.
-- `media`: every request under `/cdn/`, the mock CDN, with `path`, `query`, `headers`, `status` and `at`. Helpers: `header(name)`, `param(name)`, `url()`. `Recording::media_to(prefix)` filters by path prefix.
+- `media`: every request under `/cdn/`, the mock CDN, and `/media/`, where `bridge::local_media` sends remote images in mock runs, with `path`, `query`, `headers`, `status` and `at`. Helpers: `header(name)`, `param(name)`, `url()`. `Recording::media_to(prefix)` filters by path prefix.
 
 `Recording::requests_to(method, pattern)` and `frames_with(opcode)` filter. Patterns compare path segments. `*` or `{name}` matches one segment, `**` matches any number, and `"*"` as the method matches any method. Use the `at` timestamps to assert spacing (see "Time" for pacing). Group frames by `connection` to tell an IDENTIFY on a fresh socket from a RESUME after a drop.
 

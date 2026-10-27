@@ -593,6 +593,7 @@ fn embed_media(media: &UnfurledMedia) -> EmbedMedia {
 		width: media.width,
 		content_type: media.content_type.clone(),
 		placeholder: media.placeholder.clone(),
+		flags: None,
 	}
 }
 

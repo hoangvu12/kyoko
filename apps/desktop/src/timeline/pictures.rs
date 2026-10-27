@@ -89,6 +89,9 @@ impl Pictures {
 
 	pub fn request(&self, mut request: ImageRequest) -> ImageName {
 		request.url = bridge::local_media(&request.url, self.mock_origin.as_deref());
+		request.fallback = request
+			.fallback
+			.map(|url| bridge::local_media(&url, self.mock_origin.as_deref()));
 		self.gallery.request(request)
 	}
 
@@ -191,6 +194,14 @@ impl Pictures {
 
 	pub fn embed_media(&self, media: &EmbedMedia, size: (f32, f32)) -> Option<ImageName> {
 		let request = bridge::embed_request(media, (f64::from(size.0), f64::from(size.1)), self.scale.get())?;
+		Some(self.request(request))
+	}
+
+	pub fn bare_embed(&self, embed: &Embed, media: &EmbedMedia, size: (f32, f32)) -> Option<ImageName> {
+		if embed.kind != Some(EmbedKind::Gifv) {
+			return self.embed_media(media, size);
+		}
+		let request = bridge::gifv_request(embed, (f64::from(size.0), f64::from(size.1)), self.scale.get())?;
 		Some(self.request(request))
 	}
 
@@ -346,9 +357,11 @@ impl Pictures {
 	fn collect_embed(&self, embed: &Embed, names: &mut Vec<ImageName>) {
 		if matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv)) {
 			if let Some(media) = bare_media(embed) {
-				names.extend(
-					self.embed_media(media, bridge::fit_box(media.width, media.height, bare_box(embed))),
-				);
+				names.extend(self.bare_embed(
+					embed,
+					media,
+					bridge::fit_box(media.width, media.height, bare_box(embed)),
+				));
 			}
 			return;
 		}

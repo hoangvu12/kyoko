@@ -35,7 +35,7 @@ mod voice;
 mod web;
 
 pub use alt::{ALT_USER_ID, ALT_USERNAME};
-pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, Signature};
+pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, MEDIA_FRAMES, Signature};
 pub use community::{COMMUNITY_INVITE, COMMUNITY_NAME, CommunityGuild};
 pub use config::{AutocompleteReply, InteractionTiming, MockConfig};
 pub use control::Control;

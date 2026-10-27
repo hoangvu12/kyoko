@@ -24,6 +24,7 @@ const AVATAR_MAX_SIZE: u32 = 512;
 const BANNER_WIDTH_PARTS: u32 = 5;
 const BANNER_HEIGHT_PARTS: u32 = 2;
 pub const ANIMATION_FRAMES: usize = 4;
+pub const MEDIA_FRAMES: usize = 8;
 pub const FRAME_DELAY_MS: u32 = 100;
 const JPEG_QUALITY: u8 = 85;
 const VP8X_ANIMATION: u8 = 0x02;
@@ -93,11 +94,18 @@ fn render(seed: u64, width: u32, height: u32, frame: usize) -> RgbaImage {
 	})
 }
 
-fn frames(seed: u64, width: u32, height: u32, animated: bool) -> Vec<RgbaImage> {
-	let count = if animated { ANIMATION_FRAMES } else { 1 };
+fn frames(seed: u64, width: u32, height: u32, count: usize) -> Vec<RgbaImage> {
 	(0..count)
 		.map(|frame| render(seed, width, height, frame))
 		.collect()
+}
+
+pub(crate) fn encode_gif(frames: Vec<RgbaImage>) -> Result<Vec<u8>, ImageError> {
+	encode(Kind::Gif, frames)
+}
+
+pub(crate) fn encode_webp(frames: Vec<RgbaImage>) -> Result<Vec<u8>, ImageError> {
+	encode(Kind::Webp, frames)
 }
 
 fn encode(kind: Kind, frames: Vec<RgbaImage>) -> Result<Vec<u8>, ImageError> {
@@ -215,7 +223,8 @@ fn sized(seed_name: &str, stem: &str, kind: Kind, query: &SizedQuery) -> Respons
 		Kind::Webp => animated_hash && query.animated.unwrap_or(false),
 		Kind::Png | Kind::Jpeg => false,
 	};
-	respond(kind, frames(seed_of(seed_name), side, side, animated))
+	let count = if animated { ANIMATION_FRAMES } else { 1 };
+	respond(kind, frames(seed_of(seed_name), side, side, count))
 }
 
 pub async fn avatar(
@@ -250,7 +259,8 @@ fn banner(seed_name: &str, stem: &str, kind: Kind, query: &SizedQuery) -> Respon
 			Kind::Webp => query.animated.unwrap_or(false),
 			Kind::Png | Kind::Jpeg => false,
 		};
-	respond(kind, frames(seed_of(seed_name), width, height, animated))
+	let count = if animated { ANIMATION_FRAMES } else { 1 };
+	respond(kind, frames(seed_of(seed_name), width, height, count))
 }
 
 pub async fn user_banner(
@@ -381,7 +391,8 @@ pub async fn attachment(
 	};
 	let width = query.width.unwrap_or(ATTACHMENT_WIDTH).clamp(1, MAX_SIDE);
 	let height = query.height.unwrap_or(ATTACHMENT_HEIGHT).clamp(1, MAX_SIDE);
-	respond(kind, frames(seed_of(&path), width, height, stored == Kind::Gif))
+	let count = if stored == Kind::Gif { MEDIA_FRAMES } else { 1 };
+	respond(kind, frames(seed_of(&path), width, height, count))
 }
 
 pub fn attachment_size() -> (u32, u32) {

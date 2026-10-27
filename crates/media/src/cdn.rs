@@ -159,11 +159,13 @@ pub fn sticker_source_url(id: u64, format: StickerFormat) -> Option<String> {
 
 pub fn sticker_url(id: u64, format: StickerFormat) -> Option<String> {
 	match format {
-		StickerFormat::Png | StickerFormat::Apng => {
-			Some(format!("{CDN}/stickers/{id}.png?size={STICKER_SIZE}"))
-		}
+		StickerFormat::Png => Some(format!("{CDN}/stickers/{id}.png?size={STICKER_SIZE}")),
+		StickerFormat::Apng => Some(format!(
+			"{CDN}/stickers/{id}.png?size={STICKER_SIZE}&passthrough=true"
+		)),
 		StickerFormat::Gif => Some(format!("{MEDIA_PROXY}/stickers/{id}.gif?size={STICKER_SIZE}")),
-		StickerFormat::Lottie | StickerFormat::Unknown(_) => None,
+		StickerFormat::Lottie => Some(format!("{CDN}/stickers/{id}.json")),
+		StickerFormat::Unknown(_) => None,
 	}
 }
 

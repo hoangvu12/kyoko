@@ -296,12 +296,17 @@ pub fn stickers(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.iter()
 		.filter_map(|sticker| {
 			let name = env.pictures.sticker(sticker)?;
-			let view = div().mt(4.).size(STICKER_SIDE, STICKER_SIDE).child(picture(
-				&env.pictures,
-				Some(name),
-				None,
-				ObjectFit::Contain,
-			));
+			let pictures = env.pictures.clone();
+			let hovered = name.clone();
+			let view = div().mt(4.).size(STICKER_SIDE, STICKER_SIDE).child(
+				picture(&env.pictures, Some(name), None, ObjectFit::Contain).on_event(
+					move |event| match event.event {
+						InputEvent::PointerEnter => pictures.hover(Some(&hovered)),
+						InputEvent::PointerLeave => pictures.hover(None),
+						_ => {}
+					},
+				),
+			);
 			let target = bridge::sticker_expression(sticker);
 			let view = match target.clone() {
 				Some(target) => {
@@ -330,7 +335,7 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 
 fn bare(embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, bare_box(embed));
-	let name = env.pictures.embed_media(media, (width, height));
+	let name = env.pictures.bare_embed(embed, media, (width, height));
 	let target = bridge::LightboxImage::embed(media);
 	let frame = div()
 		.mt(4.)

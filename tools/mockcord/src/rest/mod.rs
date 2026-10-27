@@ -316,7 +316,7 @@ async fn observe_media(shared: &Shared, request: Request, next: Next, at: Instan
 	if !shared.config.media_delay.is_zero() {
 		tokio::time::sleep(shared.config.media_delay).await;
 	}
-	if !shared.recorder.enabled() || !path.starts_with("/cdn/") {
+	if !shared.recorder.enabled() || !(path.starts_with("/cdn/") || path.starts_with("/media/")) {
 		return next.run(request).await;
 	}
 	let query = request.uri().query().map(str::to_owned);
