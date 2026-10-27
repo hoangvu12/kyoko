@@ -150,6 +150,10 @@ impl Control {
 		parse_id(&message["id"])
 	}
 
+	pub fn add_unjoined_thread(&self, parent_id: u64, name: &str) -> Option<u64> {
+		self.shared.add_unjoined_thread(parent_id, name)
+	}
+
 	pub fn edit_message(&self, channel_id: u64, id: u64, content: &str) -> bool {
 		self.shared.edit_any_message(channel_id, id, content).is_ok()
 	}

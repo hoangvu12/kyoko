@@ -127,6 +127,9 @@ impl ConnectionWatch {
 				self.live_once = true;
 				Connection::Live
 			}
+			ConnectionStatus::Connecting | ConnectionStatus::Resuming if self.current == Connection::Live => {
+				Connection::Live
+			}
 			ConnectionStatus::Connecting | ConnectionStatus::Resuming => self.waiting(None),
 			ConnectionStatus::Reconnecting { attempt, retry_in } => {
 				self.failures = attempt.saturating_sub(1);

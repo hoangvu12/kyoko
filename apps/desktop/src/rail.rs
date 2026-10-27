@@ -10,6 +10,7 @@ use state::{Changes, State};
 use store::Store;
 use zgx_script::{ScriptHost, Shared, Value};
 
+use crate::stable::StableRows;
 use crate::ui::{Link, record};
 
 const ICON_POINTS: f64 = 48.;
@@ -25,6 +26,7 @@ pub(crate) struct RailView {
 	items: Shared,
 	home_mentions: Shared,
 	open: Shared,
+	stable: StableRows,
 }
 
 impl RailView {
@@ -37,6 +39,7 @@ impl RailView {
 			items: host.shared("rail.items", Value::List(Rc::new([]))),
 			home_mentions: host.shared("rail.home_mentions", 0.),
 			open: host.shared("rail.open_folders", Value::List(Rc::new([]))),
+			stable: StableRows::default(),
 		}
 	}
 
@@ -48,6 +51,7 @@ impl RailView {
 	pub(crate) fn reset(&self) {
 		*self.rail.borrow_mut() = Rail::default();
 		self.icons.borrow_mut().clear();
+		self.stable.forget();
 		self.items.set(Value::List(Rc::new([])));
 		self.home_mentions.set(0.0.into());
 		self.reload_open();
@@ -81,8 +85,8 @@ impl RailView {
 			.iter()
 			.filter_map(|(id, name)| name.clone().map(|name| (*id, name)))
 			.collect();
-		let items = rail.items().iter().map(|item| item_value(item, &icons)).collect();
-		self.items.set(Value::List(items));
+		let items = rail.items().iter().map(|item| item_value(item, &icons));
+		self.items.set(Value::List(self.stable.rows(items)));
 		self.home_mentions.set(f64::from(rail.home_mentions()).into());
 		Some(icons.into_values().collect())
 	}

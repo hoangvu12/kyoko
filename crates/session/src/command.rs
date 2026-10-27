@@ -635,6 +635,9 @@ pub enum Command {
 	Logout,
 	ShowDeletedMessages(bool),
 	Shutdown,
+	RetryHistory {
+		channel_id: Snowflake,
+	},
 }
 
 impl Command {
@@ -642,6 +645,7 @@ impl Command {
 		match self {
 			Command::SelectChannel { channel_id, .. }
 			| Command::LoadOlder { channel_id }
+			| Command::RetryHistory { channel_id }
 			| Command::LoadNewer { channel_id }
 			| Command::LoadAround { channel_id, .. }
 			| Command::RefreshMedia { channel_id, .. }

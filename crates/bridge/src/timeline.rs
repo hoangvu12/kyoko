@@ -17,6 +17,7 @@ use crate::sidebar::ChannelKind;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RowKey {
 	Loading,
+	Failed,
 	Start,
 	Day(NaiveDate),
 	Unread,
@@ -27,6 +28,7 @@ pub enum RowKey {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Row {
 	Loading,
+	Failed { channel_id: Snowflake, reason: String },
 	Start,
 	Day(NaiveDate),
 	Unread,
@@ -472,10 +474,23 @@ impl Timeline {
 		let mut rows = Vec::new();
 		let mut ungroup = false;
 		for row in state.channel_rows(open.channel_id) {
-			let MessageRow::Message(view) = row else {
-				ungroup = false;
-				rows.extend(marker_row(row));
-				continue;
+			let view = match row {
+				MessageRow::Message(view) => view,
+				MessageRow::Failed(reason) => {
+					rows.push(TimelineRow {
+						key: RowKey::Failed,
+						row: Row::Failed {
+							channel_id: open.channel_id,
+							reason,
+						},
+					});
+					continue;
+				}
+				row => {
+					ungroup = false;
+					rows.extend(marker_row(row));
+					continue;
+				}
 			};
 			let look = self.display.look(state, open.guild_id, &view);
 			if view.deleted.is_some()
@@ -559,7 +574,7 @@ fn marker_row(row: MessageRow) -> Option<TimelineRow> {
 			key: RowKey::Unread,
 			row: Row::Unread,
 		},
-		MessageRow::Message(_) => return None,
+		MessageRow::Message(_) | MessageRow::Failed(_) => return None,
 	})
 }
 

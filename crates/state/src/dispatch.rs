@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -425,11 +426,15 @@ impl State {
 			})
 			.map(|thread| thread.id)
 			.collect();
+		let known: HashSet<Snowflake> = guild.threads.keys().copied().collect();
 		for id in stale {
 			guild.threads.shift_remove(&id);
 			self.channel_guilds.remove(&id);
 		}
 		for thread in sync.threads.iter().filter(|thread| is_thread(thread.kind)) {
+			if !known.contains(&thread.id) {
+				guild.unlisted_threads.insert(thread.id);
+			}
 			let mut stored = thread.clone();
 			stored.guild_id = Some(sync.guild_id);
 			self.channel_guilds.insert(stored.id, Some(sync.guild_id));

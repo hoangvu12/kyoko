@@ -127,6 +127,7 @@ pub struct State {
 	pub(crate) commands: HashMap<Snowflake, Arc<ApplicationCommandIndex>>,
 	pub(crate) autocomplete: Option<crate::composer::Autocomplete>,
 	pub(crate) app_modal: Option<crate::modal::AppModal>,
+	pub(crate) history_failures: HashMap<Snowflake, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,6 +203,10 @@ impl State {
 			!users.is_empty()
 		});
 		changes
+	}
+
+	pub fn history_failure(&self, channel_id: Snowflake) -> Option<&str> {
+		self.history_failures.get(&channel_id).map(String::as_str)
 	}
 
 	pub fn current_user(&self) -> Option<&User> {
@@ -377,6 +382,7 @@ impl State {
 			.and_then(|channel| channel.last_message_id);
 		let open = self.is_open(channel_id);
 		let mut changes = Changes::default();
+		self.history_failures.remove(&channel_id);
 		self.warm_up(channel_id, &mut changes);
 		let limits = self.limits;
 		let spliced = self.messages.entry(channel_id).or_default().merge_loaded(
@@ -594,6 +600,15 @@ impl State {
 				};
 				if changed {
 					self.mark_channel_dirty(*channel_id, &mut changes);
+				}
+			}
+			LocalEvent::HistoryFailed { channel_id, reason } => {
+				self.history_failures.insert(*channel_id, reason.clone());
+				changes.messages.insert(*channel_id);
+			}
+			LocalEvent::HistoryRequested { channel_id } => {
+				if self.history_failures.remove(channel_id).is_some() {
+					changes.messages.insert(*channel_id);
 				}
 			}
 			LocalEvent::Connection(status) => {

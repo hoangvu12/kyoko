@@ -96,7 +96,22 @@ Every other drop reconnects after `Backoff::delay(failures)`. The delay is `base
 
 `state.session().connected` is true exactly when the status is `Connected`.
 
+The connection banner (`bridge::ConnectionWatch`) shows "Reconnecting" only after a socket really closed (`Reconnecting`, then the `Connecting` or `Resuming` of the next attempt). A `Connecting` while the session is live, which is an op 9 Invalid Session answered by a fresh IDENTIFY on the same socket, keeps the banner hidden. Nothing a channel open does touches the connection status.
+
 `SessionConfig::gateway` takes a `GatewayTuning` with the backoff and send budget. Production uses the defaults. Tests shrink them.
+
+## Opening a channel
+
+What goes out when a channel opens (`Command::SelectChannel`), as the web client does, and nothing more:
+
+- One history page, `GET /channels/{id}/messages?limit=50`, only when the channel has nothing in memory. A cached page from disk shows first and the fetched page merges around it. Reopening a channel already in memory sends nothing.
+- For a guild channel, the op 37 change for that channel (see below), batched with other changes. The first channel in a guild also turns on typing, threads and activities; Discord answers with THREAD_LIST_SYNC and the member list SYNC.
+- The read ack for the channel being left, if it was still pending, and the ack for the opened channel once its newest message is on screen ("Read acks" in `docs/rest.md`).
+- Backfill of missing reply originals and unknown mentions, paced ("Backfill" in `docs/rest.md`). No profile is fetched when a channel opens; ticket 77 owns profile loading.
+
+The message pane shows the skeleton row (`MessageRow::Loading`) until the first page arrives. If the first page fails, the session records `LocalEvent::HistoryFailed` and the pane shows `MessageRow::Failed` with the reason and a Retry (`Command::RetryHistory`), which clears it and loads again. Opening the channel again retries too. The failure stays in the pane: the connection banner, the member list and the channel list are untouched.
+
+Nothing outside the message pane moves. THREAD_LIST_SYNC brings every active thread of the subscribed channels; a thread first learnt that way stays out of the channel list unless the user has joined it (`GuildState::unlisted_threads`; Discord lists joined threads only), and the threads popout still shows it. The sidebar, rail and member list reuse the previous row value for every unchanged row (`apps/desktop/src/stable.rs`), because zgx's keyed `ui.each` rebuilds a row whose item is a new allocation even when it is equal. Unread and mention state lives in `sidebar.badges`, not in `sidebar.rows`, so reading a channel redraws its dot and badge without rebuilding its row.
 
 ## Lazy loading
 

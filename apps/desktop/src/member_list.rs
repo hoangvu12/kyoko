@@ -12,6 +12,7 @@ use state::{Changes, State};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::rail::Icons;
+use crate::stable::StableRows;
 use crate::ui::{Link, field, number, record};
 
 const AVATAR_POINTS: f64 = 32.;
@@ -25,6 +26,7 @@ pub(crate) struct MemberListView {
 	heights: Shared,
 	window: Shared,
 	jump: Shared,
+	stable: StableRows,
 }
 
 impl MemberListView {
@@ -37,12 +39,14 @@ impl MemberListView {
 			heights: host.shared("members.heights", Value::List(Rc::new([]))),
 			window: host.shared("members.window", empty_window()),
 			jump: host.shared("members.jump", jump_value(0, 0.)),
+			stable: StableRows::default(),
 		}
 	}
 
 	pub(crate) fn reset(&self) {
 		self.panel.borrow_mut().reset();
 		self.avatars.borrow_mut().clear();
+		self.stable.forget();
 		self.heights.set(Value::List(Rc::new([])));
 		self.window.set(empty_window());
 	}
@@ -117,7 +121,7 @@ impl MemberListView {
 			self.heights.set(Value::List(heights));
 		}
 		let mut names = Vec::new();
-		let rows: Rc<[Value]> = panel
+		let rows: Vec<Value> = panel
 			.entries()
 			.iter()
 			.enumerate()
@@ -144,7 +148,7 @@ impl MemberListView {
 			.collect();
 		self.window.set(record([
 			("first", (panel.first() as f64).into()),
-			("rows", Value::List(rows)),
+			("rows", Value::List(self.stable.rows(rows))),
 		]));
 		names
 	}

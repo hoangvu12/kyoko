@@ -359,6 +359,9 @@ impl Connection {
 				for update in member_list::bulk_updates(&self.shared, data) {
 					hub.dispatch_to(session, "GUILD_MEMBER_LIST_UPDATE", &update);
 				}
+				for sync in self.shared.thread_syncs(data) {
+					hub.dispatch_to(session, "THREAD_LIST_SYNC", &sync);
+				}
 			}
 			Opcode::GuildSubscriptions => {
 				for update in member_list::legacy_updates(&self.shared, data) {

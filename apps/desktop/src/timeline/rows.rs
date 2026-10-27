@@ -55,6 +55,7 @@ const WASH_STOP: f32 = 0.4;
 const START_HEIGHT: f32 = 202.;
 const SKELETON_HEIGHT: f32 = 240.;
 const SKELETON_ROWS: usize = 4;
+const FAILED_HEIGHT: f32 = 96.;
 const AVERAGE_GLYPH: f32 = 7.5;
 const EMBED_TEXT: f32 = 120.;
 const POLL_CHROME: f32 = 120.;
@@ -185,6 +186,7 @@ impl RowEnv {
 pub fn render(row: &Row, env: &Rc<RowEnv>, hovered: &Signal<bool>, bump: &Signal<u32>) -> View {
 	match row {
 		Row::Loading => skeleton(),
+		Row::Failed { channel_id, reason } => history_failed(*channel_id, reason, env),
 		Row::Start => welcome(env),
 		Row::Day(day) => day_separator(*day),
 		Row::Unread => unread_marker(),
@@ -206,6 +208,7 @@ fn inset(row: View) -> View {
 pub fn estimate(row: &Row, width: f32) -> f32 {
 	match row {
 		Row::Loading => SKELETON_HEIGHT,
+		Row::Failed { .. } => FAILED_HEIGHT,
 		Row::Start => START_HEIGHT,
 		Row::Day(_) => DAY_HEIGHT,
 		Row::Unread => UNREAD_HEIGHT,
@@ -983,6 +986,30 @@ fn welcome(env: &Rc<RowEnv>) -> View {
 			text_signal(move || format!("This is the start of the #{} channel.", body.get()))
 				.text_size(tok("font_md"))
 				.text_color(tok("text_muted")),
+		)
+}
+
+fn history_failed(channel_id: Snowflake, reason: &str, env: &Rc<RowEnv>) -> View {
+	let retry = env.clone();
+	column()
+		.id("history-failed")
+		.gap(tok("space_8"))
+		.px(16.)
+		.py(24.)
+		.items_center()
+		.child(
+			text(reason.to_owned())
+				.text_size(tok("font_md"))
+				.font_weight(500)
+				.text_color(tok("red_2")),
+		)
+		.child(
+			text("Retry")
+				.text_size(tok("font_md"))
+				.font_weight(500)
+				.text_color(tok("link"))
+				.cursor(Cursor::Pointer)
+				.on_click(move || retry.send(Command::RetryHistory { channel_id })),
 		)
 }
 

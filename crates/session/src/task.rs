@@ -14,7 +14,7 @@ use protocol::{
 	Channel, ChannelType, DISCORD_EPOCH_MS, DispatchEvent, EditMessage, GatewayRateLimited, Message,
 	MessageAck, MessagesQuery, Nonce, Opcode, Snowflake, Token, User,
 };
-use rest::{RestClient, RestTuning};
+use rest::{RestClient, RestError, RestTuning};
 use state::{
 	Changes, ConnectionStatus, DeleteStatus, DisconnectReason, Event, LoadDirection, Loaded, LocalEvent,
 	RenderedMessage, SendFailure, SharedState, TYPING_TIMEOUT,
@@ -88,6 +88,10 @@ pub(crate) enum Page {
 }
 
 pub(crate) enum Internal {
+	HistoryFailed {
+		channel_id: Snowflake,
+		reason: String,
+	},
 	Messages {
 		channel_id: Snowflake,
 		direction: LoadDirection,
@@ -266,6 +270,17 @@ fn page_query(
 		before,
 		after,
 		limit: Some(PAGE_SIZE),
+	}
+}
+
+fn history_failure(error: &RestError) -> &'static str {
+	match error {
+		RestError::Forbidden | RestError::MissingPermissions | RestError::Suspended { .. } => {
+			"You can't read this channel's messages."
+		}
+		RestError::NotFound => "This channel no longer exists.",
+		RestError::Network(_) => "Messages couldn't load. Check your connection.",
+		_ => "Messages couldn't load.",
 	}
 }
 
@@ -668,6 +683,9 @@ impl Core {
 				reached_start,
 				cache,
 			} => self.on_messages(channel_id, direction, messages, reached_start, cache),
+			Internal::HistoryFailed { channel_id, reason } => {
+				self.apply_local(LocalEvent::HistoryFailed { channel_id, reason });
+			}
 			Internal::LoadFinished(channel_id, page) => {
 				self.loading.remove(&(channel_id, page));
 			}
@@ -813,6 +831,7 @@ impl Core {
 			Command::ConfirmRisky { target, reason } => self.confirm_risky(target, reason),
 			Command::SelectChannel { guild_id, channel_id } => self.select_channel(guild_id, channel_id),
 			Command::LoadOlder { channel_id } => self.load_older(channel_id),
+			Command::RetryHistory { channel_id } => self.retry_history(channel_id),
 			Command::LoadNewer { channel_id } => self.load_newer(channel_id),
 			Command::RefreshMedia {
 				channel_id,
@@ -1005,6 +1024,7 @@ impl Core {
 			return;
 		}
 		if !has_messages {
+			self.apply_local(LocalEvent::HistoryRequested { channel_id });
 			self.load_initial(channel_id);
 		}
 		if !has_draft {
@@ -1056,9 +1076,25 @@ impl Core {
 						cache: true,
 					});
 				}
-				Err(error) => tracing::warn!(%error, "could not load messages"),
+				Err(error) if !had_cache => {
+					tracing::warn!(%error, "could not load messages");
+					let _ = internal.send(Internal::HistoryFailed {
+						channel_id,
+						reason: history_failure(&error).to_owned(),
+					});
+				}
+				Err(error) => tracing::warn!(%error, "could not refresh cached messages"),
 			}
 		});
+	}
+
+	fn retry_history(&mut self, channel_id: Snowflake) {
+		let failed = self.state.read().history_failure(channel_id).is_some();
+		if !failed {
+			return;
+		}
+		self.apply_local(LocalEvent::HistoryRequested { channel_id });
+		self.load_initial(channel_id);
 	}
 
 	fn load_draft(&self, channel_id: Snowflake) {

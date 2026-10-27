@@ -149,3 +149,87 @@ impl Shared {
 		self.hub.broadcast("MESSAGE_UPDATE", &gateway);
 	}
 }
+
+impl Shared {
+	pub fn add_unjoined_thread(&self, parent_id: u64, name: &str) -> Option<u64> {
+		let mut store = self.store.lock();
+		let guild_id = store.channels.get(&parent_id)?.guild_id?;
+		let thread_id = store.next_snowflake();
+		let now = Utc::now();
+		let thread = Channel {
+			id: Snowflake(thread_id),
+			kind: ChannelType::PublicThread,
+			guild_id: Some(guild_id),
+			parent_id: Some(Snowflake(parent_id)),
+			name: Some(name.to_owned()),
+			owner_id: Some(self.fixtures.current_user.id),
+			rate_limit_per_user: Some(0),
+			message_count: Some(0),
+			member_count: Some(2),
+			thread_metadata: Some(ThreadMetadata {
+				archived: false,
+				auto_archive_duration: Some(1440),
+				archive_timestamp: Some(now),
+				locked: false,
+				invitable: Some(true),
+				create_timestamp: Some(now),
+			}),
+			..Channel::default()
+		};
+		store.channels.insert(thread_id, thread);
+		store.messages.entry(thread_id).or_default();
+		store.unjoined_threads.insert(thread_id);
+		Some(thread_id)
+	}
+
+	pub fn thread_syncs(&self, data: &Value) -> Vec<Value> {
+		let Some(subscriptions) = data["subscriptions"].as_object() else {
+			return Vec::new();
+		};
+		let store = self.store.lock();
+		subscriptions
+			.iter()
+			.filter(|(_, subscription)| subscription["threads"] == json!(true))
+			.filter_map(|(guild_key, subscription)| {
+				let guild_id: u64 = guild_key.parse().ok()?;
+				let parents: Vec<u64> = subscription["channels"]
+					.as_object()?
+					.keys()
+					.filter_map(|key| key.parse().ok())
+					.collect();
+				let threads: Vec<&Channel> = crate::ready::guild_threads(&store, guild_id)
+					.into_iter()
+					.filter(|thread| {
+						thread.parent_id.is_some_and(|parent| parents.contains(&parent.0))
+							&& thread
+								.thread_metadata
+								.as_ref()
+								.is_none_or(|metadata| !metadata.archived)
+					})
+					.collect();
+				let members: Vec<Value> = threads
+					.iter()
+					.filter(|thread| store.joined_threads.contains(&thread.id.0))
+					.map(|thread| {
+						json!({
+							"id": thread.id.to_string(),
+							"user_id": CURRENT_USER_ID.to_string(),
+							"join_timestamp": Utc::now().to_rfc3339(),
+							"flags": 0,
+						})
+					})
+					.collect();
+				let threads: Vec<Value> = threads
+					.into_iter()
+					.map(|thread| store.thread_json(thread))
+					.collect();
+				Some(json!({
+					"guild_id": guild_id.to_string(),
+					"channel_ids": parents.iter().map(u64::to_string).collect::<Vec<_>>(),
+					"threads": threads,
+					"members": members,
+				}))
+			})
+			.collect()
+	}
+}

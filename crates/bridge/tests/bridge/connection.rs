@@ -122,3 +122,25 @@ async fn a_stopped_gateway_shows_an_offline_banner_without_retry() {
 	assert!(banner.text.starts_with("Disconnected from Discord"));
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_fresh_identify_on_an_open_socket_shows_no_banner() {
+	let mut running = started("connection-invalid-session").await;
+	let seen = RefCell::new(Seen::default());
+	running
+		.until_state("the session to be live", |state| {
+			*seen.borrow_mut().observe(state) == Connection::Live
+		})
+		.await;
+	let first = running.session().state().read().session().session_id.clone();
+	running.server.control().invalidate_session(false);
+	running
+		.until_state("a new session on the same socket", |state| {
+			seen.borrow_mut().observe(state);
+			state.session().connected && state.session().session_id != first
+		})
+		.await;
+	assert_eq!(seen.borrow().phases, ["live"]);
+	assert!(seen.borrow().banners.is_empty(), "{:?}", seen.borrow().banners);
+	running.stop().await;
+}

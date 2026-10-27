@@ -26,6 +26,7 @@ mod profile;
 mod rail;
 mod scrim;
 mod sidebar;
+mod stable;
 mod switcher;
 mod theme;
 mod threads;

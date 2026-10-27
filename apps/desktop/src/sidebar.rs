@@ -13,6 +13,7 @@ use state::{Changes, State};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use crate::rail::Icons;
+use crate::stable::StableRows;
 use crate::ui::{Link, record};
 
 const VOICE_AVATAR_POINTS: f64 = 24.;
@@ -23,7 +24,9 @@ pub(crate) struct SidebarView {
 	guild_id: Shared,
 	guild_name: Shared,
 	header: Shared,
+	badges: Shared,
 	show_hidden: Cell<bool>,
+	stable: StableRows,
 }
 
 impl SidebarView {
@@ -35,17 +38,21 @@ impl SidebarView {
 			guild_id: host.shared("sidebar.guild_id", ""),
 			guild_name: host.shared("sidebar.guild_name", ""),
 			header: host.shared("sidebar.header", header_value(&GuildHeader::default())),
+			badges: host.shared("sidebar.badges", Value::Map(Rc::new([]))),
 			show_hidden: Cell::new(false),
+			stable: StableRows::default(),
 		}
 	}
 
 	pub(crate) fn reset(&self) {
 		*self.sidebar.borrow_mut() = Sidebar::showing_hidden(self.show_hidden.get());
 		self.avatars.borrow_mut().clear();
+		self.stable.forget();
 		self.rows.set(Value::List(Rc::new([])));
 		self.guild_id.set("".into());
 		self.guild_name.set("".into());
 		self.header.set(header_value(&GuildHeader::default()));
+		self.badges.set(Value::Map(Rc::new([])));
 	}
 
 	pub(crate) fn sidebar(&self) -> std::cell::Ref<'_, Sidebar> {
@@ -84,7 +91,7 @@ impl SidebarView {
 	pub(crate) fn publish(&self, state: &State, icons: &Icons<'_>) -> Vec<String> {
 		let sidebar = self.sidebar.borrow();
 		let mut names = Vec::new();
-		let rows = sidebar
+		let rows: Vec<Value> = sidebar
 			.rows()
 			.iter()
 			.map(|row| match row {
@@ -103,7 +110,8 @@ impl SidebarView {
 				}
 			})
 			.collect();
-		self.rows.set(Value::List(rows));
+		self.rows.set(Value::List(self.stable.rows(rows)));
+		self.badges.set(badges_value(sidebar.channels()));
 		let selected = sidebar.selected();
 		let id = selected.map(|id| id.to_string()).unwrap_or_default();
 		self.guild_id.set(id.as_str().into());
@@ -216,8 +224,6 @@ fn channel_value(channel: &ChannelEntry, voice: Value) -> Value {
 		("type", channel.kind.as_str().into()),
 		("icon", channel.icon.into()),
 		("name", channel.name.as_str().into()),
-		("unread", channel.unread.into()),
-		("mentions", f64::from(channel.mentions).into()),
 		("muted", channel.muted.into()),
 		("locked", channel.locked.into()),
 		("joined", channel.joined.into()),
@@ -227,6 +233,21 @@ fn channel_value(channel: &ChannelEntry, voice: Value) -> Value {
 		("last_thread", channel.last_thread.into()),
 		("voice", voice),
 	])
+}
+
+fn badges_value<'a>(channels: impl Iterator<Item = &'a ChannelEntry>) -> Value {
+	let mut badges: Vec<(Rc<str>, Value)> = channels
+		.filter(|channel| channel.unread || channel.mentions > 0)
+		.map(|channel| {
+			let badge = record([
+				("unread", channel.unread.into()),
+				("mentions", f64::from(channel.mentions).into()),
+			]);
+			(Rc::from(channel.id.to_string()), badge)
+		})
+		.collect();
+	badges.sort_by(|left, right| left.0.cmp(&right.0));
+	Value::Map(badges.into())
 }
 
 fn voice_value(channel_id: Snowflake, member: &VoiceMember, avatar: Option<&str>) -> Value {

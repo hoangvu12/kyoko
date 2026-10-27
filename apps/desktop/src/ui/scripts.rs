@@ -2127,7 +2127,7 @@ pub(super) fn sidebar_rows() -> serde_json::Value {
 	let channel = |id: &str, kind: &str, icon: &str, name: &str, voice: serde_json::Value| {
 		json!({
 			"kind": "channel", "key": format!("h{id}"), "id": id, "type": kind, "icon": icon, "name": name,
-			"unread": true, "mentions": 1, "muted": false, "locked": false, "joined": false,
+			"muted": false, "locked": false, "joined": false,
 			"selectable": true, "thread": false, "last_thread": false, "voice": voice,
 		})
 	};

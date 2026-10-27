@@ -159,10 +159,16 @@ local function header_menu(mute_open: any): { any }
 	}
 end
 
+local NO_BADGE: state.SidebarBadge = { unread = false, mentions = 0 }
+
+local function badge(id: string): state.SidebarBadge
+	return state.sidebar.badges:get()[id] or NO_BADGE
+end
+
 local function channel_menu(channel: state.SidebarRow): { any }
 	local header = state.sidebar.header:get()
 	local items = {
-		item("Mark As Read", later("mark_channel_read", channel.id), not channel.unread),
+		item("Mark As Read", later("mark_channel_read", channel.id), not badge(channel.id).unread),
 		separator(),
 	}
 	if not channel.thread and header.can_invite then
@@ -343,7 +349,7 @@ local function tones(row: state.SidebarRow, selected: boolean): (string, string)
 		return theme.color.text_2, theme.color.text_3
 	elseif row.muted or row.locked then
 		return theme.color.text_5, theme.color.text_5
-	elseif row.unread then
+	elseif badge(row.id).unread then
 		return theme.color.text_3, theme.color.text_3
 	end
 	return theme.color.text_4, theme.color.text_3
@@ -531,7 +537,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 			w_full = true,
 			py = theme.size.space_1,
 			ui.show(function()
-				return row.unread == true and not row.muted
+				return badge(row.id).unread and not row.muted
 			end, unread_dot(hovered)),
 			ui.row {
 				id = `channel_{row.id}`,
@@ -575,10 +581,12 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 					weight = theme.weight.medium,
 				},
 				ui.show(
-					(row.mentions or 0) > 0,
+					function()
+						return badge(row.id).mentions > 0
+					end,
 					mention_badge {
 						count = function()
-							return row.mentions or 0
+							return badge(row.id).mentions
 						end,
 					}
 				),

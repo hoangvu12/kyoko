@@ -3,6 +3,7 @@ mod alerts;
 mod backfill;
 mod caches;
 mod capabilities;
+mod channel_open;
 mod collapse;
 mod command_options;
 mod command_replies;

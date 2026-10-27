@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
@@ -33,6 +33,7 @@ pub struct GuildState {
 	pub emojis: Vec<Emoji>,
 	pub voice_states: HashMap<Snowflake, VoiceState>,
 	pub member_list: MemberList,
+	pub unlisted_threads: HashSet<Snowflake>,
 }
 
 pub fn is_thread(kind: ChannelType) -> bool {
@@ -126,6 +127,7 @@ impl GuildState {
 	}
 
 	pub fn remove_channel(&mut self, id: Snowflake) -> Option<Channel> {
+		self.unlisted_threads.remove(&id);
 		self.channels
 			.shift_remove(&id)
 			.or_else(|| self.threads.shift_remove(&id))

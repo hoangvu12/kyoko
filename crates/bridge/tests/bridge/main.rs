@@ -1,6 +1,7 @@
 mod actions;
 mod apps;
 mod built_ins;
+mod channel_open;
 mod cloner;
 mod composer;
 mod connection;

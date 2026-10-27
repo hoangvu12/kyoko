@@ -60,6 +60,7 @@ export type VoiceMember = {
 	video: string,
 	live: boolean,
 }
+export type SidebarBadge = { unread: boolean, mentions: number }
 export type SidebarRow = {
 	kind: string,
 	key: string,
@@ -68,8 +69,6 @@ export type SidebarRow = {
 	collapsed: boolean?,
 	type: string?,
 	icon: string?,
-	unread: boolean?,
-	mentions: number?,
 	muted: boolean,
 	locked: boolean?,
 	joined: boolean?,
@@ -390,6 +389,7 @@ M.rail = {
 
 M.sidebar = {
 	rows = ui.shared("sidebar.rows", {} :: { SidebarRow }),
+	badges = ui.shared("sidebar.badges", {} :: { [string]: SidebarBadge }),
 	guild_id = ui.shared("sidebar.guild_id", ""),
 	guild_name = ui.shared("sidebar.guild_name", ""),
 	header = ui.shared("sidebar.header", {

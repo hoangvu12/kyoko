@@ -45,6 +45,7 @@ fn ready_guild(shared: &Shared, store: &Store, guild: &GuildFixture) -> Value {
 		.unwrap_or_default();
 	let threads: Vec<Value> = guild_threads(store, guild.id)
 		.into_iter()
+		.filter(|thread| !store.unjoined_threads.contains(&thread.id.0))
 		.map(|thread| store.thread_json(thread))
 		.collect();
 	json!({

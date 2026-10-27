@@ -119,6 +119,13 @@ pub enum LocalEvent {
 		collapsed: bool,
 	},
 	Connection(ConnectionStatus),
+	HistoryFailed {
+		channel_id: Snowflake,
+		reason: String,
+	},
+	HistoryRequested {
+		channel_id: Snowflake,
+	},
 	LatencyMeasured(Duration),
 	SecretStorage(SecretStorage),
 	VoiceConnection {

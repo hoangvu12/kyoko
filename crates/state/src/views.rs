@@ -93,6 +93,7 @@ pub enum MessageRow {
 	UnreadMarker,
 	HistoryStart,
 	Loading,
+	Failed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -190,10 +190,12 @@ impl State {
 		}
 		let mut threads: HashMap<Snowflake, Vec<&Channel>> = HashMap::new();
 		for thread in guild.threads.values().filter(|thread| {
-			thread
-				.thread_metadata
-				.as_ref()
-				.is_none_or(|metadata| !metadata.archived)
+			let listed = thread.member.is_some() || !guild.unlisted_threads.contains(&thread.id);
+			listed
+				&& thread
+					.thread_metadata
+					.as_ref()
+					.is_none_or(|metadata| !metadata.archived)
 		}) {
 			let Some(parent_id) = thread.parent_id else {
 				continue;
@@ -327,7 +329,10 @@ impl State {
 
 	pub fn channel_rows(&self, channel_id: Snowflake) -> Vec<MessageRow> {
 		let Some(cache) = self.messages.get(&channel_id) else {
-			return vec![MessageRow::Loading];
+			return vec![match self.history_failures.get(&channel_id) {
+				Some(reason) => MessageRow::Failed(reason.clone()),
+				None => MessageRow::Loading,
+			}];
 		};
 		let guild = self
 			.channel_guild(channel_id)
