@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Left click inserts the emoji into the composer (or reacts, when the picker was opened from a message's reaction button); right click opens the Favorite menu
 - [ ] In-process UI test (zgx `Ui::dispatch`) for both buttons
