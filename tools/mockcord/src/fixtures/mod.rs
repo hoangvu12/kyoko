@@ -90,6 +90,9 @@ impl Fixtures {
 		if config.autocomplete_emoji {
 			guilds::add_autocomplete_emojis(&mut builder, &mut guilds);
 		}
+		if config.crowded_expressions {
+			guilds::add_crowded_emojis(&mut builder, &mut guilds);
+		}
 		let user_guild_settings = build_user_guild_settings(&guilds);
 		let mut users: BTreeMap<u64, User> = builder
 			.people

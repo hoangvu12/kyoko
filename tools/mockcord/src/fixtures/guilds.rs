@@ -564,6 +564,29 @@ pub(super) fn add_autocomplete_emojis(builder: &mut Builder, guilds: &mut [Guild
 	}
 }
 
+const CROWDED_EMOJIS_PER_GUILD: usize = 60;
+const CROWDED_ANIMATED_EVERY: usize = 7;
+
+pub(super) fn add_crowded_emojis(builder: &mut Builder, guilds: &mut [GuildFixture]) {
+	for (index, guild) in guilds.iter_mut().enumerate() {
+		let Some(owner) = guild.emojis.first().and_then(|emoji| emoji.user.clone()) else {
+			continue;
+		};
+		guild
+			.emojis
+			.extend((0..CROWDED_EMOJIS_PER_GUILD).map(|number| Emoji {
+				id: Some(Snowflake(builder.ids.next())),
+				name: Some(format!("crowd_{index}_{number}")),
+				roles: Vec::new(),
+				user: Some(owner.clone()),
+				require_colons: Some(true),
+				managed: Some(false),
+				animated: Some(number % CROWDED_ANIMATED_EVERY == 0),
+				available: Some(true),
+			}));
+	}
+}
+
 fn named_emojis(builder: &mut Builder, owner: &User, names: &[(&str, bool)]) -> Vec<Emoji> {
 	names
 		.iter()

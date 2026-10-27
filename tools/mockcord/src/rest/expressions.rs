@@ -80,6 +80,8 @@ const GUILD_STICKERS: [(&str, &str); 2] = [("crab_wave", "crab,wave"), ("ship_it
 const PACK_EPOCH_MS: i64 = 1_641_000_000_000;
 const PACK_STICKER_EPOCH_MS: i64 = 1_642_000_000_000;
 const GUILD_STICKER_EPOCH_MS: i64 = 1_643_000_000_000;
+const CROWDED_STICKER_EPOCH_MS: i64 = 1_644_000_000_000;
+const CROWDED_STICKERS_PER_GUILD: usize = 6;
 const MIN_STICKER_NAME: usize = 2;
 const MAX_STICKER_NAME: usize = 30;
 
@@ -266,37 +268,52 @@ fn live_guild_index(shared: &Shared, id: u64) -> Result<usize, ApiError> {
 
 fn seeded_stickers(shared: &Shared, guild_index: usize, guild_id: u64) -> Vec<Sticker> {
 	let user = shared.store.lock().current_user.clone();
-	seeded_for(&user, guild_index, guild_id)
+	seeded_for(&user, guild_index, guild_id, shared.config.crowded_expressions)
 }
 
 pub(crate) fn ready_stickers(shared: &Shared, user: &User, guild_index: usize, guild_id: u64) -> Value {
 	let key = (std::ptr::from_ref(shared) as usize, guild_id);
 	match GUILD_STICKER_STORE.lock().get(&key) {
 		Some(stickers) => to_json(stickers),
-		None => to_json(&seeded_for(user, guild_index, guild_id)),
+		None => to_json(&seeded_for(
+			user,
+			guild_index,
+			guild_id,
+			shared.config.crowded_expressions,
+		)),
 	}
 }
 
-fn seeded_for(user: &User, guild_index: usize, guild_id: u64) -> Vec<Sticker> {
-	GUILD_STICKERS
-		.iter()
-		.enumerate()
-		.map(|(index, (name, tags))| {
-			let offset = (guild_index * GUILD_STICKERS.len() + index) as i64;
-			Sticker {
-				id: Snowflake(snowflake_at(GUILD_STICKER_EPOCH_MS + offset * 1000, 0)),
-				name: (*name).to_owned(),
-				description: Some(String::new()),
-				tags: Some((*tags).to_owned()),
-				kind: Some(StickerKind::Guild),
-				format_type: Some(StickerFormat::Png),
-				available: Some(true),
-				guild_id: Some(Snowflake(guild_id)),
-				user: Some(user.clone()),
-				..Sticker::default()
-			}
-		})
-		.collect()
+fn seeded_for(user: &User, guild_index: usize, guild_id: u64, crowded: bool) -> Vec<Sticker> {
+	let guild_sticker = |id: u64, name: String, tags: &str| Sticker {
+		id: Snowflake(id),
+		name,
+		description: Some(String::new()),
+		tags: Some(tags.to_owned()),
+		kind: Some(StickerKind::Guild),
+		format_type: Some(StickerFormat::Png),
+		available: Some(true),
+		guild_id: Some(Snowflake(guild_id)),
+		user: Some(user.clone()),
+		..Sticker::default()
+	};
+	let seeded = GUILD_STICKERS.iter().enumerate().map(|(index, (name, tags))| {
+		let offset = (guild_index * GUILD_STICKERS.len() + index) as i64;
+		guild_sticker(
+			snowflake_at(GUILD_STICKER_EPOCH_MS + offset * 1000, 0),
+			(*name).to_owned(),
+			tags,
+		)
+	});
+	let crowd = (0..if crowded { CROWDED_STICKERS_PER_GUILD } else { 0 }).map(|index| {
+		let offset = (guild_index * CROWDED_STICKERS_PER_GUILD + index) as i64;
+		guild_sticker(
+			snowflake_at(CROWDED_STICKER_EPOCH_MS + offset * 1000, 0),
+			format!("crowd_sticker_{guild_index}_{index}"),
+			"crowd",
+		)
+	});
+	seeded.chain(crowd).collect()
 }
 
 fn with_stickers<R>(

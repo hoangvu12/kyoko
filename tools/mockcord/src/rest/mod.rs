@@ -300,6 +300,9 @@ async fn observe(State(shared): State<Arc<Shared>>, request: Request, next: Next
 
 async fn observe_media(shared: &Shared, request: Request, next: Next, at: Instant) -> Response {
 	let path = request.uri().path().to_owned();
+	if !shared.config.media_delay.is_zero() {
+		tokio::time::sleep(shared.config.media_delay).await;
+	}
 	if !shared.recorder.enabled() || !path.starts_with("/cdn/") {
 		return next.run(request).await;
 	}

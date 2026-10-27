@@ -46,6 +46,8 @@ pub struct MockConfig {
 	pub autocomplete_emoji: bool,
 	pub frequent_commands: bool,
 	pub more_apps: bool,
+	pub crowded_expressions: bool,
+	pub media_delay: Duration,
 	pub autocomplete: AutocompleteReply,
 	pub interactions: InteractionTiming,
 	pub failing_modals: bool,
@@ -76,6 +78,8 @@ impl Default for MockConfig {
 			autocomplete_emoji: false,
 			frequent_commands: false,
 			more_apps: false,
+			crowded_expressions: false,
+			media_delay: Duration::ZERO,
 			autocomplete: AutocompleteReply::Answer,
 			interactions: InteractionTiming::default(),
 			failing_modals: false,
@@ -84,6 +88,23 @@ impl Default for MockConfig {
 			build_number: 424_242,
 			bucket_limit: 5,
 			bucket_window: Duration::from_secs(2),
+		}
+	}
+}
+
+impl MockConfig {
+	pub const CROWDED_GUILDS: usize = 50;
+	pub const CROWDED_MEDIA_DELAY: Duration = Duration::from_millis(120);
+
+	pub fn crowded() -> Self {
+		Self {
+			guilds: Self::CROWDED_GUILDS,
+			channels_per_guild: 2,
+			messages_per_channel: 20,
+			members_per_guild: 10,
+			crowded_expressions: true,
+			media_delay: Self::CROWDED_MEDIA_DELAY,
+			..Self::default()
 		}
 	}
 }

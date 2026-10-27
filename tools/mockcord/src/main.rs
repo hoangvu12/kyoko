@@ -36,6 +36,13 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--autocomplete-emoji" => config.autocomplete_emoji = true,
 			"--frequent-commands" => config.frequent_commands = true,
 			"--more-apps" => config.more_apps = true,
+			"--crowded-expressions" => {
+				config = MockConfig {
+					port: config.port,
+					seed: config.seed,
+					..MockConfig::crowded()
+				}
+			}
 			"--slow-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Stall,
 			"--failing-autocomplete" => config.autocomplete = mockcord::AutocompleteReply::Fail,
 			"--slow-followups" => config.interactions.followup = SLOW_FOLLOWUP,
