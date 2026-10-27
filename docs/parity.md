@@ -651,3 +651,11 @@ Kyoko only (`--apps kyoko`). Mockcord gives every sixth member of a server (from
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `server-profile` | 81 | Default selection, then open the profile popout of the open server's member with a server banner (one with a server avatar first) at (348, 404), anchored top left: the server banner, the server avatar, the server nick and the server bio. | yes |
+
+### 92 Profiles like Discord
+
+Kyoko only (`--apps kyoko`); compare by eye with Discord. Mockcord gives a user a profile theme when the timestamp part of its id (in seconds from the fixture epoch) is even and a profile effect when it is a multiple of four; a member with a server look has a server theme of its own.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `profile-menu` | 92 | Default selection, then open the profile menu of the newest other author at (348, 404), as the DM column's More button does: View Full Profile, Share Profile, Invite to Server (when there is a server to invite to), Ignore, Block, Report User Profile, Copy User ID. | yes |

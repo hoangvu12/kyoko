@@ -115,6 +115,7 @@ pub enum Screen {
 	AppsLauncher,
 	GameActivity,
 	ServerProfile,
+	ProfileMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -310,6 +311,7 @@ impl Screen {
 			"name-decorations-profile" => Some(Screen::ProfilePopout),
 			"user-panel-game-activity" => Some(Screen::GameActivity),
 			"server-profile" => Some(Screen::ServerProfile),
+			"profile-menu" => Some(Screen::ProfileMenu),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -378,7 +380,8 @@ impl Screen {
 			| Screen::Polls(_)
 			| Screen::AppsLauncher
 			| Screen::GameActivity
-			| Screen::ServerProfile => Some(Opening::First),
+			| Screen::ServerProfile
+			| Screen::ProfileMenu => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

@@ -7,7 +7,7 @@ mod status_menu;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use bridge::{AccountEntry, EmojiPicker, PanelUser, ProfileCard};
+use bridge::{AccountEntry, EmojiPicker, PanelUser, ProfileCard, ProfileMenuItem};
 use media::ImageName;
 use protocol::{Snowflake, User};
 use session::Command;
@@ -46,7 +46,9 @@ pub struct Opening {
 pub enum Request {
 	Command(Command),
 	Message(Snowflake),
+	QuickMessage(Snowflake, String),
 	FullProfile(Snowflake),
+	Report,
 	Block(Snowflake),
 	EditProfile,
 	SwitchAccounts,
@@ -72,6 +74,10 @@ enum Surface {
 	},
 	Full {
 		serial: u64,
+	},
+	Menu {
+		serial: u64,
+		at: (f32, f32),
 	},
 }
 
@@ -105,6 +111,7 @@ impl CardImages {
 pub struct Shown {
 	serial: u64,
 	pub card: Rc<ProfileCard>,
+	pub menu: Rc<Vec<Vec<ProfileMenuItem>>>,
 	pub images: Rc<CardImages>,
 }
 
@@ -256,6 +263,16 @@ impl ProfileLayer {
 			serial: self.serial(),
 			at: opening.at,
 			anchor: opening.anchor,
+		}));
+	}
+
+	pub fn open_menu(&self, user_id: Snowflake, at: (f32, f32)) {
+		self.close_menus();
+		self.target.set(Some((user_id, None)));
+		self.shown.set(None);
+		self.surface.set(Some(Surface::Menu {
+			serial: self.serial(),
+			at,
 		}));
 	}
 
@@ -431,16 +448,18 @@ impl ProfileLayer {
 		open
 	}
 
-	pub fn show_card(&self, card: Option<ProfileCard>) {
-		let Some(card) = card else {
+	pub fn show_card(&self, card: Option<(ProfileCard, Vec<Vec<ProfileMenuItem>>)>) {
+		let Some((card, menu)) = card else {
 			if self.shown.with_untracked(Option::is_some) {
 				self.shown.set(None);
 			}
 			return;
 		};
-		let same = self
-			.shown
-			.with_untracked(|shown| shown.as_ref().is_some_and(|shown| *shown.card == card));
+		let same = self.shown.with_untracked(|shown| {
+			shown
+				.as_ref()
+				.is_some_and(|shown| *shown.card == card && *shown.menu == menu)
+		});
 		if same {
 			return;
 		}
@@ -448,6 +467,7 @@ impl ProfileLayer {
 		self.shown.set(Some(Shown {
 			serial: self.serial(),
 			card: Rc::new(card),
+			menu: Rc::new(menu),
 			images: Rc::new(images),
 		}));
 		self.refresh_images();
@@ -457,11 +477,7 @@ impl ProfileLayer {
 		let (cdn, scale) = (self.pictures.cdn().to_owned(), self.pictures.scale());
 		let request =
 			|request: Option<media::ImageRequest>| request.map(|request| self.pictures.request(request));
-		let points = if self.has_full_profile() {
-			self.points("avatar_size_xl")
-		} else {
-			self.points("avatar_size_lg")
-		};
+		let points = self.points("avatar_size_lg");
 		CardImages {
 			avatar: request(card.avatar_request(&cdn, points, scale)),
 			banner: request(card.banner_request(&cdn)),
@@ -611,6 +627,7 @@ impl ProfileLayer {
 			})
 			.child(self.full_view())
 			.child(self.popout_view())
+			.child(self.floating_view())
 			.child(self.menu_view())
 			.child(self.custom_view())
 			.child(self.picker.view())
@@ -638,6 +655,18 @@ impl ProfileLayer {
 					})
 					.on_mount(move |node| measured.measured(&node, &target))
 			},
+		)
+	}
+
+	fn floating_view(self: &Rc<Self>) -> View {
+		let (surface, shown) = (self.surface.clone(), self.shown.clone());
+		let this = self.clone();
+		div().child_when(
+			move || match (surface.get(), shown.get()) {
+				(Some(Surface::Menu { serial, at }), Some(shown)) => Some((serial, at, shown)),
+				_ => None,
+			},
+			move |(_, at, shown): (u64, (f32, f32), Shown), _| popout::floating_menu(&this, &shown, at),
 		)
 	}
 

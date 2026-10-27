@@ -21,6 +21,8 @@ mod notices;
 mod plugin_slots;
 mod plugins;
 mod poll_shots;
+#[cfg(test)]
+mod profile_menus;
 mod profiles;
 mod qr_code;
 mod reaction_shots;
@@ -977,7 +979,8 @@ impl Link {
 			| capture::Screen::CustomStatus
 			| capture::Screen::ProfilePopout
 			| capture::Screen::FullProfile
-			| capture::Screen::ServerProfile => self.drive_profiles(capture.screen).await,
+			| capture::Screen::ServerProfile
+			| capture::Screen::ProfileMenu => self.drive_profiles(capture.screen).await,
 			capture::Screen::UserPanel => {}
 			capture::Screen::QuickSwitcher => {
 				self.open_switcher();

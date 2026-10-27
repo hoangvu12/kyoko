@@ -485,6 +485,14 @@ function M.open_full_profile(id: string)
 	ui.invoke("dms.full_profile", id)
 end
 
+function M.open_dm_profile_menu(id: string, x: number, y: number)
+	ui.invoke("dms.profile_more", { id = id, x = x, y = y })
+end
+
+function M.add_dm_profile_friend()
+	ui.invoke("dms.add_friend", nil)
+end
+
 function M.composer_choose_result(index: number, area: string?)
 	ui.invoke(area_of(area) .. ".choose_result", index)
 end

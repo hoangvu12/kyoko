@@ -2167,7 +2167,14 @@ fn dm_profile(open: bool) -> serde_json::Value {
 		"open": open, "id": "50", "name": "ada", "username": "ada", "tag": "RUST", "tag_badge": "",
 		"avatar": "", "banner": "",
 		"accent": "", "status": "online", "bio": "hi, i am ada", "since": "Mar 3, 2019",
-		"servers": "Mutual Servers — 2", "friends": "Mutual Friends — 1",
+		"servers": "2 Mutual Servers", "friends": "1 Mutual Friend",
+		"server_icons": [
+			{ "key": "m10", "src": "", "initial": "K" },
+			{ "key": "m11", "src": "", "initial": "R" },
+		],
+		"friend_icons": [{ "key": "m51", "src": "", "initial": "g" }],
+		"friend": "add", "loading": false,
+		"theme_top": "#1a1033", "theme_bottom": "#5c2a9d", "effect": true,
 	})
 }
 
@@ -2186,7 +2193,7 @@ fn the_dm_columns_show_the_profile_and_the_group_members() {
 	shows(
 		&mut app,
 		"the profile column of a direct message",
-		"Mutual Servers — 2",
+		"2 Mutual Servers",
 		&[
 			("login.screen", json!("main")),
 			("rail.items", rail_items()),
@@ -2199,9 +2206,24 @@ fn the_dm_columns_show_the_profile_and_the_group_members() {
 	);
 	shows(&mut app, "the profile's bio", "hi, i am ada", &[]);
 	shows(&mut app, "the profile's guild tag", "RUST", &[]);
+	shows(&mut app, "the mutual friends", "1 Mutual Friend", &[]);
+	assert!(
+		app.find("dm_profile_effect").is_some(),
+		"the effect glows over the banner"
+	);
 	app.click("dm_profile_full");
 	app.frames(2);
 	assert_eq!(last_call(&calls, "dms.full_profile"), Some(json!("50")));
+	app.click("dm_profile_friend");
+	app.frames(2);
+	assert!(
+		last_call(&calls, "dms.add_friend").is_some(),
+		"Add Friend asks the host"
+	);
+	app.click("dm_profile_more");
+	app.frames(2);
+	let more = last_call(&calls, "dms.profile_more").expect("More asks the host for the menu");
+	assert_eq!(more["id"], json!("50"));
 	app.click("top_bar_dm_profile");
 	app.frames(2);
 	assert!(

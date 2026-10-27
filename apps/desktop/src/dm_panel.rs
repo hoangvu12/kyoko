@@ -2,10 +2,11 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use bridge::{DmPanel, DmProfile, GroupMember};
+use bridge::{DmPanel, DmProfile, GroupMember, ProfileCard, Relation};
 use chrono::Utc;
 use media::{ImageName, ImageRequest};
 use protocol::Snowflake;
+use session::{Command, FriendSource};
 use state::{Changes, State};
 use zgx_script::{ScriptHost, Shared, Value};
 
@@ -14,6 +15,7 @@ use crate::ui::record;
 
 const PROFILE_AVATAR: f64 = 80.;
 const MEMBER_AVATAR: f64 = 32.;
+const MUTUAL_ICON: f64 = 20.;
 
 pub(crate) struct DmPanelView {
 	open: Cell<Option<Snowflake>>,
@@ -31,7 +33,7 @@ impl DmPanelView {
 			panel: RefCell::new(DmPanel::Empty),
 			images: RefCell::new(HashMap::new()),
 			shown: RefCell::new(Vec::new()),
-			profile: host.shared("dms.profile", profile_value(None, [None, None, None])),
+			profile: host.shared("dms.profile", empty_profile()),
 			members: host.shared("dms.members", Value::List(Rc::new([]))),
 		}
 	}
@@ -41,7 +43,7 @@ impl DmPanelView {
 		*self.panel.borrow_mut() = DmPanel::Empty;
 		self.images.borrow_mut().clear();
 		self.shown.borrow_mut().clear();
-		self.profile.set(profile_value(None, [None, None, None]));
+		self.profile.set(empty_profile());
 		self.members.set(Value::List(Rc::new([])));
 	}
 
@@ -60,6 +62,22 @@ impl DmPanelView {
 	pub(crate) fn recipient(&self) -> Option<Snowflake> {
 		match &*self.panel.borrow() {
 			DmPanel::Profile(profile) => Some(profile.card.id),
+			_ => None,
+		}
+	}
+
+	pub(crate) fn friend_command(&self) -> Option<Command> {
+		let panel = self.panel.borrow();
+		let DmPanel::Profile(profile) = &*panel else {
+			return None;
+		};
+		let card = &profile.card;
+		match card.relation {
+			Relation::None if !card.mine && !card.bot => Some(Command::AddFriend {
+				username: card.username.clone(),
+				from: FriendSource::Profile,
+			}),
+			Relation::Incoming => Some(Command::AcceptFriend { user_id: card.id }),
 			_ => None,
 		}
 	}
@@ -102,9 +120,36 @@ impl DmPanelView {
 				names.extend(avatar.clone());
 				names.extend(banner.clone());
 				names.extend(tag.clone());
+				let servers: Vec<Value> = profile
+					.mutual_server_icons()
+					.iter()
+					.map(|guild| {
+						let icon =
+							ProfileCard::guild_icon_request(guild, icons.cdn, MUTUAL_ICON, icons.scale)
+								.map(|request| self.image(request, icons));
+						names.extend(icon.clone());
+						mutual_value(guild.id, icon.as_deref(), &guild.name)
+					})
+					.collect();
+				let friends: Vec<Value> = profile
+					.mutual_friend_icons()
+					.iter()
+					.map(|friend| {
+						let icon = friend
+							.user
+							.as_ref()
+							.and_then(|user| {
+								bridge::avatar_request(icons.cdn, user, MUTUAL_ICON, icons.scale, false)
+							})
+							.map(|request| self.image(request, icons));
+						names.extend(icon.clone());
+						mutual_value(friend.id, icon.as_deref(), &friend.name)
+					})
+					.collect();
 				self.profile.set(profile_value(
-					Some(profile),
+					profile,
 					[avatar.as_deref(), banner.as_deref(), tag.as_deref()],
+					[servers, friends],
 				));
 				self.members.set(Value::List(Rc::new([])));
 			}
@@ -119,11 +164,11 @@ impl DmPanelView {
 						member_value(member, avatar.as_deref())
 					})
 					.collect();
-				self.profile.set(profile_value(None, [None, None, None]));
+				self.profile.set(empty_profile());
 				self.members.set(Value::List(rows.into()));
 			}
 			DmPanel::Empty => {
-				self.profile.set(profile_value(None, [None, None, None]));
+				self.profile.set(empty_profile());
 				self.members.set(Value::List(Rc::new([])));
 			}
 		}
@@ -151,26 +196,60 @@ fn accent_text(accent: Option<u32>) -> String {
 		.unwrap_or_default()
 }
 
-fn profile_value(profile: Option<&DmProfile>, [avatar, banner, tag_badge]: [Option<&str>; 3]) -> Value {
-	let Some(profile) = profile else {
-		return record([
-			("open", false.into()),
-			("id", "".into()),
-			("name", "".into()),
-			("username", "".into()),
-			("tag", "".into()),
-			("tag_badge", "".into()),
-			("avatar", "".into()),
-			("banner", "".into()),
-			("accent", "".into()),
-			("status", "offline".into()),
-			("bio", "".into()),
-			("since", "".into()),
-			("servers", "".into()),
-			("friends", "".into()),
-		]);
-	};
+fn empty_profile() -> Value {
+	record([
+		("open", false.into()),
+		("id", "".into()),
+		("name", "".into()),
+		("username", "".into()),
+		("tag", "".into()),
+		("tag_badge", "".into()),
+		("avatar", "".into()),
+		("banner", "".into()),
+		("accent", "".into()),
+		("status", "offline".into()),
+		("bio", "".into()),
+		("since", "".into()),
+		("servers", "".into()),
+		("friends", "".into()),
+		("server_icons", Value::List(Rc::new([]))),
+		("friend_icons", Value::List(Rc::new([]))),
+		("friend", "".into()),
+		("loading", false.into()),
+		("theme_top", "".into()),
+		("theme_bottom", "".into()),
+		("effect", false.into()),
+	])
+}
+
+fn mutual_value(id: Snowflake, icon: Option<&str>, name: &str) -> Value {
+	let initial: String = name.chars().next().map(String::from).unwrap_or_default();
+	record([
+		("key", format!("m{id}").as_str().into()),
+		("src", host_image(icon).as_str().into()),
+		("initial", initial.as_str().into()),
+	])
+}
+
+fn friend_state(card: &ProfileCard) -> &'static str {
+	match card.relation {
+		_ if card.mine || card.bot => "",
+		Relation::None => "add",
+		Relation::Incoming => "accept",
+		Relation::Outgoing => "sent",
+		Relation::Friend | Relation::Blocked => "",
+	}
+}
+
+fn profile_value(
+	profile: &DmProfile,
+	[avatar, banner, tag_badge]: [Option<&str>; 3],
+	[servers, friends]: [Vec<Value>; 2],
+) -> Value {
 	let card = &profile.card;
+	let (top, bottom) = card
+		.theme
+		.map_or((None, None), |theme| (Some(theme.primary), Some(theme.accent)));
 	record([
 		("open", true.into()),
 		("id", card.id.to_string().as_str().into()),
@@ -195,6 +274,13 @@ fn profile_value(profile: Option<&DmProfile>, [avatar, banner, tag_badge]: [Opti
 			"friends",
 			profile.mutual_friends_text().unwrap_or_default().as_str().into(),
 		),
+		("server_icons", Value::List(servers.into())),
+		("friend_icons", Value::List(friends.into())),
+		("friend", friend_state(card).into()),
+		("loading", profile.loading.into()),
+		("theme_top", accent_text(top).as_str().into()),
+		("theme_bottom", accent_text(bottom).as_str().into()),
+		("effect", card.effect.into()),
 	])
 }
 

@@ -168,6 +168,12 @@ impl Link {
 		}
 	}
 
+	pub(crate) fn dm_profile_friend(&self) {
+		if let Some(command) = self.dm_panel.friend_command() {
+			self.send(command);
+		}
+	}
+
 	pub(super) fn dm_panel_apply(&self, state: &State, changes: &Changes) {
 		if self.dm_panel.refresh(state, Some(changes)) {
 			self.publish_dm_panel();

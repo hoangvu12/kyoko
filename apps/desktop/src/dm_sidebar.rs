@@ -143,6 +143,23 @@ pub(crate) fn install_actions(host: &ScriptHost, link: &Rc<Link>) {
 		}
 	});
 	let actions = Rc::downgrade(link);
+	host.action("dms.profile_more", move |argument| {
+		let user_id = crate::ui::field(&argument, "id").and_then(snowflake);
+		let at = (
+			crate::ui::number(&argument, "x").unwrap_or(0.),
+			crate::ui::number(&argument, "y").unwrap_or(0.),
+		);
+		if let (Some(link), Some(user_id)) = (actions.upgrade(), user_id) {
+			link.open_profile_menu(user_id, at);
+		}
+	});
+	let actions = Rc::downgrade(link);
+	host.action("dms.add_friend", move |_| {
+		if let Some(link) = actions.upgrade() {
+			link.dm_profile_friend();
+		}
+	});
+	let actions = Rc::downgrade(link);
 	host.action("home.show_page", move |argument| {
 		if let (Some(link), Value::Str(page)) = (actions.upgrade(), &argument) {
 			link.show_home_page(page);

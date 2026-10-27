@@ -127,6 +127,18 @@ export type DmProfile = {
 	since: string,
 	servers: string,
 	friends: string,
+	server_icons: { DmMutual },
+	friend_icons: { DmMutual },
+	friend: string,
+	loading: boolean,
+	theme_top: string,
+	theme_bottom: string,
+	effect: boolean,
+}
+export type DmMutual = {
+	key: string,
+	src: string,
+	initial: string,
 }
 export type DmMember = {
 	key: string,
@@ -420,6 +432,13 @@ M.dms = {
 		since = "",
 		servers = "",
 		friends = "",
+		server_icons = {},
+		friend_icons = {},
+		friend = "",
+		loading = false,
+		theme_top = "",
+		theme_bottom = "",
+		effect = false,
 	} :: DmProfile),
 	members = ui.shared("dms.members", {} :: { DmMember }),
 }

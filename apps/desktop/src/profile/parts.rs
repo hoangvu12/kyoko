@@ -1,9 +1,12 @@
+use std::f32::consts::FRAC_PI_2;
 use std::rc::Rc;
 
-use bridge::{ActivityLine, DmStatus, ProfileCard, ProfileConnection, RoleChip, StatusLine};
+use bridge::{ActivityLine, DmStatus, ProfileCard, ProfileConnection, ProfileTheme, RoleChip, StatusLine};
 use media::ImageName;
+use zgx::canvas::GradientStop;
 use zgx::compose::prelude::*;
 use zgx::reactive::Runtime;
+use zgx::scene::Color;
 use zgx::style::ObjectFit;
 use zgx::theme::{Themed, Themes};
 
@@ -57,6 +60,10 @@ pub fn status_color(status: DmStatus) -> &'static str {
 }
 
 pub fn status_dot(status: DmStatus, size: f32, cutout: &str) -> View {
+	status_dot_on(status, size, Themed::Token(tok(cutout)))
+}
+
+pub fn status_dot_on(status: DmStatus, size: f32, cutout: Themed<Color>) -> View {
 	let mark = match status {
 		DmStatus::Online => None,
 		DmStatus::Idle => Some(
@@ -66,10 +73,10 @@ pub fn status_dot(status: DmStatus, size: f32, cutout: &str) -> View {
 				.top(-size * 0.125)
 				.size(size * 0.75, size * 0.75)
 				.rounded(size)
-				.bg(tok(cutout)),
+				.bg(cutout),
 		),
-		DmStatus::Dnd => Some(div().size(size * 0.6, size * 0.25).rounded(size).bg(tok(cutout))),
-		DmStatus::Offline => Some(div().size(size * 0.5, size * 0.5).rounded(size).bg(tok(cutout))),
+		DmStatus::Dnd => Some(div().size(size * 0.6, size * 0.25).rounded(size).bg(cutout)),
+		DmStatus::Offline => Some(div().size(size * 0.5, size * 0.5).rounded(size).bg(cutout)),
 	};
 	row()
 		.relative()
@@ -120,6 +127,16 @@ pub fn avatar(
 	badge: Option<Badge>,
 	cutout: &str,
 ) -> View {
+	avatar_on(pictures, name, side, badge, Themed::Token(tok(cutout)))
+}
+
+pub fn avatar_on(
+	pictures: &Rc<Pictures>,
+	name: Option<&ImageName>,
+	side: f32,
+	badge: Option<Badge>,
+	cutout: Themed<Color>,
+) -> View {
 	let circle = div()
 		.size(side, side)
 		.rounded(side / 2.)
@@ -135,8 +152,8 @@ pub fn avatar(
 			.rounded(outer)
 			.items_center()
 			.justify_center()
-			.bg(tok(cutout))
-			.child(status_dot(badge.status, badge.dot, cutout))
+			.bg(cutout)
+			.child(status_dot_on(badge.status, badge.dot, cutout))
 	});
 	div()
 		.relative()
@@ -146,7 +163,7 @@ pub fn avatar(
 		.when_some(badge, |avatar, badge| avatar.child(badge))
 }
 
-pub fn avatar_ring(ring: &str, padding: &str, child: View) -> View {
+pub fn avatar_ring(ring: &str, padding: &str, fill: Themed<Color>, child: View) -> View {
 	row()
 		.w(tok(ring))
 		.h(tok(ring))
@@ -155,7 +172,7 @@ pub fn avatar_ring(ring: &str, padding: &str, child: View) -> View {
 		.justify_center()
 		.rounded(tok(ring))
 		.p(tok(padding))
-		.bg(tok("bg_3"))
+		.bg(fill)
 		.child(child)
 }
 
@@ -442,12 +459,7 @@ fn connection(account: &ProfileConnection) -> View {
 		.w_full()
 		.items_center()
 		.gap(tok("space_12"))
-		.px(tok("space_12"))
-		.py(tok("space_8"))
-		.rounded(tok("profile_inner_radius"))
-		.bg(tok("bg_4"))
-		.border(tok("border_thickness"))
-		.border_color(tok("border"))
+		.py(tok("space_4"))
 		.child(
 			row()
 				.w(tok("icon_size_lg"))
@@ -498,8 +510,9 @@ pub fn stats(card: &ProfileCard) -> Option<View> {
 	)
 }
 
-pub fn round_button<F: FnMut() + 'static>(glyph: &'static str, caption: &str, action: F) -> View {
+pub fn round_button<F: FnMut() + 'static>(id: &str, glyph: &'static str, caption: &str, action: F) -> View {
 	button()
+		.id(id.to_owned())
 		.w(tok("button_size"))
 		.h(tok("button_size"))
 		.shrink_0()
@@ -513,16 +526,89 @@ pub fn round_button<F: FnMut() + 'static>(glyph: &'static str, caption: &str, ac
 		.cursor(Cursor::Pointer)
 		.hover(|style| style.bg(tok("bg_1")))
 		.child(crate::timeline::icons::glyph(glyph, 20.))
-		.tooltip(caption.to_owned())
 		.on_click(action)
+		.tooltip(caption.to_owned())
 }
 
-pub fn icon_button<F: FnMut() + 'static>(glyph: &'static str, caption: &str, action: F) -> View {
+pub fn icon_button<F: FnMut() + 'static>(id: &str, glyph: &'static str, caption: &str, action: F) -> View {
 	kit::button_view(
 		crate::timeline::icons::glyph(glyph, 20.),
 		kit::Variant::Secondary,
 		action,
 	)
+	.id(id.to_owned())
 	.px(tok("space_10"))
 	.tooltip(caption.to_owned())
+}
+
+pub fn surface(view: View, theme: Option<ProfileTheme>, fallback: &str) -> View {
+	match theme {
+		Some(theme) => view.bg_gradient(FRAC_PI_2, theme_stops(theme.primary, theme.accent, 0xff)),
+		None => view.bg(tok(fallback)),
+	}
+}
+
+pub fn inner(view: View, theme: Option<ProfileTheme>) -> View {
+	match theme {
+		Some(_) => view.bg(tok("overlay_button_background")),
+		None => view.bg(tok("bg_4")),
+	}
+}
+
+pub fn ring_fill(theme: Option<ProfileTheme>, fallback: &str) -> Themed<Color> {
+	match theme {
+		Some(theme) => Themed::Value(rgb(theme.primary)),
+		None => Themed::Token(tok(fallback)),
+	}
+}
+
+fn theme_stops(start: u32, end: u32, alpha: u8) -> Vec<GradientStop> {
+	let color = |value: u32| {
+		let [_, red, green, blue] = value.to_be_bytes();
+		Color(red, green, blue, alpha)
+	};
+	vec![
+		GradientStop {
+			offset: 0.,
+			color: color(start),
+		},
+		GradientStop {
+			offset: 1.,
+			color: color(end),
+		},
+	]
+}
+
+pub fn effect_glow(runtime: &Runtime, theme: Option<ProfileTheme>, height: &str) -> View {
+	let glow = match theme {
+		Some(theme) => theme.accent,
+		None => Themes::of(runtime)
+			.get(tok("accent_2"))
+			.color()
+			.map_or(0, |Color(red, green, blue, _)| {
+				u32::from_be_bytes([0, red, green, blue])
+			}),
+	};
+	let [_, red, green, blue] = glow.to_be_bytes();
+	div()
+		.id("profile-effect")
+		.absolute()
+		.left(0.)
+		.top(0.)
+		.w_full()
+		.h(tok(height))
+		.pointer_events(false)
+		.bg_gradient(
+			FRAC_PI_2,
+			vec![
+				GradientStop {
+					offset: 0.,
+					color: Color(red, green, blue, 0x66),
+				},
+				GradientStop {
+					offset: 1.,
+					color: Color(red, green, blue, 0),
+				},
+			],
+		)
 }

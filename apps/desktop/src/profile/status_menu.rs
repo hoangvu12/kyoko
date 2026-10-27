@@ -168,6 +168,7 @@ fn account_popout(layer: &Rc<ProfileLayer>, shown: &MenuShown) -> View {
 				.child(parts::avatar_ring(
 					"profile_avatar_ring",
 					"space_6",
+					zgx::theme::Themed::Token(tok("bg_3")),
 					parts::avatar(
 						&pictures,
 						shown.avatar.as_ref(),

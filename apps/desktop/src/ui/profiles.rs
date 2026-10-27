@@ -76,20 +76,35 @@ impl Link {
 		self.refresh_profile();
 	}
 
+	pub(crate) fn open_profile_menu(&self, user_id: Snowflake, at: (f32, f32)) {
+		self.send(Command::LoadProfile {
+			user_id,
+			guild_id: None,
+		});
+		self.profile.open_menu(user_id, at);
+		self.refresh_profile();
+	}
+
 	fn refresh_profile(&self) {
-		let (Some((user_id, guild_id)), Some(shared)) = (self.profile.target(), self.state()) else {
+		if let Some(shared) = self.state() {
+			self.show_profile(&shared.read());
+		}
+	}
+
+	fn show_profile(&self, state: &State) {
+		let Some((user_id, guild_id)) = self.profile.target() else {
 			return;
 		};
-		let card = ProfileCard::of(&shared.read(), user_id, guild_id, Utc::now());
+		let card = ProfileCard::of(state, user_id, guild_id, Utc::now()).map(|card| {
+			let card = card.shown_with(state, &self.display);
+			let menu = bridge::profile_menu(state, &card, self.profile.has_full_profile());
+			(card, menu)
+		});
 		self.profile.show_card(card);
 	}
 
 	pub(super) fn publish_profiles(&self, state: &State, changes: &Changes) {
-		if let Some((user_id, guild_id)) = self.profile.target() {
-			let card = ProfileCard::of(state, user_id, guild_id, Utc::now());
-			self.profile
-				.show_card(card.map(|card| card.shown_with(state, &self.display)));
-		}
+		self.show_profile(state);
 		if let Some(user_id) = self.pending_dm.get()
 			&& let Some(channel_id) = bridge::dm_channel(state, user_id)
 		{
@@ -164,6 +179,18 @@ impl Link {
 		match request {
 			Request::Command(command) => self.send(command),
 			Request::Message(user_id) => self.message_user(user_id),
+			Request::QuickMessage(user_id, content) => {
+				self.send(Command::MessageUser { user_id, content });
+				match self.existing_dm(user_id) {
+					Some(channel_id) => self.open(None, channel_id),
+					None => self.pending_dm.set(Some(user_id)),
+				}
+			}
+			Request::Report => {
+				if let Err(error) = platform::open::open_url(bridge::REPORT_URL) {
+					tracing::warn!(%error, "could not open the report page");
+				}
+			}
 			Request::FullProfile(user_id) => self.open_full_profile(user_id),
 			Request::Block(user_id) => self.ask_block(user_id),
 			Request::EditProfile => self.open_settings("profiles"),
@@ -181,11 +208,13 @@ impl Link {
 		}
 	}
 
+	fn existing_dm(&self, user_id: Snowflake) -> Option<Snowflake> {
+		self.state()
+			.and_then(|shared| bridge::dm_channel(&shared.read(), user_id))
+	}
+
 	pub(super) fn message_user(&self, user_id: Snowflake) {
-		let existing = self
-			.state()
-			.and_then(|shared| bridge::dm_channel(&shared.read(), user_id));
-		match existing {
+		match self.existing_dm(user_id) {
 			Some(channel_id) => self.open(None, channel_id),
 			None => {
 				self.pending_dm.set(Some(user_id));
@@ -226,6 +255,11 @@ impl Link {
 					self.open_full_profile(author);
 				}
 			}
+			capture::Screen::ProfileMenu => {
+				if let Some(author) = self.newest_other_author() {
+					self.open_profile_menu(author, capture::PROFILE_ANCHOR);
+				}
+			}
 			capture::Screen::ServerProfile => {
 				if let Some(member) = self.server_styled_member() {
 					self.open_profile(member, capture::PROFILE_ANCHOR, Anchor::TopLeft);
@@ -251,7 +285,8 @@ impl Link {
 		let loaded = match screen {
 			capture::Screen::ProfilePopout
 			| capture::Screen::FullProfile
-			| capture::Screen::ServerProfile => self
+			| capture::Screen::ServerProfile
+			| capture::Screen::ProfileMenu => self
 				.profile
 				.target()
 				.zip(self.state())
