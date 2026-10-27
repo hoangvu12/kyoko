@@ -1,5 +1,35 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: seventh orchestrator hands off (main `a2a64e5` + this note)
+
+Written by the seventh orchestrator (roboco chat `375a5e1b`, "kyoko orchestrator 7", same machine) when the user asked to hand off. Everything below still applies unless this section says otherwise.
+
+### State
+
+- Resolved this session (7): v1 62; Midnight 13, 17, 15, 27 (merged and answered); plus the three lanes' rebases. Main is `a2a64e5`.
+- Left to do: **4**. v1 39 and 58 stay skipped (`ready-for-human`, user decision). Count with the `Status:` lines.
+
+| Ticket | Lane | Worker | State |
+|---|---|---|---|
+| Midnight 14 built-in commands | A | `95aa01ab` (done, idle) | Worker report: `read_chat 95aa01ab` (the long message before the last). I rebased it onto `a2a64e5` myself (head `427d5d1`; union conflicts in `composer/mod.rs` mod/use/struct fields, `bridge/src/lib.rs` image request imports, `tests/bridge/main.rs`, `docs/testing.md`, `docs/parity.md` (the unmapped-mockups line now reads "Every mockup page now has a kyoko screen."), `MOCKUPS`). Verification was running in my shell when I handed off: `kyoko-lane-a/target/orch-verify.log`, done when it has `=== exit N for parity` (screens command-picker-built-in, built-in-gif, built-in-sticker, built-in-thread, apps-launcher, command-picker on port 8494). If it was cut off (fewer exit lines, no cargo process for lane A), rerun `verify.sh` plus that parity line. Worker's parity: 12.6 / 18.9 / 16.2 / 13.3%. Then merge, write the Answer (protocol facts: frecency ids shrug -1 … sticker -17, schedule -19; `/schedule` left out, experiment-gated `/users/@me/scheduled-messages`; moderation built-ins open kyoko's dialogs instead of running at once; `/shrug` single backslash fixed; deviations in the report), claim 56 and launch it on lane A. |
+| v1 49 PlatformIndicators + ForceOwnerCrown | B | `45f92384` (running) | Started on `7e7ddd0`; told main moved to `a2a64e5` (inbox) and that lane C's 54 overlaps in `docs/plugins.md`, `bundled.rs`, `crates/plugins/src/*`. Prompt points it at v1 52's Rust-drawn decoration pattern and the reserved `user.decoration`/`member.decoration` slots; kyoko-only captures with `KYOKO_CAPTURE_PLUGINS`. |
+| v1 54 ReadAllNotificationsButton | C | `7566b982` (running) | Started on `a2a64e5`; uses the existing `rail.buttons` slot and `Command::MarkAllRead` (paced bulk ack), reuses M27's `unread_groups()`. |
+| v1 56 GameActivityToggle | — | not started | Next on lane A after M14 merges. Uses `panel.buttons` (v1 47) and can reuse M19's `show_current_game` setting. |
+
+- **Completion notices for 49 and 54 come to `375a5e1b`, not to you.** Poll them with `get_chat`/`read_chat`, or send each one short message so its next turn reports to you.
+- Disk: 215 GB free; lane targets were 21–25 GB when last measured.
+
+### Things to know (new this session)
+
+- Union-conflict pattern on rebases (the same every time): `capture.rs` `Screen` variants and shot enums, `ui.rs` `layered(...)` list and capture arms, `ui/root.rs` `LAYERS` (bump the array length when both sides add one; it is 15 now), `timeline/icons.rs`, `docs/parity.md` rows and the unmapped list (apply both sides' removals), `MOCKUPS`, mockcord showcase sections, `bridge/src/lib.rs` re-exports, `session/command.rs`, `state/event.rs` imports. A small Python resolver (keep both sides; intersect the unmapped list) handled every one; re-verify after.
+- The parity tool refuses a screen with no mockup (`timeline-replies has no mockup yet`): only pass `MOCKUPS` keys to `parity mockup`.
+- `verify.sh` writes `=== done`, not a parity line; append the parity step yourself (`echo "=== exit $? for parity"`).
+- A session restart kills background verifications; check the log for one exit line per step and rerun.
+- New load flakes seen by workers (each passed alone): `kept::a_deleted_message_stays_in_place_flagged_and_survives_a_restart`, `display::dont_round_my_timestamps_rounds_down_and_redraws_the_rows_that_show_one`. Add them to rules.md's flake list.
+- `get_chat` on a busy worker returns its whole tool list (very long); prefer `list_chats` with `parent` for status and `read_chat` with `limit: 1, include_tools: false` for reports.
+- The user asked (2026-10-27) whether kyoko has been tried on a real account: no, everything so far is mock only (see "Real Discord" below). Ask before any real run.
+
+
 ## Latest: sixth orchestrator hands off (main `2bbf0fd` + this note)
 
 Written by the sixth orchestrator (roboco chat `7d781d9c`, "kyoko orchestrator 6", same machine) when the user asked to hand off at about 44% context. Everything below still applies unless this section says otherwise.
