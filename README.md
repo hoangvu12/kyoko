@@ -83,7 +83,7 @@ To remove everything, delete those folders and the `kyoko` entries from Windows 
 
 ## Build from source
 
-You need the Rust toolchain pinned in `rust-toolchain.toml`, the MSVC build tools and CMake.
+You need the Rust toolchain pinned in `rust-toolchain.toml`, the MSVC build tools, CMake and libclang (LLVM). `CONTRIBUTING.md` has the details.
 
 ```bash
 git clone https://github.com/hoangvu12/kyoko

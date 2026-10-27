@@ -163,3 +163,20 @@ Fixtures come from `MockConfig::seed`. The same seed and anchor always give the 
 ## The headless driver
 
 `cargo xtask headless-run --mock` runs a longer scripted session against mockcord and checks counts and features. It can also run with `--chaos`. Its mockcord records traffic, so its wire checks (no typing request while SilentTyping is on, nothing naming a hidden channel, the bulk ack from ReadAllNotificationsButton) see real requests. It complements the behaviour tests and should keep passing. Use the behaviour tests for assertions about specific traffic.
+
+## TLS and HTTP/2 handshakes
+
+mockcord speaks plain HTTP/1.1 and `ws://`, so session tests never see a TLS or HTTP/2 handshake. `cargo xtask tls-capture` records one instead. It listens on `localhost` only, on a random port, with a throwaway rcgen root and a `localhost` certificate, and never connects anywhere itself.
+
+```
+cargo xtask tls-capture --client chrome --h2 --record chrome-156
+cargo xtask tls-capture --client wreq --h2 --compare chrome-156
+```
+
+- `--client chrome` starts the local Chrome (or `--browser <exe>`) with a new profile in the temp folder, `--ignore-certificate-errors`, and `https://localhost:<port>/`. It closes that Chrome by process id when done and deletes the profile. `--client wreq` runs `cargo run -p kyoko-net --example tls_probe -- <port>`, which fetches `/` and `/fetch` with `net::client_builder()` and opens `wss://localhost:<port>/ws` with `net::websocket_emulation()`. `--trust-root` makes the probe trust the listener's root instead of turning certificate checks off.
+- Without `--h2`, the listener reads each ClientHello and drops the connection. With `--h2`, it completes TLS (rustls, ALPN `h2` then `http/1.1`, no session tickets, so every connection starts fresh), waits 50 ms as a network round trip would, sends its SETTINGS, and serves a page that sets two cookies, calls `fetch('/fetch')` and then opens `wss://localhost:<port>/ws`. The websocket upgrade gets a 404.
+- It waits up to `--wait` seconds (40 by default) for an HTTP/2 `/fetch` and a websocket upgrade, then prints one line per connection, and for `https` and `wss` the JA4, the Akamai-style HTTP/2 string and a JSON summary.
+- The summary (`mockcord::hello::Capture`) holds the cipher list, extensions in arrival order and as a sorted set, server name, versions, groups, key-share groups and lengths, signature algorithms, ALPN, ALPS, certificate compression, ECH GREASE parameters, the Trust Anchor IDs, and the other short extension bodies. Random values, the session id and key-share bytes are left out. The HTTP/2 part holds the frames before the first HEADERS, SETTINGS in order, the connection WINDOW_UPDATE, PRIORITY frames, and for every request on every HTTP/2 connection its flags, stream priority, pseudo-header order, decoded header list and number of `cookie` fields. The websocket part is the upgrade request line and headers, with `Sec-WebSocket-Key` replaced by `<random>`.
+- `--record <name>` writes `tools/mockcord/fixtures/tls/<name>-https.json` and `<name>-wss.json`. `--compare <name>` reads them and prints every field that differs, ignoring extension order (Chrome permutes it) but not where GREASE sits, and for HTTP/2 comparing SETTINGS, WINDOW_UPDATE, PRIORITY frames and the first request's flags, priority and pseudo-header order. Header lists are kept for reading, not compared, because they come from the caller.
+
+The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` feature so the shipped app does not carry it. Session tests that check kyoko's own handshakes against these fixtures can start it in-process. Fixtures must hold no secrets: the page sets its own test cookies, and a capture runs on a fresh profile. Results and the Chrome-against-wreq comparison are in `docs/fingerprint.md`, "TLS and HTTP/2 handshake".

@@ -18,11 +18,12 @@ crates/bridge       core to UI bridge without a UI dependency: the Changes inbox
 crates/login        token, QR and web login
 crates/plugins      the Luau plugin runtime: sandboxed VMs on worker threads behind SessionHooks (docs/plugins.md)
 crates/platform     Windows tray, notifications, hotkeys, clipboard, autostart, URL scheme (docs/desktop.md)
+crates/net          wreq client builder with Chrome's TLS and HTTP/2 options; not used by the app yet (docs/fingerprint.md)
 tools/mockcord      mock Discord REST and gateway server driven by fixtures, with traffic recording and scenario controls
-tools/xtask         test, headless-run, the first party theme check, release notes, the Twemoji pack
+tools/xtask         test, headless-run, the first party theme check, release notes, the Twemoji pack, tls-capture
 ```
 
-Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state`, `media` and `audio` (and on `plugins` in its tests only). `audio` depends on no other kyoko crate. `plugins` depends on `session`, `state`, `store`, `protocol` and mlua. `twemoji` depends only on zstd. `apps/desktop` depends on `bridge`, `plugins`, `session`, `state`, `store`, `protocol`, `twemoji`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session`, `bridge`, `plugins` or `twemoji` has a UI dependency.
+Crate graph: `protocol` is the leaf. `rest` and `gateway` depend on `protocol`; `state` on `protocol` and `markdown`; `store` on `protocol`. `session` sits on all of them. `bridge` depends on `session`, `state`, `media` and `audio` (and on `plugins` in its tests only). `audio` depends on no other kyoko crate. `plugins` depends on `session`, `state`, `store`, `protocol` and mlua. `twemoji` depends only on zstd. `net` depends only on wreq and wreq-util, and no other crate depends on it yet. `apps/desktop` depends on `bridge`, `plugins`, `session`, `state`, `store`, `protocol`, `twemoji`, `mockcord` and zgx. None of `protocol`, `rest`, `gateway`, `state`, `store`, `markdown`, `session`, `bridge`, `plugins`, `twemoji` or `net` has a UI dependency.
 
 Behaviour tests drive a session against an in-process mockcord; see `docs/testing.md`. Gateway pacing, reconnect policy and the connection status are in `docs/gateway.md`. The Discord web-client identity (user agent, super-properties, build number, cookies) is described in `docs/fingerprint.md`. Cache limits, warm channels and the message window are in `docs/caches.md`. Risky-action locks and the safety setting are in `docs/locks.md`. Findings from the zgx spike (build times, memory, bridge latency, the real-traffic comparison) are in `docs/spike.md`. The interface (Luau layout, theme, fonts, icons, naming) is described in `docs/ui.md`.
 

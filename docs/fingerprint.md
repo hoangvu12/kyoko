@@ -1,6 +1,6 @@
 # Client fingerprint
 
-Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files.
+Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. The TLS and HTTP/2 handshake is not Chrome's yet; see "TLS and HTTP/2 handshake".
 
 ## What is sent
 
@@ -17,6 +17,65 @@ Kyoko presents itself as the Discord web client in Chrome, on both the gateway a
 - **Cookies**: one jar, filled from Discord's responses, plus `__dcfduid`, `__sdcfduid` and `_cfuvid` carried over from the web login page (`docs/sign-in.md`, "Web login").
 - **Web login**: the login window is honestly WebView2. It sets no user agent, so the page sees WebView2's own (Edge, `Edg/<version>`) beside WebView2's own `Sec-CH-UA` and `navigator.userAgentData` brands (`Microsoft Edge WebView2`). WebView2 lets an app replace the user agent string but not the client hints, so kyoko's Chrome string there would sit beside Edge brands, a mismatch bot checks such as Cloudflare's flag. This is only the login page: once the token is handed over, REST, the gateway and the QR socket present the Chrome web client above, carrying the page's cookies.
 - **Images**: CDN and media-proxy fetches send Chrome's `<img>` headers from `Fingerprint::image_headers`: the same user agent and client hints, an image `Accept`, `Referer: https://discord.com/`, `Sec-Fetch-Dest: image`, `Sec-Fetch-Mode: no-cors`, `Sec-Fetch-Site: cross-site` and `Priority: i`. They carry no cookies, because discord.com cookies are never sent to Discord's CDN hosts. See `docs/media.md`.
+
+## TLS and HTTP/2 handshake
+
+Today REST, media and theme links use reqwest on rustls, and the gateway and QR sockets use tokio-tungstenite on rustls. Their ClientHello and HTTP/2 framing are a Rust program's, not Chrome's, whatever the headers say. Tickets 69 to 74 move them to `wreq`, which runs BoringSSL with Chrome's TLS and HTTP/2 options. Ticket 69 was the trial: `crates/net` builds a `wreq` client, `cargo xtask tls-capture` (`docs/testing.md`) recorded the local Chrome and that client against a localhost listener, and nothing contacted Discord. No app code uses `crates/net` yet.
+
+### Pins
+
+`wreq-util` (rev `5715529`), `wreq` (rev `cd76bcd`) and `btls`/`btls-sys` (rev `1298875`) are git pins: no crates.io release has a Chrome profile newer than 149, and the newest at these revs is Chrome154. `wreq-util` is a normal dependency; `wreq`, `btls` and `btls-sys` are `[patch.crates-io]` entries, because `wreq-util`'s own patch section is ignored when it is a dependency. `emulation-chromium-pki` is on; without it the Chrome 152 to 154 profiles send an empty Trust Anchor IDs extension. `cargo tree -e features -i btls-sys` shows only its `default` feature, so neither `relax-cert-validation` nor `allow-crl-extensions-bad-version` is applied. Older `wreq-util` releases were GPL-3.0 or LGPL-3.0; the pinned rev is Apache-2.0 and `cargo deny check` guards it. Its `emulation` feature also pulls zstd 0.13 and zstd-safe 7, which have advisories (RUSTSEC-2026-0391, -0398, -0403) fixed only in zstd-safe 8. wreq-util uses zstd only for the certificate compressor of its Firefox profiles; the Chrome profile offers brotli only, so `deny.toml` ignores the three with that reason. A wreq-util rev that moves to zstd 0.14 should drop the ignores.
+
+`net::chrome_emulation()` takes `Profile::Chrome154` and clears its headers and original-header map, because the profile's headers are a navigation's (`upgrade-insecure-requests`, `sec-fetch-user: ?1`, `accept: text/html...`) and would leak into kyoko's requests. Kyoko stays the only source of headers. `net::websocket_emulation()` is the same with `alps_protocols` removed, for websocket requests (below).
+
+### What Chrome 156 sends
+
+Recorded from Chrome 156.0.8078.48 on Windows, fresh profile, on 2026-10-27 (`tools/mockcord/fixtures/tls/chrome-156-https.json` and `chrome-156-wss.json`).
+
+- **https** (JA4 `t13d1517h2_8daaf6152771_cb7bf5808d99`): GREASE then the 15 TLS 1.3, ECDHE and legacy RSA suites (`TLS_AES_128_GCM_SHA256` first, `TLS_RSA_WITH_AES_256_CBC_SHA` last). 17 extensions plus a GREASE extension first and last, in a new order each connection: server name, status request, supported groups, EC point formats, signature algorithms, ALPN, SCT, extended master secret, certificate compression (brotli), empty session ticket, supported versions (GREASE, 1.3, 1.2), PSK modes (`psk_dhe_ke`), key share, ALPS on the new codepoint (17613) for `h2`, Trust Anchor IDs (28 IDs, sorted by their bytes), ECH GREASE (HKDF-SHA256, AES-128-GCM, 32-byte enc) and renegotiation info. Groups GREASE, X25519MLKEM768, X25519, P-256, P-384, with key shares for GREASE (1 byte), X25519MLKEM768 and X25519. Signature algorithms GREASE, ML-DSA-44, -65, -87, then the usual eight ECDSA, RSA-PSS and PKCS#1 ones. ALPN `h2`, `http/1.1`. No pre-shared key on a fresh connection.
+- **wss** (JA4 `t13d1516h1_8daaf6152771_5b37b36a67c0`): the same ClientHello on its own connection, except that ALPN is `http/1.1` only and there is **no ALPS** extension. The upgrade request is HTTP/1.1 with title-case names in this order: `Host`, `Connection: Upgrade`, `Pragma: no-cache`, `Cache-Control: no-cache`, `User-Agent`, `Upgrade: websocket`, `Origin`, `Sec-WebSocket-Version: 13`, `Accept-Encoding: gzip, deflate, br, zstd`, `Accept-Language`, `Cookie` (one line), `Sec-WebSocket-Key`, `Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits`.
+- **HTTP/2** (Akamai `1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p`): the first flight is SETTINGS (header table 65536, push off, initial window 6291456, max header list 262144, in that order), a connection WINDOW_UPDATE of 15663105, then HEADERS. No PRIORITY frames. Pseudo-headers `:method`, `:authority`, `:scheme`, `:path`. Every HEADERS frame carries END_HEADERS and a priority: the navigation is exclusive on stream 0 with weight 256; `fetch()` and image requests use weight 220 (`priority: u=1, i`), and a later request on the same connection depended exclusively on the earlier one (stream 3 on stream 1). Cookies are split: each cookie is its own `cookie` field.
+- Header order of a same-origin `fetch()` on HTTP/2: `sec-ch-ua-platform`, `user-agent`, `sec-ch-ua`, `sec-ch-ua-mobile`, `accept`, `sec-fetch-site`, `sec-fetch-mode`, `sec-fetch-dest`, `referer`, `accept-encoding`, `accept-language`, `cookie`..., `priority`.
+
+The capture ran Chrome with `--disable-background-networking` and a new profile, so no variations seed was loaded: field trials that change TLS behaviour, if any are running, are at their defaults.
+
+### What wreq's Chrome154 sends, and the difference
+
+`cargo xtask tls-capture --client wreq --h2 --compare chrome-156` (fixtures `wreq-chrome154-https.json` and `-wss.json`) reports **no difference** for https or wss: same JA4s, cipher list, extension set, GREASE places (first and last extension), groups, key shares, signature algorithms, ALPN, ALPS, certificate compression, ECH GREASE parameters, the same 28 Trust Anchor IDs in the same order, SETTINGS, WINDOW_UPDATE, first HEADERS priority and pseudo-header order. Two things were needed for that:
+
+- **Websocket ALPS.** wreq offers ALPN `http/1.1` only for a websocket, but still adds the ALPS extension for `h2` from the profile's `TlsOptions`, so its wss hello had 17 extensions (`t13d1517h1_...`) where Chrome has 16. Per request, `client.websocket(url).emulation(net::websocket_emulation())` drops ALPS and the hello matches. This is the one `TlsOptions` override kyoko needs.
+- **SETTINGS ACK timing.** With a listener that sends its SETTINGS the instant TLS completes, wreq acknowledged them before sending its WINDOW_UPDATE. With 50 ms of latency, as any real network has, its first flight is SETTINGS, WINDOW_UPDATE, HEADERS like Chrome's. The listener now waits 50 ms.
+
+Trusting a test root through `tls_cert_store` instead of turning certificate checks off leaves the ClientHello unchanged (`--trust-root --compare wreq-chrome154`: no difference). The trust-anchor list comes from the profile, not from the certificate store.
+
+Left over, outside what the comparison checks (for tickets 70 to 74):
+
+- **Later HEADERS priority.** wreq gives every request exclusive, stream 0, weight 256; Chrome's `fetch()` requests use weight 220 and chain on earlier streams. Discord's web client makes its API calls with `fetch()`. The weight is an `Http2Options` setting per client; chaining is not available.
+- **Header order and case.** wreq sends the headers kyoko gives it. With the emulation headers cleared it adds only `accept-encoding: zstd,gzip,deflate,br`, which kyoko already replaces with Chrome's value. Chrome's order is above. On the websocket upgrade wreq writes lowercase names in its own order (`sec-websocket-version`, `upgrade`, `connection`, `sec-websocket-key`, `accept-encoding`, `host`, `cookie`) and no `Pragma`, `Cache-Control` or `Sec-WebSocket-Extensions`; `OrigHeaderMap` can set case and order, but permessage-deflate cannot be offered without supporting it.
+- **Cookies.** wreq's own cookie store splits cookies on HTTP/2 like Chrome. Kyoko's `CookieJar` must return the split form for HTTP/2 when it implements wreq's `CookieStore`.
+- **Image `Accept`.** Chrome 156 sends `image/jxl,image/avif,...` for images; `fingerprint::IMAGE_ACCEPT` has no `image/jxl`.
+- Not covered by a local capture: HTTP/3 after Cloudflare's `alt-svc`, real ECH from DNS HTTPS records, and session resumption.
+
+### Recommendation
+
+Keep claiming Chrome 156 (`CHROME_MAJOR = 156`) and use wreq-util's Chrome154 TLS and HTTP/2 options for it, with the emulation headers cleared. Chrome 156's handshake equals Chrome154's in every field the capture compares, so no `TlsOptions` override is needed for https and kyoko does not need to claim 154. Websockets need the ALPS override above. Re-run the capture when Chrome moves to 157 (`cargo xtask tls-capture --client chrome --h2 --record chrome-157`, then `--client wreq --compare chrome-157`).
+
+### Build cost
+
+Measured on the development machine (i9-12900HK, `CARGO_BUILD_JOBS=3`, sccache as `RUSTC_WRAPPER`, other worktrees building at the same time), 2026-10-27:
+
+- **First build of `btls-sys`**, the build script that runs CMake, MSBuild and bindgen: 383 s for dev (RelWithDebInfo, because dependencies build at `opt-level = 3` with debug info) and 201 s for release. The wreq, btls and http2 Rust crates add about 15 s. A changed `BORING_BSSL_*`, `CMAKE*` or `HOST_CMAKE_TOOLCHAIN_FILE` value reruns it (about 4 min with the CMake build dir already there).
+- **No-op rebuild** of `kyoko-net`: 0.9 s.
+- **sccache** caches none of the C build: its C/C++ miss count did not move during it. CMake's Visual Studio generator ignores the compiler launcher that `btls-sys` passes.
+- **Git fetch**: `~/.cargo/git` grew by 672 MB, mostly the BoringSSL submodule (192 MB database, 455 MB `btls` checkout with it).
+- **Target dir**: about 0.6 GB per profile (dev: 337 MB `btls-sys` build dirs, a 252 MB patched copy of BoringSSL among them, 186 MB of new crates, 69 MB for the probe example; release: 301 MB of `btls-sys` build dirs).
+- **Release `kyoko.exe`**: 78,949,888 bytes today, 83,832,832 bytes (+4.66 MiB, +6.2 %) with a temporary call into `crates/net` (client build, a GET and a websocket open), while reqwest, rustls and aws-lc are still linked. Ticket 74 removes those.
+
+Native Windows builds of `btls-sys` assemble BoringSSL's assembly unless they cross-compile, which needs NASM. `.cargo/config.toml` points `HOST_CMAKE_TOOLCHAIN_FILE` at `.cargo/boringssl-no-asm.cmake`, which sets `OPENSSL_NO_ASM` (and the release C runtime, which `btls-sys` stops setting when a toolchain file is given). The cost is slower bulk crypto; the TLS 1.3 cipher order is unchanged, because the profile sets `aes_hw_override`, as the capture shows. libclang was found in `C:\Program Files\LLVM` without `LIBCLANG_PATH`.
+
+**Sharing one BoringSSL between worktrees.** `BORING_BSSL_INSTALL_DIR` does not work on Windows at this rev: it copies `libcrypto.a` and `libssl.a`, and MSVC builds `crypto.lib` and `ssl.lib`, so the build script fails. Copying by hand works: after a release build, copy `target/release/build/btls-sys-*/out/build/Release/{crypto,ssl}.lib` into `<dir>/lib` and `target/release/build/btls-sys-*/out/boringssl/include` into `<dir>/include`, outside the repo, one dir per `btls` rev. Then set `BORING_BSSL_PATH=<dir>` and `BORING_BSSL_ASSUME_PATCHED=1`: the build script runs bindgen only (2.6 s), CMake is not needed, and the capture still shows no difference from Chrome 156. Release libraries link into dev builds too (both use the `/MD` runtime).
+
+**CI.** No workflow file changed. `windows-latest` has CMake on `PATH`, LLVM in `C:\Program Files\LLVM` and Git, and the toolchain file removes the need for NASM, so `ci.yml` should build and test the workspace as it is, with the first run paying the BoringSSL fetch and build (`Swatinem/rust-cache` keeps `~/.cargo/git` and `target` afterwards). `release.yml` builds only `-p kyoko`, which does not use `crates/net` yet. Its ubuntu `publish` job builds `xtask`, which does not depend on `crates/net`, so it builds no BoringSSL, but cargo still fetches the git pins and the BoringSSL submodule to load the workspace. None of this has run on CI yet.
 
 ## IDENTIFY
 
