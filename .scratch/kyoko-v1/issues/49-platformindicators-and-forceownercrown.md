@@ -4,7 +4,7 @@
 
 **Blocked by:** 45 (Plugin runtime with ClearURLs), 29 (Member list)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] User and member decoration slots exist
 - [ ] PlatformIndicators shows platforms from presence data
