@@ -1,6 +1,6 @@
 # Signing in and out
 
-How kyoko gets from launch to the main view, what the login screen does with a pasted token, and how a rejected token or a sign-out brings the login screen back. Code: `crates/bridge/src/sign_in.rs` (the flow, UI-free and tested at the session seam in `crates/bridge/tests/bridge/sign_in.rs`), `apps/desktop/src/ui/sign_in.rs` (the window side) and `apps/desktop/ui/shell/login.luau` (the screen). The ways in are the email form, a token, the QR code and web login on discord.com. Storage details are in `docs/storage.md`.
+How kyoko gets from launch to the main view, what the login screen does with a pasted token, and how a rejected token or a sign-out brings the login screen back. Code: `crates/bridge/src/sign_in.rs` (the flow, UI-free and tested at the session seam in `crates/bridge/tests/bridge/sign_in.rs`), `apps/desktop/src/ui/sign_in.rs` (the window side) and `apps/desktop/ui/shell/login.luau` (the screen). The ways in are web login on discord.com, the QR code, the email form and a token. Storage details are in `docs/storage.md`.
 
 ## The flow
 
@@ -34,17 +34,22 @@ Without `--data-dir`, a run against Discord now uses the real data directory (`P
 
 ## The login screen
 
-The screen follows the Midnight mockups (`login.html`, `login-email.html`, `login-token.html`, `login-2fa.html`, `login-captcha.html`, `login-unsaved.html`, with the QR states and `login-web.html`), on Midnight tokens only: a card `login_card_width` 784 wide, `space_32` padding, `login_card_gap` 64 between its columns, `radius_lg`, `bg_4` with a `border` line, and the Terms of Service notice under it in `background_feedback_warning` with a `border_feedback_warning` line, `gap` apart. The left column is one of:
+The screen follows the Midnight mockups (`login.html`, `login-email.html`, `login-token.html`, `login-2fa.html`, `login-captcha.html`, `login-unsaved.html`, with the QR states and `login-web.html`), on Midnight tokens only, except for which column comes first (below): a card `login_card_width` 784 wide, `space_32` padding, `login_card_gap` 64 between its columns, `radius_lg`, `bg_4` with a `border` line, and the Terms of Service notice under it in `background_feedback_warning` with a `border_feedback_warning` line, `gap` apart. The left column is one of:
 
-- the email form (the default): "Welcome back!", the email or phone and password fields, "Forgot your password?" (opens web login, where Discord's own reset lives), Log In, then "Sign in with a token" and "Sign in on discord.com" side by side, and "Kyoko keeps your token in Windows Credential Manager.";
-- the token form, after "Sign in with a token" (`login.mode`, `token` or `email`): the masked Token field with its eye button, Paste token, and "Back to email login";
+- the discord.com column (the default): "Welcome back!", the brand button "Sign in on discord.com" (web login, below), "You'll sign in on Discord's own page, in a Kyoko window.", then two smaller links, "Use email and password instead" and "Sign in with a token", and "Kyoko keeps your token in Windows Credential Manager.";
+- the email form, after "Use email and password instead": the email or phone and password fields, "Forgot your password?" (opens web login, where Discord's own reset lives) with "Back to sign-in options" across from it, Log In, then "Sign in with a token" and "Sign in on discord.com" side by side;
+- the token form, after "Sign in with a token": the masked Token field with its eye button, Paste token, and "Back to sign-in options";
 - the captcha hand-over (below).
 
-The QR column (`login_qr.luau`) sits to the right of all three. The two-factor step and the unsaved token use the narrow card (`login_card_narrow` 480) without the QR column, with an 80-point badge (`login_badge_size`) above the title.
+The QR column (`login_qr.luau`) sits to the right of all four.
+
+Why discord.com comes first (user decision, 2026-10-27): native email and password login is where other third-party clients' users run into captchas and disabled accounts, so kyoko leads with the two ways that sign in on Discord's own terms, Discord's page and the phone. Nothing is removed; the email form is one click away and unchanged. The Midnight mockups `login.html` and `login-email.html` show the email form as the default; kyoko departs from them there on purpose (`docs/parity.md`).
+
+The column is `bridge::LoginChoice` (`LoginColumn`: `discord`, `email`, `token`), published as `login.mode` and chosen with `login.mode`. It can only change on the login screen, and it goes back to `discord` whenever the login screen leaves (a sign-in, a switch), so a sign-out, an added account or an expired session opens on discord.com again. A failed token or password keeps its form. Tested at the session seam in `crates/bridge/tests/bridge/login_column.rs`, and the links in `apps/desktop/src/ui/scripts/login.rs`. The two-factor step and the unsaved token use the narrow card (`login_card_narrow` 480) without the QR column, with an 80-point badge (`login_badge_size`) above the title.
 
 The notice reads "Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk." Until "I understand" is ticked, the left column is dimmed to `disabled_opacity_control` and ignores the pointer, and the QR column asks for the notice. Ticking it sets `settings.first_run_acknowledged`, so the notice stays acknowledged across launches and sign-outs.
 
-"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Sign in on discord.com" opens web login (below). "Back to your account" shows under either form while adding an account.
+"Paste token" submits what is typed, or the clipboard when the field is empty. Enter in the field submits too. The field is masked; the eye button shows it. "Sign in on discord.com" opens web login (below); its failures show under the button in whichever column shows it. "Back to your account" shows under every column while adding an account.
 
 `Flow::submit` validates with `login::TokenLogin::validate` (`GET /users/@me` with the web client's headers). Validation never retries: a 429 comes back at once (`max_retry_wait` of zero). Errors show under the field:
 
@@ -57,7 +62,7 @@ The notice reads "Kyoko is an unofficial client and is not affiliated with Disco
 
 A valid token is saved with `store.accounts.save` and made the current account. Each account has its own cache database, so signing in as another user wipes nothing and never shows the previous account's data. When the keyring fails, nothing is written to disk and the narrow card says "Your token couldn't be saved": "You're signed in as <username>, but Windows Credential Manager refused to store your token.", then "If you continue, Kyoko keeps the token in memory only. You'll need to sign in again the next time you open Kyoko." "Continue for this session only" starts the session with `remember_account: false`; "Back to login" (`Flow::discard_unsaved`) drops the checked token and shows the form again. A new sign-in is always a new `Session`, so safety locks are read again and earlier risky-action confirmations are gone.
 
-Other `Flow` messages (session expired, the session could not start, a missing saved sign-in) show in the same place, under the password field, or under the token field in token mode.
+Other `Flow` messages (session expired, the session could not start, a missing saved sign-in) show in the column in view: under the discord.com button and its line in the default column, under the password field in the email form, under the token field in the token form.
 
 ## Email and password
 

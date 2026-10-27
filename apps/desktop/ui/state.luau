@@ -378,7 +378,7 @@ M.login = {
 	qr = ui.shared("login.qr", nil :: LoginQr?),
 	web = ui.shared("login.web", nil :: LoginWeb?),
 	password = ui.shared("login.password", nil :: LoginPassword?),
-	mode = ui.shared("login.mode", "email"),
+	mode = ui.shared("login.mode", "discord"),
 	unsaved_name = ui.shared("login.unsaved_name", ""),
 }
 

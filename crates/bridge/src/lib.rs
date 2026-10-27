@@ -20,6 +20,7 @@ mod images;
 mod inbox;
 mod inbox_popout;
 mod lightbox;
+mod login_column;
 mod member_list;
 mod message;
 mod password_login;
@@ -115,6 +116,7 @@ pub use inbox_popout::{
 };
 pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
 pub use login::{MfaMethod, MfaMethods, QrEvent, REMOTE_AUTH_URL, Scanner};
+pub use login_column::{LoginChoice, LoginColumn};
 pub use member_list::{
 	MEMBER_PUBLISH_GAP, MemberChange, MemberEntry, MemberGroup, MemberHeights, MemberListEntry, MemberPanel,
 	MemberRowKind, OpenMembers, layout_of,

@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use bridge::themes::parse_color;
 use bridge::{
-	Arrival, Checked, Failure, Flow, Handover, Inbox, MfaMethod, MfaView, PasswordProblem, PasswordReply,
-	PasswordSignIn, PasswordStage, PasswordWork, QrEvent, QrEvents, QrSignIn, QrStage, Scanner, Screen,
-	Status, WebPage, WebSignIn, WebStage,
+	Arrival, Checked, Failure, Flow, Handover, Inbox, LoginChoice, LoginColumn, MfaMethod, MfaView,
+	PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage, PasswordWork, QrEvent, QrEvents, QrSignIn,
+	QrStage, Scanner, Screen, Status, WebPage, WebSignIn, WebStage,
 };
 use media::ImageName;
 use protocol::Snowflake;
@@ -20,8 +20,6 @@ use crate::web_page::{Bounds, PageEvent, PageHost};
 use crate::{capture, theme};
 
 const QR_IMAGE: &str = "login-qr";
-const EMAIL_MODE: &str = "email";
-const TOKEN_MODE: &str = "token";
 const CAPTURE_TOKEN: &str = "kyoko-capture-token";
 const CAPTURE_PASSWORD: &str = "kyoko-capture-password";
 
@@ -74,6 +72,7 @@ pub(super) struct Account {
 	password: RefCell<PasswordSignIn>,
 	password_view: Shared,
 	mode: Shared,
+	column: RefCell<LoginChoice>,
 	unsaved_name: Shared,
 	capture_code: RefCell<Option<String>>,
 }
@@ -112,7 +111,8 @@ impl Account {
 			web_host: RefCell::new(None),
 			password: RefCell::new(PasswordSignIn::new()),
 			password_view: host.shared("login.password", Value::Nil),
-			mode: host.shared("login.mode", EMAIL_MODE),
+			mode: host.shared("login.mode", LoginColumn::default().name()),
+			column: RefCell::new(LoginChoice::default()),
 			unsaved_name: host.shared("login.unsaved_name", ""),
 			capture_code: RefCell::new(None),
 		}
@@ -205,9 +205,9 @@ impl Link {
 		let actions = Rc::downgrade(link);
 		host.action("login.mode", move |argument| {
 			if let Some(link) = actions.upgrade()
-				&& let Some(mode) = text(&argument)
+				&& let Some(column) = text(&argument).and_then(LoginColumn::named)
 			{
-				link.set_mode(mode);
+				link.choose_column(column);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -280,10 +280,19 @@ impl Link {
 		if screen != capture::Screen::LoginTos {
 			self.acknowledge();
 		}
+		if matches!(
+			screen,
+			capture::Screen::LoginEmail
+				| capture::Screen::Login2fa
+				| capture::Screen::LoginCaptcha
+				| capture::Screen::LoginUnsaved
+		) {
+			self.choose_column(LoginColumn::Email);
+		}
 		match screen {
 			capture::Screen::LoginWeb => self.open_web(),
 			capture::Screen::LoginToken => {
-				self.set_mode(TOKEN_MODE);
+				self.choose_column(LoginColumn::Token);
 				self.submit(CAPTURE_TOKEN.to_owned());
 			}
 			capture::Screen::LoginEmail => {
@@ -316,9 +325,14 @@ impl Link {
 			&& self.qr_settled(screen)
 	}
 
-	fn set_mode(&self, mode: &str) {
-		if matches!(mode, EMAIL_MODE | TOKEN_MODE) {
-			self.account.mode.set(mode.into());
+	fn choose_column(&self, column: LoginColumn) {
+		if self
+			.account
+			.column
+			.borrow_mut()
+			.choose(&self.flow.borrow(), column)
+		{
+			self.account.mode.set(column.name().into());
 		}
 	}
 
@@ -525,6 +539,7 @@ impl Link {
 		self.follow_qr();
 		self.sync_web();
 		self.account.password.borrow_mut().follow(&self.flow.borrow());
+		self.account.column.borrow_mut().follow(&self.flow.borrow());
 		self.publish_sign_in();
 	}
 
@@ -802,6 +817,7 @@ impl Link {
 				.unsaved
 				.set(matches!(status, Some(Status::Unsaved(_))).into());
 			account.adding.set(flow.adding().into());
+			account.mode.set(account.column.borrow().column().name().into());
 			let unsaved = flow.unsaved_user().map(|user| user.username.as_str());
 			account.unsaved_name.set(unsaved.unwrap_or_default().into());
 		});

@@ -9,6 +9,8 @@ local web_window = require("./login_web")
 local NOTICE =
 	"Kyoko is an unofficial client and is not affiliated with Discord. Using a third-party client with a user account can violate Discord's Terms of Service and can result in account termination. Use it at your own risk."
 local STORAGE_NOTE = "Kyoko keeps your token in Windows Credential Manager."
+local WEB_NOTE = "You'll sign in on Discord's own page, in a Kyoko window."
+local WELCOME = "We're so excited to see you again!"
 local MFA_STAGES = { "mfa", "texting", "verifying" }
 local OTHER_METHODS = {
 	totp = "Use your authenticator app instead",
@@ -54,7 +56,8 @@ local function view(): string
 	elseif stage == "handover" then
 		return "handover"
 	end
-	return if state.login.mode:get() == "token" then "token" else "email"
+	local mode = state.login.mode:get()
+	return if mode == "token" or mode == "email" then mode else "discord"
 end
 
 local function narrow(): boolean
@@ -157,9 +160,12 @@ local function error_line(message: () -> string, color: (() -> any)?)
 	)
 end
 
-local primary_button = ui.component(function(props: { text: any, glyph: string?, disabled: () -> boolean, on_click: () -> () })
+type PrimaryProps = { text: any, glyph: string?, id: string?, disabled: () -> boolean, on_click: () -> () }
+
+local primary_button = ui.component(function(props: PrimaryProps)
 	local hovered = ui.use_state(false)
 	return ui.button {
+		id = props.id,
 		direction = "row",
 		w_full = true,
 		h = theme.size.button_height_lg,
@@ -197,7 +203,7 @@ local primary_button = ui.component(function(props: { text: any, glyph: string?,
 	}
 end)
 
-local function primary(props: { text: any, glyph: string?, disabled: () -> boolean, on_click: () -> () })
+local function primary(props: PrimaryProps)
 	local fade = theme.number(theme.size.disabled_opacity_control)
 	return ui.div {
 		w_full = true,
@@ -268,8 +274,8 @@ local function link(text: any, on_click: () -> (), extra: { [string]: any }?)
 	return ui.button(props)
 end
 
-local function centered_link(text: string, on_click: () -> (), top: string)
-	return ui.row { w_full = true, mt = top, justify = "center", link(text, on_click) }
+local function centered_link(text: string, on_click: () -> (), top: string, id: string?)
+	return ui.row { w_full = true, mt = top, justify = "center", link(text, on_click, { id = id }) }
 end
 
 local function note()
@@ -302,6 +308,70 @@ local function back_to_account()
 	)
 end
 
+local function flow_message(): string
+	return if state.login.checking:get() then "" else state.login.message:get()
+end
+
+local function flow_line()
+	return error_line(flow_message, function()
+		return if state.login.error:get() then theme.color.red_1 else theme.color.text_4
+	end)
+end
+
+local function choose(mode: string): () -> ()
+	return function()
+		if not locked() and not busy() then
+			actions.login_mode(mode)
+		end
+	end
+end
+
+local function discord_column()
+	return ui.column {
+		grow = 1,
+		min_w = 0,
+		heading(WELCOME),
+		ui.column {
+			w_full = true,
+			opacity = dimmed(),
+			pointer_events = function()
+				return not locked()
+			end,
+			primary {
+				id = "login_discord",
+				text = "Sign in on discord.com",
+				glyph = "globe",
+				disabled = function()
+					return state.login.checking:get()
+				end,
+				on_click = function()
+					if not locked() then
+						actions.login_web_open()
+					end
+				end,
+			},
+			line(WEB_NOTE, theme.size.font_size_sm, theme.size.line_height_sm, theme.weight.regular, theme.color.text_4, {
+				mt = theme.size.space_8,
+				align = "center",
+				wrap = true,
+				w_full = true,
+			}),
+			web_line(),
+			flow_line(),
+			ui.column {
+				w_full = true,
+				mt = theme.size.space_20,
+				gap = theme.size.space_8,
+				items = "center",
+				link("Use email and password instead", choose("email"), { id = "login_email_link" }),
+				link("Sign in with a token", choose("token"), { id = "login_token_link" }),
+			},
+		},
+		back_to_account(),
+		note(),
+	}
+end
+
 local function email_problem(): string
 	local own = problem()
 	if own ~= "" or state.login.checking:get() then
@@ -324,7 +394,7 @@ local function email_form()
 	return ui.column {
 		grow = 1,
 		min_w = 0,
-		heading("We're so excited to see you again!"),
+		heading(WELCOME),
 		ui.column {
 			gap = theme.size.space_20,
 			opacity = dimmed(),
@@ -348,8 +418,11 @@ local function email_form()
 					return if problem() ~= "" or state.login.error:get() then theme.color.red_1 else theme.color.text_4
 				end),
 				ui.row {
+					w_full = true,
 					mt = theme.size.space_8,
+					justify = "between",
 					link("Forgot your password?", actions.login_web_open),
+					link("Back to sign-in options", choose("discord"), { id = "login_email_back" }),
 				},
 			},
 		},
@@ -442,11 +515,7 @@ local function token_form()
 					icon { name = "eye", size = theme.size.icon_size_md :: any },
 				},
 			},
-			error_line(function()
-				return if state.login.checking:get() then "" else state.login.message:get()
-			end, function()
-				return if state.login.error:get() then theme.color.red_1 else theme.color.text_4
-			end),
+			flow_line(),
 		},
 		ui.div {
 			mt = theme.size.space_20,
@@ -461,9 +530,9 @@ local function token_form()
 				on_click = submit,
 			},
 		},
-		centered_link("Back to email login", function()
-			actions.login_mode("email")
-		end, theme.size.space_12),
+		centered_link("Back to sign-in options", function()
+			actions.login_mode("discord")
+		end, theme.size.space_12, "login_token_back"),
 		back_to_account(),
 		note(),
 	}
@@ -473,7 +542,7 @@ local function handover_step()
 	return ui.column {
 		grow = 1,
 		min_w = 0,
-		heading("We're so excited to see you again!"),
+		heading(WELCOME),
 		ui.row {
 			gap = theme.size.space_12,
 			p = theme.size.space_16,
@@ -771,6 +840,7 @@ local function card()
 		border = theme.size.border_thickness,
 		border_color = theme.color.border,
 		ui.switch(view, {
+			discord = discord_column(),
 			email = email_form(),
 			token = token_form(),
 			handover = handover_step(),

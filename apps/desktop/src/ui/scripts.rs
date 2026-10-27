@@ -12,6 +12,7 @@ use crate::theme::Catalog;
 
 mod decorations;
 mod hidden;
+mod login;
 mod plugins;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
@@ -1841,7 +1842,25 @@ fn login_forms(app: &mut TestApp) {
 			"awaits_text": false, "others": others,
 		})
 	};
-	shows(app, "the email form", "We're so excited to see you again!", &[]);
+	shows(
+		app,
+		"the discord.com column",
+		"You'll sign in on Discord's own page, in a Kyoko window.",
+		&[],
+	);
+	shows(
+		app,
+		"the email and password link",
+		"Use email and password instead",
+		&[],
+	);
+	shows(
+		app,
+		"the email form",
+		"EMAIL OR PHONE NUMBER",
+		&[("login.mode", json!("email"))],
+	);
+	shows(app, "the email form's way back", "Back to sign-in options", &[]);
 	shows(
 		app,
 		"a wrong password",
@@ -1906,7 +1925,7 @@ fn login_forms(app: &mut TestApp) {
 	shows(
 		app,
 		"the email form again",
-		"We're so excited to see you again!",
+		"EMAIL OR PHONE NUMBER",
 		&[("login.unsaved", json!(false))],
 	);
 }

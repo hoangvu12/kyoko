@@ -214,7 +214,7 @@ Unless a row says otherwise, both apps start signed in on the first guild in rai
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `login-tos` | 21 | Start without a token on a fresh data directory: the login screen with the unacknowledged Terms of Service notice. | yes |
+| `login-tos` | 21 | Start without a token on a fresh data directory: the login screen with the unacknowledged Terms of Service notice. Since v1 68 the left column is the "Sign in on discord.com" column, not the email form `login.html` shows, so this screen, `login-qr-scanned` and `login-qr-expired` differ from their mockups in the left column by design (`docs/sign-in.md`). | yes |
 | `login-token` | 21 | As `login-tos`, then acknowledge the notice. Kyoko then switches to "Sign in with a token" and submits a token mockcord rejects, so the form shows "That token was rejected." as `login-token.html` does; its QR column shows a live code from mockcord's remote-auth gateway (ticket 42). Oxidcord's side only acknowledges the notice and its QR column shows its failed state, because it has no mock remote-auth gateway. | yes |
 
 ### 42 QR login
@@ -240,10 +240,10 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `login-email` | 44 | As `login-tos`, acknowledge the notice, then log in as `mock@kyoko.invalid` with a wrong password: "Login or password is invalid." under the password field. Settles once the QR code is drawn. | yes |
-| `login-2fa` | 44 | As `login-tos`, acknowledge the notice, then log in as `mfa@kyoko.invalid`, and send the code `000000`, which mockcord answers with a rate limit: the narrow two-factor card with the "Discord refused the sign-in for now..." line. | yes |
-| `login-captcha` | 44 | As `login-tos`, acknowledge the notice, then log in as `captcha@kyoko.invalid`, which mockcord answers with a captcha: the hand-over to discord.com beside the QR code. | yes |
-| `login-unsaved` | 44 | Opens the store on an in-memory keyring that refuses writes, with plain-text storage off; acknowledge the notice and log in as `mock@kyoko.invalid`: the narrow "Your token couldn't be saved" card. | yes |
+| `login-email` | 44 | As `login-tos`, acknowledge the notice, then "Use email and password instead" (v1 68) and log in as `mock@kyoko.invalid` with a wrong password: "Login or password is invalid." under the password field. Settles once the QR code is drawn. | yes |
+| `login-2fa` | 44 | As `login-tos`, acknowledge the notice, then open the email form and log in as `mfa@kyoko.invalid`, and send the code `000000`, which mockcord answers with a rate limit: the narrow two-factor card with the "Discord refused the sign-in for now..." line. | yes |
+| `login-captcha` | 44 | As `login-tos`, acknowledge the notice, then open the email form and log in as `captcha@kyoko.invalid`, which mockcord answers with a captcha: the hand-over to discord.com beside the QR code. | yes |
+| `login-unsaved` | 44 | Opens the store on an in-memory keyring that refuses writes, with plain-text storage off; acknowledge the notice, open the email form and log in as `mock@kyoko.invalid`: the narrow "Your token couldn't be saved" card. | yes |
 
 ### 22 Server rail and folders
 
