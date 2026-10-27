@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Behaviour written in `docs/` with sources
 - [ ] Opening a server opens its last viewed channel, else the default one; remembered per account across restarts
