@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Channel settings page for text and voice channels, opened from Edit Channel (menu and the voice row's gear), gated by Manage Channels; fields as listed, saved with `PATCH /channels/{id}` (only changed fields, with `X-Audit-Log-Reason` where kyoko already sends one), unsaved-changes bar as in server settings
 - [ ] Permissions (role/member overwrites list and editor, reusing server settings' role permission editor where possible), Invites (list, revoke), Delete Channel through kyoko's confirmation; Integrations listed read-only or left out (say which)
