@@ -1,5 +1,33 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: tenth orchestrator hands off (roboco chat `223bd24d`, "kyoko orchestrator 10", same machine, main `6b6b73e` + this note)
+
+Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-28) and wants the new orchestrator to ask them the open questions.
+
+### Ask the user first (in plain words, short)
+
+1. **Voice transport** (plan `nguyenvu/.research/voice-plan/plan.md` section 2, tickets 96–108). The browser does voice over WebRTC; oxidcord, the desktop app, discordo and endcord use plain UDP, which is a visible mismatch for a client that presents itself as Chrome (whether Discord acts on it is unknown). Options: (1) UDP now, everything above the transport built once behind a `Transport` seam, decide WebRTC later from a localhost capture of Chrome's offer (recommended); (2) WebRTC only (faithful, weeks later; needs a str0m crypto backend on BoringSSL); (3) UDP only. Also: openh264 left out (Cisco's patent cover only applies to its binary), Windows Media Foundation for H.264, unless the user objects. The user's wishes: clicking a voice channel joins it, real talk/listen, camera, screen share, watching and starting Go Live.
+2. **Slash-command crash (75, `needs-info`)**: not reproduced on mock (mouse, keyboard, typed command, em dash, autocomplete, the user's 7 plugins, ~1,500 random steps); no Windows crash record; the crashing run had no stderr capture. Ask: did they pick the option by clicking or by keyboard, were they typing a value; and did they close kyoko at 20:45 on 2026-10-27 or did it vanish (run 3's log just stops, no panic on stderr).
+
+### State
+
+- Real-account testing (user's go-ahead, 2026-10-27; throwaway token `KYOKO_TOKEN`, user drives the app, look-only rules for us). Launch recipe (PowerShell): set `$env:KYOKO_TOKEN` from the user-level variable, `RUST_BACKTRACE=1`, `Start-Process kyoko\target\debug\kyoko.exe -ArgumentList '--log','info,gateway=debug'` with stdout/stderr redirected to `nguyenvu\.orchestrator\real-run\stdout-N.txt`/`stderr-N.txt`, then remove the env var from the shell. Rebuild the main checkout first (`cargo build -p kyoko` with the BoringSSL prebuilt env vars, ~8 min cold). Check logs only with `grep -o` for key names, never print values. The gateway never disconnected in the user's run. Screenshots from the user: `nguyenvu\.orchestrator\real-run\screens\` (outside the repo; real people's messages). The user will test again once the current batch lands.
+- Resolved this session after the TLS work: 75 (partly: caret gap, options at once, popovers float; crash open as `needs-info`), 76 (false "Reconnecting", sidebar reflow, isolated loading), 77 (profiles load on open), 79 (emoji picker), 80 (server opens its channel), 86 (caret blink, cursors), 88 (toasts). 78 is `wontfix`, superseded by the voice tickets. 74 part 2b (Chrome 157 bump) waits for 2026-11-03.
+- **Running** (completion notices go to `223bd24d`, not to you: poll with `list_chats` parent `223bd24d` and `read_chat <id> limit 1 include_tools false`, or send each a short note so its next turn reports to you):
+  - 81 server profiles, animated avatars and banners: lane A, `bdca7cbb`, base `d9ca670`. Next on lane A: 92 (DM panel, full profile, popout menu; blocked by 81).
+  - 96 voice build trial: lane B, `6197a52b`, base `a976864`. Writes A/B/C "decision pending" in `docs/fingerprint.md` ("Voice"); tell it the user's answer if it comes first. Then 97 onward per the blocked-by lines.
+  - 87 GIFs and animated stickers: lane C, `9dc9e7f0`, base `6b6b73e`.
+- **Queue** (open, unblocked): 94 voice row hover buttons, 95 channel settings, 82 image grid, 89 image viewer, 83 rail hover and voice indicator, 84 plugin dialog and scroll, 85 hover colours audit, 93 image fetch concurrency, 90 new logo (user's image URL in the ticket; credit the artist), 91 inline video (start from oxidcord's Media Foundation decoder; share it with the voice video tickets). 102 is the user's own real call (`ready-for-human`), 108 DM calls `needs-triage`.
+- Worker brief: `nguyenvu\.orchestrator\common.md` (point every prompt at it plus the ticket, Answers, lane, base, port). All lanes use the shared BoringSSL prebuilt env vars (`BORING_BSSL_PATH`, `BORING_BSSL_ASSUME_PATCHED=1`) in every cargo shell, the orchestrator's verify runs included.
+
+### Gotchas this session
+
+- Three lanes building at once on 32 GB ran out of memory twice: run your verifications one after another (a Bash `until grep ... orch-verify.log` chain), never in parallel.
+- `verify.sh`'s luau line now greps `luau0-src` (a "Blocking waiting for file lock" line used to hide it).
+- Workers often end their turn while checks run, and "finished" notices also fire when a queued "main moved" note starts a new turn: read one message further back (`offset`) for the real report. If a worker stopped mid-check, verify yourself after checking for stray lane processes.
+- Rebase conflicts were all unions (`crates/state/src/state.rs` fields); after a conflicted rebase rerun the full verify.
+- zgx lessons recorded in Answers: `ui.each` grows even with `grow = 0`; keyed `ui.each` rebuilds rows on new allocations (use `StableRows`); zgx cancels a component's tasks on rebuild; a `menu` attached to an element with handlers swallows left clicks; cursor lookup doesn't skip `pointer_events = "none"` (any empty full-window layer hides cursors).
+
 ## Latest: tenth orchestrator (roboco chat `223bd24d`, "kyoko orchestrator 10", same machine)
 
 Everything below still applies unless this section says otherwise.
