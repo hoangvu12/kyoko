@@ -129,6 +129,7 @@ pub struct State {
 	pub(crate) app_modal: Option<crate::modal::AppModal>,
 	pub(crate) history_failures: HashMap<Snowflake, String>,
 	pub(crate) profiles_loading: HashSet<Snowflake>,
+	pub(crate) last_channels: HashMap<Snowflake, Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -586,6 +587,7 @@ impl State {
 					channel_id: *channel_id,
 				});
 				changes.selection = true;
+				self.remember_channel(*guild_id, *channel_id);
 				if let Some(previous) = previous.filter(|previous| previous != channel_id) {
 					self.leave_channel(previous, &mut changes);
 				}

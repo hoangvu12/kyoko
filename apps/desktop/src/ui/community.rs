@@ -275,7 +275,7 @@ impl Link {
 		};
 		if let Some(guild_id) = arrived {
 			self.joins.arriving.set(None);
-			self.select_guild(guild_id);
+			self.visit_guild(guild_id);
 		}
 	}
 

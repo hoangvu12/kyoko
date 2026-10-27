@@ -27,6 +27,7 @@ mod locks;
 mod members;
 mod mentions;
 mod moderation;
+mod navigation;
 mod polls;
 mod reactions;
 mod reads;

@@ -14,6 +14,7 @@ mod hidden;
 mod home;
 mod inbox;
 mod kept;
+mod landing;
 mod members;
 mod message_actions;
 mod notices;
@@ -676,7 +677,7 @@ impl Link {
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
-				link.select_guild(guild_id);
+				link.visit_guild(guild_id);
 			}
 		});
 		let actions = Rc::downgrade(&link);
@@ -873,7 +874,9 @@ impl Link {
 		}
 		self.watch_session(changes);
 		let shown = self.top_channel(self.timeline.borrow().open());
+		let before = self.sidebar.sidebar().selected();
 		let opened = self.publish(changes);
+		let launched = opened.is_some();
 		self.replace_removed(shown);
 		self.community_apply(changes);
 		if let Some(shared) = self.state() {
@@ -893,6 +896,9 @@ impl Link {
 				channels = self.sidebar.sidebar().channels().count(),
 				"opened a channel on launch"
 			);
+		}
+		if !launched {
+			self.follow_selection(before);
 		}
 	}
 

@@ -728,6 +728,25 @@ pub fn replacement_channel(state: &State, open: OpenChannel) -> Option<OpenChann
 	})
 }
 
+pub fn landing_channel(state: &State, guild_id: Snowflake) -> Option<OpenChannel> {
+	let channel_id = state
+		.last_channel(guild_id)
+		.filter(|channel_id| reopenable(state, guild_id, *channel_id))
+		.or_else(|| openable_channels(state, guild_id).next())?;
+	Some(OpenChannel {
+		guild_id: Some(guild_id),
+		channel_id,
+	})
+}
+
+fn reopenable(state: &State, guild_id: Snowflake, channel_id: Snowflake) -> bool {
+	state
+		.guild_channel_tree(guild_id)
+		.into_iter()
+		.flat_map(|node| node.children)
+		.any(|row| row.id == channel_id && !row.locked && ChannelKind::of(row.kind).opens())
+}
+
 fn openable_channels(state: &State, guild_id: Snowflake) -> impl Iterator<Item = Snowflake> {
 	state
 		.guild_channel_tree(guild_id)

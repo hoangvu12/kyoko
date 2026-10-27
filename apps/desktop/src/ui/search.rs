@@ -207,7 +207,7 @@ impl Link {
 				guild_id: None,
 				channel_id,
 			} => self.select_dm(channel_id),
-			SwitcherTarget::Guild(guild_id) => self.select_guild(guild_id),
+			SwitcherTarget::Guild(guild_id) => self.visit_guild(guild_id),
 			SwitcherTarget::Friend(user_id) => match self.dm_with(user_id) {
 				Some(channel_id) => self.select_dm(channel_id),
 				None => {

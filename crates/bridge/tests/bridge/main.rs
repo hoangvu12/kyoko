@@ -17,6 +17,7 @@ mod gif_favourites;
 mod guild_admin;
 mod harness;
 mod hidden;
+mod landing;
 mod login_column;
 mod media;
 mod media_fetch;

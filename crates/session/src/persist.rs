@@ -24,6 +24,7 @@ pub(crate) const CACHED_MESSAGES: u32 = 50;
 pub(crate) const RECENT_EMOJI_KEY: &str = "expressions.recent.emoji";
 pub(crate) const RECENT_GIFS_KEY: &str = "expressions.recent.gifs";
 pub(crate) const RECENT_STICKERS_KEY: &str = "expressions.recent.stickers";
+pub(crate) const LAST_CHANNELS_KEY: &str = "navigation.last_channels";
 
 pub(crate) enum Job {
 	Ready(Box<Ready>),
@@ -412,4 +413,11 @@ pub(crate) fn load_recent<T: DeserializeOwned>(store: &Store, key: &str) -> Vec<
 		.flatten()
 		.and_then(|bytes| serde_json::from_slice(&bytes).ok())
 		.unwrap_or_default()
+}
+
+pub(crate) fn load_last_channels(store: &Store) -> Vec<(Snowflake, Snowflake)> {
+	load_recent::<serde_json::Value>(store, LAST_CHANNELS_KEY)
+		.into_iter()
+		.filter_map(|pair| serde_json::from_value(pair).ok())
+		.collect()
 }

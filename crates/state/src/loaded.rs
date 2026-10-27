@@ -124,6 +124,7 @@ pub enum Loaded {
 	EmojiRanked(crate::favorites::EmojiRanking),
 	UserSettings(Value),
 	AuthSessions(Value),
+	LastChannels(Vec<(Snowflake, Snowflake)>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -569,6 +570,7 @@ impl State {
 			Loaded::MemberVerification { guild_id, raw } => return self.verification_loaded(*guild_id, raw),
 			Loaded::MemberVerificationSubmitted { guild_id } => return self.verification_finished(*guild_id),
 			Loaded::UserSettings(settings) => return self.apply_user_settings(settings),
+			Loaded::LastChannels(pairs) => self.restore_last_channels(pairs),
 			Loaded::AuthSessions(raw) => {
 				let parsed = RawAuthSessions::deserialize(raw).unwrap_or_default();
 				self.lazy.auth_sessions = Some(

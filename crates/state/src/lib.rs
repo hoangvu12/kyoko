@@ -16,6 +16,7 @@ mod member_list;
 mod mentions;
 mod messages;
 mod modal;
+mod navigation;
 mod notifications;
 mod own_status;
 mod permissions;

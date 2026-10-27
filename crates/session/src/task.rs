@@ -363,13 +363,20 @@ impl Core {
 	) {
 		self.publish_secret_health(self.store.secret_health());
 		let store = self.store.clone();
-		let cached = tokio::task::spawn_blocking(move || persist::load_cache(&store));
+		let cached = tokio::task::spawn_blocking(move || {
+			(persist::load_last_channels(&store), persist::load_cache(&store))
+		});
 		let startup = self.startup.take();
 		if let Some(source) = startup.as_ref().and_then(|startup| startup.build_source.as_ref()) {
 			identity::discover_build_number(self.rest.identity(), &self.store, source).await;
 		}
-		if let Ok(Some(ready)) = cached.await {
-			self.apply(Event::Ready(&ready));
+		if let Ok((last_channels, ready)) = cached.await {
+			if !last_channels.is_empty() {
+				self.on_loaded(Loaded::LastChannels(last_channels));
+			}
+			if let Some(ready) = ready {
+				self.apply(Event::Ready(&ready));
+			}
 		}
 		self.apply_local(LocalEvent::Connection(ConnectionStatus::Connecting));
 		if let Some(startup) = startup {
@@ -1001,7 +1008,12 @@ impl Core {
 
 	fn select_channel(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake) {
 		self.rest.set_referer(&channel_referer(guild_id, channel_id));
+		let remembered =
+			guild_id.is_some_and(|guild_id| self.state.read().last_channel(guild_id) == Some(channel_id));
 		self.apply_local(LocalEvent::ChannelSelected { guild_id, channel_id });
+		if !remembered && guild_id.is_some() {
+			self.store_last_channels();
+		}
 		match guild_id {
 			Some(guild_id) => self
 				.subscriptions
@@ -1032,6 +1044,17 @@ impl Core {
 		}
 		self.on_channel_opened(channel_id);
 		self.backfill_opened(channel_id);
+	}
+
+	fn store_last_channels(&self) {
+		let pairs = self.state.read().last_channels();
+		match serde_json::to_vec(&pairs) {
+			Ok(json) => self.persist.submit(persist::Job::Recent {
+				key: persist::LAST_CHANNELS_KEY,
+				json,
+			}),
+			Err(error) => tracing::warn!(%error, "the last viewed channels were not saved"),
+		}
 	}
 
 	fn load_initial(&self, channel_id: Snowflake) {
