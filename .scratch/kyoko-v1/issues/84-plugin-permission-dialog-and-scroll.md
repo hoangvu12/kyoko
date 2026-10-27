@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Permission dialog uses the dialog tokens (opaque surface, scrim behind, readable text at WCAG AA); capture checked by eye
 - [ ] Opening a plugin's settings or toggling one keeps the page's scroll position; find why it jumped (a full page rebuild?) and fix; in-process UI test
