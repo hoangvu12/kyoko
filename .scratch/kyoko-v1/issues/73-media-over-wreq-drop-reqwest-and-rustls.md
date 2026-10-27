@@ -4,7 +4,7 @@
 
 **Blocked by:** 70
 
-**Status:** open
+**Status:** claimed
 
 - [ ] `MediaFetcher` on wreq: host allow-list on redirects (max 5), https-only outside loopback, size caps, shared in-flight dedupe; media bridge tests green
 - [ ] A test captures a media ClientHello against an https localhost host and asserts it matches the fixture

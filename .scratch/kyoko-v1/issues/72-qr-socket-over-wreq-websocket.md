@@ -4,7 +4,7 @@
 
 **Blocked by:** 71
 
-**Status:** open
+**Status:** claimed
 
 - [ ] `login::qr` connects through `net::ws`; tokio-tungstenite is no longer a `login` dependency
 - [ ] QR bridge tests green (scan, confirm, cancel, expire, garbled nonce, captcha on the exchange); refused-upgrade errors still name the HTTP status
