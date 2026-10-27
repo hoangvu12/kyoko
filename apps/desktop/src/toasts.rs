@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-use bridge::{ToastKind, Toasts};
+use bridge::{TOAST_LIFETIME, ToastKind, Toasts};
 use zgx::compose::prelude::*;
 use zgx::compose::{ModalPlacement, PlacementEdge, TaskRunner, Tasks, modal};
 use zgx::input::InputEvent;
@@ -72,8 +72,12 @@ pub struct ToastLayer {
 
 impl ToastLayer {
 	pub fn new(runtime: &Runtime) -> Rc<Self> {
+		Self::lasting(runtime, TOAST_LIFETIME)
+	}
+
+	pub fn lasting(runtime: &Runtime, lifetime: Duration) -> Rc<Self> {
 		Rc::new(Self {
-			toasts: RefCell::default(),
+			toasts: RefCell::new(Toasts::lasting(lifetime)),
 			shown: runtime.signal(Vec::new()),
 			window: runtime.signal((0., 0.)),
 			area: runtime.signal(None),
@@ -208,6 +212,17 @@ impl ToastLayer {
 	}
 
 	pub fn view(self: &Rc<Self>) -> View {
+		let this = self.clone();
+		component(move |cx| {
+			if cx.try_service::<TaskRunner>().is_some() {
+				*this.tasks.borrow_mut() = Some(cx.tasks());
+				this.schedule();
+			}
+			this.raised_stack()
+		})
+	}
+
+	fn raised_stack(self: &Rc<Self>) -> View {
 		let (this, raised) = (self.clone(), self.raised.clone());
 		div().child_when(
 			move || Some(raised.get()),
@@ -233,10 +248,7 @@ impl ToastLayer {
 
 	fn stack(self: &Rc<Self>) -> View {
 		let this = self.clone();
-		component(move |cx| {
-			if cx.try_service::<TaskRunner>().is_some() {
-				*this.tasks.borrow_mut() = Some(cx.tasks());
-			}
+		component(move |_| {
 			let (sized, placed, listed) = (this.shown.clone(), this.clone(), this.shown.clone());
 			let (hover, rows) = (Rc::downgrade(&this), this.clone());
 			column()

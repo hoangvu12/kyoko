@@ -25,22 +25,39 @@ pub struct Toast {
 	leaving_at: Option<Instant>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Toasts {
 	items: Vec<Toast>,
 	next_id: u64,
 	paused_at: Option<Instant>,
 	seen_rejection: u64,
+	lifetime: Duration,
+}
+
+impl Default for Toasts {
+	fn default() -> Self {
+		Self::lasting(TOAST_LIFETIME)
+	}
 }
 
 impl Toasts {
+	pub fn lasting(lifetime: Duration) -> Self {
+		Self {
+			items: Vec::new(),
+			next_id: 0,
+			paused_at: None,
+			seen_rejection: 0,
+			lifetime,
+		}
+	}
+
 	pub fn items(&self) -> &[Toast] {
 		&self.items
 	}
 
 	pub fn push(&mut self, kind: ToastKind, text: &str, now: Instant) -> u64 {
 		let text = clipped(text);
-		let expires_at = now + TOAST_LIFETIME;
+		let expires_at = now + self.lifetime;
 		if let Some(toast) = self
 			.items
 			.iter_mut()

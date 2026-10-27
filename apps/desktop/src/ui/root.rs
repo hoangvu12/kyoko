@@ -446,6 +446,75 @@ fn a_toast_floats_over_the_timeline_and_never_moves_its_rows() {
 	}
 }
 
+const BRIEF_TOAST: std::time::Duration = std::time::Duration::from_secs(1);
+
+fn idle(app: &mut TestApp, span: std::time::Duration) {
+	let until = std::time::Instant::now() + span;
+	while std::time::Instant::now() < until {
+		app.settle();
+		app.ui.prepare_frame();
+		std::thread::sleep(std::time::Duration::from_millis(5));
+	}
+}
+
+fn toast_gone(app: &mut TestApp, layer: &ToastLayer, id: &str) -> bool {
+	app.wait_until(|app| layer.showing().is_empty() && app.find(id).is_none())
+}
+
+#[test]
+fn a_toast_leaves_on_its_own_without_input_and_hovering_holds_it() {
+	let made: Rc<RefCell<Option<Rc<ToastLayer>>>> = Rc::default();
+	let (into, used) = (made.clone(), made.clone());
+	let mut app = TestApp::wrapped(
+		move |runtime| {
+			Catalog::load(&[themes_dir()]).install(runtime, "dark");
+			let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+			for name in host_names() {
+				host.action(name.clone(), |_| {});
+				host.function(name, |_| Value::Nil);
+			}
+			let layer = ToastLayer::lasting(runtime, BRIEF_TOAST);
+			layer.set_window(WIDE.0, WIDE.1);
+			*into.borrow_mut() = Some(layer);
+			host
+		},
+		move |luau| {
+			let layer = used.borrow().clone().expect("the toast layer");
+			layered(luau, [layer.view()])
+		},
+	);
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	app.frames(2);
+	let layer = made.borrow().clone().expect("the toast layer");
+
+	layer.push(bridge::ToastKind::Error, "You are being rate limited.");
+	assert!(app.find("toast-1").is_some(), "the toast shows");
+	assert!(
+		toast_gone(&mut app, &layer, "toast-1"),
+		"a toast leaves on its own with no input at all"
+	);
+
+	layer.push(bridge::ToastKind::Success, "Link copied");
+	app.frames(30);
+	let bounds = app.bounds("toast-2");
+	app.ui.dispatch(zgx::input::InputEvent::PointerMove {
+		x: bounds.x + bounds.width / 2.,
+		y: bounds.y + bounds.height / 2.,
+	});
+	idle(&mut app, BRIEF_TOAST * 2);
+	assert_eq!(
+		layer.showing(),
+		vec![(bridge::ToastKind::Success, "Link copied".to_owned())],
+		"a hovered toast stays past its time"
+	);
+	app.ui
+		.dispatch(zgx::input::InputEvent::PointerMove { x: 1., y: 1. });
+	assert!(
+		toast_gone(&mut app, &layer, "toast-2"),
+		"a toast leaves on its own once the pointer leaves it"
+	);
+}
+
 type PollParts = (
 	Rc<crate::composer_layer::ComposerLayer>,
 	Rc<RefCell<Vec<crate::composer_layer::Request>>>,
