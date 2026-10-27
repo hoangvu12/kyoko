@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Message rows, member list, popouts and full profiles use the member's server avatar, nick and server banner/bio where set (member `avatar`, `banner`; `guild_member_profile` in the profile response), falling back to global
 - [ ] Animated avatars (`a_` hashes) animate where Discord animates them (on hover in message rows, always in popouts and the user panel, per the media playback setting); animated banners in profiles
