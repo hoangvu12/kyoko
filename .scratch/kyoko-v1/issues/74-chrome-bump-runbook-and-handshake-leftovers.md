@@ -4,7 +4,7 @@
 
 **Blocked by:** 71, 72, 73
 
-**Status:** open
+**Status:** claimed
 
 - [ ] The Chrome bump procedure (update local Chrome, `cargo xtask tls-capture --record <major>`, fixture, `CHROME_MAJOR`, profile map, pin bump, TLS seam tests) documented in `docs/fingerprint.md` and run once for 157
 - [ ] Decision recorded (user) on the REST header order (`orig_headers`) and the Chrome websocket handshake headers (`Pragma`, `Cache-Control`, `Sec-WebSocket-Extensions` that wreq can't honour), with evidence from public docs or a user-provided capture of the real web client
