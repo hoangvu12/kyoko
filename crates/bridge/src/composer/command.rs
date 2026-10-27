@@ -928,8 +928,8 @@ pub enum Prepared {
 
 impl ActiveCommand {
 	pub fn new(entry: CommandEntry) -> Self {
-		let fields = entry.required().map(OptionField::new).collect();
-		Self {
+		let fields: Vec<OptionField> = entry.required().map(OptionField::new).collect();
+		let mut command = Self {
 			entry,
 			fields,
 			focused: 0,
@@ -938,16 +938,20 @@ impl ActiveCommand {
 			refusal: None,
 			choice_selected: 0,
 			asked: None,
-		}
+		};
+		command.optional_open = command.fields.is_empty() && !command.optional().is_empty();
+		command
 	}
 
 	pub fn optional(&self) -> Vec<&CommandOption> {
-		self.entry
+		let mut left: Vec<&CommandOption> = self
+			.entry
 			.options
 			.iter()
-			.filter(|option| !option.is_required())
 			.filter(|option| !self.fields.iter().any(|field| field.option.name == option.name))
-			.collect()
+			.collect();
+		left.sort_by_key(|option| !option.is_required());
+		left
 	}
 
 	pub fn focused_field(&self) -> Option<&OptionField> {

@@ -277,6 +277,7 @@ async fn the_picker_lists_frequent_commands_then_each_app_then_built_ins() {
 			"bug",
 			"echo",
 			"ignore",
+			"lookup",
 			"ping",
 			"roll",
 			"think",
@@ -1229,5 +1230,73 @@ async fn markdown_in_the_field_is_marked_but_sent_exactly_as_typed() {
 		outcome.commands.first(),
 		Some(Command::SendMessage { content, channel_id: sent_to, .. }) if content == text && *sent_to == channel_id
 	));
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_command_with_only_optional_options_lists_them_at_once_and_runs_the_one_picked() {
+	let (mut running, mut composer, channel_id) = opened("composer-only-optional").await;
+	with_commands(&mut running, &mut composer, channel_id).await;
+	picked(&mut composer, &running, "/look", "lookup");
+	let listed = |composer: &Composer| {
+		composer.command().map(|command| {
+			command
+				.optional()
+				.iter()
+				.map(|option| option.name.clone())
+				.collect::<Vec<_>>()
+		})
+	};
+	let command = composer.command().expect("open");
+	assert!(command.fields.is_empty());
+	assert!(command.optional_open, "the options list opens with the command");
+	assert_eq!(
+		listed(&composer),
+		Some(vec!["appid".to_owned(), "query".to_owned()])
+	);
+	assert_eq!(hint(&composer).0, "/lookup");
+
+	assert!(composer.dismiss(), "Escape closes the list");
+	assert!(composer.command().is_some_and(|command| !command.optional_open));
+	assert!(composer.toggle_optional());
+
+	assert!(composer.add_optional(Some(1)));
+	let command = composer.command().expect("open");
+	assert!(!command.optional_open);
+	assert_eq!(command.fields.len(), 1);
+	assert_eq!(command.focused, 0);
+	assert_eq!(command.fields[0].option.name, "query");
+	assert_eq!(hint(&composer).0, "query");
+	assert_eq!(listed(&composer), Some(vec!["appid".to_owned()]));
+	assert!(composer.edit_option(0, "portal"));
+
+	let outcome = submitted(&mut composer, &running, "");
+	match outcome.commands.first() {
+		Some(Command::RunApplicationCommand {
+			command_id, options, ..
+		}) => {
+			assert_eq!(*command_id, Snowflake(mockcord::LOOKUP_COMMAND));
+			assert_eq!(options.len(), 1);
+			assert_eq!(
+				(options[0].name.as_str(), options[0].kind),
+				("query", CommandOptionType::String)
+			);
+			assert_eq!(options[0].value, Some(json!("portal")));
+		}
+		other => panic!("expected the lookup to run, got {other:?}"),
+	}
+
+	typed(&mut composer, &running, "/lookup ");
+	let state = running.session().state().clone();
+	assert!(composer.exact_command(&state.read(), "/lookup "));
+	assert!(composer.command().is_some_and(|command| command.optional_open));
+	assert!(composer.add_optional(None));
+	assert_eq!(
+		composer
+			.command()
+			.map(|command| command.fields[0].option.name.clone()),
+		Some("appid".to_owned())
+	);
+	assert!(composer.cancel_command());
 	running.stop().await;
 }

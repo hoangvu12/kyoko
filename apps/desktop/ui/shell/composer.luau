@@ -908,8 +908,22 @@ return function(scope: any?)
 		end
 		actions.composer_plus({ x = field_box.x, y = field_box.y }, area)
 	end
-	return ui.show(shared.open, ui.column {
-		relative = true,
+	local rest_height = ui.state(area .. "_composer_rest", 0)
+	local float_height = 0
+	local rest_box: any = nil
+	local function report_float()
+		if area ~= MAIN.area or rest_box == nil or rest_box.x == nil or rest_box.y == nil then
+			return
+		end
+		actions.report_slot("composer_float", {
+			x = rest_box.x,
+			y = rest_box.y - float_height,
+			width = rest_box.width,
+			height = float_height,
+		})
+	end
+	local popovers: { [any]: any } = {
+		id = area .. "_popovers",
 		w_full = true,
 		shrink = 0,
 		ui.show(picker_open, command_picker.picker(shared, area)),
@@ -917,65 +931,92 @@ return function(scope: any?)
 		ui.show(choices_open, command_picker.choices(shared, area)),
 		ui.show(dropbox_open, command_picker.dropbox(shared, area)),
 		popup(text, shared, area, suggesting),
-		typing_line(),
-		joined_bars(),
-		ui.row {
-			id = area .. "_box",
-			relative = true,
-			mx = theme.size.space_8,
-			mb = theme.size.space_8,
-			min_h = theme.size.chatbar_height,
-			items = "start",
-			bg = theme.color.bg_3,
-			border = 1,
-			border_color = theme.color.border_light,
-			on_resize = function(_, element)
-				field_box = element
-				if area == MAIN.area then
-					actions.report_slot("composer", element)
-				end
+	}
+	if area == MAIN.area then
+		popovers.absolute = true
+		popovers.left = 0
+		popovers.right = 0
+		popovers.bottom = function()
+			return rest_height:get()
+		end
+		popovers.on_resize = function(size)
+			float_height = size.h
+			report_float()
+		end
+	end
+	return ui.show(shared.open, ui.column {
+		relative = true,
+		w_full = true,
+		shrink = 0,
+		ui.column(popovers),
+		ui.column {
+			w_full = true,
+			shrink = 0,
+			on_resize = function(size, element)
+				rest_height:set(size.h)
+				rest_box = element
+				report_float()
 			end,
-			rounded_bl = radius,
-			rounded_br = radius,
-			rounded_tl = function()
-				return if joined() or suggesting() then 0 else radius()
-			end,
-			rounded_tr = function()
-				return if joined() or suggesting() then 0 else radius()
-			end,
-			ui.show(commanding, ui.row {
-				h = function()
-					return chatbar() - 2
+			typing_line(),
+			joined_bars(),
+			ui.row {
+				id = area .. "_box",
+				relative = true,
+				mx = theme.size.space_8,
+				mb = theme.size.space_8,
+				min_h = theme.size.chatbar_height,
+				items = "start",
+				bg = theme.color.bg_3,
+				border = 1,
+				border_color = theme.color.border_light,
+				on_resize = function(_, element)
+					field_box = element
+					if area == MAIN.area then
+						actions.report_slot("composer", element)
+					end
 				end,
-				shrink = 0,
-				command_picker.app_slot(shared),
-			}, ui.row {
-				w = LEADING,
-				h = function()
-					return chatbar() - 2
+				rounded_bl = radius,
+				rounded_br = radius,
+				rounded_tl = function()
+					return if joined() or suggesting() then 0 else radius()
 				end,
-				shrink = 0,
-				justify = "center",
-				items = "center",
-				icon_button {
-					id = area .. "_plus_button",
-					name = "plus",
-					icon_size = ICON,
-					hit_size = BUTTON,
-					tooltip = "More",
-					on_click = plus,
-				},
-			}),
-			ui.show(commanding, ui.row {
-				grow = 1,
-				min_w = 0,
-				h = function()
-					return chatbar() - 2
+				rounded_tr = function()
+					return if joined() or suggesting() then 0 else radius()
 				end,
-				command_picker.editor(shared, area),
-			}, editor(text, box)),
-			toolbar(),
-			counter(text),
+				ui.show(commanding, ui.row {
+					h = function()
+						return chatbar() - 2
+					end,
+					shrink = 0,
+					command_picker.app_slot(shared),
+				}, ui.row {
+					w = LEADING,
+					h = function()
+						return chatbar() - 2
+					end,
+					shrink = 0,
+					justify = "center",
+					items = "center",
+					icon_button {
+						id = area .. "_plus_button",
+						name = "plus",
+						icon_size = ICON,
+						hit_size = BUTTON,
+						tooltip = "More",
+						on_click = plus,
+					},
+				}),
+				ui.show(commanding, ui.row {
+					grow = 1,
+					min_w = 0,
+					h = function()
+						return chatbar() - 2
+					end,
+					command_picker.editor(shared, area),
+				}, editor(text, box)),
+				toolbar(),
+				counter(text),
+			},
 		},
 	}, ui.row {
 		w_full = true,

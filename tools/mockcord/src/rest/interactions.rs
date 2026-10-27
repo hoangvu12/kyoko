@@ -38,6 +38,7 @@ pub const THINK_COMMAND: u64 = 9_100_000_000_000_000_106;
 pub const WHISPER_COMMAND: u64 = 9_100_000_000_000_000_107;
 pub const IGNORE_COMMAND: u64 = 9_100_000_000_000_000_108;
 pub const BUG_COMMAND: u64 = 9_100_000_000_000_000_109;
+pub const LOOKUP_COMMAND: u64 = 9_100_000_000_000_000_110;
 pub const THOUGHT: &str = "Thought it over: the answer is 42";
 pub const WHISPERED: &str = "Only you can read this one";
 pub const SHRUG_COMMAND: &str = "-1";
@@ -49,7 +50,7 @@ pub const LANGUAGES: [(&str, &str); 6] = [
 	("日本語", "ja"),
 	("Português", "pt"),
 ];
-const COMMAND_IDS: [(u64, u64, &str); 13] = [
+const COMMAND_IDS: [(u64, u64, &str); 14] = [
 	(PING_COMMAND, MOCKBOT_ID, "ping"),
 	(9_100_000_000_000_000_102, MOCKBOT_ID, "echo"),
 	(ROLL_COMMAND, MOCKBOT_ID, "roll"),
@@ -59,6 +60,7 @@ const COMMAND_IDS: [(u64, u64, &str); 13] = [
 	(WHISPER_COMMAND, MOCKBOT_ID, "whisper"),
 	(IGNORE_COMMAND, MOCKBOT_ID, "ignore"),
 	(BUG_COMMAND, MOCKBOT_ID, "bug"),
+	(LOOKUP_COMMAND, MOCKBOT_ID, "lookup"),
 	(REMIND_COMMAND, REMINDY_ID, "remind"),
 	(POLL_COMMAND, POLLY_ID, "poll"),
 	(SNAP_COMMAND, SNAPPER_ID, "snap"),
@@ -212,6 +214,17 @@ fn command(id: u64, application_id: u64, name: &str) -> Value {
 		"whisper" => ("Answers so only you can see it", json!([])),
 		"ignore" => ("Never answers, to test timeouts", json!([])),
 		"bug" => ("Report a bug in a form", json!([])),
+		"lookup" => (
+			"Look up a game in the store",
+			json!([
+				string_option("appid", "Store app ID, like 431960", false),
+				string_option(
+					"query",
+					"Search by game name — shows results with pictures",
+					false
+				),
+			]),
+		),
 		"warn" => (
 			"Warn a member",
 			json!([string_option("reason", "Why they are warned", true)]),
@@ -515,6 +528,13 @@ fn answer(name: &str, data: &Value) -> Option<String> {
 			.and_then(Value::as_str)
 			.map(|question| format!("Poll: {question}")),
 		"snap" => Some("Snapshot saved".to_owned()),
+		"lookup" => Some(format!(
+			"Looked up {}",
+			["appid", "query"]
+				.iter()
+				.find_map(|name| option_value(data, name).and_then(Value::as_str))
+				.unwrap_or("everything")
+		)),
 		"translate" => {
 			let text = option_value(data, "text").and_then(Value::as_str)?;
 			let language = option_value(data, "language").and_then(Value::as_str)?;

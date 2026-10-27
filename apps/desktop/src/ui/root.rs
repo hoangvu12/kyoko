@@ -162,6 +162,7 @@ fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: &Rc<Picture
 			runtime.signal(Slot::default()),
 			timeline().view(),
 			[runtime.signal(false), runtime.signal(false)],
+			runtime.signal(Slot::default()),
 		),
 		"thread slot" => threads::thread_slot(
 			runtime.signal(Slot::default()),
@@ -368,6 +369,7 @@ type ToastParts = (
 	Rc<ToastLayer>,
 	zgx::reactive::Signal<Slot>,
 	[zgx::reactive::Signal<bool>; 2],
+	zgx::reactive::Signal<Slot>,
 );
 
 #[test]
@@ -394,15 +396,16 @@ fn a_toast_floats_over_the_timeline_and_never_moves_its_rows() {
 				layer,
 				runtime.signal(TOAST_SLOT),
 				[runtime.signal(false), runtime.signal(false)],
+				runtime.signal(Slot::default()),
 			));
 			host
 		},
 		move |luau| {
-			let (layer, slot, hidden) = used.borrow().clone().expect("the toast parts");
+			let (layer, slot, hidden, float) = used.borrow().clone().expect("the toast parts");
 			let rows = column().w_full().h_full().justify_end().children(
 				(0..TOAST_ROWS).map(|index| div().id(format!("timeline-row-{index}")).w_full().h(40.)),
 			);
-			layered(luau, [timeline_slot(slot, rows, hidden), layer.view()])
+			layered(luau, [timeline_slot(slot, rows, hidden, float), layer.view()])
 		},
 	);
 	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);

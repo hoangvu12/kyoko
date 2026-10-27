@@ -103,7 +103,7 @@ impl Link {
 		found.map(|member| member.name.clone())
 	}
 
-	fn rightmost_text(&self, wanted: &str) -> Option<Rect> {
+	pub(super) fn rightmost_text(&self, wanted: &str) -> Option<Rect> {
 		let ui = self.ui.borrow().as_ref().and_then(WeakUi::upgrade)?;
 		let scene = ui.scene.borrow();
 		let mut stack = vec![scene.root()];

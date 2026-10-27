@@ -493,6 +493,7 @@ Kyoko only (`--apps kyoko`, or `parity mockup`). Mockcord serves the mockups' ap
 | `command-options-optional` | 10 | As `command-options`, with `sides` set to 20 and the optional list opened (`count`). | yes |
 | `command-options-remind` | 10 | As `command-options`, picking `/remind`: the focused `when` chip and the `message` chip. | yes |
 | `command-choices-invalid` | 10 | As `command-options`, with `sides` set to 1000: the chip and the hint in red with "Must be a number between 1 and 100". | yes |
+| `command-options-only-optional` | 75 | As `command-options`, picking Mockbot's `/lookup` (two optional string options): the OPTIONS list opens at once; then `query` clicked in it (`Ui::dispatch`): its focused chip right after `/lookup` and the "+1 option" hint after it. No mockup. | yes |
 
 ### Midnight 11 Command choices, autocomplete and file options
 

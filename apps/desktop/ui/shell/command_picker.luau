@@ -479,9 +479,8 @@ local function chip(shared: any, area: string, row: any)
 	}
 end
 
-local function tail(shared: any, area: string)
+local function tail(shared: any, area: string, box: any)
 	local typed = ui.state(area .. "_command_tail", "")
-	local box = ui.ref()
 	local seen = -1
 	ui.effect(function()
 		local element = box:get()
@@ -505,8 +504,8 @@ local function tail(shared: any, area: string)
 		value = typed,
 		ref = box,
 		label = "Command",
-		grow = 1,
-		min_w = theme.size.border_thickness,
+		w = theme.size.space_2,
+		shrink = 0,
 		h = theme.size.line_height_md,
 		p = 0,
 		bg = "#00000000",
@@ -540,7 +539,32 @@ function M.app_slot(shared: any)
 		end, { key = by_key }),
 	}
 end
+local function options_hint(shared: any, area: string)
+	local function count(): number
+		return shared.command:get().optional_count or 0
+	end
+	return ui.show(function()
+		return count() > 0
+	end, ui.text {
+		function()
+			return "+" .. tostring(count()) .. if count() == 1 then " option" else " options"
+		end,
+		id = area .. "_command_options_hint",
+		literal = true,
+		shrink = 0,
+		ml = theme.size.space_4,
+		cursor = "pointer",
+		text_size = theme.size.font_size_md,
+		line_height = theme.size.line_height_md,
+		color = theme.color.text_5,
+		on_click = function()
+			actions.composer_toggle_optional(area)
+		end,
+	})
+end
+
 function M.editor(shared: any, area: string)
+	local box = ui.ref()
 	local function fields()
 		return shared.command:get().fields or {}
 	end
@@ -549,7 +573,6 @@ function M.editor(shared: any, area: string)
 		min_w = 0,
 		h_full = true,
 		ml = theme.size.space_12,
-		gap = theme.size.space_8,
 		items = "center",
 		overflow = "hidden",
 		ui.text {
@@ -558,15 +581,39 @@ function M.editor(shared: any, area: string)
 			end,
 			literal = true,
 			shrink = 0,
+			mr = theme.size.space_4,
 			text_size = theme.size.font_size_md,
 			line_height = theme.size.line_height_md,
 			weight = theme.weight.semibold,
 			color = theme.color.text_2,
 		},
-		ui.each(ui.computed(fields), function(_item: any, _index: number, row: any)
-			return chip(shared, area, row)
-		end, { key = by_key, gap = theme.size.space_8, items = "center" }),
-		tail(shared, area),
+		ui.row {
+			shrink = 0,
+			items = "center",
+			ml = function()
+				return if #fields() > 0 then theme.number(theme.size.space_4)() else 0
+			end,
+			mr = function()
+				return if #fields() > 0 then theme.number(theme.size.space_4)() else 0
+			end,
+			ui.each(ui.computed(fields), function(_item: any, _index: number, row: any)
+				return chip(shared, area, row)
+			end, { key = by_key, gap = theme.size.space_8, items = "center" }),
+		},
+		tail(shared, area, box),
+		options_hint(shared, area),
+		ui.div {
+			id = area .. "_command_rest",
+			grow = 1,
+			h_full = true,
+			cursor = "text",
+			on_click = function()
+				local element = box:peek()
+				if element ~= nil then
+					(element :: any):focus()
+				end
+			end,
+		},
 	}
 end
 
@@ -596,9 +643,6 @@ end
 function M.hint(shared: any, area: string)
 	local function hint()
 		return shared.command:get().hint or { name = "", description = "", error = false }
-	end
-	local function open(): boolean
-		return shared.command:get().optional_open == true
 	end
 	return ui.row {
 		id = area .. "_command_hint",
@@ -632,34 +676,6 @@ function M.hint(shared: any, area: string)
 				return if hint().error then theme.color.red_2 else theme.color.text_4
 			end,
 		},
-		ui.show(function()
-			return (shared.command:get().optional_count or 0) > 0
-		end, ui.button {
-			id = area .. "_command_optional",
-			h = theme.size.command_option_height,
-			shrink = 0,
-			px = theme.size.space_8,
-			py = 0,
-			rounded = theme.size.radius_xs,
-			border = 0,
-			focus = { border = 0 },
-			cursor = "pointer",
-			bg = function()
-				return if open() then theme.color.active else "#00000000"
-			end,
-			hover = { bg = theme.color.hover },
-			text_size = theme.size.font_size_sm,
-			weight = theme.weight.medium,
-			color = function()
-				return if open() then theme.color.text_2 else theme.color.link
-			end,
-			on_click = function()
-				actions.composer_toggle_optional(area)
-			end,
-			ui.text(function()
-				return "+" .. tostring(shared.command:get().optional_count or 0) .. " optional"
-			end),
-		}),
 		clear_button(area),
 	}
 end
@@ -684,7 +700,7 @@ function M.optional(shared: any, area: string)
 			px = theme.size.space_8,
 			items = "center",
 			ui.text {
-				"OPTIONAL",
+				"OPTIONS",
 				literal = true,
 				text_size = theme.size.font_size_xs,
 				line_height = theme.size.line_height_xs,

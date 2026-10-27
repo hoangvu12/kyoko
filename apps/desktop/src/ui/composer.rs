@@ -38,6 +38,7 @@ const CAPTURE_DRAFT: &str = "Checking how the composer looks with a draft in it"
 const CAPTURE_EMOJI_QUERY: &str = "wow :sm";
 const CAPTURE_OPTION_TEXT: &str = "hello";
 const CAPTURE_ROLL_SIDES: i64 = 20;
+const CAPTURE_OPTIONAL_PICK: &str = "query";
 type ReplyStep = (u64, &'static str, fn(&bridge::MessageEntry) -> bool);
 const CAPTURE_FILE_NAME: &str = "cat.png";
 const CAPTURE_GIF_QUERY: &str = "cat";
@@ -2180,7 +2181,8 @@ impl Link {
 			| capture::ComposerShot::CommandChoicesLoading
 			| capture::ComposerShot::CommandChoicesFailed
 			| capture::ComposerShot::CommandFile
-			| capture::ComposerShot::CommandFilePicked => self.drive_command(shot).await,
+			| capture::ComposerShot::CommandFilePicked
+			| capture::ComposerShot::CommandOnlyOptional => self.drive_command(shot).await,
 			capture::ComposerShot::CommandReplies => self.drive_command_replies().await,
 			capture::ComposerShot::CommandBuiltIn
 			| capture::ComposerShot::BuiltInGif
@@ -2245,6 +2247,7 @@ impl Link {
 			capture::ComposerShot::CommandFile | capture::ComposerShot::CommandFilePicked => {
 				("resize", "", false)
 			}
+			capture::ComposerShot::CommandOnlyOptional => ("lookup", "", false),
 			_ => return,
 		};
 		{
@@ -2270,6 +2273,37 @@ impl Link {
 		}
 		self.until_capture(move |link| link.command_shot_ready(shot))
 			.await;
+		if shot == capture::ComposerShot::CommandOnlyOptional {
+			self.pick_optional_by_hand().await;
+		}
+	}
+
+	async fn pick_optional_by_hand(&self) {
+		zgx::timer::sleep(capture::SETTLE).await;
+		self.click_text(CAPTURE_OPTIONAL_PICK);
+		self.until_capture(|link| {
+			link.composer
+				.composer
+				.borrow()
+				.command()
+				.is_some_and(|command| command.fields.len() == 1)
+		})
+		.await;
+	}
+
+	fn click_text(&self, wanted: &str) {
+		let Some(bounds) = self.rightmost_text(wanted) else {
+			tracing::warn!(wanted, "the text to click is not on screen");
+			return;
+		};
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(zgx::widgets::WeakUi::upgrade) else {
+			return;
+		};
+		let (x, y) = (bounds.x + bounds.width / 2., bounds.y + bounds.height / 2.);
+		let button = zgx::input::PointerButton::Primary;
+		ui.dispatch(zgx::input::InputEvent::PointerMove { x, y });
+		ui.dispatch(zgx::input::InputEvent::PointerDown { x, y, button });
+		ui.dispatch(zgx::input::InputEvent::PointerUp { x, y, button });
 	}
 
 	async fn drive_built_in(&self, shot: capture::ComposerShot) {

@@ -78,6 +78,7 @@ const FRAME_POLL: Duration = Duration::from_millis(50);
 const FRAME_TRIES: usize = 100;
 const TIMELINE_SLOT: &str = "timeline";
 const WEB_LOGIN_SLOT: &str = "web_login";
+const COMPOSER_FLOAT: &str = "composer_float";
 const RELOAD_EVERY: Duration = Duration::from_millis(250);
 const AVATAR_POINTS: f64 = 32.;
 const WIDTH: f64 = 1100.;
@@ -165,6 +166,7 @@ pub fn run(
 				handle: cx.window.clone(),
 				frame: Cell::new(None),
 				slot: cx.ui.runtime.signal(Slot::default()),
+				float: cx.ui.runtime.signal(Slot::default()),
 			};
 			let messages = Messages {
 				developer_mode: capture.is_none() && desktop.store.settings.read().developer.developer_mode,
@@ -226,6 +228,7 @@ pub fn run(
 				.is_none()
 				.then(|| Integration::install(cx, &host, &link, desktop));
 			let slot = link.window.slot.clone();
+			let float = link.window.float.clone();
 			let transcript = link.timeline_view.view();
 			let forum_shown = link.threads.forum_shown();
 			let hidden_shown = link.hidden.shown();
@@ -262,7 +265,7 @@ pub fn run(
 				layered(
 					host.view(),
 					[
-						timeline_slot(slot, transcript, [forum_shown, hidden_shown]),
+						timeline_slot(slot, transcript, [forum_shown, hidden_shown], float),
 						thread_view,
 						scrim,
 						profiles,
@@ -344,17 +347,37 @@ fn layered(luau: View, layers: impl IntoIterator<Item = View>) -> View {
 		})
 }
 
-fn timeline_slot(slot: Signal<Slot>, transcript: View, covers: [Signal<bool>; 2]) -> View {
-	div().child(transcript).reactive_style(move || {
+fn timeline_slot(
+	slot: Signal<Slot>,
+	transcript: View,
+	covers: [Signal<bool>; 2],
+	float: Signal<Slot>,
+) -> View {
+	let shown = move || {
 		let covered = covers.iter().any(Signal::get);
-		let slot = if covered { Slot::default() } else { slot.get() };
+		if covered { Slot::default() } else { slot.get() }
+	};
+	let inner = shown.clone();
+	let full = div().child(transcript).reactive_style(move || {
+		let slot = inner();
+		Styles::new().w(slot.width).h(slot.height)
+	});
+	div().overflow_hidden().child(full).reactive_style(move || {
+		let slot = shown();
 		Styles::new()
 			.absolute()
 			.left(slot.x)
 			.top(slot.y)
 			.w(slot.width)
-			.h(slot.height)
+			.h(visible_height(slot, float.get()))
 	})
+}
+
+fn visible_height(slot: Slot, float: Slot) -> f32 {
+	if float.height <= 0. {
+		return slot.height;
+	}
+	(float.y - slot.y).clamp(0., slot.height)
 }
 
 fn is_switcher_key(event: &zgx::input::InputEvent) -> bool {
@@ -394,6 +417,7 @@ struct Window {
 	handle: WindowHandle,
 	frame: Cell<Option<Frame>>,
 	slot: Signal<Slot>,
+	float: Signal<Slot>,
 }
 
 pub(crate) struct Link {
@@ -711,6 +735,9 @@ impl Link {
 					WEB_LOGIN_SLOT => link.place_web(slot),
 					threads::THREAD_SLOT => link.place_thread_slot(slot),
 					expressions::COMPOSER_SLOT => link.place_composer(slot),
+					COMPOSER_FLOAT => {
+						link.window.float.set(slot);
+					}
 					_ => {}
 				}
 			}

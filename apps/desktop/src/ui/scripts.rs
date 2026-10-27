@@ -1515,12 +1515,12 @@ fn the_command_picker_and_option_states_load() {
 			("composer.command", command_state("", false, false)),
 		],
 	);
-	assert!(app.texts().iter().any(|text| text == "+1 optional"));
+	assert!(app.texts().iter().any(|text| text == "+1 option"));
 	assert!(app.texts().iter().any(|text| text == "/roll"));
 	shows(
 		&mut app,
 		"the optional options",
-		"OPTIONAL",
+		"OPTIONS",
 		&[("composer.command", command_state("20", false, true))],
 	);
 	assert!(app.texts().iter().any(|text| text == "How many dice to roll"));
