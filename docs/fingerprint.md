@@ -1,6 +1,6 @@
 # Client fingerprint
 
-Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST, the gateway and the QR socket also present Chrome's TLS and HTTP/2 handshake through `crates/net`; media and theme links do not yet. See "TLS and HTTP/2 handshake".
+Kyoko presents itself as the Discord web client in Chrome, on both the gateway and REST. Everything that makes up that identity lives in `crates/protocol/src/fingerprint.rs`, plus the IDENTIFY builder in `crates/gateway/src/frames.rs`. When Chrome or Discord moves, update those two files. REST, the gateway, the QR socket, media and theme links also present Chrome's TLS and HTTP/2 handshake through `crates/net`. See "TLS and HTTP/2 handshake".
 
 ## What is sent
 
@@ -42,12 +42,13 @@ Who uses what:
 
 ### What Chrome 156 sends
 
-Recorded from Chrome 156.0.8078.48 on Windows, fresh profile, on 2026-10-27 (`tools/mockcord/fixtures/tls/chrome-156-https.json` and `chrome-156-wss.json`).
+Recorded from Chrome 156.0.8078.48 on Windows, fresh profile, on 2026-10-27 (`tools/mockcord/fixtures/tls/chrome-156-https.json`, `-wss.json`, `-image.json` and `-wss-cross-site.json`; `docs/testing.md`, `tls-capture`).
 
-- **https** (JA4 `t13d1517h2_8daaf6152771_cb7bf5808d99`): GREASE then the 15 TLS 1.3, ECDHE and legacy RSA suites (`TLS_AES_128_GCM_SHA256` first, `TLS_RSA_WITH_AES_256_CBC_SHA` last). 17 extensions plus a GREASE extension first and last, in a new order each connection: server name, status request, supported groups, EC point formats, signature algorithms, ALPN, SCT, extended master secret, certificate compression (brotli), empty session ticket, supported versions (GREASE, 1.3, 1.2), PSK modes (`psk_dhe_ke`), key share, ALPS on the new codepoint (17613) for `h2`, Trust Anchor IDs (28 IDs, sorted by their bytes), ECH GREASE (HKDF-SHA256, AES-128-GCM, 32-byte enc) and renegotiation info. Groups GREASE, X25519MLKEM768, X25519, P-256, P-384, with key shares for GREASE (1 byte), X25519MLKEM768 and X25519. Signature algorithms GREASE, ML-DSA-44, -65, -87, then the usual eight ECDSA, RSA-PSS and PKCS#1 ones. ALPN `h2`, `http/1.1`. No pre-shared key on a fresh connection.
-- **wss** (JA4 `t13d1516h1_8daaf6152771_5b37b36a67c0`): the same ClientHello on its own connection, except that ALPN is `http/1.1` only and there is **no ALPS** extension. The upgrade request is HTTP/1.1 with title-case names in this order: `Host`, `Connection: Upgrade`, `Pragma: no-cache`, `Cache-Control: no-cache`, `User-Agent`, `Upgrade: websocket`, `Origin`, `Sec-WebSocket-Version: 13`, `Accept-Encoding: gzip, deflate, br, zstd`, `Accept-Language`, `Cookie` (one line), `Sec-WebSocket-Key`, `Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits`.
-- **HTTP/2** (Akamai `1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p`): the first flight is SETTINGS (header table 65536, push off, initial window 6291456, max header list 262144, in that order), a connection WINDOW_UPDATE of 15663105, then HEADERS. No PRIORITY frames. Pseudo-headers `:method`, `:authority`, `:scheme`, `:path`. Every HEADERS frame carries END_HEADERS and a priority: the navigation is exclusive on stream 0 with weight 256; `fetch()` and image requests use weight 220 (`priority: u=1, i`), and a later request on the same connection depended exclusively on the earlier one (stream 3 on stream 1). Cookies are split: each cookie is its own `cookie` field.
-- Header order of a same-origin `fetch()` on HTTP/2: `sec-ch-ua-platform`, `user-agent`, `sec-ch-ua`, `sec-ch-ua-mobile`, `accept`, `sec-fetch-site`, `sec-fetch-mode`, `sec-fetch-dest`, `referer`, `accept-encoding`, `accept-language`, `cookie`..., `priority`.
+- **https** (JA4 `t13d1517h2_8daaf6152771_cb7bf5808d99`): GREASE then the 15 TLS 1.3, ECDHE and legacy RSA suites (`TLS_AES_128_GCM_SHA256` first, `TLS_RSA_WITH_AES_256_CBC_SHA` last). 17 extensions plus a GREASE extension first and last, in a new order each connection: server name, status request, supported groups, EC point formats, signature algorithms, ALPN, SCT, extended master secret, certificate compression (brotli), empty session ticket, supported versions (GREASE, 1.3, 1.2), PSK modes (`psk_dhe_ke`), key share, ALPS on the new codepoint (17613) for `h2`, Trust Anchor IDs (28 IDs, sorted by their bytes), ECH GREASE (HKDF-SHA256, AES-128-GCM, 32-byte enc) and renegotiation info. Groups GREASE, X25519MLKEM768, X25519, P-256, P-384, with key shares for GREASE (1 byte), X25519MLKEM768 and X25519. Signature algorithms GREASE, ML-DSA-44, -65, -87, then the usual eight ECDSA, RSA-PSS and PKCS#1 ones. ALPN `h2`, `http/1.1`. No pre-shared key on a fresh connection. The image host's connection (`-image.json`) has the same hello with its own server name.
+- **wss** (JA4 `t13d1516h1_8daaf6152771_5b37b36a67c0`): the same ClientHello on its own connection, except that ALPN is `http/1.1` only and there is **no ALPS** extension. The upgrade request is HTTP/1.1 with title-case names in this order: `Host`, `Connection: Upgrade`, `Pragma: no-cache`, `Cache-Control: no-cache`, `User-Agent`, `Upgrade: websocket`, `Origin`, `Sec-WebSocket-Version: 13`, `Accept-Encoding: gzip, deflate, br, zstd`, `Accept-Language`, `Cookie` (one line), `Sec-WebSocket-Key`, `Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits`. To another site (`-wss-cross-site.json`, as discord.com to gateway.discord.gg) it is the same list without `Cookie`.
+- **HTTP/2** (Akamai `1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p`): the first flight is SETTINGS (header table 65536, push off, initial window 6291456, max header list 262144, in that order), a connection WINDOW_UPDATE of 15663105, then HEADERS. No PRIORITY frames. Pseudo-headers `:method`, `:authority`, `:scheme`, `:path`. Every HEADERS frame carries END_HEADERS and a priority: the navigation is exclusive on stream 0 with weight 256; `fetch()` (GET and POST alike) and the `<img>` use weight 220 (`priority: u=1, i`). A request made while an earlier one on the connection is still open depends exclusively on it (the favicon on the API GET); one made after the earlier ones finished depends on stream 0. Cookies are split: each cookie is its own `cookie` field. A POST's HEADERS frame has no END_STREAM, and its `content-length` comes first, straight after the pseudo-headers.
+- **API calls**: the page calls `fetch()` on its own origin, as the web client calls `discord.com/api`, with Discord's header names and dummy values (`mockcord::hello::DUMMY_API_HEADERS` and `API_CALLS`): a GET with `Authorization`, `X-Debug-Options`, `X-Discord-Locale`, `X-Discord-Timezone`, `X-Installation-ID` and `X-Super-Properties`; a POST adding `Content-Type: application/json`; a join-style POST adding `X-Context-Properties`; a PATCH adding `X-Audit-Log-Reason`. Chrome sends those headers neither in the page's order nor alphabetically. All four requests, and two runs of the capture, fit one fixed ranking (below), and reversing the order the page set them in changed nothing. That looks like a hash table's order, so a header set not captured here (several optional headers at once, or another Chrome major) may come out in another order: re-capture rather than guess.
+- **Image**: an `<img>` on the page loading from another site (`kyoko-cdn.test`, as discord.com loads from cdn.discordapp.com) goes on its own connection with `accept: image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8`, `sec-fetch-site: cross-site`, `sec-fetch-mode: no-cors`, `sec-fetch-dest: image`, `sec-fetch-storage-access: active`, the page's origin as `referer`, no cookie and `priority: u=1, i`.
 
 The capture ran Chrome with `--disable-background-networking` and a new profile, so no variations seed was loaded: field trials that change TLS behaviour, if any are running, are at their defaults.
 
@@ -62,21 +63,106 @@ Trusting a test root through `tls_cert_store` instead of turning certificate che
 
 Left over, outside what the comparison checks:
 
-- **Priority chaining.** API requests carry Chrome's `fetch()` weight, 220, exclusive on stream 0. Chrome makes a later request on the same connection depend exclusively on the one before; wreq cannot chain, so every kyoko request depends on stream 0.
-- **Header order and case.** wreq sends the headers kyoko gives it, in kyoko's order: the default headers first (`user-agent`, `accept`, `accept-encoding`, `accept-language`, `x-discord-locale`, `x-discord-timezone`, the client hints, `sec-fetch-*`, `priority`), then the per-request ones (`authorization`, `x-super-properties`, `x-installation-id`, `referer`, `origin`), then the `cookie` fields. Chrome's order is above. On the websocket upgrade wreq writes lowercase names in its own order (`sec-websocket-version`, `upgrade`, `connection`, `sec-websocket-key`, `accept-encoding`, `host`, `cookie`) and no `Pragma`, `Cache-Control` or `Sec-WebSocket-Extensions`; `OrigHeaderMap` can set case and order, but permessage-deflate cannot be offered without supporting it. Ticket 74 decides on both.
-- **Image `Accept`.** Chrome 156 sends `image/jxl,image/avif,...` for images; `fingerprint::IMAGE_ACCEPT` has no `image/jxl` (ticket 74).
+- **Priority chaining.** API requests carry Chrome's `fetch()` weight, 220, exclusive on stream 0. Chrome chains a request onto one still open on the same connection; wreq cannot, so every kyoko request depends on stream 0. That matches Chrome whenever kyoko's requests don't overlap.
+- **Header order and case**: the next section.
+- **Image `sec-fetch-storage-access` and `priority`.** Chrome's cross-site `<img>` sends `sec-fetch-storage-access: active` and `priority: u=1, i`; kyoko sends no `sec-fetch-storage-access` and `priority: i`. The storage-access value follows the browser's third-party cookie state, and an image's priority depends on whether it is in view, so neither is copied from one capture.
 - Not covered by a local capture: HTTP/3 after Cloudflare's `alt-svc`, real ECH from DNS HTTPS records, and session resumption.
+
+### Header order: kyoko against Chrome 156
+
+Kyoko's order is what wreq writes today, measured through the session and bridge seam tests against the hello listener on 2026-10-27; Chrome's is the capture above. Pseudo-headers are `:method`, `:authority`, `:scheme`, `:path` on both, with weight 220 exclusive on stream 0.
+
+**API POST** (a message send). A GET is the same without `content-length`, `content-type` and `origin`. Chrome puts `x-context-properties` between `x-discord-timezone` and `x-super-properties`, and `x-audit-log-reason` between `x-super-properties` and `x-discord-locale`; kyoko puts the first after `x-super-properties` and the second after `authorization`.
+
+| # | Chrome 156 | kyoko |
+|---|---|---|
+| 1 | `content-length` | `user-agent` |
+| 2 | `sec-ch-ua-platform` | `accept` |
+| 3 | `authorization` | `accept-encoding` |
+| 4 | `x-installation-id` | `accept-language` |
+| 5 | `x-debug-options` | `x-discord-locale` |
+| 6 | `sec-ch-ua` | `x-discord-timezone` |
+| 7 | `sec-ch-ua-mobile` | `sec-ch-ua` |
+| 8 | `x-discord-timezone` | `sec-ch-ua-mobile` |
+| 9 | `x-super-properties` | `sec-ch-ua-platform` |
+| 10 | `x-discord-locale` | `sec-fetch-dest` |
+| 11 | `user-agent` | `sec-fetch-mode` |
+| 12 | `content-type` | `sec-fetch-site` |
+| 13 | `accept` | `priority` |
+| 14 | `origin` | `authorization` |
+| 15 | `sec-fetch-site` | `x-super-properties` |
+| 16 | `sec-fetch-mode` | `x-installation-id` |
+| 17 | `sec-fetch-dest` | `referer` |
+| 18 | `referer` | `origin` |
+| 19 | `accept-encoding` | `content-type` |
+| 20 | `accept-language` | `cookie`... |
+| 21 | `cookie`... | `content-length` |
+| 22 | `priority` | |
+
+Kyoko sends no `X-Debug-Options`. The capture includes it because ticket 74 lists it among the web client's headers; this capture can't confirm that the web client sends it.
+
+**Image** (an `<img>` from another site):
+
+| # | Chrome 156 | kyoko |
+|---|---|---|
+| 1 | `sec-ch-ua-platform` | `user-agent` |
+| 2 | `user-agent` | `accept` |
+| 3 | `sec-ch-ua` | `accept-encoding` |
+| 4 | `sec-ch-ua-mobile` | `accept-language` |
+| 5 | `accept` | `priority: i` |
+| 6 | `sec-fetch-site` | `referer` |
+| 7 | `sec-fetch-mode` | `sec-ch-ua` |
+| 8 | `sec-fetch-dest` | `sec-ch-ua-mobile` |
+| 9 | `sec-fetch-storage-access: active` | `sec-ch-ua-platform` |
+| 10 | `referer` | `sec-fetch-dest` |
+| 11 | `accept-encoding` | `sec-fetch-mode` |
+| 12 | `accept-language` | `sec-fetch-site` |
+| 13 | `priority: u=1, i` | |
+
+**Websocket upgrade**, gateway and QR alike (both cross-site from discord.com, so no `Cookie` on either side):
+
+| # | Chrome 156 | kyoko (gateway and QR) |
+|---|---|---|
+| 1 | `Host` | `user-agent` |
+| 2 | `Connection: Upgrade` | `origin` |
+| 3 | `Pragma: no-cache` | `accept-language` |
+| 4 | `Cache-Control: no-cache` | `sec-websocket-version: 13` |
+| 5 | `User-Agent` | `upgrade: websocket` |
+| 6 | `Upgrade: websocket` | `connection: upgrade` |
+| 7 | `Origin` | `sec-websocket-key` |
+| 8 | `Sec-WebSocket-Version: 13` | `accept-encoding: zstd,gzip,deflate,br` |
+| 9 | `Accept-Encoding: gzip, deflate, br, zstd` | `host` |
+| 10 | `Accept-Language` | |
+| 11 | `Sec-WebSocket-Key` | |
+| 12 | `Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits` | |
+
+What wreq can and can't reproduce, read at the pinned revs:
+
+- **HTTP/2 order: yes.** An `OrigHeaderMap` (on the client, or per request) rebuilds the header map in its order just before the HEADERS frame is encoded, after wreq has added `content-length` and the cookie store's `cookie` fields; names it doesn't list follow in their old order (wreq's `src/header.rs`, wreq-proto's `proto/http2/client.rs`). So every field in the tables can be placed, `content-length` first included. Name case does not exist on HTTP/2. `net::chrome_emulation` clears the profile's map today; a kyoko list would take its place. Not reproducible: priority chaining, and HPACK's indexing choices, which the capture does not compare.
+- **HTTP/1.1 upgrade case and order: yes.** `websocket(..).orig_headers(..)` writes listed names with the given spelling, in order (`call_visit`, used by wreq-proto's `proto/http1/role.rs`). `Host` is in the map by then (wreq's client layer adds it), so it can go first as `Host`. `Pragma` and `Cache-Control` are plain headers. Kyoko setting `Accept-Encoding: gzip, deflate, br, zstd` itself replaces wreq's `zstd,gzip,deflate,br`, because tower-http's decoder only fills in a missing one.
+- **`Connection: Upgrade` value: no.** wreq's websocket builder inserts `connection: upgrade` after the caller's headers (`src/client/ws.rs`), overwriting any value kyoko sets. The name can be spelt `Connection`; the value stays lowercase without a patch to wreq.
+- **permessage-deflate: no, and kyoko must never offer it.** Neither wreq nor tungstenite 0.29 implements RFC 7692. If kyoko sent Chrome's `Sec-WebSocket-Extensions` line and a server accepted it, compressed frames (RSV1 set) would arrive and tungstenite would drop the connection. Discord does not appear to use it: its gateway docs list only zlib-stream and zstd-stream, and in [discord-api-docs discussion #3944](https://github.com/discord/discord-api-docs/discussions/3944) (opened 2021-10-10, saying the Discord client sends the offer) devsnek answered on 2021-10-12 "We don't have any current plans to support this extension" (read 2026-10-27). So the line stays missing, and every gateway or QR connect shows that gap to whoever terminates TLS.
+
+Whether kyoko sends Chrome's API order through an `OrigHeaderMap`, and whether the upgrade copies Chrome's names, order and cache headers apart from the deflate offer and the `Connection` value, are the user's decisions (ticket 74).
 
 ### Recommendation
 
-Keep claiming Chrome 156 (`CHROME_MAJOR = 156`) and use wreq-util's Chrome154 TLS and HTTP/2 options for it, with the emulation headers cleared. Chrome 156's handshake equals Chrome154's in every field the capture compares, so no `TlsOptions` override is needed for https and kyoko does not need to claim 154. Websockets need the ALPS override above. Re-run the capture when Chrome moves to 157 (`cargo xtask tls-capture --client chrome --h2 --record chrome-157`, then `--client wreq --compare chrome-157`).
+Keep claiming Chrome 156 (`CHROME_MAJOR = 156`) and use wreq-util's Chrome154 TLS and HTTP/2 options for it, with the emulation headers cleared. Chrome 156's handshake equals Chrome154's in every field the capture compares, so no `TlsOptions` override is needed for https and kyoko does not need to claim 154. Websockets need the ALPS override above. Re-capture at every Chrome bump (below).
 
 ### Bumping Chrome
 
-1. Update the local Chrome and record it: `cargo xtask tls-capture --client chrome --h2 --record chrome-<major>`.
-2. Compare wreq's profile with it: `cargo xtask tls-capture --client wreq --h2 --compare chrome-<major>`.
-3. With no difference, add the major to `net::profile` beside the profile it equals. With a difference, bump the wreq-util, wreq and btls revs to a profile that matches, or set the differing `TlsOptions` or `Http2Options` fields in `crates/net/src/chrome.rs`.
-4. Bump `CHROME_MAJOR`. The build fails until step 3 maps it, and the `tls_fingerprint` session tests fail until `chrome-<major>-https.json` and `chrome-<major>-wss.json` exist and match.
+Run this when a new Chrome major reaches full stable (Chromium Dash, see "Chrome major and the brand list"). Nothing here contacts Discord; the capture stays on localhost.
+
+1. Update the local Chrome to the new major (`chrome://settings/help`, or the installer) and note its full version.
+2. Record it: `cargo xtask tls-capture --client chrome --h2 --record chrome-<major>`. Check the printed connections: the page, `/fetch` and the API calls on `h2` to `localhost`, `/image.gif` on its own `h2` connection, then `/ws` and the cross-site upgrade on `http/1.1`. It writes `chrome-<major>-https.json`, `-wss.json`, `-image.json` and `-wss-cross-site.json` in `tools/mockcord/fixtures/tls/`. Keep the older major's files until the bump is merged.
+3. Compare with the old major: `cargo xtask tls-capture --client chrome --h2 --compare chrome-<old major>` prints handshake differences, and a diff of the JSON files shows header changes. Look at every header value kyoko copies, as `image/jxl` was for 156: `sec-ch-ua` (against `fingerprint::sec_ch_ua()` for the new major), `accept` on `/fetch` and on the image (`IMAGE_ACCEPT`), `accept-encoding`, `accept-language`, `priority`, any new `sec-fetch-*` header, the API header order, and the upgrade's names and order. Fix copied values in `crates/protocol/src/fingerprint.rs` (or `rest`, `gateway`, `login::qr`) together with their tests.
+4. Compare wreq's profile with the new capture: `cargo xtask tls-capture --client wreq --h2 --compare chrome-<major>`.
+5. With no https and no wss difference, add the major to `net::profile` in `crates/net/src/chrome.rs` beside the profile it equals.
+6. With a difference, find a newer wreq-util profile that matches: bump the `wreq-util` rev in `[workspace.dependencies]` and the `wreq`, `btls` and `btls-sys` `[patch.crates-io]` revs to the ones that wreq-util uses, update `Cargo.lock`, run `cargo deny check` (licence, the zstd ignores) and `cargo tree -e features -i btls-sys`, rebuild the shared BoringSSL prebuilt for a new `btls` rev ("Sharing one BoringSSL between worktrees"), and repeat step 4. If no profile matches, set the differing `TlsOptions` or `Http2Options` fields in `crates/net/src/chrome.rs` instead. Update "Pins".
+7. Bump `CHROME_MAJOR` in `crates/protocol/src/fingerprint.rs`. The build fails until step 5 or 6 maps it. Set `CHROME_156_BRANDS` in `crates/session/tests/session/fingerprint.rs` (renamed for the new major) to the captured `sec-ch-ua`.
+8. Run the TLS seam tests: `cargo test -p kyoko-session --test session tls_fingerprint` and `cargo test -p kyoko-bridge --test bridge media_fetch qr_login`. They read `chrome-<CHROME_MAJOR>-*.json` and fail until the fixtures exist and match: ClientHello, SETTINGS, WINDOW_UPDATE, priority, pseudo-header order, and the image's `accept` and `sec-fetch-*`.
+9. If kyoko sends a recorded header order (a ticket 74 decision), update its lists from the new fixtures and run their seam tests.
+10. Delete the old major's Chrome fixtures, re-record `wreq-chrome<profile>-*.json` if the profile changed (`--client wreq --h2 --record wreq-chrome<profile>`), and update this file ("What Chrome sends", "Header order", "Chrome major and the brand list", versions and dates), `docs/media.md` for image headers, and `docs/testing.md` if a command changed.
 
 ### Build cost
 
