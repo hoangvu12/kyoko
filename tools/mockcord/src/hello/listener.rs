@@ -24,8 +24,91 @@ const HELLO_LIMIT: Duration = Duration::from_secs(10);
 const ROUND_TRIP: Duration = Duration::from_millis(50);
 const CONNECTION_LIMIT: Duration = Duration::from_secs(60);
 const READ_CHUNK: usize = 16 * 1024;
-const PAGE: &str = "<!doctype html><meta charset=utf-8><title>kyoko tls-capture</title><p>kyoko tls-capture</p><script>fetch('/fetch').finally(() => { const socket = new WebSocket('wss://' + location.host + '/ws'); socket.onerror = socket.onclose = () => { document.title = 'kyoko tls-capture done'; }; });</script>";
 const COOKIES: [&str; 2] = ["kyoko_a=1; Path=/; Secure", "kyoko_b=2; Path=/; Secure"];
+const PIXEL: [u8; 43] = [
+	0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	0xff, 0xff, 0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+	0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b,
+];
+pub const FETCH_PATH: &str = "/fetch";
+pub const IMAGE_PATH: &str = "/image.gif";
+pub const WEBSOCKET_PATH: &str = "/ws";
+pub const GATEWAY_PATH: &str = "/?v=9&encoding=json";
+pub const IMAGE_HOST: &str = "kyoko-cdn.test";
+pub const GATEWAY_HOST: &str = "kyoko-gateway.test";
+pub const DUMMY_API_HEADERS: [(&str, &str); 6] = [
+	("Authorization", "kyoko-tls-capture-dummy-token"),
+	("X-Debug-Options", "bugReporterEnabled"),
+	("X-Discord-Locale", "en-US"),
+	("X-Discord-Timezone", "Etc/UTC"),
+	("X-Installation-ID", "0.kyoko-tls-capture-dummy"),
+	("X-Super-Properties", "eyJreW9rbyI6ImR1bW15In0="),
+];
+const JSON_BODY: (&str, &str) = ("Content-Type", "application/json");
+pub const API_CALLS: [ApiCall; 4] = [
+	ApiCall {
+		method: "GET",
+		path: "/api/v9/users/@me",
+		extra: &[],
+	},
+	ApiCall {
+		method: "POST",
+		path: "/api/v9/channels/1/messages",
+		extra: &[JSON_BODY],
+	},
+	ApiCall {
+		method: "POST",
+		path: "/api/v9/invites/kyoko",
+		extra: &[
+			JSON_BODY,
+			("X-Context-Properties", "eyJsb2NhdGlvbiI6ImR1bW15In0="),
+		],
+	},
+	ApiCall {
+		method: "PATCH",
+		path: "/api/v9/guilds/1/members/2",
+		extra: &[JSON_BODY, ("X-Audit-Log-Reason", "kyoko%20tls-capture")],
+	},
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ApiCall {
+	pub method: &'static str,
+	pub path: &'static str,
+	pub extra: &'static [(&'static str, &'static str)],
+}
+
+impl ApiCall {
+	fn script(&self) -> String {
+		let headers = DUMMY_API_HEADERS
+			.iter()
+			.chain(self.extra)
+			.map(|(name, value)| format!("'{name}': '{value}'"))
+			.collect::<Vec<_>>();
+		let body = if self.method == "GET" {
+			String::new()
+		} else {
+			", body: JSON.stringify({ content: 'kyoko tls-capture' })".to_owned()
+		};
+		format!(
+			"await fetch('{}', {{ method: '{}', headers: {{ {} }}{body} }}).catch(() => {{}}); ",
+			self.path,
+			self.method,
+			headers.join(", ")
+		)
+	}
+}
+
+fn page() -> String {
+	let calls = API_CALLS.iter().map(ApiCall::script).collect::<String>();
+	format!(
+		"<!doctype html><meta charset=utf-8><title>kyoko tls-capture</title><p>kyoko tls-capture</p><script>		const port = location.port; 		const socket = (url) => new Promise((done) => {{ 			const socket = new WebSocket(url); socket.onerror = socket.onclose = done; }}); 		const image = (url) => new Promise((done) => {{ 			const element = document.createElement('img'); element.onload = element.onerror = done; 			element.src = url; document.body.append(element); }}); 		(async () => {{ 			await fetch('{FETCH_PATH}').catch(() => {{}}); 			{calls}			await image('https://{IMAGE_HOST}:' + port + '{IMAGE_PATH}'); 			await socket('wss://' + location.host + '{WEBSOCKET_PATH}'); 			await socket('wss://{GATEWAY_HOST}:' + port + '{GATEWAY_PATH}'); 			document.title = 'kyoko tls-capture done'; 		}})();</script>"
+	)
+}
+
+pub fn is_api_path(path: &str) -> bool {
+	API_CALLS.iter().any(|call| call.path == path)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -178,9 +261,20 @@ async fn serve_h2<S: AsyncRead + AsyncWrite + Unpin>(mut tls: S, record: &Record
 				Some("/") => {
 					let mut headers = vec![("content-type", "text/html; charset=utf-8")];
 					headers.extend(COOKIES.iter().map(|cookie| ("set-cookie", *cookie)));
-					h2::response(request.stream, 200, &headers, PAGE.as_bytes())
+					h2::response(request.stream, 200, &headers, page().as_bytes())
 				}
-				Some("/fetch") => h2::response(request.stream, 200, &[("content-type", "text/plain")], b"ok"),
+				Some(FETCH_PATH) => {
+					h2::response(request.stream, 200, &[("content-type", "text/plain")], b"ok")
+				}
+				Some(path) if is_api_path(path) => h2::response(
+					request.stream,
+					200,
+					&[("content-type", "application/json")],
+					b"{}",
+				),
+				Some(IMAGE_PATH) => {
+					h2::response(request.stream, 200, &[("content-type", "image/gif")], &PIXEL)
+				}
 				_ => h2::response(request.stream, 404, &[], b""),
 			});
 		}
@@ -218,12 +312,13 @@ async fn serve_http1<S: AsyncRead + AsyncWrite + Unpin>(mut tls: S, record: &Rec
 					.iter()
 					.map(|cookie| format!("Set-Cookie: {cookie}\r\n"))
 					.collect::<String>();
+				let page = page();
 				format!(
-					"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n{cookies}Content-Length: {}\r\n\r\n{PAGE}",
-					PAGE.len()
+					"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n{cookies}Content-Length: {}\r\n\r\n{page}",
+					page.len()
 				)
 			}
-			Some("/fetch") => {
+			Some(FETCH_PATH) => {
 				"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok".to_owned()
 			}
 			_ => {

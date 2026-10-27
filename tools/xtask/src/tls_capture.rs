@@ -4,7 +4,10 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use mockcord::hello::{Capture, Connection, HelloListener, Mode, TlsSummary, differences};
+use mockcord::hello::{
+	API_CALLS, Capture, Connection, FETCH_PATH, GATEWAY_HOST, GATEWAY_PATH, HelloListener, Http2Request,
+	IMAGE_HOST, IMAGE_PATH, Mode, TlsSummary, WEBSOCKET_PATH, differences,
+};
 
 use crate::parity::browser;
 
@@ -13,6 +16,10 @@ const PROFILE_CLEANUP_TRIES: usize = 20;
 const FIXTURES: &str = "tools/mockcord/fixtures/tls";
 const HTTPS: &str = "https";
 const WSS: &str = "wss";
+const IMAGE: &str = "image";
+const CROSS_SITE_WSS: &str = "wss-cross-site";
+const KINDS: [&str; 4] = [HTTPS, WSS, IMAGE, CROSS_SITE_WSS];
+const PAGE_HOST: &str = "localhost";
 
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Client {
@@ -73,7 +80,10 @@ pub fn run(args: Args) -> Result<()> {
 		}
 	};
 	let deadline = Instant::now() + Duration::from_secs(args.wait);
-	while Instant::now() < deadline && !complete(&listener.connections(), mode) && client.running() {
+	while Instant::now() < deadline
+		&& !complete(&listener.connections(), mode, args.client)
+		&& client.running()
+	{
 		std::thread::sleep(POLL);
 	}
 	if args.client == Client::Wreq {
@@ -84,7 +94,7 @@ pub fn run(args: Args) -> Result<()> {
 	drop(listener);
 	runtime.shutdown_timeout(Duration::from_secs(1));
 	print_connections(&connections);
-	let captures = [HTTPS, WSS]
+	let captures = KINDS
 		.into_iter()
 		.filter_map(|kind| capture(&connections, mode, kind, &label))
 		.collect::<Vec<_>>();
@@ -103,7 +113,7 @@ pub fn run(args: Args) -> Result<()> {
 	Ok(())
 }
 
-fn complete(connections: &[Connection], mode: Mode) -> bool {
+fn complete(connections: &[Connection], mode: Mode, client: Client) -> bool {
 	match mode {
 		Mode::HelloOnly => [HTTPS, WSS].into_iter().all(|kind| {
 			connections
@@ -111,15 +121,22 @@ fn complete(connections: &[Connection], mode: Mode) -> bool {
 				.any(|connection| offered_kind(connection) == Some(kind))
 		}),
 		Mode::Complete => {
-			let fetched = connections.iter().any(|connection| {
-				connection.http2.as_ref().is_some_and(|summary| {
-					summary
-						.requests
-						.iter()
-						.any(|request| request.path() == Some("/fetch"))
-				})
-			});
-			fetched && connections.iter().any(is_upgrade)
+			let fetched = |path| connections.iter().any(|connection| requested(connection, path));
+			let upgraded = |path| {
+				connections
+					.iter()
+					.any(|connection| upgrade_path(connection) == Some(path))
+			};
+			let probed = fetched(FETCH_PATH) && upgraded(WEBSOCKET_PATH);
+			match client {
+				Client::Wreq => probed,
+				Client::Chrome => {
+					probed
+						&& API_CALLS.iter().all(|call| fetched(call.path))
+						&& fetched(IMAGE_PATH)
+						&& upgraded(GATEWAY_PATH)
+				}
+			}
 		}
 	}
 }
@@ -133,29 +150,58 @@ fn offered_kind(connection: &Connection) -> Option<&'static str> {
 	})
 }
 
-fn is_upgrade(connection: &Connection) -> bool {
-	connection.http1.as_ref().is_some_and(|request| {
-		request.headers.iter().any(|(name, value)| {
-			name.eq_ignore_ascii_case("upgrade") && value.eq_ignore_ascii_case("websocket")
-		})
+fn requested(connection: &Connection, path: &str) -> bool {
+	connection.http2.as_ref().is_some_and(|summary| {
+		summary
+			.requests
+			.iter()
+			.any(|request| request.path() == Some(path))
 	})
+}
+
+fn on_page_host(request: &Http2Request) -> bool {
+	request
+		.headers
+		.iter()
+		.find(|(name, _)| name == ":authority")
+		.is_some_and(|(_, authority)| authority.split(':').next() == Some(PAGE_HOST))
+}
+
+fn upgrade_path(connection: &Connection) -> Option<&str> {
+	let request = connection.http1.as_ref()?;
+	let upgrade = request
+		.headers
+		.iter()
+		.any(|(name, value)| name.eq_ignore_ascii_case("upgrade") && value.eq_ignore_ascii_case("websocket"));
+	upgrade.then(|| request.request_line.split(' ').nth(1))?
 }
 
 fn capture(connections: &[Connection], mode: Mode, kind: &str, label: &str) -> Option<Capture> {
 	let chosen = connections.iter().find(|connection| match (mode, kind) {
-		(Mode::HelloOnly, _) => offered_kind(connection) == Some(kind),
+		(Mode::HelloOnly, HTTPS | WSS) => offered_kind(connection) == Some(kind),
+		(Mode::HelloOnly, _) => false,
 		(Mode::Complete, HTTPS) => connection
 			.http2
 			.as_ref()
-			.is_some_and(|summary| !summary.requests.is_empty()),
-		(Mode::Complete, _) => is_upgrade(connection),
+			.is_some_and(|summary| summary.requests.iter().any(on_page_host)),
+		(Mode::Complete, IMAGE) => requested(connection, IMAGE_PATH),
+		(Mode::Complete, WSS) => upgrade_path(connection) == Some(WEBSOCKET_PATH),
+		(Mode::Complete, _) => upgrade_path(connection) == Some(GATEWAY_PATH),
 	})?;
 	let http2 = chosen.http2.clone().map(|mut summary| {
-		summary.requests = connections
-			.iter()
-			.filter_map(|connection| connection.http2.as_ref())
-			.flat_map(|summary| summary.requests.iter().cloned())
-			.collect();
+		if kind == HTTPS {
+			summary.requests = connections
+				.iter()
+				.filter_map(|connection| connection.http2.as_ref())
+				.flat_map(|summary| {
+					summary
+						.requests
+						.iter()
+						.filter(|request| on_page_host(request))
+						.cloned()
+				})
+				.collect();
+		}
 		summary
 	});
 	Some(Capture {
@@ -222,6 +268,11 @@ fn record(root: &Path, name: &str, captures: &[Capture]) -> Result<()> {
 fn compare(root: &Path, name: &str, captures: &[Capture]) -> Result<()> {
 	for captured in captures {
 		let path = root.join(FIXTURES).join(format!("{name}-{}.json", captured.kind));
+		if !path.exists() {
+			println!();
+			println!("== {} has no {} to compare with", captured.kind, path.display());
+			continue;
+		}
 		let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
 		let expected: Capture =
 			serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
@@ -277,6 +328,7 @@ impl Running {
 				"--disable-background-networking",
 				"--disable-component-update",
 				"--ignore-certificate-errors",
+				&format!("--host-resolver-rules=MAP {IMAGE_HOST} 127.0.0.1, MAP {GATEWAY_HOST} 127.0.0.1"),
 				"--new-window",
 				&format!("https://localhost:{port}/"),
 			])

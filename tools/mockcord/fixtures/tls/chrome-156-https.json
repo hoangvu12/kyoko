@@ -31,23 +31,23 @@
     ],
     "extensions": [
       "GREASE",
-      "signed_certificate_timestamp",
-      "encrypted_client_hello",
-      "application_settings",
-      "extended_master_secret",
+      "renegotiation_info",
       "supported_groups",
       "signature_algorithms",
       "trust_anchors",
-      "server_name",
+      "compress_certificate",
+      "application_settings",
       "status_request",
       "psk_key_exchange_modes",
-      "application_layer_protocol_negotiation",
-      "session_ticket",
       "key_share",
-      "renegotiation_info",
-      "compress_certificate",
-      "ec_point_formats",
       "supported_versions",
+      "signed_certificate_timestamp",
+      "session_ticket",
+      "encrypted_client_hello",
+      "server_name",
+      "extended_master_secret",
+      "ec_point_formats",
+      "application_layer_protocol_negotiation",
       "GREASE"
     ],
     "extension_set": [
@@ -231,7 +231,7 @@
           ],
           [
             ":authority",
-            "localhost:46293"
+            "localhost:61516"
           ],
           [
             ":scheme",
@@ -297,7 +297,7 @@
         "cookie_fields": 0
       },
       {
-        "stream": 1,
+        "stream": 3,
         "flags": [
           "END_STREAM",
           "END_HEADERS",
@@ -321,7 +321,7 @@
           ],
           [
             ":authority",
-            "localhost:46293"
+            "localhost:61516"
           ],
           [
             ":scheme",
@@ -365,7 +365,7 @@
           ],
           [
             "referer",
-            "https://localhost:46293/"
+            "https://localhost:61516/"
           ],
           [
             "accept-encoding",
@@ -391,7 +391,7 @@
         "cookie_fields": 2
       },
       {
-        "stream": 3,
+        "stream": 5,
         "flags": [
           "END_STREAM",
           "END_HEADERS",
@@ -399,7 +399,7 @@
         ],
         "priority": {
           "exclusive": true,
-          "depends_on": 1,
+          "depends_on": 0,
           "weight": 220
         },
         "pseudo_order": [
@@ -415,7 +415,125 @@
           ],
           [
             ":authority",
-            "localhost:46293"
+            "localhost:61516"
+          ],
+          [
+            ":scheme",
+            "https"
+          ],
+          [
+            ":path",
+            "/api/v9/users/@me"
+          ],
+          [
+            "sec-ch-ua-platform",
+            "\"Windows\""
+          ],
+          [
+            "authorization",
+            "kyoko-tls-capture-dummy-token"
+          ],
+          [
+            "x-installation-id",
+            "0.kyoko-tls-capture-dummy"
+          ],
+          [
+            "x-debug-options",
+            "bugReporterEnabled"
+          ],
+          [
+            "sec-ch-ua",
+            "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\""
+          ],
+          [
+            "sec-ch-ua-mobile",
+            "?0"
+          ],
+          [
+            "x-discord-timezone",
+            "Etc/UTC"
+          ],
+          [
+            "x-super-properties",
+            "eyJreW9rbyI6ImR1bW15In0="
+          ],
+          [
+            "x-discord-locale",
+            "en-US"
+          ],
+          [
+            "user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+          ],
+          [
+            "accept",
+            "*/*"
+          ],
+          [
+            "sec-fetch-site",
+            "same-origin"
+          ],
+          [
+            "sec-fetch-mode",
+            "cors"
+          ],
+          [
+            "sec-fetch-dest",
+            "empty"
+          ],
+          [
+            "referer",
+            "https://localhost:61516/"
+          ],
+          [
+            "accept-encoding",
+            "gzip, deflate, br, zstd"
+          ],
+          [
+            "accept-language",
+            "en-US,en;q=0.9"
+          ],
+          [
+            "cookie",
+            "kyoko_a=1"
+          ],
+          [
+            "cookie",
+            "kyoko_b=2"
+          ],
+          [
+            "priority",
+            "u=1, i"
+          ]
+        ],
+        "cookie_fields": 2
+      },
+      {
+        "stream": 7,
+        "flags": [
+          "END_STREAM",
+          "END_HEADERS",
+          "PRIORITY"
+        ],
+        "priority": {
+          "exclusive": true,
+          "depends_on": 5,
+          "weight": 220
+        },
+        "pseudo_order": [
+          ":method",
+          ":authority",
+          ":scheme",
+          ":path"
+        ],
+        "headers": [
+          [
+            ":method",
+            "GET"
+          ],
+          [
+            ":authority",
+            "localhost:61516"
           ],
           [
             ":scheme",
@@ -459,7 +577,402 @@
           ],
           [
             "referer",
-            "https://localhost:46293/"
+            "https://localhost:61516/"
+          ],
+          [
+            "accept-encoding",
+            "gzip, deflate, br, zstd"
+          ],
+          [
+            "accept-language",
+            "en-US,en;q=0.9"
+          ],
+          [
+            "cookie",
+            "kyoko_a=1"
+          ],
+          [
+            "cookie",
+            "kyoko_b=2"
+          ],
+          [
+            "priority",
+            "u=1, i"
+          ]
+        ],
+        "cookie_fields": 2
+      },
+      {
+        "stream": 9,
+        "flags": [
+          "END_HEADERS",
+          "PRIORITY"
+        ],
+        "priority": {
+          "exclusive": true,
+          "depends_on": 0,
+          "weight": 220
+        },
+        "pseudo_order": [
+          ":method",
+          ":authority",
+          ":scheme",
+          ":path"
+        ],
+        "headers": [
+          [
+            ":method",
+            "POST"
+          ],
+          [
+            ":authority",
+            "localhost:61516"
+          ],
+          [
+            ":scheme",
+            "https"
+          ],
+          [
+            ":path",
+            "/api/v9/channels/1/messages"
+          ],
+          [
+            "content-length",
+            "31"
+          ],
+          [
+            "sec-ch-ua-platform",
+            "\"Windows\""
+          ],
+          [
+            "authorization",
+            "kyoko-tls-capture-dummy-token"
+          ],
+          [
+            "x-installation-id",
+            "0.kyoko-tls-capture-dummy"
+          ],
+          [
+            "x-debug-options",
+            "bugReporterEnabled"
+          ],
+          [
+            "sec-ch-ua",
+            "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\""
+          ],
+          [
+            "sec-ch-ua-mobile",
+            "?0"
+          ],
+          [
+            "x-discord-timezone",
+            "Etc/UTC"
+          ],
+          [
+            "x-super-properties",
+            "eyJreW9rbyI6ImR1bW15In0="
+          ],
+          [
+            "x-discord-locale",
+            "en-US"
+          ],
+          [
+            "user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "accept",
+            "*/*"
+          ],
+          [
+            "origin",
+            "https://localhost:61516"
+          ],
+          [
+            "sec-fetch-site",
+            "same-origin"
+          ],
+          [
+            "sec-fetch-mode",
+            "cors"
+          ],
+          [
+            "sec-fetch-dest",
+            "empty"
+          ],
+          [
+            "referer",
+            "https://localhost:61516/"
+          ],
+          [
+            "accept-encoding",
+            "gzip, deflate, br, zstd"
+          ],
+          [
+            "accept-language",
+            "en-US,en;q=0.9"
+          ],
+          [
+            "cookie",
+            "kyoko_a=1"
+          ],
+          [
+            "cookie",
+            "kyoko_b=2"
+          ],
+          [
+            "priority",
+            "u=1, i"
+          ]
+        ],
+        "cookie_fields": 2
+      },
+      {
+        "stream": 11,
+        "flags": [
+          "END_HEADERS",
+          "PRIORITY"
+        ],
+        "priority": {
+          "exclusive": true,
+          "depends_on": 0,
+          "weight": 220
+        },
+        "pseudo_order": [
+          ":method",
+          ":authority",
+          ":scheme",
+          ":path"
+        ],
+        "headers": [
+          [
+            ":method",
+            "POST"
+          ],
+          [
+            ":authority",
+            "localhost:61516"
+          ],
+          [
+            ":scheme",
+            "https"
+          ],
+          [
+            ":path",
+            "/api/v9/invites/kyoko"
+          ],
+          [
+            "content-length",
+            "31"
+          ],
+          [
+            "sec-ch-ua-platform",
+            "\"Windows\""
+          ],
+          [
+            "authorization",
+            "kyoko-tls-capture-dummy-token"
+          ],
+          [
+            "x-installation-id",
+            "0.kyoko-tls-capture-dummy"
+          ],
+          [
+            "x-debug-options",
+            "bugReporterEnabled"
+          ],
+          [
+            "sec-ch-ua",
+            "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\""
+          ],
+          [
+            "sec-ch-ua-mobile",
+            "?0"
+          ],
+          [
+            "x-discord-timezone",
+            "Etc/UTC"
+          ],
+          [
+            "x-context-properties",
+            "eyJsb2NhdGlvbiI6ImR1bW15In0="
+          ],
+          [
+            "x-super-properties",
+            "eyJreW9rbyI6ImR1bW15In0="
+          ],
+          [
+            "x-discord-locale",
+            "en-US"
+          ],
+          [
+            "user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "accept",
+            "*/*"
+          ],
+          [
+            "origin",
+            "https://localhost:61516"
+          ],
+          [
+            "sec-fetch-site",
+            "same-origin"
+          ],
+          [
+            "sec-fetch-mode",
+            "cors"
+          ],
+          [
+            "sec-fetch-dest",
+            "empty"
+          ],
+          [
+            "referer",
+            "https://localhost:61516/"
+          ],
+          [
+            "accept-encoding",
+            "gzip, deflate, br, zstd"
+          ],
+          [
+            "accept-language",
+            "en-US,en;q=0.9"
+          ],
+          [
+            "cookie",
+            "kyoko_a=1"
+          ],
+          [
+            "cookie",
+            "kyoko_b=2"
+          ],
+          [
+            "priority",
+            "u=1, i"
+          ]
+        ],
+        "cookie_fields": 2
+      },
+      {
+        "stream": 13,
+        "flags": [
+          "END_HEADERS",
+          "PRIORITY"
+        ],
+        "priority": {
+          "exclusive": true,
+          "depends_on": 0,
+          "weight": 220
+        },
+        "pseudo_order": [
+          ":method",
+          ":authority",
+          ":scheme",
+          ":path"
+        ],
+        "headers": [
+          [
+            ":method",
+            "PATCH"
+          ],
+          [
+            ":authority",
+            "localhost:61516"
+          ],
+          [
+            ":scheme",
+            "https"
+          ],
+          [
+            ":path",
+            "/api/v9/guilds/1/members/2"
+          ],
+          [
+            "content-length",
+            "31"
+          ],
+          [
+            "sec-ch-ua-platform",
+            "\"Windows\""
+          ],
+          [
+            "authorization",
+            "kyoko-tls-capture-dummy-token"
+          ],
+          [
+            "x-installation-id",
+            "0.kyoko-tls-capture-dummy"
+          ],
+          [
+            "x-debug-options",
+            "bugReporterEnabled"
+          ],
+          [
+            "sec-ch-ua",
+            "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\""
+          ],
+          [
+            "sec-ch-ua-mobile",
+            "?0"
+          ],
+          [
+            "x-discord-timezone",
+            "Etc/UTC"
+          ],
+          [
+            "x-super-properties",
+            "eyJreW9rbyI6ImR1bW15In0="
+          ],
+          [
+            "x-audit-log-reason",
+            "kyoko%20tls-capture"
+          ],
+          [
+            "x-discord-locale",
+            "en-US"
+          ],
+          [
+            "user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "accept",
+            "*/*"
+          ],
+          [
+            "origin",
+            "https://localhost:61516"
+          ],
+          [
+            "sec-fetch-site",
+            "same-origin"
+          ],
+          [
+            "sec-fetch-mode",
+            "cors"
+          ],
+          [
+            "sec-fetch-dest",
+            "empty"
+          ],
+          [
+            "referer",
+            "https://localhost:61516/"
           ],
           [
             "accept-encoding",
