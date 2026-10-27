@@ -118,6 +118,8 @@ impl Core {
 			| Command::AcceptFriend { .. }
 			| Command::RemoveRelationship { .. }
 			| Command::BlockUser { .. }
+			| Command::IgnoreUser { .. }
+			| Command::UnignoreUser { .. }
 			| Command::LeaveGuild { .. }
 			| Command::CreateGroupDm { .. }
 			| Command::AddGroupRecipient { .. }
@@ -368,6 +370,12 @@ impl Core {
 					move |rest| async move { rest.block_user(user_id).await },
 				)
 			}
+			Command::IgnoreUser { user_id } => self.spawn_action("ignore user", move |rest| async move {
+				rest.ignore_user(user_id).await
+			}),
+			Command::UnignoreUser { user_id } => self.spawn_action("unignore user", move |rest| async move {
+				rest.unignore_user(user_id).await
+			}),
 			Command::LeaveGuild { guild_id } => self.spawn_action("leave server", move |rest| async move {
 				rest.leave_guild(guild_id).await
 			}),

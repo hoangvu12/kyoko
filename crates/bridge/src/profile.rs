@@ -5,10 +5,11 @@ use chrono::{DateTime, NaiveDate, Utc};
 use media::cdn;
 use media::{ImageRequest, Shape, SizeHint, Variant};
 use protocol::{
-	Activity, ActivityKind, ChannelType, PrimaryGuild, RelationshipKind, Snowflake, StatusKind, User,
+	Activity, ActivityKind, ChannelType, Permissions, PrimaryGuild, RelationshipKind, Snowflake, StatusKind,
+	User,
 };
 use session::Badge;
-use state::{ConnectionStatus, CustomStatus, RiskyLock, State};
+use state::{ConnectionStatus, CustomStatus, RailEntry, RiskyLock, State};
 
 use crate::display::Display;
 use crate::dm_list::DmStatus;
@@ -17,6 +18,147 @@ use crate::images::{Avatar, emoji_request, guild_icon_request, guild_member};
 pub const BANNER_PIXELS: (u32, u32) = (600, 300);
 pub const BADGE_PIXELS: u32 = 64;
 pub const TAG_BADGE_PIXELS: u32 = 32;
+pub const PROFILE_LINK: &str = "https://discord.com/users/";
+
+pub fn profile_link(user_id: Snowflake) -> String {
+	format!("{PROFILE_LINK}{user_id}")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProfileTheme {
+	pub primary: u32,
+	pub accent: u32,
+}
+
+impl ProfileTheme {
+	fn of(colors: Option<[u32; 2]>) -> Option<Self> {
+		let [primary, accent] = colors?;
+		Some(Self {
+			primary: primary & 0x00ff_ffff,
+			accent: accent & 0x00ff_ffff,
+		})
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InviteTarget {
+	pub guild_id: Snowflake,
+	pub channel_id: Snowflake,
+	pub name: String,
+	pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileMenuItem {
+	ViewFullProfile,
+	ShareProfile,
+	InviteToServer(Vec<InviteTarget>),
+	Ignore,
+	Unignore,
+	Block,
+	Unblock,
+	Report,
+	CopyId,
+}
+
+impl ProfileMenuItem {
+	pub fn label(&self) -> &'static str {
+		match self {
+			Self::ViewFullProfile => "View Full Profile",
+			Self::ShareProfile => "Share Profile",
+			Self::InviteToServer(_) => "Invite to Server",
+			Self::Ignore => "Ignore",
+			Self::Unignore => "Unignore",
+			Self::Block => "Block",
+			Self::Unblock => "Unblock",
+			Self::Report => "Report User Profile",
+			Self::CopyId => "Copy User ID",
+		}
+	}
+
+	pub fn key(&self) -> &'static str {
+		match self {
+			Self::ViewFullProfile => "full-profile",
+			Self::ShareProfile => "share",
+			Self::InviteToServer(_) => "invite",
+			Self::Ignore => "ignore",
+			Self::Unignore => "unignore",
+			Self::Block => "block",
+			Self::Unblock => "unblock",
+			Self::Report => "report",
+			Self::CopyId => "copy-id",
+		}
+	}
+
+	pub fn is_danger(&self) -> bool {
+		matches!(self, Self::Block | Self::Report)
+	}
+}
+
+pub fn profile_menu(state: &State, card: &ProfileCard, full_open: bool) -> Vec<Vec<ProfileMenuItem>> {
+	let mut first = Vec::new();
+	if !full_open {
+		first.push(ProfileMenuItem::ViewFullProfile);
+	}
+	first.push(ProfileMenuItem::ShareProfile);
+	if !card.mine && !card.bot {
+		let targets = invite_targets(state, card);
+		if !targets.is_empty() {
+			first.push(ProfileMenuItem::InviteToServer(targets));
+		}
+	}
+	let mut groups = vec![first];
+	if !card.mine {
+		let blocked = card.relation == Relation::Blocked;
+		groups.push(vec![
+			if card.ignored {
+				ProfileMenuItem::Unignore
+			} else {
+				ProfileMenuItem::Ignore
+			},
+			if blocked {
+				ProfileMenuItem::Unblock
+			} else {
+				ProfileMenuItem::Block
+			},
+			ProfileMenuItem::Report,
+		]);
+	}
+	groups.push(vec![ProfileMenuItem::CopyId]);
+	groups
+}
+
+pub fn invite_targets(state: &State, card: &ProfileCard) -> Vec<InviteTarget> {
+	let member_of = |guild_id: Snowflake| {
+		card.mutual_guilds.iter().any(|guild| guild.id == guild_id)
+			|| state
+				.guild(guild_id)
+				.is_some_and(|guild| guild.members.contains_key(&card.id))
+	};
+	state
+		.guild_layout()
+		.into_iter()
+		.flat_map(|entry| match entry {
+			RailEntry::Guild(id) => vec![id],
+			RailEntry::Folder { guilds, .. } => guilds,
+		})
+		.filter(|guild_id| !member_of(*guild_id))
+		.filter_map(|guild_id| {
+			let guild = state.guild(guild_id)?;
+			let channel_id = crate::community::invite_channel(state, guild_id).filter(|channel| {
+				state
+					.my_permissions(*channel)
+					.contains(Permissions::CREATE_INSTANT_INVITE)
+			})?;
+			Some(InviteTarget {
+				guild_id,
+				channel_id,
+				name: guild.name.clone(),
+				icon: guild.icon.clone(),
+			})
+		})
+		.collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Relation {
@@ -202,6 +344,8 @@ pub struct ProfileCard {
 	pub avatar: Avatar,
 	pub banner: Option<ProfileBanner>,
 	pub accent: Option<u32>,
+	pub theme: Option<ProfileTheme>,
+	pub effect: bool,
 	pub pronouns: Option<String>,
 	pub tag: Option<GuildTag>,
 	pub bio: Option<String>,
@@ -219,6 +363,7 @@ pub struct ProfileCard {
 	pub custom_status: StatusLine,
 	pub activities: Vec<ActivityLine>,
 	pub relation: Relation,
+	pub ignored: bool,
 	pub mine: bool,
 	pub bot: bool,
 	pub dm_channel: Option<Snowflake>,
@@ -306,6 +451,13 @@ impl ProfileCard {
 				.and_then(|profile| profile.accent_color)
 				.or(user.accent_color)
 				.and_then(|color| u32::try_from(color).ok()),
+			theme: ProfileTheme::of(
+				server
+					.and_then(|server| server.theme_colors)
+					.or_else(|| profile.and_then(|profile| profile.theme_colors)),
+			),
+			effect: server.and_then(|server| server.profile_effect).is_some()
+				|| profile.and_then(|profile| profile.profile_effect).is_some(),
 			pronouns: server
 				.and_then(|server| server.pronouns.clone())
 				.or_else(|| profile.and_then(|profile| profile.pronouns.clone()))
@@ -360,6 +512,7 @@ impl ProfileCard {
 			custom_status,
 			activities,
 			relation: relation(state, user_id),
+			ignored: state.is_ignored(user_id),
 			mine,
 			bot: user.bot == Some(true),
 			dm_channel: dm_channel(state, user_id),

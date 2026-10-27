@@ -92,7 +92,8 @@ pub async fn profile(
 		"accent_color": null,
 		"pronouns": "",
 		"banner": null,
-		"theme_colors": null,
+		"theme_colors": theme_colors(id),
+		"profile_effect": profile_effect(id),
 	});
 	if id == CURRENT_USER_ID {
 		for (key, value) in shared.store.lock().profile.iter() {
@@ -131,8 +132,40 @@ fn guild_member_profile(member: &Value, guild_id: Option<u64>, username: &str) -
 		"banner": member["banner"],
 		"pronouns": "",
 		"accent_color": null,
-		"theme_colors": null,
+		"theme_colors": if styled { server_theme(id_of(member)) } else { Value::Null },
 	})
+}
+
+const THEMES: [[u32; 2]; 3] = [
+	[0x1a_1033, 0x5c_2a9d],
+	[0x0f_2a3a, 0x2f_8f9d],
+	[0x3a_1f0f, 0x9d_6b2f],
+];
+
+fn id_of(member: &Value) -> u64 {
+	parse_id(&member["user"]["id"]).unwrap_or_default()
+}
+
+fn look(id: u64) -> u64 {
+	(id >> 22) / 1000
+}
+
+fn theme_colors(id: u64) -> Value {
+	if !look(id).is_multiple_of(2) {
+		return Value::Null;
+	}
+	json!(THEMES[(look(id) / 2 % THEMES.len() as u64) as usize])
+}
+
+fn server_theme(id: u64) -> Value {
+	json!(THEMES[((look(id) + 1) % THEMES.len() as u64) as usize])
+}
+
+fn profile_effect(id: u64) -> Value {
+	if !look(id).is_multiple_of(4) {
+		return Value::Null;
+	}
+	json!({ "id": "1139323098643333240", "expires_at": null })
 }
 
 pub async fn create_dm(State(shared): State<Arc<Shared>>, Json(body): Json<Value>) -> ApiResult {

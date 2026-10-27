@@ -75,7 +75,7 @@ pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
 pub use deep_link::{DeepLink, parse_deep_link};
 pub use display::{Display, decorated_user, person, relative_text, relative_time};
 pub use dm_list::{DmEntry, DmList, DmStatus, is_request};
-pub use dm_panel::{DmPanel, DmProfile, GroupMember, since_label};
+pub use dm_panel::{DmPanel, DmProfile, GroupMember, MUTUAL_ICONS, since_label};
 pub use emoji_picker::{
 	CustomEmoji, EmojiCell, EmojiPicker, EmojiSection, FAVORITES_SECTION, NITRO_LOCK, PERMISSION_LOCK,
 	PickerSection, RECENT_SECTION, RailEntry, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE, TONES,
@@ -138,9 +138,10 @@ pub use playback::{
 };
 pub use polls::{PollChoice, PollOutcome, PollSummary, can_create_polls, time_left};
 pub use profile::{
-	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, MutualFriend, MutualGuild, PanelUser, ProfileBadge,
-	ProfileBanner, ProfileCard, ProfileConnection, Relation, RoleChip, StatusChoice, StatusLine,
-	activity_line, dm_channel,
+	ActivityLine, BADGE_PIXELS, BANNER_PIXELS, GuildTag, InviteTarget, MutualFriend, MutualGuild,
+	PROFILE_LINK, PanelUser, ProfileBadge, ProfileBanner, ProfileCard, ProfileConnection, ProfileMenuItem,
+	ProfileTheme, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel, invite_targets,
+	profile_link, profile_menu,
 };
 pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{

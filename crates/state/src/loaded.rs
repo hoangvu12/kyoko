@@ -156,6 +156,8 @@ pub struct UserProfile {
 	pub connected_accounts: Vec<ConnectedAccount>,
 	pub guilds: HashMap<Snowflake, GuildProfile>,
 	pub premium_since: Option<DateTime<Utc>>,
+	pub theme_colors: Option<[u32; 2]>,
+	pub profile_effect: Option<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -164,6 +166,8 @@ pub struct GuildProfile {
 	pub bio: Option<String>,
 	pub banner: Option<String>,
 	pub pronouns: Option<String>,
+	pub theme_colors: Option<[u32; 2]>,
+	pub profile_effect: Option<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,6 +318,21 @@ struct RawMeta {
 	banner: Option<String>,
 	accent_color: Option<i64>,
 	pronouns: Option<String>,
+	theme_colors: Option<Value>,
+	profile_effect: Option<Value>,
+}
+
+impl RawMeta {
+	fn theme_colors(&self) -> Option<[u32; 2]> {
+		let colors = self.theme_colors.as_ref()?.as_array()?;
+		let color = |index: usize| u32::try_from(colors.get(index)?.as_i64()?).ok();
+		Some([color(0)?, color(1)?])
+	}
+
+	fn profile_effect(&self) -> Option<Snowflake> {
+		let id = self.profile_effect.as_ref()?.get("id")?;
+		Snowflake::deserialize(id).ok().filter(|id| id.0 != 0)
+	}
 }
 
 #[derive(Deserialize, Default)]
@@ -464,6 +483,8 @@ fn guild_profile(member: Option<Member>, meta: Option<RawMeta>) -> GuildProfile 
 	let meta = meta.unwrap_or_default();
 	let filled = |value: Option<String>| value.filter(|value| !value.trim().is_empty());
 	GuildProfile {
+		theme_colors: meta.theme_colors(),
+		profile_effect: meta.profile_effect(),
 		banner: filled(meta.banner).or_else(|| filled(member.as_ref()?.banner.clone())),
 		bio: filled(meta.bio),
 		pronouns: filled(meta.pronouns),
@@ -755,6 +776,7 @@ impl State {
 		let user = User::deserialize(&parsed.user).ok()?;
 		intern_user(&mut self.users, &user);
 		let meta = parsed.user_profile.unwrap_or_default();
+		let (theme_colors, profile_effect) = (meta.theme_colors(), meta.profile_effect());
 		let mutual_friends = parsed.mutual_friends.unwrap_or_default();
 		for friend in &mutual_friends {
 			intern_user(&mut self.users, friend);
@@ -808,6 +830,8 @@ impl State {
 				.into_iter()
 				.collect(),
 			premium_since: parsed.premium_since,
+			theme_colors,
+			profile_effect,
 			user,
 		})
 	}

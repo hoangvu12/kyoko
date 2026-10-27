@@ -94,6 +94,7 @@ pub struct Relationship {
 	pub nickname: Option<String>,
 	#[serde(deserialize_with = "timestamp")]
 	pub since: Option<DateTime<Utc>>,
+	pub user_ignored: bool,
 }
 
 pub type ReadStateContainer = EntryContainer<ReadState>;

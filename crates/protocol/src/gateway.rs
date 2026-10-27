@@ -449,6 +449,7 @@ pub struct RelationshipUpdate {
 	#[serde(skip_serializing_if = "Option::is_none", deserialize_with = "nullable_string")]
 	pub nickname: Option<Option<String>>,
 	pub user: Option<User>,
+	pub user_ignored: Option<bool>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

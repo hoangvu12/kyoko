@@ -5,7 +5,7 @@ use state::{Changes, State};
 
 use crate::dm_list::DmStatus;
 use crate::images::avatar_request;
-use crate::profile::ProfileCard;
+use crate::profile::{MutualFriend, MutualGuild, ProfileCard};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DmPanel {
@@ -18,19 +18,38 @@ pub enum DmPanel {
 pub struct DmProfile {
 	pub card: ProfileCard,
 	pub since: String,
+	pub loading: bool,
 	pub mutual_servers: Option<usize>,
 	pub mutual_friends: Option<usize>,
 }
 
+pub const MUTUAL_ICONS: usize = 3;
+
+fn mutual_text(count: Option<usize>, one: &str) -> Option<String> {
+	match count? {
+		0 => None,
+		1 => Some(format!("1 {one}")),
+		count => Some(format!("{count} {one}s")),
+	}
+}
+
 impl DmProfile {
 	pub fn mutual_servers_text(&self) -> Option<String> {
-		self.mutual_servers
-			.map(|count| format!("Mutual Servers \u{2014} {count}"))
+		mutual_text(self.mutual_servers, "Mutual Server")
 	}
 
 	pub fn mutual_friends_text(&self) -> Option<String> {
-		self.mutual_friends
-			.map(|count| format!("Mutual Friends \u{2014} {count}"))
+		mutual_text(self.mutual_friends, "Mutual Friend")
+	}
+
+	pub fn mutual_server_icons(&self) -> &[MutualGuild] {
+		let guilds = &self.card.mutual_guilds;
+		&guilds[..guilds.len().min(MUTUAL_ICONS)]
+	}
+
+	pub fn mutual_friend_icons(&self) -> &[MutualFriend] {
+		let friends = &self.card.mutual_friends;
+		&friends[..friends.len().min(MUTUAL_ICONS)]
 	}
 }
 
@@ -102,6 +121,7 @@ impl DmProfile {
 		};
 		Self {
 			since: since_label(card.created),
+			loading: card.loading,
 			mutual_servers,
 			mutual_friends,
 			card,

@@ -210,6 +210,7 @@ impl State {
 				user_id: Some(relationship.id),
 				nickname: relationship.nickname.clone(),
 				since: relationship.since,
+				user_ignored: relationship.user_ignored,
 			},
 		);
 	}
@@ -227,6 +228,9 @@ impl State {
 		}
 		if let Some(nickname) = &update.nickname {
 			stored.nickname.clone_from(nickname);
+		}
+		if let Some(ignored) = update.user_ignored {
+			stored.user_ignored = ignored;
 		}
 		*stored != before || update.user.is_some()
 	}

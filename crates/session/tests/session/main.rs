@@ -29,6 +29,7 @@ mod mentions;
 mod moderation;
 mod navigation;
 mod polls;
+mod profile_actions;
 mod reactions;
 mod reads;
 mod safety;

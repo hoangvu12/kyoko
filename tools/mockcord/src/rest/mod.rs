@@ -73,6 +73,10 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			"/users/@me/relationships/{id}",
 			put(admin::put_relationship).delete(admin::delete_relationship),
 		)
+		.route(
+			"/users/@me/relationships/{id}/ignore",
+			put(admin::ignore_user).delete(admin::unignore_user),
+		)
 		.route("/users/@me/channels", post(users::create_dm))
 		.route("/users/@me/mentions", get(users::recent_mentions))
 		.route("/users/@me/mentions/{id}", delete(users::dismiss_mention))

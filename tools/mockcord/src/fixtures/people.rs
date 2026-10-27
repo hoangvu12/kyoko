@@ -153,6 +153,7 @@ pub fn build_relationships(builder: &Builder) -> Vec<Relationship> {
 			user_id: None,
 			nickname: None,
 			since: Some(builder.anchor - Duration::days(30 + index as i64 * 17)),
+			user_ignored: false,
 		})
 		.collect()
 }

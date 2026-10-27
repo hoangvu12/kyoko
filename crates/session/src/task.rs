@@ -73,6 +73,7 @@ const TYPING_EXPIRY_SLACK: Duration = Duration::from_millis(100);
 const DAY_MILLIS: i64 = 86_400_000;
 const NONCE_SEQUENCE_BITS: u32 = 22;
 const RENDER_REVISION: u64 = 1;
+const INVITE_MAX_AGE: u32 = 604_800;
 
 #[derive(Default)]
 pub(crate) struct Stats {
@@ -111,6 +112,7 @@ pub(crate) enum Internal {
 	DmMessage {
 		channel: Box<Channel>,
 		content: String,
+		open: bool,
 	},
 	ThreadOpened(Box<Channel>),
 	Loaded(Loaded),
@@ -717,10 +719,16 @@ impl Core {
 				self.apply_dispatch(&DispatchEvent::ChannelCreate(channel));
 				self.select_channel(None, channel_id);
 			}
-			Internal::DmMessage { channel, content } => {
+			Internal::DmMessage {
+				channel,
+				content,
+				open,
+			} => {
 				let channel_id = channel.id;
 				self.apply_dispatch(&DispatchEvent::ChannelCreate(channel));
-				self.select_channel(None, channel_id);
+				if open {
+					self.select_channel(None, channel_id);
+				}
 				self.on_command(Command::SendMessage {
 					channel_id,
 					content,
@@ -968,6 +976,7 @@ impl Core {
 			Command::RequestMembers { guild_id, user_ids } => self.request_members(guild_id, user_ids),
 			Command::OpenDm { user_id } => self.open_dm(user_id),
 			Command::MessageUser { user_id, content } => self.message_user(user_id, content),
+			Command::InviteToServer { user_id, channel_id } => self.invite_to_server(user_id, channel_id),
 			Command::Search {
 				guild_id,
 				channel_id,
@@ -1453,10 +1462,46 @@ impl Core {
 				Ok(channel) => Internal::DmMessage {
 					channel: Box::new(channel),
 					content,
+					open: true,
 				},
 				Err(error) => {
 					tracing::warn!(%error, "could not open the conversation");
 					Internal::Rejected(actions::failure_reason("Message", &error))
+				}
+			};
+			let _ = internal.send(message);
+		});
+	}
+
+	fn invite_to_server(&mut self, user_id: Snowflake, channel_id: Snowflake) {
+		if !self.channel_allows(
+			channel_id,
+			protocol::Permissions::CREATE_INSTANT_INVITE,
+			"Invite to Server",
+		) {
+			return;
+		}
+		let rest = self.rest.clone();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			let options = serde_json::json!({ "max_age": INVITE_MAX_AGE, "max_uses": 0, "temporary": false });
+			let sent = async {
+				let invite = rest.create_invite(channel_id, options).await?;
+				let channel = rest.create_dm(user_id).await?;
+				Ok::<_, RestError>((invite, channel))
+			};
+			let message = match sent.await {
+				Ok((invite, channel)) => match invite.get("code").and_then(serde_json::Value::as_str) {
+					Some(code) => Internal::DmMessage {
+						channel: Box::new(channel),
+						content: format!("https://discord.gg/{code}"),
+						open: false,
+					},
+					None => Internal::Rejected("Invite to Server failed.".to_owned()),
+				},
+				Err(error) => {
+					tracing::warn!(%error, "the invite was not sent");
+					Internal::Rejected(actions::failure_reason("Invite to Server", &error))
 				}
 			};
 			let _ = internal.send(message);

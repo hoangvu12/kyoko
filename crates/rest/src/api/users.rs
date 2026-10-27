@@ -119,6 +119,18 @@ impl RestClient {
 		self.send_empty(request).await
 	}
 
+	pub async fn ignore_user(&self, user_id: Snowflake) -> Result<()> {
+		self.send_empty(Request::put(format!("/users/@me/relationships/{user_id}/ignore")))
+			.await
+	}
+
+	pub async fn unignore_user(&self, user_id: Snowflake) -> Result<()> {
+		self.send_empty(Request::delete(format!(
+			"/users/@me/relationships/{user_id}/ignore"
+		)))
+		.await
+	}
+
 	pub async fn patch_current_user(&self, changes: Value) -> Result<User> {
 		self.send(Request::patch("/users/@me").json(&changes)).await
 	}

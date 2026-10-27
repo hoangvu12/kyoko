@@ -28,6 +28,7 @@ mod password_login;
 mod playback;
 mod popouts;
 mod profile;
+mod profile_menu;
 mod qr_login;
 mod rail;
 mod reorder;

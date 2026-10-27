@@ -52,6 +52,10 @@ async fn a_dm_shows_its_recipients_profile_and_the_mutuals_only_once_loaded() {
 		assert!(profile.mutual_friends_text().is_none());
 		assert!(profile.card.bio.is_none());
 	}
+	running
+		.server
+		.control()
+		.hold_requests("GET", &format!("/users/{recipient}/profile"));
 	for _ in 0..2 {
 		running.session().send(Command::LoadProfile {
 			user_id: recipient,
@@ -59,7 +63,23 @@ async fn a_dm_shows_its_recipients_profile_and_the_mutuals_only_once_loaded() {
 		});
 	}
 	running
-		.until_state("the profile to load", |state| state.profile(recipient).is_some())
+		.until_state("the profile to be requested", |state| {
+			state.profile_loading(recipient)
+		})
+		.await;
+	{
+		let state = running.session().state().read();
+		let DmPanel::Profile(profile) = DmPanel::of(&state, channel_id, Utc::now()) else {
+			panic!("the profile shows while it loads");
+		};
+		assert!(profile.loading, "the column says it is loading");
+		assert!(profile.mutual_servers_text().is_none());
+	}
+	running.server.control().release_requests();
+	running
+		.until_state("the profile to load", |state| {
+			state.profile(recipient).is_some() && !state.profile_loading(recipient)
+		})
 		.await;
 	running.session().send(Command::LoadProfile {
 		user_id: recipient,
@@ -75,12 +95,19 @@ async fn a_dm_shows_its_recipients_profile_and_the_mutuals_only_once_loaded() {
 			profile.card.bio.as_deref(),
 			Some(format!("hi, i am {username}").as_str())
 		);
+		assert!(!profile.loading);
 		let servers = profile.mutual_servers.expect("the mutual servers are known");
+		let text = profile.mutual_servers_text();
+		match servers {
+			0 => assert_eq!(text, None),
+			1 => assert_eq!(text.as_deref(), Some("1 Mutual Server")),
+			count => assert_eq!(text, Some(format!("{count} Mutual Servers"))),
+		}
 		assert_eq!(
-			profile.mutual_servers_text(),
-			Some(format!("Mutual Servers — {servers}"))
+			profile.mutual_server_icons().len(),
+			servers.min(bridge::MUTUAL_ICONS)
 		);
-		assert!(profile.mutual_friends_text().is_some());
+		assert!(profile.mutual_friends.is_some());
 	}
 	assert_eq!(profile_requests(&running, recipient), 1);
 	running.stop().await;

@@ -72,6 +72,16 @@ pub async fn put_relationship(
 	Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn ignore_user(State(shared): Mock, Path(id): Path<u64>) -> NoContent {
+	shared.set_ignored(id, true)?;
+	Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn unignore_user(State(shared): Mock, Path(id): Path<u64>) -> NoContent {
+	shared.set_ignored(id, false)?;
+	Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn delete_relationship(State(shared): Mock, Path(id): Path<u64>) -> NoContent {
 	shared.delete_relationship(id)?;
 	Ok(StatusCode::NO_CONTENT)

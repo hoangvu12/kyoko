@@ -184,6 +184,10 @@ pub enum Command {
 		user_id: Snowflake,
 		content: String,
 	},
+	InviteToServer {
+		user_id: Snowflake,
+		channel_id: Snowflake,
+	},
 	ConfirmRisky {
 		target: RiskyTarget,
 		reason: RiskyReason,
@@ -264,6 +268,12 @@ pub enum Command {
 		user_id: Snowflake,
 	},
 	BlockUser {
+		user_id: Snowflake,
+	},
+	IgnoreUser {
+		user_id: Snowflake,
+	},
+	UnignoreUser {
 		user_id: Snowflake,
 	},
 	LoadProfile {

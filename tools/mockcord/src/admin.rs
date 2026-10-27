@@ -331,10 +331,57 @@ impl Shared {
 			user_id: None,
 			nickname: None,
 			since: Some(Utc::now()),
+			user_ignored: false,
 		};
 		let event = to_json(&relationship);
 		self.store.lock().relationships.insert(user_id, relationship);
 		self.hub.broadcast("RELATIONSHIP_ADD", &event);
+		Ok(())
+	}
+
+	pub fn set_ignored(&self, user_id: u64, ignored: bool) -> Result<(), ApiError> {
+		let user = self
+			.fixtures
+			.users
+			.get(&user_id)
+			.cloned()
+			.ok_or_else(ApiError::unknown_user)?;
+		let mut store = self.store.lock();
+		match store.relationships.get_mut(&user_id) {
+			Some(existing) if existing.kind == RelationshipKind::from(0) && !ignored => {
+				store.relationships.remove(&user_id);
+				drop(store);
+				self.hub.broadcast(
+					"RELATIONSHIP_REMOVE",
+					&json!({ "id": user_id.to_string(), "type": 0 }),
+				);
+			}
+			Some(existing) => {
+				existing.user_ignored = ignored;
+				let kind = i64::from(existing.kind);
+				drop(store);
+				self.hub.broadcast(
+					"RELATIONSHIP_UPDATE",
+					&json!({ "id": user_id.to_string(), "type": kind, "user_ignored": ignored }),
+				);
+			}
+			None if ignored => {
+				let relationship = Relationship {
+					id: user.id,
+					kind: RelationshipKind::from(0),
+					user: Some(user),
+					user_id: None,
+					nickname: None,
+					since: Some(Utc::now()),
+					user_ignored: true,
+				};
+				let event = to_json(&relationship);
+				store.relationships.insert(user_id, relationship);
+				drop(store);
+				self.hub.broadcast("RELATIONSHIP_ADD", &event);
+			}
+			None => {}
+		}
 		Ok(())
 	}
 

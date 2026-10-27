@@ -26,6 +26,12 @@ impl State {
 		self.relationship_rows(RelationshipKind::Blocked)
 	}
 
+	pub fn is_ignored(&self, user_id: protocol::Snowflake) -> bool {
+		self.relationships
+			.get(&user_id)
+			.is_some_and(|relationship| relationship.user_ignored)
+	}
+
 	fn relationship_rows(&self, kind: RelationshipKind) -> Vec<RelationshipRow> {
 		self.relationships
 			.values()
