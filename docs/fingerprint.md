@@ -198,7 +198,7 @@ Native Windows builds of `btls-sys` assemble BoringSSL's assembly unless they cr
 
 ## Voice
 
-**Decision pending** (the user's, ticket 96). Kyoko has no voice yet. `crates/voice` is a build trial that no kyoko crate depends on; nothing below changed what kyoko sends. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
+**Decided (the user, 2026-10-28): UDP, option A.** See "Decision" below. Kyoko has no voice yet. `crates/voice` is a build trial that no kyoko crate depends on; nothing below changed what kyoko sends. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
 
 ### What the web client does
 
@@ -279,7 +279,15 @@ Measured on the development machine, 2026-10-28, `CARGO_BUILD_JOBS=3`, other wor
 
 **openh264: leave it out.** Media Foundation is licensed with Windows and does H.264 encode and decode here in hardware and software; openh264 costs 0.69 MiB, a 60–100 s C++ build (no NASM, so its slow C path), and Cisco's patent cover only applies to Cisco's downloaded binary, not a source build. Keep it behind the off-by-default `openh264` feature for testing only. Windows N editions without the Media Feature Pack show "video unavailable".
 
-**Decision: pending.** Transport A, B or C, and openh264 in or out, are the user's to choose; record the answer here.
+### Decision
+
+The user chose on 2026-10-28: **A, UDP.** In their words: "if others use udp then i dont know why we would use webrtc".
+
+- Voice uses `protocol: "udp"` with IP discovery, `aead_aes256_gcm_rtpsize` (or `aead_xchacha20_poly1305_rtpsize` when that is all the server offers) and DAVE, as oxidcord, the desktop app, discordo and endcord do. Signalling still goes over `net::ws` with the web client's identify, heartbeat and simulcast layers.
+- This is a known gap, like permessage-deflate: a session that identifies as Chrome on the web uses the desktop app's voice transport, with no DTLS and UDP payload types.
+- The code keeps a thin `Transport` seam between the media pipeline and the UDP socket, because it costs little. No WebRTC work is planned.
+- `cargo xtask webrtc-capture` and its fixtures in `tools/mockcord/fixtures/webrtc/` stay as the record of what Chrome 156 does, in case this is ever revisited.
+- **openh264 stays out.** H.264 encode and decode use Media Foundation; the trial's `openh264` feature stays off and is never shipped.
 
 ## IDENTIFY
 
