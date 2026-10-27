@@ -4,7 +4,7 @@
 
 **Blocked by:** 69
 
-**Status:** open
+**Status:** claimed
 
 - [ ] `crates/net` provides the Chrome client builder from `CHROME_MAJOR`'s mapped profile with emulation headers cleared; `rest` uses it for the API, upload and discovery clients
 - [ ] `CookieJar` implements wreq's cookie store; cookies still persist, restore and adopt from web login (existing tests green)

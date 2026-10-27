@@ -4,7 +4,7 @@
 
 **Blocked by:** 70
 
-**Status:** open
+**Status:** claimed
 
 - [ ] `gateway` connects through `net::ws`; tokio-tungstenite is no longer a `gateway` dependency
 - [ ] The User-Agent, Origin and Accept-Language handshake headers are as today (the `wire.rs`/`fingerprint.rs` connection assertions stay green); frame caps and oversize handling unchanged
