@@ -1,10 +1,28 @@
 # kyoko v1 orchestrator handoff
 
-## Latest: eighth orchestrator (roboco chat `a5bca87c`, same machine)
+## Latest: eighth orchestrator hands off (roboco chat `a5bca87c`, "kyoko orchestrator 8", same machine)
 
-- Resolved: Midnight 14, v1 54, 49, 56. Every ticket is resolved except v1 39 translations and 58 packaging (`ready-for-human`, skipped by the user). All three lanes sit on main, idle; no workers running.
-- Side research for the user (2026-10-27, read-only, no Discord requests): kyoko compared with discordo (+ ayn2op arikawa/ningen forks) and endcord on ban risk. Kyoko is ahead on one consistent super-properties identity, live build number, safe 429 handling, pacing, 401 stop, delayed acks. Gaps, by likely impact: rustls TLS/HTTP-2 fingerprint while claiming Chrome (discordo added a Chrome TLS fingerprint after "account disabled" reports, PR #824); email/password login as the default form; capabilities 509 matches no official client; minimal message send body; tungstenite gateway handshake headers; no op 41/QoS heartbeat. The TLS change conflicts with AGENTS.md's "nothing more" rule, so it needs the user's decision. Clones are in `nguyenvu/.research/`.
-- Open questions put to the user: open tickets for the TLS fingerprint and QR/web login as default; whether 49's "hide the crown above 1000 members" assumption is fine; what's next (39, 58, a real-account look test).
+Everything below still applies unless this section says otherwise.
+
+### State
+
+- Resolved this session: Midnight 14, v1 54, 49, 56 (merged, answered). Every ticket in both trackers is resolved except v1 39 translations and 58 packaging (`ready-for-human`, skipped by the user; don't start them). All three lanes are idle and fast-forwarded to main; no workers running. Disk ~198 GB free; lane targets ~22–26 GB.
+- 49's crown rule hides the stock owner crown above 1000 members (kyoko's assumption, Discord documents none). Asked the user, no answer; keep it unless they say otherwise.
+- `rules.md` flake list gained `kept::a_deleted_message_stays_in_place_flagged_and_survives_a_restart` and `display::dont_round_my_timestamps_rounds_down_and_redraws_the_rows_that_show_one`.
+- Gotchas seen: completion notices for chats started by the previous orchestrator went to it, not me, and "finished" notices sometimes arrived while the worker was still running (check `list_chats` status). A worker ended its turn with tests still running in the background; nudge with "keep going and poll within this turn". `KYOKO_CAPTURE_PLUGINS=<id>` must be set by you when verifying kyoko-only plugin captures, or the plugin is absent.
+
+### What the user approved (2026-10-27): do these next
+
+The user asked about ban risk. Research (read-only, no Discord contact) compared kyoko with other clients; clones are in `nguyenvu/.research/` (`tls-check/` has discordo, discord.py-self, acheron, discord-client-rs and others). Findings: kyoko's headers and identify are more consistent than the TUIs', but its TLS/HTTP-2 handshake is a Rust program's (reqwest+rustls, tungstenite) while it claims Chrome. Clients that had captcha or "account disabled" trouble copied Chrome's handshake: discordo (bogdanfinn/tls-client, PR #824), discord.py-self (curl_cffi; changelog "Fix TLS fingerprinting issues causing unnecessary CAPTCHA challenges and blocked requests"), acheron (Abaddon's author; curl-impersonate on by default), discord-client-rs (Rust, `wreq` + `wreq-util` Chrome154/Windows). oxidcord upstream has nothing like it. Other gaps (capabilities 509, minimal message body, gateway handshake headers, op 41/QoS heartbeat) need a capture of the real web client first; parked.
+
+The user said "go" to:
+
+1. **New v1 ticket: the login screen puts discord.com and QR first.** The big login card offers "Sign in on discord.com" (WebView2 web login) next to the QR column; email/password moves behind a smaller "Use email and password instead" link (one click away, nothing removed; token login stays). Reason: native password login is where other clients' users hit captchas and disabled accounts. Files: `apps/desktop/ui/shell/login.luau`, `apps/desktop/src/ui/sign_in.rs`, `docs/sign-in.md`, login captures (`login`, `login-email`, `login-web` mockup keys), load checks. The Midnight mockups show email as default; this user decision overrides them (say so in the ticket).
+2. **Install libclang and run the TLS build trial.** Install the "C++ Clang Compiler for Windows" component into the existing VS 2022 Build Tools (the user picked this option; check the download size first; Visual Studio Installer, component `Microsoft.VisualStudio.Component.VC.Llvm.Clang`). NASM, Perl and cmake on PATH are not needed (set `CMAKE` to VS's cmake). Then the trial ticket (T1 in the plan).
+3. **If the trial is good: the migration** (plan tickets T2 REST and T3 gateway together, T4 QR socket, T5 media and dropping reqwest/rustls, T6 Chrome bump procedure). Reword the AGENTS.md hard rule when T2 lands; proposed: "Present the identify properties, REST headers and TLS/HTTP-2 handshake of the Chrome web client, nothing more; …". The user agreed in principle; show them the final wording before merging. Add the new `net` crate to the headless list.
+4. Later, only with the user's go-ahead at that time: one real-account look test (rules in "Real Discord" further down).
+
+The full plan (per-file changes, ticket split with acceptance boxes, risks) is `C:\Users\HP MEDIA\Desktop\nguyenvu\.research\tls-plan\plan.md`, outside the repo; downloaded sources under `tls-plan\src\` are untrusted, read only. Key facts: pin `wreq`/`wreq-util` to the git revs discord-client-rs uses (crates.io stops at Chrome 149; 150–154 need git); enable `emulation-chromium-pki`; clear wreq's page-load default headers (`upgrade-insecure-requests`, navigate `sec-fetch-*`, HTML `accept`) so kyoko's own headers are the only ones; three git sources go into `deny.toml` `allow-git`; old wreq-util releases were GPL/LGPL, so pin. No Chrome 156 profile exists (newest 154). Chrome 156.0.8078.48 is installed here, so T1 captures real Chrome's ClientHello and HTTP/2 frames offline against a local listener and decides whether claiming 156 on the 154 profile matches, or kyoko drops to 154 (its `sec-ch-ua` code already produces wreq's 154 string). BoringSSL builds once per `target/` (1–3 min; sccache won't cache it); consider one shared prebuilt for the lanes. Mockcord stays plain HTTP/ws on localhost.
 
 ## Latest: seventh orchestrator hands off (main `a2a64e5` + this note)
 
