@@ -11,6 +11,7 @@ pub const HEIGHT: f64 = 800.;
 pub const POLL: Duration = Duration::from_millis(100);
 pub const SETTLE: Duration = Duration::from_millis(1500);
 pub const LIMIT: Duration = Duration::from_secs(30);
+pub const PAGE_EVERY: Duration = Duration::from_secs(1);
 pub const SCROLL_PASSES: usize = 10;
 pub const BUG_TITLE_TEXT: &str = "Reaction tooltip wraps to three lines";
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);

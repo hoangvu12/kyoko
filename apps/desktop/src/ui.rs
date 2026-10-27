@@ -1103,6 +1103,7 @@ impl Link {
 	}
 
 	async fn reveal(self: &Rc<Self>, marker: Option<&str>) {
+		let mut showcase_id = None;
 		if marker.is_some() {
 			let showcase = self
 				.sidebar
@@ -1110,12 +1111,14 @@ impl Link {
 				.channels()
 				.find(|channel| channel.name == mockcord::fixtures::showcase::CHANNEL_NAME)
 				.map(|channel| channel.id);
+			showcase_id = showcase;
 			match showcase {
 				Some(channel_id) => self.select_channel(channel_id),
 				None => tracing::warn!("the showcase channel is missing"),
 			}
 		}
 		let started = Instant::now();
+		let mut paged = started;
 		let target = loop {
 			let found = {
 				let timeline = self.timeline.borrow();
@@ -1132,6 +1135,12 @@ impl Link {
 			};
 			if found.is_some() || started.elapsed() >= capture::LIMIT {
 				break found;
+			}
+			if let (Some(_), Some(channel_id)) = (marker, showcase_id)
+				&& paged.elapsed() >= capture::PAGE_EVERY
+			{
+				paged = Instant::now();
+				self.send(Command::LoadOlder { channel_id });
 			}
 			zgx::timer::sleep(capture::POLL).await;
 		};
