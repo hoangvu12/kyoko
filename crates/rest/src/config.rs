@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use net::Trust;
 use protocol::fingerprint::{API_VERSION, WEB_ORIGIN};
 use url::Url;
 
@@ -13,6 +14,7 @@ pub struct RestConfig {
 	pub timeout: Duration,
 	pub max_body: usize,
 	pub tuning: RestTuning,
+	pub trust: Trust,
 }
 
 impl RestConfig {
@@ -23,6 +25,7 @@ impl RestConfig {
 			timeout: Duration::from_secs(30),
 			max_body: 16 * 1024 * 1024,
 			tuning: RestTuning::default(),
+			trust: Trust::default(),
 		}
 	}
 

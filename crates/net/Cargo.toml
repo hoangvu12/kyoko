@@ -11,6 +11,7 @@ publish = false
 name = "net"
 
 [dependencies]
+protocol.workspace = true
 wreq.workspace = true
 wreq-util.workspace = true
 

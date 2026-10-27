@@ -1,9 +1,11 @@
 use std::io::BufReader;
 
 use parking_lot::Mutex;
-use reqwest::header::HeaderValue;
 use tokio::sync::Notify;
 use url::Url;
+use wreq::cookie::{CookieStore, Cookies};
+use wreq::header::HeaderValue;
+use wreq::{Uri, Version};
 
 pub struct CookieJar {
 	store: Mutex<cookie_store::CookieStore>,
@@ -49,24 +51,18 @@ impl CookieJar {
 	}
 
 	pub fn adopt<'a>(&self, set_cookies: impl IntoIterator<Item = &'a str>, url: &Url) {
-		let values: Vec<HeaderValue> = set_cookies
+		let cookies: Vec<_> = set_cookies
 			.into_iter()
-			.filter_map(|value| HeaderValue::from_str(value).ok())
+			.filter_map(|value| cookie_store::RawCookie::parse(value.to_owned()).ok())
 			.collect();
-		reqwest::cookie::CookieStore::set_cookies(self, &mut values.iter(), url);
+		self.store_cookies(cookies, url);
 	}
 
 	pub async fn changed(&self) {
 		self.changed.notified().await;
 	}
-}
 
-impl reqwest::cookie::CookieStore for CookieJar {
-	fn set_cookies(&self, cookie_headers: &mut dyn Iterator<Item = &HeaderValue>, url: &Url) {
-		let cookies: Vec<_> = cookie_headers
-			.filter_map(|value| value.to_str().ok())
-			.filter_map(|value| cookie_store::RawCookie::parse(value.to_owned()).ok())
-			.collect();
+	fn store_cookies(&self, cookies: Vec<cookie_store::RawCookie<'static>>, url: &Url) {
 		if cookies.is_empty() {
 			return;
 		}
@@ -80,19 +76,48 @@ impl reqwest::cookie::CookieStore for CookieJar {
 		self.changed.notify_one();
 	}
 
-	fn cookies(&self, url: &Url) -> Option<HeaderValue> {
-		let joined = self
-			.store
+	fn request_pairs(&self, url: &Url) -> Vec<String> {
+		self.store
 			.lock()
 			.get_request_values(url)
 			.map(|(name, value)| format!("{name}={value}"))
-			.collect::<Vec<_>>()
-			.join("; ");
-		if joined.is_empty() {
-			return None;
+			.collect()
+	}
+}
+
+fn url_of(uri: &Uri) -> Option<Url> {
+	Url::parse(&uri.to_string()).ok()
+}
+
+fn sensitive(text: &str) -> Option<HeaderValue> {
+	let mut value = HeaderValue::from_str(text).ok()?;
+	value.set_sensitive(true);
+	Some(value)
+}
+
+impl CookieStore for CookieJar {
+	fn set_cookies(&self, cookie_headers: &mut dyn Iterator<Item = &HeaderValue>, uri: &Uri) {
+		let Some(url) = url_of(uri) else {
+			return;
+		};
+		let cookies = cookie_headers
+			.filter_map(|value| value.to_str().ok())
+			.filter_map(|value| cookie_store::RawCookie::parse(value.to_owned()).ok())
+			.collect();
+		self.store_cookies(cookies, &url);
+	}
+
+	fn cookies(&self, uri: &Uri, version: Version) -> Cookies {
+		let Some(url) = url_of(uri) else {
+			return Cookies::Empty;
+		};
+		let pairs = self.request_pairs(&url);
+		if pairs.is_empty() {
+			return Cookies::Empty;
 		}
-		let mut value = HeaderValue::from_str(&joined).ok()?;
-		value.set_sensitive(true);
-		Some(value)
+		if version == Version::HTTP_2 {
+			return Cookies::Uncompressed(pairs.iter().filter_map(|pair| sensitive(pair)).collect());
+		}
+		sensitive(&pairs.join("; ")).map_or(Cookies::Empty, Cookies::Compressed)
 	}
 }

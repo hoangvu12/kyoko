@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use protocol::DecodeError;
 use protocol::rest::ApiError;
-use reqwest::StatusCode;
 use thiserror::Error;
+use wreq::StatusCode;
 
 pub type Result<T> = std::result::Result<T, RestError>;
 
@@ -40,7 +40,7 @@ pub enum RestError {
 	InvalidRequest,
 }
 
-pub(crate) fn network_error(error: reqwest::Error) -> RestError {
+pub(crate) fn network_error(error: wreq::Error) -> RestError {
 	let reason = if error.is_timeout() {
 		"request timed out"
 	} else if error.is_connect() {

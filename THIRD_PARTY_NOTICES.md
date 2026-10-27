@@ -124,6 +124,79 @@ Kyoko plays voice messages and audio attachments with crates.io packages linked 
 
 The audio fixtures in `tools/mockcord/fixtures/audio/` (`voice-message.ogg`, `voice-reply.ogg`, `rainy-loop.mp3`) are tones generated for kyoko with FFmpeg's `sine` source; they are test data and not shipped in the application.
 
+## TLS and HTTP/2: BoringSSL and wreq
+
+Kyoko's REST and gateway connections run on [wreq](https://github.com/0x676e67/wreq) and link a patched [BoringSSL](https://boringssl.googlesource.com/boringssl) built from source by `btls-sys`. They are used unmodified, from git pins in the workspace `Cargo.toml` (`docs/fingerprint.md`, "Pins"):
+
+- BoringSSL (vendored in `btls-sys` at rev `129887582a538b8f4dcf371d15c953335312ca37`, with btls's patches): Apache License 2.0. Its fiat-crypto code (`third_party/fiat`) is used under Apache-2.0, one of its MIT, Apache-2.0 and BSD-1-Clause options. BoringSSL's Go-licensed TLS test suite is not compiled into kyoko.
+- `wreq` 0.16.1, `wreq-util` 0.2.0, `wreq-proto` 0.2.6, `wreq-rt` 0.2.2-rc.4 and `btls` 0.5.6 (0x676e67 and contributors): Apache License 2.0, whose full text is in `LICENSE-APACHE`.
+- `tokio-btls` 0.5.6: MIT OR Apache-2.0, used under Apache-2.0.
+- `btls-sys` 0.5.6 and `http2` 0.5.20 (a fork of `h2`): MIT, licence below.
+- `chromium-roots` 0.1.2, Chromium's root store as Rust data: BSD-3-Clause, licence below, for both the crate and the Chromium data it is generated from.
+
+`btls-sys` and `http2` are distributed under the following licence:
+
+```
+Copyright (c) 2014 Alex Crichton
+Copyright (c) 2020 Ivan Nikulin <ifaaan@gmail.com>
+Copyright (c) 2025 0x676e67 <gngppz@gmail.com>
+(btls-sys)
+
+Copyright (c) 2017 h2 authors
+(http2)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`chromium-roots` and the Chromium root data are distributed under the following licence:
+
+```
+Copyright (c) 2026, chromium-roots contributors
+Copyright 2015 The Chromium Authors
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ## Fonts
 
 Kyoko bundles one font family, Inter, for the built-in Midnight theme. `apps/desktop/fonts/inter/` holds `Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` and `Inter-Bold.ttf` (weights 400, 500, 600 and 700) from `extras/ttf/` of the [rsms/inter](https://github.com/rsms/inter) release v4.1 (`Inter-4.1.zip`, SHA-256 `9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e`), unchanged, with the release's `LICENSE.txt`. Their SHA-256 sums:

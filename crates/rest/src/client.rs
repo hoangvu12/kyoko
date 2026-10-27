@@ -7,12 +7,12 @@ use futures_util::StreamExt;
 use parking_lot::RwLock;
 use protocol::rest::{ApiError, RateLimitBody};
 use protocol::{DecodeError, Token};
-use reqwest::header::{
+use serde::de::DeserializeOwned;
+use url::{Host, Url};
+use wreq::header::{
 	ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, HeaderMap,
 	HeaderName, HeaderValue, IntoHeaderName, ORIGIN, REFERER,
 };
-use serde::de::DeserializeOwned;
-use url::{Host, Url};
 
 use crate::config::RestConfig;
 use crate::error::{RestError, Result, network_error};
@@ -21,11 +21,12 @@ use crate::limiter::{Probe, RateLimiter, header_global, header_retry_after, head
 use crate::request::{Body, Request, UploadFile, encode_component};
 use crate::route::{RouteKey, route_key};
 use crate::safety::{self, Admission, Pace, Release, Releases, Safety};
+use net::{Destination, Trust};
 use protocol::Fingerprint;
 use protocol::fingerprint::{HOME_REFERER, WEB_ORIGIN, sec_ch_ua, sec_ch_ua_platform};
-use reqwest::multipart::{Form, Part};
-use reqwest::redirect::Policy;
-use reqwest::{Body as HttpBody, Method, Response, StatusCode};
+use wreq::multipart::{Form, Part};
+use wreq::redirect::Policy;
+use wreq::{Body as HttpBody, Method, Response, StatusCode};
 
 const FALLBACK_RETRY_AFTER: Duration = Duration::from_secs(1);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
@@ -49,8 +50,8 @@ pub struct RestClient {
 }
 
 struct Inner {
-	http: reqwest::Client,
-	uploads: reqwest::Client,
+	http: wreq::Client,
+	uploads: wreq::Client,
 	base_url: Url,
 	max_body: usize,
 	token: Arc<RwLock<Option<Token>>>,
@@ -101,6 +102,10 @@ fn insert_text(headers: &mut HeaderMap, name: impl IntoHeaderName, value: &str) 
 	if let Ok(value) = HeaderValue::from_str(value) {
 		headers.insert(name, value);
 	}
+}
+
+fn chrome_client(trust: &Trust) -> wreq::ClientBuilder {
+	net::client_builder(Destination::Fetch, trust).expect("trusted roots are valid pem")
 }
 
 fn secure_scheme(url: &Url) -> bool {
@@ -190,7 +195,7 @@ fn classify(status: StatusCode, body: &[u8]) -> RestError {
 impl RestClient {
 	pub fn new(config: RestConfig) -> Self {
 		let fingerprint = config.identity.fingerprint();
-		let http = reqwest::Client::builder()
+		let http = chrome_client(&config.trust)
 			.redirect(Policy::none())
 			.timeout(config.timeout)
 			.user_agent(fingerprint.user_agent())
@@ -198,7 +203,7 @@ impl RestClient {
 			.cookie_provider(config.identity.cookies().clone())
 			.build()
 			.expect("http client initializes");
-		let uploads = reqwest::Client::builder()
+		let uploads = chrome_client(&config.trust)
 			.redirect(Policy::none())
 			.timeout(UPLOAD_TIMEOUT)
 			.user_agent(fingerprint.user_agent())
@@ -279,7 +284,7 @@ impl RestClient {
 		let request = self
 			.inner
 			.uploads
-			.put(url)
+			.put(url.as_str())
 			.header(CONTENT_TYPE, file.content_type.as_str())
 			.header(CONTENT_LENGTH, file.bytes.len())
 			.body(counted(file.bytes.clone(), progress));
@@ -333,7 +338,7 @@ impl RestClient {
 	}
 
 	async fn dispatch(&self, request: &Request, url: &Url) -> Result<Response> {
-		let mut builder = self.inner.http.request(request.method.clone(), url.clone());
+		let mut builder = self.inner.http.request(request.method.clone(), url.as_str());
 		if let Some(authorization) = self.authorization(url) {
 			builder = builder.header(AUTHORIZATION, authorization);
 		}

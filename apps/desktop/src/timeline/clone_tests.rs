@@ -57,6 +57,7 @@ fn open_session(server: &Server, root: &std::path::Path) -> Session {
 		retention: Default::default(),
 		remember_account: false,
 		theme_links: Default::default(),
+		trust: Default::default(),
 	})
 	.expect("session starts")
 }

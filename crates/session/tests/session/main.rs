@@ -35,6 +35,7 @@ mod status;
 mod storage;
 mod theme_links;
 mod threads;
+mod tls_fingerprint;
 mod uploads;
 mod versions;
 mod wire;

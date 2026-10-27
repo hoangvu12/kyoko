@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use wreq::tls::trust::CertStore;
+use net::Destination;
 
 enum Trust {
 	Nothing,
@@ -33,13 +33,15 @@ async fn main() -> ExitCode {
 	}
 }
 
-async fn probe(port: u16, trust: Trust) -> Result<(), wreq::Error> {
-	let builder = net::client_builder().cookie_store(true);
-	let builder = match trust {
-		Trust::Nothing => builder.tls_cert_verification(false),
-		Trust::Root(pem) => builder.tls_cert_store(CertStore::from_pem_certs([pem.as_bytes()])?),
-	};
-	let client = builder.build()?;
+async fn probe(port: u16, trust: Trust) -> Result<(), net::Error> {
+	let client = match trust {
+		Trust::Nothing => {
+			net::client_builder(Destination::Document, &net::Trust::Bundled)?.tls_cert_verification(false)
+		}
+		Trust::Root(pem) => net::client_builder(Destination::Document, &net::Trust::only(pem))?,
+	}
+	.cookie_store(true)
+	.build()?;
 	let base = format!("https://localhost:{port}");
 	for path in ["/", "/fetch"] {
 		match client.get(format!("{base}{path}")).send().await {

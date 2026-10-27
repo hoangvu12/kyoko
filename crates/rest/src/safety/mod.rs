@@ -4,7 +4,7 @@ mod releases;
 mod stop;
 
 use protocol::rest::{ApiError, CaptchaChallenge};
-use reqwest::StatusCode;
+use wreq::StatusCode;
 
 use crate::error::RestError;
 use crate::tuning::RestTuning;

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gateway::GatewayTuning;
+use net::Trust;
 use protocol::Token;
 use rest::ClientIdentity;
 use rest::RestTuning;
@@ -31,4 +32,5 @@ pub struct SessionConfig {
 	pub retention: store::Retention,
 	pub remember_account: bool,
 	pub theme_links: ThemeLinkTuning,
+	pub trust: Trust,
 }

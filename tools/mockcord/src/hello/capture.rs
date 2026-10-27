@@ -1,3 +1,6 @@
+use std::io;
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -6,6 +9,15 @@ use super::http1::Http1Request;
 use super::summary::TlsSummary;
 
 const PERMUTED: &str = "extensions";
+
+pub fn chrome_fixture(major: u32, kind: &str) -> io::Result<Capture> {
+	let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("fixtures")
+		.join("tls")
+		.join(format!("chrome-{major}-{kind}.json"));
+	let text = std::fs::read_to_string(&path)?;
+	serde_json::from_str(&text).map_err(io::Error::other)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capture {

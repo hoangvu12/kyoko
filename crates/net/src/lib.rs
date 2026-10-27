@@ -1,24 +1,8 @@
-use wreq::header::OrigHeaderMap;
-use wreq::{ClientBuilder, Emulation, IntoEmulation};
-use wreq_util::Profile;
+mod chrome;
+mod trust;
 
-pub const CHROME_PROFILE: Profile = Profile::Chrome154;
-
-pub fn chrome_emulation() -> Emulation {
-	let mut emulation = CHROME_PROFILE.into_emulation();
-	emulation.headers.clear();
-	emulation.orig_headers = OrigHeaderMap::new();
-	emulation
-}
-
-pub fn websocket_emulation() -> Emulation {
-	let mut emulation = chrome_emulation();
-	if let Some(options) = emulation.tls_options.as_mut() {
-		options.alps_protocols = None;
-	}
-	emulation
-}
-
-pub fn client_builder() -> ClientBuilder {
-	wreq::Client::builder().emulation(chrome_emulation()).no_proxy()
-}
+pub use chrome::{
+	CHROME_PROFILE, Destination, chrome_emulation, client_builder, profile, websocket_emulation,
+};
+pub use trust::Trust;
+pub use wreq::{Client, Error};

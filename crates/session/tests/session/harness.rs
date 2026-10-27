@@ -9,7 +9,7 @@ use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
 use session::{
 	AlertPacing, CacheLimits, Command, GatewayTuning, RestTuning, Retention, Session, SessionConfig,
-	SessionHooks, ThemeLinkTuning,
+	SessionHooks, ThemeLinkTuning, Trust,
 };
 use state::State;
 use store::{MemoryKeyring, Paths, Settings, Store};
@@ -41,6 +41,13 @@ pub struct Options {
 	keyring: Arc<MemoryKeyring>,
 	clock: Clock,
 	theme_links: ThemeLinkTuning,
+	endpoints: Endpoints,
+}
+
+#[derive(Clone, Default)]
+struct Endpoints {
+	rest_base: Option<Url>,
+	trust: Trust,
 }
 
 impl Options {
@@ -65,7 +72,18 @@ impl Options {
 			keyring: Arc::new(MemoryKeyring::new()),
 			clock: Clock::system(),
 			theme_links: ThemeLinkTuning::default(),
+			endpoints: Endpoints::default(),
 		}
+	}
+
+	pub fn rest_base(mut self, url: Url) -> Self {
+		self.endpoints.rest_base = Some(url);
+		self
+	}
+
+	pub fn trust(mut self, trust: Trust) -> Self {
+		self.endpoints.trust = trust;
+		self
 	}
 
 	pub fn clock(mut self, clock: Clock) -> Self {
@@ -200,6 +218,7 @@ impl Running {
 			keyring: options.keyring,
 			clock: options.clock,
 			theme_links: options.theme_links,
+			endpoints: options.endpoints,
 		};
 		let (session, store) = open_session(&server, &scratch, &wake, &launch);
 		Running {
@@ -427,6 +446,7 @@ struct Launch {
 	keyring: Arc<MemoryKeyring>,
 	clock: Clock,
 	theme_links: ThemeLinkTuning,
+	endpoints: Endpoints,
 }
 
 fn open_session(
@@ -447,7 +467,11 @@ fn open_session(
 		identity: session::client_identity_with_clock(&store, launch.clock.clone()),
 		build_source: Some(Url::parse(&server.app_url()).expect("app url")),
 		store: store.clone(),
-		rest_base: Url::parse(server.rest_base_url()).expect("rest url"),
+		rest_base: launch
+			.endpoints
+			.rest_base
+			.clone()
+			.unwrap_or_else(|| Url::parse(server.rest_base_url()).expect("rest url")),
 		gateway_url: server.gateway_url().to_owned(),
 		token: Token::new(server.token()),
 		runtime: None,
@@ -460,6 +484,7 @@ fn open_session(
 		retention: launch.retention,
 		remember_account: launch.remember_account,
 		theme_links: launch.theme_links.clone(),
+		trust: launch.endpoints.trust.clone(),
 	})
 	.expect("session starts");
 	(session, store)

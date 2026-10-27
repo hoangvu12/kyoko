@@ -77,6 +77,7 @@ impl Session {
 		let locale = config.identity.fingerprint().locale().to_owned();
 		let rest = RestClient::new(RestConfig {
 			tuning: config.rest,
+			trust: config.trust.clone(),
 			..RestConfig::new(config.rest_base, config.identity.clone())
 		});
 		rest.set_token(Token::new(config.token.as_str()));

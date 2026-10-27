@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use reqwest::Method;
 use serde::Serialize;
+use wreq::Method;
 
 const SPOILER_PREFIX: &str = "SPOILER_";
 

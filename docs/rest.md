@@ -8,6 +8,14 @@ Every REST request goes through one path, `RestClient::execute` in `crates/rest/
 - `safety/stop.rs`: the sign-out stop after a 401.
 - `tuning.rs`: `RestTuning`, every interval in one struct. `RestConfig::tuning` and `SessionConfig::rest` carry it.
 
+## Transport
+
+The API client, the upload client and the build-number scrape are `wreq` clients from `net::client_builder` (`crates/net`), so they present Chrome's TLS and HTTP/2 handshake (`docs/fingerprint.md`, "TLS and HTTP/2 handshake"). The API and upload clients use `Destination::Fetch` (HEADERS weight 220, as the web client's `fetch()`), the scrape `Destination::Document` (256, a page load). The profile's own headers are cleared, so every header still comes from kyoko: the API client's defaults and per-request headers above, the upload client's own set, and only `User-Agent` and `Accept-Language` on the scrape. None of them follows redirects. `RestConfig::trust` (from `SessionConfig::trust`) is `Trust::Bundled` in the app; tests pass a localhost root.
+
+The cookie store is kyoko's `rest::CookieJar` on `cookie_store`, implementing wreq's `CookieStore`. It hands out one `cookie` field per cookie on HTTP/2 and one joined `Cookie` line on HTTP/1.1, keeps its JSON persistence, and `adopt()` still takes the web login page's `Set-Cookie` values. The upload client has no cookie store.
+
+Over plain `http://127.0.0.1` (mockcord) the same clients speak HTTP/1.1 without TLS; `http` is only allowed to loopback hosts.
+
 ## Rate limits
 
 - Buckets come only from response headers: `X-RateLimit-Bucket`, `-Limit`, `-Remaining` and `-Reset-After`. Nothing is hard-coded per route. A route key is the method plus the path, with the major parameter (`channels/<id>`, `guilds/<id>`, `webhooks/<id>`) kept and other ids, emoji and invite codes templated. A bucket is the learned hash plus the major parameter.

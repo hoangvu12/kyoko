@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use reqwest::header::HeaderMap;
 use tokio::sync::Notify;
+use wreq::header::HeaderMap;
 
 use crate::route::RouteKey;
 

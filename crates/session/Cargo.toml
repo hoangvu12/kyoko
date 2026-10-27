@@ -13,6 +13,7 @@ name = "session"
 protocol.workspace = true
 rest.workspace = true
 gateway.workspace = true
+net.workspace = true
 state.workspace = true
 store.workspace = true
 tokio.workspace = true
@@ -34,7 +35,7 @@ indexmap.workspace = true
 [dev-dependencies]
 base64.workspace = true
 bytes.workspace = true
-mockcord.workspace = true
+mockcord = { workspace = true, features = ["tls"] }
 media.workspace = true
 tokio-rustls.workspace = true
 rcgen.workspace = true

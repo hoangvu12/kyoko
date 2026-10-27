@@ -3236,6 +3236,7 @@ dependencies = [
 name = "kyoko-net"
 version = "0.2.0-beta.1"
 dependencies = [
+ "kyoko-protocol",
  "tokio",
  "wreq",
  "wreq-util",
@@ -3301,15 +3302,16 @@ dependencies = [
  "bytes",
  "cookie_store",
  "futures-util",
+ "kyoko-net",
  "kyoko-protocol",
  "parking_lot",
- "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
  "url",
+ "wreq",
 ]
 
 [[package]]
@@ -3324,6 +3326,7 @@ dependencies = [
  "indexmap",
  "kyoko-gateway",
  "kyoko-media",
+ "kyoko-net",
  "kyoko-protocol",
  "kyoko-rest",
  "kyoko-state",

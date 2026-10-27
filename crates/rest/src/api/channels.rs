@@ -1,9 +1,9 @@
 use protocol::fingerprint::ContextProperties;
 use protocol::rest::{AttachmentDescriptor, CreateMessage, EditMessage, MessagesQuery};
 use protocol::{Channel, DecodeError, LenientVec, Message, Snowflake, ThreadMember, User};
-use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use wreq::StatusCode;
 
 use super::guild_admin::with_reason;
 use crate::client::RestClient;

@@ -517,6 +517,7 @@ fn mock_session(server: &mockcord::Server, root: &Path) -> session::Session {
 		retention: Default::default(),
 		remember_account: false,
 		theme_links: Default::default(),
+		trust: Default::default(),
 	})
 	.expect("session starts")
 }

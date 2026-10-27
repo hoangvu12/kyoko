@@ -1,8 +1,9 @@
 use futures_util::StreamExt;
-use reqwest::Client;
-use reqwest::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
-use reqwest::redirect::Policy;
+use net::{Destination, Trust};
 use url::{Host, Url};
+use wreq::Client;
+use wreq::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
+use wreq::redirect::Policy;
 
 use crate::error::{RestError, Result, network_error};
 use crate::identity::ClientIdentity;
@@ -20,7 +21,8 @@ pub fn discovery_client(identity: &ClientIdentity) -> Result<Client> {
 	if let Ok(language) = HeaderValue::from_str(&fingerprint.accept_language()) {
 		headers.insert(ACCEPT_LANGUAGE, language);
 	}
-	Client::builder()
+	net::client_builder(Destination::Document, &Trust::Bundled)
+		.map_err(network_error)?
 		.redirect(Policy::none())
 		.user_agent(fingerprint.user_agent())
 		.default_headers(headers)
@@ -63,7 +65,7 @@ pub async fn discover_build_number(client: &Client, app_url: &Url) -> Result<u64
 
 async fn fetch_capped(client: &Client, url: &Url, cap: usize) -> Result<(Vec<u8>, bool)> {
 	let response = client
-		.get(url.clone())
+		.get(url.as_str())
 		.send()
 		.await
 		.map_err(network_error)?

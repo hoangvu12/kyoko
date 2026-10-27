@@ -260,6 +260,7 @@ impl Harness {
 			retention: Default::default(),
 			remember_account: true,
 			theme_links: Default::default(),
+			trust: Default::default(),
 		})
 		.context("session did not start")?;
 		let state = session.state().clone();

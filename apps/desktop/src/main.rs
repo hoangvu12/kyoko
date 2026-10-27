@@ -423,6 +423,7 @@ fn session_starter(
 				alerts: Default::default(),
 				remember_account: remember == Remember::Account,
 				theme_links: Default::default(),
+				trust: Default::default(),
 			})?;
 			plugin_host.attach(session.state().clone(), session.commander());
 			Ok(session)

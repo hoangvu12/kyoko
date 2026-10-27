@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use reqwest::Method;
 use tokio::time::Instant;
+use wreq::Method;
 
 use crate::route::RouteKey;
 use crate::tuning::RestTuning;

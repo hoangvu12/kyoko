@@ -1,6 +1,6 @@
 use std::fmt;
 
-use reqwest::Method;
+use wreq::Method;
 
 const MAJOR_PARENTS: [&str; 3] = ["channels", "guilds", "webhooks"];
 
