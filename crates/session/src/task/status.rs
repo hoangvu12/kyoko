@@ -80,8 +80,10 @@ impl StatusWriter {
 	}
 }
 
+const CUSTOM_STATUS: u64 = 4;
+
 fn custom_activity(custom: &CustomStatus) -> Value {
-	let mut activity = json!({ "name": "Custom Status", "type": 4 });
+	let mut activity = json!({ "name": "Custom Status", "type": CUSTOM_STATUS });
 	if let Some(text) = &custom.text {
 		activity["state"] = json!(text);
 	}
@@ -93,6 +95,10 @@ fn custom_activity(custom: &CustomStatus) -> Value {
 		});
 	}
 	activity
+}
+
+fn shareable(activity: &Value, shares_activity: bool) -> bool {
+	shares_activity || activity["type"].as_u64() == Some(CUSTOM_STATUS)
 }
 
 impl Core {
@@ -218,11 +224,19 @@ impl Core {
 	}
 
 	pub(super) fn publish_presence(&self) {
-		let (status, custom) = {
+		let (status, custom, shares_activity) = {
 			let state = self.state.read();
-			(state.own_status(), state.own_custom_status(Utc::now()))
+			(
+				state.own_status(),
+				state.own_custom_status(Utc::now()),
+				state.status_settings().shares_activity(),
+			)
 		};
-		let activities = custom.iter().map(custom_activity).collect();
+		let activities = custom
+			.iter()
+			.map(custom_activity)
+			.filter(|activity| shareable(activity, shares_activity))
+			.collect();
 		let status = if self.afk && status == StatusKind::Online {
 			StatusKind::Idle
 		} else {

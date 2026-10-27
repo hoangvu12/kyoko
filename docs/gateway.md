@@ -37,7 +37,7 @@ IDENTIFY's `client_state` comes from the persisted read-state and guild-settings
 
 ## IDENTIFY
 
-`frames::identify` builds the payload in the web client's key order: `token`, `properties`, `compress`, `presence`, `capabilities`, `client_state`. There is no `large_threshold`. `presence` is `{"activities":[],"status":"unknown","since":0,"afk":false}` (`GatewayConfig::INITIAL_STATUS`). `properties` comes from `GatewayConfig::properties`, a `PropertiesSource` that the gateway reads on every connect and every IDENTIFY. `docs/fingerprint.md` covers the property set.
+`frames::identify` builds the payload in the web client's key order: `token`, `properties`, `compress`, `presence`, `capabilities`, `client_state`. There is no `large_threshold`. `presence` is `{"activities":[],"status":"unknown","since":0,"afk":false}` (`GatewayConfig::INITIAL_STATUS`). Kyoko reports no game, listening or watching activities: IDENTIFY never carries one, and a presence update (op 3) carries only the custom status (type 4). While "Share my activity" (`show_current_game`) is off, `publish_presence` drops every activity but the custom status, so an activity kyoko reports later is held back without another change (`status::with_activity_sharing_off_presence_carries_nothing_but_the_custom_status`). `properties` comes from `GatewayConfig::properties`, a `PropertiesSource` that the gateway reads on every connect and every IDENTIFY. `docs/fingerprint.md` covers the property set.
 
 ## Refreshed token
 

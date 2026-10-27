@@ -327,3 +327,58 @@ async fn turning_off_activity_sharing_is_saved_and_a_refusal_turns_it_back_on() 
 		.await;
 	running.stop().await;
 }
+
+fn activity_types(recording: &Recording) -> Vec<Value> {
+	let identified = recording.frames_with(Opcode::Identify).flat_map(|frame| {
+		frame.data["presence"]["activities"]
+			.as_array()
+			.cloned()
+			.unwrap_or_default()
+	});
+	let updated = presences(recording)
+		.into_iter()
+		.flat_map(|presence| presence["activities"].as_array().cloned().unwrap_or_default());
+	identified
+		.chain(updated)
+		.map(|activity| activity["type"].clone())
+		.collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn with_activity_sharing_off_presence_carries_nothing_but_the_custom_status() {
+	let running = start("status-activity-honoured").await;
+	running.session().send(Command::SetActivitySharing(false));
+	running
+		.until_wire("sharing off saved", |recording| writes(recording).pop())
+		.await;
+	running.session().send(Command::SetCustomStatus {
+		text: Some("heads down".to_owned()),
+		emoji: None,
+		expires: None,
+	});
+	let presence = running
+		.until_wire("the presence with the custom status", |recording| {
+			presences(recording)
+				.pop()
+				.filter(|presence| presence["activities"] != json!([]))
+		})
+		.await;
+	assert_eq!(presence["activities"][0]["state"], "heads down");
+	running.session().send(Command::SetStatus(StatusKind::Idle));
+	running
+		.until_wire("the idle presence", |recording| {
+			presences(recording)
+				.pop()
+				.filter(|presence| presence["status"] == "idle")
+		})
+		.await;
+	let recording = running.mock().recording();
+	assert!(recording.frames_with(Opcode::Identify).next().is_some());
+	let types = activity_types(&recording);
+	assert!(!types.is_empty());
+	assert!(
+		types.iter().all(|kind| *kind == json!(4)),
+		"only the custom status goes out while sharing is off: {types:?}"
+	);
+	running.stop().await;
+}
