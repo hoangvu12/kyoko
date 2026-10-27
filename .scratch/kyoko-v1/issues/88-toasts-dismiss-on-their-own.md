@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Root cause found (timer only started or advanced on hover or on input events, or the redraw isn't scheduled); fixed so a toast times out with no input at all
 - [ ] Hover pauses, leaving resumes; error toasts may stay longer as documented in `docs/ui.md`
