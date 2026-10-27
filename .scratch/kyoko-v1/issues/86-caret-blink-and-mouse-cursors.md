@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] The caret blinks at the platform rate (Windows caret blink time; solid while typing, resumes blinking after a pause; no blink when the window loses focus) in every text input
 - [ ] Cursor rule written in `docs/ui.md`; every clickable kit component (buttons, links, list rows, tabs, menu items, icons with actions) shows the pointer, inputs show the I-beam, disabled controls the default or not-allowed cursor, splitters the resize cursor
