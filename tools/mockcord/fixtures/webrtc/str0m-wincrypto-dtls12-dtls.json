@@ -1,0 +1,62 @@
+{
+  "client": "str0m-wincrypto DTLS 1.2 (str0m 0.24.1 offerer, in-process loopback)",
+  "kind": "dtls",
+  "negotiated_alpn": null,
+  "tls": {
+    "ja4": "dd2i020500_177d36ae841b_cd314463c40d",
+    "ja4_r": "dd2i020500_c02b,c02c_000a,000b,000d,000e,0017_0403,0503",
+    "record_version": "0xfefd",
+    "legacy_version": "0xfefd",
+    "session_id_length": 0,
+    "ciphers": [
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+    ],
+    "compression_methods": [
+      0
+    ],
+    "extensions": [
+      "supported_groups",
+      "ec_point_formats",
+      "signature_algorithms",
+      "use_srtp",
+      "extended_master_secret"
+    ],
+    "extension_set": [
+      "supported_groups",
+      "ec_point_formats",
+      "signature_algorithms",
+      "use_srtp",
+      "extended_master_secret"
+    ],
+    "server_name": null,
+    "supported_versions": [],
+    "supported_groups": [
+      "X25519",
+      "P-256",
+      "P-384"
+    ],
+    "key_shares": [],
+    "signature_algorithms": [
+      "ecdsa_secp256r1_sha256",
+      "ecdsa_secp384r1_sha384"
+    ],
+    "alpn": [],
+    "alps": null,
+    "certificate_compression": [],
+    "ec_point_formats": [
+      0
+    ],
+    "psk_key_exchange_modes": [],
+    "status_request": null,
+    "ech": null,
+    "trust_anchors": null,
+    "pre_shared_key": false,
+    "other_extensions": {
+      "extended_master_secret": "",
+      "use_srtp": "000600080007000100"
+    }
+  },
+  "http2": null,
+  "http1": null
+}

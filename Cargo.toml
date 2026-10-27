@@ -110,6 +110,17 @@ embed-resource = "3.0"
 
 aes-gcm = { version = "0.11", features = ["hazmat"] }
 chacha20poly1305 = "0.11"
+hmac = "0.12"
+opus = "0.4"
+rubato = "5.0"
+nnnoiseless = { version = "0.5", default-features = false }
+openh264 = { version = "0.9", default-features = false, features = ["source"] }
+openmls = "0.9"
+openmls_rust_crypto = "0.6"
+openmls_basic_credential = "0.6"
+tls_codec = "0.5"
+str0m = { version = "0.24.1", default-features = false }
+str0m-wincrypto = "0.8.1"
 
 [patch.crates-io]
 wgpu-hal = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }

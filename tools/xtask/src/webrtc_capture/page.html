@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>kyoko webrtc-capture</title>
+</head>
+<body>
+<p id="status">starting</p>
+<script>
+const status = document.getElementById("status");
+const report = (state) => {
+	status.textContent = state;
+	fetch("/state", { method: "POST", body: state });
+};
+const run = async () => {
+	const connection = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
+	connection.addTransceiver("audio", { direction: "recvonly" });
+	connection.addTransceiver("video", { direction: "recvonly" });
+	connection.onconnectionstatechange = () => report(connection.connectionState);
+	const offer = await connection.createOffer();
+	await connection.setLocalDescription(offer);
+	const response = await fetch("/offer", { method: "POST", body: offer.sdp });
+	const answer = await response.text();
+	await connection.setRemoteDescription({ type: "answer", sdp: answer });
+	report("answered");
+};
+run().catch((error) => report("error " + error));
+</script>
+</body>
+</html>

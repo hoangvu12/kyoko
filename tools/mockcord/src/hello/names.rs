@@ -3,6 +3,7 @@ pub const STATUS_REQUEST: u16 = 0x0005;
 pub const SUPPORTED_GROUPS: u16 = 0x000a;
 pub const EC_POINT_FORMATS: u16 = 0x000b;
 pub const SIGNATURE_ALGORITHMS: u16 = 0x000d;
+pub const USE_SRTP: u16 = 0x000e;
 pub const ALPN: u16 = 0x0010;
 pub const PADDING: u16 = 0x0015;
 pub const COMPRESS_CERTIFICATE: u16 = 0x001b;
@@ -41,6 +42,8 @@ pub fn cipher(value: u16) -> String {
 		0xc030 => Some("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"),
 		0xcca9 => Some("TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"),
 		0xcca8 => Some("TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"),
+		0xc009 => Some("TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"),
+		0xc00a => Some("TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"),
 		0xc013 => Some("TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"),
 		0xc014 => Some("TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"),
 		0x009c => Some("TLS_RSA_WITH_AES_128_GCM_SHA256"),
@@ -59,9 +62,11 @@ pub fn extension(value: u16) -> String {
 		SUPPORTED_GROUPS => Some("supported_groups"),
 		EC_POINT_FORMATS => Some("ec_point_formats"),
 		SIGNATURE_ALGORITHMS => Some("signature_algorithms"),
+		USE_SRTP => Some("use_srtp"),
 		ALPN => Some("application_layer_protocol_negotiation"),
 		0x0012 => Some("signed_certificate_timestamp"),
 		PADDING => Some("padding"),
+		0x0016 => Some("encrypt_then_mac"),
 		0x0017 => Some("extended_master_secret"),
 		COMPRESS_CERTIFICATE => Some("compress_certificate"),
 		0x001c => Some("record_size_limit"),
@@ -121,6 +126,9 @@ pub fn version(value: u16) -> String {
 		0x0303 => Some("TLS1.2"),
 		0x0302 => Some("TLS1.1"),
 		0x0301 => Some("TLS1.0"),
+		0xfeff => Some("DTLS1.0"),
+		0xfefd => Some("DTLS1.2"),
+		0xfefc => Some("DTLS1.3"),
 		_ => None,
 	};
 	named(value, name)

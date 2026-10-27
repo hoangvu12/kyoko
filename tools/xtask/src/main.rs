@@ -5,6 +5,8 @@ mod parity;
 mod release;
 mod theme;
 mod tls_capture;
+#[cfg(windows)]
+mod webrtc_capture;
 
 use std::process::ExitCode;
 
@@ -25,6 +27,8 @@ enum Task {
 	Theme(theme::ThemeArgs),
 	Twemoji(emoji_pack::TwemojiArgs),
 	TlsCapture(tls_capture::Args),
+	#[cfg(windows)]
+	WebrtcCapture(webrtc_capture::Args),
 	FmtCheck,
 	Lint,
 	Test,
@@ -40,6 +44,8 @@ fn main() -> ExitCode {
 		Task::Theme(args) => theme::run(args),
 		Task::Twemoji(args) => emoji_pack::run(args),
 		Task::TlsCapture(args) => tls_capture::run(args),
+		#[cfg(windows)]
+		Task::WebrtcCapture(args) => webrtc_capture::run(args),
 		Task::FmtCheck => checks::fmt_check(),
 		Task::Lint => checks::lint(),
 		Task::Test => checks::test(),

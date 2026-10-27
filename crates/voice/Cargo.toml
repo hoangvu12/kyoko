@@ -1,0 +1,37 @@
+[package]
+name = "kyoko-voice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "voice"
+
+[features]
+openh264 = ["dep:openh264"]
+
+[dependencies]
+opus.workspace = true
+rubato.workspace = true
+nnnoiseless.workspace = true
+aes-gcm.workspace = true
+chacha20poly1305.workspace = true
+openmls.workspace = true
+openmls_rust_crypto.workspace = true
+openmls_basic_credential.workspace = true
+tls_codec.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+cpal.workspace = true
+openh264 = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+	"Foundation",
+	"Graphics_Capture",
+	"Win32_Media_MediaFoundation",
+	"Win32_System_Com",
+] }

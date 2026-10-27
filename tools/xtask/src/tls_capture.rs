@@ -293,7 +293,7 @@ fn compare(root: &Path, name: &str, captures: &[Capture]) -> Result<()> {
 	Ok(())
 }
 
-fn chrome_label(exe: &Path) -> String {
+pub(crate) fn chrome_label(exe: &Path) -> String {
 	let version = exe.parent().and_then(|folder| {
 		fs::read_dir(folder)
 			.ok()?

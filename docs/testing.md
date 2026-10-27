@@ -193,3 +193,18 @@ The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` featur
 `kyoko-bridge`'s tests turn the feature on too: `crates/bridge/tests/bridge/qr_login.rs` points `QrConfig.gateway_url` (and `QrConfig.trust`) at a listener to check the remote-auth socket's wss ClientHello against the same fixture, and that a refused upgrade over TLS (the listener's 404) ends the code with a network error naming the status, after an upgrade with ALPN `http/1.1`, the web client's `User-Agent`, `Origin` and `Accept-Language`.
 
 A new `CHROME_MAJOR` without recorded fixtures fails these tests (`docs/fingerprint.md`, "Bumping Chrome"). Fixtures must hold no secrets: the page sets its own test cookies, and a capture runs on a fresh profile. Results and the Chrome-against-wreq comparison are in `docs/fingerprint.md`, "TLS and HTTP/2 handshake".
+
+### WebRTC offer and DTLS hello
+
+`cargo xtask webrtc-capture` (Windows only) records what Chrome does for a WebRTC voice connection, for the voice transport decision (`docs/fingerprint.md`, "Voice"). It never connects anywhere but 127.0.0.1, and no test reads its fixtures yet.
+
+```
+cargo xtask webrtc-capture --client chrome --record chrome-156
+cargo xtask webrtc-capture --client chrome --compare chrome-156
+cargo xtask webrtc-capture --client str0m --dtls 1.2 --compare chrome-156
+```
+
+- `--client chrome` serves a page on `http://127.0.0.1:<port>/` and opens it in the local Chrome on a fresh temp profile (as `tls-capture` does, plus `--allow-loopback-in-peer-connection` and `--disable-features=WebRtcHideLocalIpsWithMdns`, which only change candidate gathering, so ICE can run over loopback). The page creates `RTCPeerConnection({bundlePolicy: "max-bundle"})` with a `recvonly` audio and a `recvonly` video transceiver, posts `createOffer()`'s SDP to `/offer`, and applies the answer. No ICE servers are configured, so Chrome sends no STUN anywhere. The answer comes from a str0m 0.24.1 peer (`--backend wincrypto`, `--dtls 1.2|1.3|auto`) on a loopback UDP socket; it answers `a=setup:passive`, as Discord's server does, so Chrome is the DTLS client. Every datagram str0m receives is read for a DTLS ClientHello (`mockcord::hello::DtlsHelloReader`, which reassembles a hello split over several datagrams). The capture ends when Chrome and str0m both report the connection up, or 3 s after the hello.
+- `--client str0m` runs two str0m peers in process with the same transceivers and records the offerer's hello (str0m answers `passive` too, so the offerer is the DTLS client).
+- The DTLS hello is summarised as a `mockcord::hello::Capture` of kind `dtls` (the cookie is dropped and JA4 uses `d` and the DTLS version, e.g. `dd3i...`). The offer is summarised per media section (`webrtc_capture/sdp.rs`): payload types in order with their `rtpmap`, `fmtp` and `rtcp-fb`, the `extmap` lines, and the other attributes, with ICE credentials, fingerprints, msids, SSRCs, candidates and random mids reduced to their names.
+- `--record <name>` writes `tools/mockcord/fixtures/webrtc/<name>-offer.sdp` (raw, ephemeral credentials only), `<name>-offer.json` and `<name>-dtls.json`. `--compare <name>` prints every differing offer field and every differing hello field, ignoring extension order (Chrome permutes it in DTLS too).

@@ -1,0 +1,81 @@
+{
+  "client": "str0m-wincrypto DTLS auto (str0m 0.24.1 offerer, in-process loopback)",
+  "kind": "dtls",
+  "negotiated_alpn": null,
+  "tls": {
+    "ja4": "dd3i040900_5794a053403b_9ab7eb0b348d",
+    "ja4_r": "dd3i040900_1301,1302,c02b,c02c_000a,000b,000d,000e,0015,0017,002b,0033,ff01_0403,0503",
+    "record_version": "0xfefd",
+    "legacy_version": "0xfefd",
+    "session_id_length": 0,
+    "ciphers": [
+      "TLS_AES_128_GCM_SHA256",
+      "TLS_AES_256_GCM_SHA384",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+    ],
+    "compression_methods": [
+      0
+    ],
+    "extensions": [
+      "supported_versions",
+      "supported_groups",
+      "key_share",
+      "signature_algorithms",
+      "use_srtp",
+      "ec_point_formats",
+      "extended_master_secret",
+      "renegotiation_info",
+      "padding"
+    ],
+    "extension_set": [
+      "supported_groups",
+      "ec_point_formats",
+      "signature_algorithms",
+      "use_srtp",
+      "padding",
+      "extended_master_secret",
+      "supported_versions",
+      "key_share",
+      "renegotiation_info"
+    ],
+    "server_name": null,
+    "supported_versions": [
+      "DTLS1.3",
+      "DTLS1.2"
+    ],
+    "supported_groups": [
+      "X25519",
+      "P-256",
+      "P-384"
+    ],
+    "key_shares": [
+      {
+        "group": "X25519",
+        "length": 32
+      }
+    ],
+    "signature_algorithms": [
+      "ecdsa_secp256r1_sha256",
+      "ecdsa_secp384r1_sha384"
+    ],
+    "alpn": [],
+    "alps": null,
+    "certificate_compression": [],
+    "ec_point_formats": [
+      0
+    ],
+    "psk_key_exchange_modes": [],
+    "status_request": null,
+    "ech": null,
+    "trust_anchors": null,
+    "pre_shared_key": false,
+    "other_extensions": {
+      "extended_master_secret": "",
+      "renegotiation_info": "00",
+      "use_srtp": "000600080007000100"
+    }
+  },
+  "http2": null,
+  "http1": null
+}

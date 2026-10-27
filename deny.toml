@@ -8,6 +8,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0391", reason = "zstd 0.13 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
 	{ id = "RUSTSEC-2026-0398", reason = "zstd-safe 7 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
 	{ id = "RUSTSEC-2026-0403", reason = "zstd-safe 7 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
+	{ id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 has no fixed release; it comes from p256/p384 0.13 under openmls in the unlinked voice trial crate and str0m in xtask's localhost capture; decide before voice ships (docs/fingerprint.md, Voice)" },
 ]
 unmaintained = "workspace"
 

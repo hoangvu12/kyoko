@@ -34,4 +34,10 @@ flate2.workspace = true
 tar.workspace = true
 sha2.workspace = true
 hex.workspace = true
+serde.workspace = true
+parking_lot.workspace = true
 windows = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_Storage_Xps", "Win32_UI_HiDpi"] }
+
+[target.'cfg(windows)'.dependencies]
+str0m.workspace = true
+str0m-wincrypto.workspace = true

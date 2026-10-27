@@ -1,0 +1,490 @@
+{
+  "client": "chrome 156.0.8078.48",
+  "session": [
+    "v",
+    "o",
+    "s",
+    "t",
+    "group:BUNDLE 0 1",
+    "extmap-allow-mixed",
+    "msid-semantic:WMS"
+  ],
+  "media": [
+    {
+      "kind": "audio",
+      "protocol": "UDP/TLS/RTP/SAVPF",
+      "attributes": [
+        "rtcp:9 IN IP4 0.0.0.0",
+        "ice-ufrag",
+        "ice-pwd",
+        "ice-options:trickle",
+        "fingerprint:sha-256",
+        "setup:actpass",
+        "mid:0",
+        "recvonly",
+        "rtcp-mux",
+        "rtcp-rsize",
+        "rtcp-xr:rcvr-rtt=all"
+      ],
+      "payloads": [
+        {
+          "pt": 111,
+          "rtpmap": "opus/48000/2",
+          "fmtp": "minptime=10;useinbandfec=1",
+          "rtcp_fb": [
+            "transport-cc"
+          ]
+        },
+        {
+          "pt": 63,
+          "rtpmap": "red/48000/2",
+          "fmtp": "111/111",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 9,
+          "rtpmap": "G722/8000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 0,
+          "rtpmap": "PCMU/8000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 8,
+          "rtpmap": "PCMA/8000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 13,
+          "rtpmap": "CN/8000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 110,
+          "rtpmap": "telephone-event/48000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 126,
+          "rtpmap": "telephone-event/8000",
+          "fmtp": null,
+          "rtcp_fb": []
+        }
+      ],
+      "extmaps": [
+        "1 urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+        "2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
+        "3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
+        "4 urn:ietf:params:rtp-hdrext:sdes:mid"
+      ]
+    },
+    {
+      "kind": "video",
+      "protocol": "UDP/TLS/RTP/SAVPF",
+      "attributes": [
+        "rtcp:9 IN IP4 0.0.0.0",
+        "ice-ufrag",
+        "ice-pwd",
+        "ice-options:trickle",
+        "fingerprint:sha-256",
+        "setup:actpass",
+        "mid:1",
+        "recvonly",
+        "rtcp-mux",
+        "rtcp-rsize",
+        "rtcp-xr:rcvr-rtt=all"
+      ],
+      "payloads": [
+        {
+          "pt": 96,
+          "rtpmap": "VP8/90000",
+          "fmtp": null,
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 97,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=96",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 98,
+          "rtpmap": "VP9/90000",
+          "fmtp": "profile-id=0",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 99,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=98",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 100,
+          "rtpmap": "VP9/90000",
+          "fmtp": "profile-id=2",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 101,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=100",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 35,
+          "rtpmap": "VP9/90000",
+          "fmtp": "profile-id=1",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 36,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=35",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 37,
+          "rtpmap": "VP9/90000",
+          "fmtp": "profile-id=3",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 38,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=37",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 102,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 103,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=102",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 104,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 107,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=104",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 108,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 109,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=108",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 114,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 115,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=114",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 116,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 117,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=116",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 39,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=4d001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 40,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=39",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 41,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=f4001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 42,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=41",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 43,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=f4001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 44,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=43",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 45,
+          "rtpmap": "AV1/90000",
+          "fmtp": "level-idx=5;profile=0;tier=0",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 46,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=45",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 47,
+          "rtpmap": "AV1/90000",
+          "fmtp": "level-idx=5;profile=1;tier=0",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 48,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=47",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 118,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 119,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=118",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 120,
+          "rtpmap": "H264/90000",
+          "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=64001f",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 121,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=120",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 49,
+          "rtpmap": "H265/90000",
+          "fmtp": "level-id=186;profile-id=1;tier-flag=0;tx-mode=SRST",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 50,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=49",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 51,
+          "rtpmap": "H265/90000",
+          "fmtp": "level-id=186;profile-id=2;tier-flag=0;tx-mode=SRST",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc",
+            "ccm fir",
+            "nack",
+            "nack pli"
+          ]
+        },
+        {
+          "pt": 52,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=51",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 122,
+          "rtpmap": "red/90000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 123,
+          "rtpmap": "rtx/90000",
+          "fmtp": "apt=122",
+          "rtcp_fb": []
+        },
+        {
+          "pt": 124,
+          "rtpmap": "ulpfec/90000",
+          "fmtp": null,
+          "rtcp_fb": []
+        },
+        {
+          "pt": 53,
+          "rtpmap": "flexfec-03/90000",
+          "fmtp": "repair-window=10000000",
+          "rtcp_fb": [
+            "goog-remb",
+            "transport-cc"
+          ]
+        }
+      ],
+      "extmaps": [
+        "14 urn:ietf:params:rtp-hdrext:toffset",
+        "2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",
+        "13 urn:3gpp:video-orientation",
+        "3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
+        "5 http://www.webrtc.org/experiments/rtp-hdrext/playout-delay",
+        "6 http://www.webrtc.org/experiments/rtp-hdrext/video-content-type",
+        "7 http://www.webrtc.org/experiments/rtp-hdrext/video-timing",
+        "8 http://www.webrtc.org/experiments/rtp-hdrext/color-space",
+        "4 urn:ietf:params:rtp-hdrext:sdes:mid",
+        "10 urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
+        "11 urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id"
+      ]
+    }
+  ]
+}

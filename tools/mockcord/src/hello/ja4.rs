@@ -36,7 +36,8 @@ pub fn ja4(hello: &ClientHello) -> Ja4 {
 		.map(|list| without_grease(&list))
 		.unwrap_or_default();
 	let prefix = format!(
-		"t{}{}{:02}{:02}{}",
+		"{}{}{}{:02}{:02}{}",
+		if is_dtls(hello) { 'd' } else { 't' },
 		version(hello),
 		if hello.extension(SERVER_NAME).is_some() {
 			'd'
@@ -95,15 +96,29 @@ fn version(hello: &ClientHello) -> &'static str {
 				.ok()
 				.and_then(|list| Reader::new(list).u16s().ok())
 		})
-		.and_then(|list| without_grease(&list).into_iter().max())
+		.and_then(|list| {
+			let versions = without_grease(&list).into_iter();
+			if is_dtls(hello) {
+				versions.min()
+			} else {
+				versions.max()
+			}
+		})
 		.unwrap_or(hello.legacy_version);
 	match highest {
 		0x0304 => "13",
 		0x0303 => "12",
 		0x0302 => "11",
 		0x0301 => "10",
+		0xfefc => "d3",
+		0xfefd => "d2",
+		0xfeff => "d1",
 		_ => "00",
 	}
+}
+
+fn is_dtls(hello: &ClientHello) -> bool {
+	hello.legacy_version >= 0xfe00
 }
 
 fn alpn(hello: &ClientHello) -> String {

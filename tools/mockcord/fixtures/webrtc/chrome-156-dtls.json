@@ -1,0 +1,105 @@
+{
+  "client": "chrome 156.0.8078.48",
+  "kind": "dtls",
+  "negotiated_alpn": null,
+  "tls": {
+    "ja4": "dd3i140900_fa23b50283d1_01b4b87481e4",
+    "ja4_r": "dd3i140900_002f,0035,009c,1301,1302,1303,c009,c00a,c013,c014,c02b,c02f,cca8,cca9_000a,000b,000d,000e,0017,002b,002d,0033,ff01_0403,0804,0401,0503,0805,0501,0806,0601,0201",
+    "record_version": "0xfeff",
+    "legacy_version": "0xfefd",
+    "session_id_length": 0,
+    "ciphers": [
+      "TLS_AES_128_GCM_SHA256",
+      "TLS_AES_256_GCM_SHA384",
+      "TLS_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+      "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+      "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+      "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+      "TLS_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_RSA_WITH_AES_128_CBC_SHA",
+      "TLS_RSA_WITH_AES_256_CBC_SHA"
+    ],
+    "compression_methods": [
+      0
+    ],
+    "extensions": [
+      "ec_point_formats",
+      "supported_versions",
+      "key_share",
+      "extended_master_secret",
+      "supported_groups",
+      "use_srtp",
+      "renegotiation_info",
+      "signature_algorithms",
+      "psk_key_exchange_modes"
+    ],
+    "extension_set": [
+      "supported_groups",
+      "ec_point_formats",
+      "signature_algorithms",
+      "use_srtp",
+      "extended_master_secret",
+      "supported_versions",
+      "psk_key_exchange_modes",
+      "key_share",
+      "renegotiation_info"
+    ],
+    "server_name": null,
+    "supported_versions": [
+      "DTLS1.3",
+      "DTLS1.2"
+    ],
+    "supported_groups": [
+      "X25519MLKEM768",
+      "X25519",
+      "P-256",
+      "P-384"
+    ],
+    "key_shares": [
+      {
+        "group": "X25519MLKEM768",
+        "length": 1216
+      },
+      {
+        "group": "X25519",
+        "length": 32
+      }
+    ],
+    "signature_algorithms": [
+      "ecdsa_secp256r1_sha256",
+      "rsa_pss_rsae_sha256",
+      "rsa_pkcs1_sha256",
+      "ecdsa_secp384r1_sha384",
+      "rsa_pss_rsae_sha384",
+      "rsa_pkcs1_sha384",
+      "rsa_pss_rsae_sha512",
+      "rsa_pkcs1_sha512",
+      "rsa_pkcs1_sha1"
+    ],
+    "alpn": [],
+    "alps": null,
+    "certificate_compression": [],
+    "ec_point_formats": [
+      0
+    ],
+    "psk_key_exchange_modes": [
+      1
+    ],
+    "status_request": null,
+    "ech": null,
+    "trust_anchors": null,
+    "pre_shared_key": false,
+    "other_extensions": {
+      "extended_master_secret": "",
+      "renegotiation_info": "00",
+      "use_srtp": "000600010008000700"
+    }
+  },
+  "http2": null,
+  "http1": null
+}
