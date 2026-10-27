@@ -6,7 +6,7 @@ Plan ticket V1 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 96
 
-**Status:** open
+**Status:** claimed
 
 - [ ] The voice upgrade presents `UPGRADE_ORDER` and the Chrome wss ClientHello (same check as the gateway's, `tls_fingerprint`); no Cookie
 - [ ] Identify is v9 with `channel_id`, `video: true`, layers 100 and 50, `max_dave_protocol_version: 1`; heartbeat every `min(interval, 5000)` ms; resume carries `seq_ack` and `channel_id`
