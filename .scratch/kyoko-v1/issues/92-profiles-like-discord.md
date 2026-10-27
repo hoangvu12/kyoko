@@ -7,7 +7,7 @@
 
 **Blocked by:** 77, 81
 
-**Status:** open
+**Status:** claimed
 
 - [ ] DM side panel matches Discord's layout
 - [ ] Full profile matches Discord's (others' layout), with the three tabs; profile theme colours (`theme_colors`) and the profile effect at least as a static gradient
