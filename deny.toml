@@ -5,6 +5,9 @@ all-features = false
 version = 2
 ignore = [
 	{ id = "RUSTSEC-2023-0071", reason = "no patched rsa release exists, used only for the one-off QR login key exchange, never as a network oracle" },
+	{ id = "RUSTSEC-2026-0391", reason = "zstd 0.13 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
+	{ id = "RUSTSEC-2026-0398", reason = "zstd-safe 7 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
+	{ id = "RUSTSEC-2026-0403", reason = "zstd-safe 7 comes only from the pinned wreq-util, whose zstd certificate compressor only Firefox profiles use; kyoko's Chrome profile offers brotli only" },
 ]
 unmaintained = "workspace"
 
@@ -37,4 +40,9 @@ wildcards = "allow"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = ["https://github.com/zeronsh/zgx"]
+allow-git = [
+	"https://github.com/zeronsh/zgx",
+	"https://github.com/0x676e67/wreq",
+	"https://github.com/0x676e67/wreq-util",
+	"https://github.com/0x676e67/btls",
+]

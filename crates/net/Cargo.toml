@@ -1,0 +1,18 @@
+[package]
+name = "kyoko-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "net"
+
+[dependencies]
+wreq.workspace = true
+wreq-util.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

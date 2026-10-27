@@ -12,7 +12,7 @@ login.workspace = true
 bridge.workspace = true
 media.workspace = true
 plugins.workspace = true
-mockcord.workspace = true
+mockcord = { workspace = true, features = ["tls"] }
 store.workspace = true
 state.workspace = true
 protocol.workspace = true

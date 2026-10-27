@@ -4,6 +4,7 @@ mod headless;
 mod parity;
 mod release;
 mod theme;
+mod tls_capture;
 
 use std::process::ExitCode;
 
@@ -23,6 +24,7 @@ enum Task {
 	Release(release::ReleaseArgs),
 	Theme(theme::ThemeArgs),
 	Twemoji(emoji_pack::TwemojiArgs),
+	TlsCapture(tls_capture::Args),
 	FmtCheck,
 	Lint,
 	Test,
@@ -37,6 +39,7 @@ fn main() -> ExitCode {
 		Task::Release(args) => release::run(args),
 		Task::Theme(args) => theme::run(args),
 		Task::Twemoji(args) => emoji_pack::run(args),
+		Task::TlsCapture(args) => tls_capture::run(args),
 		Task::FmtCheck => checks::fmt_check(),
 		Task::Lint => checks::lint(),
 		Task::Test => checks::test(),

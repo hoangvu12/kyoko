@@ -26,6 +26,7 @@ bridge = { path = "crates/bridge", package = "kyoko-bridge" }
 plugins = { path = "crates/plugins", package = "kyoko-plugins" }
 twemoji = { path = "crates/twemoji", package = "kyoko-twemoji" }
 audio = { path = "crates/audio", package = "kyoko-audio" }
+net = { path = "crates/net", package = "kyoko-net" }
 
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
@@ -35,6 +36,9 @@ mlua = { version = "0.12.2", features = ["luau"] }
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream", "multipart", "gzip", "brotli", "zstd", "http2", "cookies"] }
+wreq = { version = "0.16.1", default-features = false, features = ["tokio-rt", "webpki-roots", "chromium-roots", "json", "multipart", "stream", "cookies", "gzip", "brotli", "zstd", "deflate", "ws"] }
+wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582", default-features = false, features = ["emulation", "emulation-chromium-pki"] }
+loona-hpack = "0.4.3"
 cookie_store = { version = "0.22", default-features = false, features = ["serde_json"] }
 uuid = { version = "1.28", features = ["v4"] }
 iana-time-zone = "0.1"
@@ -114,6 +118,9 @@ accesskit_unix = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2
 accesskit_windows = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 winit = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 mlua = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
+wreq = { git = "https://github.com/0x676e67/wreq", rev = "cd76bcdf1307153de289d34e072528bdf0510a3b" }
+btls = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
 
 [profile.release]
 opt-level = 3

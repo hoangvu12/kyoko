@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use image::RgbaImage;
 
-mod browser;
+pub(crate) mod browser;
 mod compose;
 mod font;
 mod mockup;

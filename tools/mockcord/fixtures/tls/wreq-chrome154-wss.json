@@ -1,0 +1,202 @@
+{
+  "client": "wreq Chrome154 via kyoko-net, certificate checks off",
+  "kind": "wss",
+  "negotiated_alpn": "http/1.1",
+  "tls": {
+    "ja4": "t13d1516h1_8daaf6152771_5b37b36a67c0",
+    "ja4_r": "t13d1516h1_002f,0035,009c,009d,1301,1302,1303,c013,c014,c02b,c02c,c02f,c030,cca8,cca9_0005,000a,000b,000d,0012,0017,001b,0023,002b,002d,0033,ca34,fe0d,ff01_0904,0905,0906,0403,0804,0401,0503,0805,0501,0806,0601",
+    "record_version": "0x0301",
+    "legacy_version": "0x0303",
+    "session_id_length": 32,
+    "ciphers": [
+      "GREASE",
+      "TLS_AES_128_GCM_SHA256",
+      "TLS_AES_256_GCM_SHA384",
+      "TLS_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+      "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+      "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+      "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+      "TLS_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_RSA_WITH_AES_256_GCM_SHA384",
+      "TLS_RSA_WITH_AES_128_CBC_SHA",
+      "TLS_RSA_WITH_AES_256_CBC_SHA"
+    ],
+    "compression_methods": [
+      0
+    ],
+    "extensions": [
+      "GREASE",
+      "key_share",
+      "renegotiation_info",
+      "status_request",
+      "supported_versions",
+      "ec_point_formats",
+      "psk_key_exchange_modes",
+      "session_ticket",
+      "application_layer_protocol_negotiation",
+      "encrypted_client_hello",
+      "trust_anchors",
+      "server_name",
+      "signed_certificate_timestamp",
+      "supported_groups",
+      "signature_algorithms",
+      "extended_master_secret",
+      "compress_certificate",
+      "GREASE"
+    ],
+    "extension_set": [
+      "server_name",
+      "status_request",
+      "supported_groups",
+      "ec_point_formats",
+      "signature_algorithms",
+      "application_layer_protocol_negotiation",
+      "signed_certificate_timestamp",
+      "extended_master_secret",
+      "compress_certificate",
+      "session_ticket",
+      "supported_versions",
+      "psk_key_exchange_modes",
+      "key_share",
+      "trust_anchors",
+      "encrypted_client_hello",
+      "renegotiation_info"
+    ],
+    "server_name": "localhost",
+    "supported_versions": [
+      "GREASE",
+      "TLS1.3",
+      "TLS1.2"
+    ],
+    "supported_groups": [
+      "GREASE",
+      "X25519MLKEM768",
+      "X25519",
+      "P-256",
+      "P-384"
+    ],
+    "key_shares": [
+      {
+        "group": "GREASE",
+        "length": 1
+      },
+      {
+        "group": "X25519MLKEM768",
+        "length": 1216
+      },
+      {
+        "group": "X25519",
+        "length": 32
+      }
+    ],
+    "signature_algorithms": [
+      "GREASE",
+      "mldsa44",
+      "mldsa65",
+      "mldsa87",
+      "ecdsa_secp256r1_sha256",
+      "rsa_pss_rsae_sha256",
+      "rsa_pkcs1_sha256",
+      "ecdsa_secp384r1_sha384",
+      "rsa_pss_rsae_sha384",
+      "rsa_pkcs1_sha384",
+      "rsa_pss_rsae_sha512",
+      "rsa_pkcs1_sha512"
+    ],
+    "alpn": [
+      "http/1.1"
+    ],
+    "alps": null,
+    "certificate_compression": [
+      "brotli"
+    ],
+    "ec_point_formats": [
+      0
+    ],
+    "psk_key_exchange_modes": [
+      1
+    ],
+    "status_request": "0100000000",
+    "ech": {
+      "kdf": "0x0001",
+      "aead": "0x0001",
+      "enc_length": 32
+    },
+    "trust_anchors": [
+      "82df130201",
+      "82df130206",
+      "82df13020d",
+      "82df13020e",
+      "82df13020f",
+      "82df130212",
+      "82df130213",
+      "82df130214",
+      "839a648c9b2d0107",
+      "839a648c9b2d0108",
+      "839a648c9b2d0109",
+      "839a648c9b2d010a",
+      "839a648c9b2d010b",
+      "839a648c9b2d010c",
+      "839a648c9b2d010d",
+      "839a648c9b2d0112",
+      "839a648c9b2d0113",
+      "d6790901",
+      "d6790904",
+      "d6790905",
+      "d6790906",
+      "d6790907",
+      "d6790908",
+      "d679090a",
+      "d679090b",
+      "d679090c",
+      "d679090d",
+      "d679090f"
+    ],
+    "pre_shared_key": false,
+    "other_extensions": {
+      "extended_master_secret": "",
+      "renegotiation_info": "00",
+      "session_ticket": "",
+      "signed_certificate_timestamp": ""
+    }
+  },
+  "http2": null,
+  "http1": {
+    "request_line": "GET /ws HTTP/1.1",
+    "headers": [
+      [
+        "sec-websocket-version",
+        "13"
+      ],
+      [
+        "upgrade",
+        "websocket"
+      ],
+      [
+        "connection",
+        "upgrade"
+      ],
+      [
+        "sec-websocket-key",
+        "<random>"
+      ],
+      [
+        "accept-encoding",
+        "zstd,gzip,deflate,br"
+      ],
+      [
+        "host",
+        "localhost:46283"
+      ],
+      [
+        "cookie",
+        "kyoko_a=1; kyoko_b=2"
+      ]
+    ]
+  }
+}

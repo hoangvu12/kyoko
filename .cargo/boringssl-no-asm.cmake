@@ -1,0 +1,4 @@
+if(WIN32)
+	set(OPENSSL_NO_ASM ON)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+endif()

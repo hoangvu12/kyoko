@@ -3,3 +3,4 @@ xtask = "run --quiet --package xtask --"
 
 [env]
 LUAU_CXXFLAGS = "-DNDEBUG"
+HOST_CMAKE_TOOLCHAIN_FILE = { value = ".cargo/boringssl-no-asm.cmake", relative = true }

@@ -10,6 +10,8 @@ mod error;
 pub mod fixtures;
 mod forward;
 mod gateway;
+#[cfg(feature = "tls")]
+pub mod hello;
 mod hub;
 mod ids;
 mod json;
