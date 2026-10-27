@@ -18,6 +18,7 @@ mod harness;
 mod hidden;
 mod login_column;
 mod media;
+mod media_fetch;
 mod members;
 mod message;
 mod message_logger;

@@ -51,10 +51,6 @@ pub struct Session {
 	runtime: Option<Runtime>,
 }
 
-fn install_crypto_provider() {
-	let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-}
-
 fn runtime_for(requested: Option<Handle>) -> io::Result<(Option<Runtime>, Handle)> {
 	match requested {
 		Some(handle) => Ok((None, handle)),
@@ -72,7 +68,6 @@ fn runtime_for(requested: Option<Handle>) -> io::Result<(Option<Runtime>, Handle
 
 impl Session {
 	pub fn start(config: SessionConfig) -> io::Result<Session> {
-		install_crypto_provider();
 		let (runtime, handle) = runtime_for(config.runtime)?;
 		let locale = config.identity.fingerprint().locale().to_owned();
 		let rest = RestClient::new(RestConfig {

@@ -1,7 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use media::cdn::{self, ProxyFormat, ProxySize, Quality, StickerFormat};
-use media::{ImageRequest, MediaFetcher, Origin, Shape, SizeHint, Variant};
+use media::{ImageRequest, MediaFetcher, MediaFetcherBuilder, Origin, Shape, SizeHint, Variant};
 use protocol::fingerprint::Fingerprint;
 use protocol::{Attachment, EmbedMedia, Snowflake, StickerItem, User};
 use session::Command;
@@ -11,11 +11,15 @@ const ANIMATED_ATTACHMENT: u64 = 1 << 5;
 const GIF: &str = "image/gif";
 const IMAGE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
 
-pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> media::Result<MediaFetcher> {
-	let mut builder = MediaFetcher::builder()
+pub fn media_fetcher_builder(fingerprint: &Fingerprint) -> MediaFetcherBuilder {
+	MediaFetcher::builder()
 		.user_agent(fingerprint.user_agent())
 		.headers(fingerprint.image_headers())
-		.audio_headers(fingerprint.audio_headers());
+		.audio_headers(fingerprint.audio_headers())
+}
+
+pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> media::Result<MediaFetcher> {
+	let mut builder = media_fetcher_builder(fingerprint);
 	if let Some(port) = loopback_port {
 		builder = builder.only_loopback(port);
 	}

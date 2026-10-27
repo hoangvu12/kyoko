@@ -4,11 +4,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, ensure};
+use futures_util::StreamExt;
+use net::{Client, Destination, Trust};
 use parking_lot::Mutex;
-use reqwest::{Certificate, Client, redirect};
 use sha2::{Digest, Sha256};
 use tokio::task::JoinSet;
 use url::Url;
+use wreq::redirect;
 
 pub const MAX_THEME_BYTES: usize = 512 * 1024;
 pub const MAX_THEME_LINKS: usize = 64;
@@ -165,16 +167,26 @@ async fn settle(cache_dir: &Path, url: String, outcome: Result<String>) -> Theme
 }
 
 fn client(tuning: &ThemeLinkTuning) -> Result<Client> {
-	let mut builder = Client::builder()
+	net::client_builder(Destination::Fetch, &trust(tuning)?)
+		.context("a trusted root is not valid pem")?
 		.https_only(true)
 		.redirect(redirect::Policy::limited(MAX_REDIRECTS))
 		.timeout(tuning.timeout)
-		.user_agent(protocol::fingerprint::user_agent());
-	for root in &tuning.trusted_roots {
-		builder = builder
-			.add_root_certificate(Certificate::from_pem(root).context("a trusted root is not valid pem")?);
+		.user_agent(protocol::fingerprint::user_agent())
+		.build()
+		.context("could not build the http client")
+}
+
+fn trust(tuning: &ThemeLinkTuning) -> Result<Trust> {
+	if tuning.trusted_roots.is_empty() {
+		return Ok(Trust::Bundled);
 	}
-	builder.build().context("could not build the http client")
+	let roots = tuning
+		.trusted_roots
+		.iter()
+		.map(|root| String::from_utf8(root.clone()).context("a trusted root is not valid pem"))
+		.collect::<Result<Vec<_>>>()?;
+	Ok(Trust::Only(roots))
 }
 
 pub fn check_link(url: &str) -> Result<Url> {
@@ -191,7 +203,7 @@ pub fn check_link(url: &str) -> Result<Url> {
 
 async fn fetch_one(client: &Client, url: &str, limit: usize) -> Result<String> {
 	let parsed = check_link(url)?;
-	let mut response = client.get(parsed).send().await.map_err(describe)?;
+	let response = client.get(parsed.as_str()).send().await.map_err(describe)?;
 	let status = response.status();
 	ensure!(status.is_success(), "the server answered {status}");
 	if let Some(length) = response.content_length() {
@@ -202,7 +214,9 @@ async fn fetch_one(client: &Client, url: &str, limit: usize) -> Result<String> {
 		);
 	}
 	let mut body = Vec::new();
-	while let Some(chunk) = response.chunk().await.map_err(describe)? {
+	let mut chunks = response.bytes_stream();
+	while let Some(chunk) = chunks.next().await {
+		let chunk = chunk.map_err(describe)?;
 		ensure!(
 			body.len() + chunk.len() <= limit,
 			"the file is larger than {} KB",
@@ -218,7 +232,7 @@ async fn fetch_one(client: &Client, url: &str, limit: usize) -> Result<String> {
 	Ok(text)
 }
 
-fn describe(error: reqwest::Error) -> anyhow::Error {
+fn describe(error: net::Error) -> anyhow::Error {
 	if error.is_timeout() {
 		return anyhow!("the server took too long to answer");
 	}

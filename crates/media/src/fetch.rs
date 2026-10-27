@@ -3,13 +3,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
-use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
+use futures_util::{FutureExt, StreamExt};
+use net::{Destination, Trust};
 use parking_lot::Mutex;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::redirect::Policy;
 use tokio::sync::Semaphore;
 use url::Url;
+use wreq::header::{HeaderMap, HeaderName, HeaderValue};
+use wreq::redirect::Policy;
 
 use crate::error::{MediaError, Result, redact_url};
 
@@ -48,6 +49,7 @@ pub struct MediaFetcherBuilder {
 	headers: Vec<(String, String)>,
 	audio_headers: Vec<(String, String)>,
 	concurrency: usize,
+	trust: Trust,
 }
 
 impl MediaFetcherBuilder {
@@ -99,6 +101,11 @@ impl MediaFetcherBuilder {
 		self
 	}
 
+	pub fn trust(mut self, trust: Trust) -> Self {
+		self.trust = trust;
+		self
+	}
+
 	pub fn build(self) -> Result<MediaFetcher> {
 		let hosts = Arc::new(Allowed {
 			hosts: self.hosts,
@@ -106,23 +113,26 @@ impl MediaFetcherBuilder {
 		});
 		let redirect_hosts = hosts.clone();
 		let policy = Policy::custom(move |attempt| {
-			if attempt.previous().len() >= MAX_REDIRECTS {
+			if attempt.previous.len() > MAX_REDIRECTS {
 				return attempt.error("too many redirects");
 			}
-			if is_allowed(&redirect_hosts, attempt.url()) {
+			let allowed =
+				Url::parse(&attempt.uri.to_string()).is_ok_and(|target| is_allowed(&redirect_hosts, &target));
+			if allowed {
 				attempt.follow()
 			} else {
 				attempt.error("redirect to a disallowed host")
 			}
 		});
-		let client = reqwest::Client::builder()
+		let client = net::client_builder(Destination::Image, &self.trust)
+			.map_err(|error| MediaError::Fetch(error.without_uri().to_string()))?
 			.https_only(self.loopback_port.is_none())
 			.timeout(REQUEST_TIMEOUT)
 			.redirect(policy)
 			.referer(false)
 			.user_agent(self.user_agent)
 			.build()
-			.map_err(|error| MediaError::Fetch(error.without_url().to_string()))?;
+			.map_err(|error| MediaError::Fetch(error.without_uri().to_string()))?;
 		Ok(MediaFetcher {
 			inner: Arc::new(FetcherInner {
 				client,
@@ -143,7 +153,7 @@ pub struct MediaFetcher {
 }
 
 struct FetcherInner {
-	client: reqwest::Client,
+	client: wreq::Client,
 	image_headers: HeaderMap,
 	audio_headers: HeaderMap,
 	hosts: Arc<Allowed>,
@@ -165,6 +175,7 @@ impl MediaFetcher {
 			headers: Vec::new(),
 			audio_headers: Vec::new(),
 			concurrency: DEFAULT_CONCURRENCY,
+			trust: Trust::Bundled,
 		}
 	}
 
@@ -220,16 +231,16 @@ impl FetcherInner {
 			.await
 			.map_err(|_| MediaError::Fetch("the fetcher closed".to_owned()))?;
 		let shown = redact_url(url.as_str()).to_owned();
-		let mut response = self
+		let response = self
 			.client
-			.get(url)
+			.get(url.as_str())
 			.headers(match purpose {
 				Purpose::Image => self.image_headers.clone(),
 				Purpose::Audio => self.audio_headers.clone(),
 			})
 			.send()
 			.await
-			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_url())))?;
+			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_uri())))?;
 		if !response.status().is_success() {
 			return Err(MediaError::Status(response.status().as_u16()));
 		}
@@ -241,11 +252,10 @@ impl FetcherInner {
 			return Err(MediaError::Limit(format!("{shown}: body exceeds {cap} bytes")));
 		}
 		let mut body = BytesMut::with_capacity(declared.unwrap_or(0).min(cap));
-		while let Some(chunk) = response
-			.chunk()
-			.await
-			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_url())))?
-		{
+		let mut chunks = response.bytes_stream();
+		while let Some(chunk) = chunks.next().await {
+			let chunk =
+				chunk.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_uri())))?;
 			if body.len() + chunk.len() > cap {
 				return Err(MediaError::Limit(format!("{shown}: body exceeds {cap} bytes")));
 			}
@@ -292,7 +302,12 @@ fn is_allowed(allowed: &Allowed, url: &Url) -> bool {
 			&& url.host_str() == Some(LOOPBACK_HOST)
 			&& url.port() == allowed.loopback_port;
 	}
+	let Some(host) = url.host_str() else {
+		return false;
+	};
 	url.scheme() == "https"
-		&& url.port().is_none_or(|port| port == HTTPS_PORT)
-		&& url.host_str().is_some_and(|host| allowed.hosts.contains(host))
+		&& match url.port() {
+			None | Some(HTTPS_PORT) => allowed.hosts.contains(host),
+			Some(port) => allowed.hosts.contains(&format!("{host}:{port}")),
+		}
 }

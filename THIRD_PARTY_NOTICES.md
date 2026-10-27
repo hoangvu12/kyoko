@@ -126,7 +126,7 @@ The audio fixtures in `tools/mockcord/fixtures/audio/` (`voice-message.ogg`, `vo
 
 ## TLS and HTTP/2: BoringSSL and wreq
 
-Kyoko's REST and gateway connections run on [wreq](https://github.com/0x676e67/wreq) and link a patched [BoringSSL](https://boringssl.googlesource.com/boringssl) built from source by `btls-sys`. They are used unmodified, from git pins in the workspace `Cargo.toml` (`docs/fingerprint.md`, "Pins"):
+Kyoko's REST, gateway, media and theme-link connections run on [wreq](https://github.com/0x676e67/wreq) and link a patched [BoringSSL](https://boringssl.googlesource.com/boringssl) built from source by `btls-sys`. They are used unmodified, from git pins in the workspace `Cargo.toml` (`docs/fingerprint.md`, "Pins"):
 
 - BoringSSL (vendored in `btls-sys` at rev `129887582a538b8f4dcf371d15c953335312ca37`, with btls's patches): Apache License 2.0. Its fiat-crypto code (`third_party/fiat`) is used under Apache-2.0, one of its MIT, Apache-2.0 and BSD-1-Clause options. BoringSSL's Go-licensed TLS test suite is not compiled into kyoko.
 - `wreq` 0.16.1, `wreq-util` 0.2.0, `wreq-proto` 0.2.6, `wreq-rt` 0.2.2-rc.4 and `btls` 0.5.6 (0x676e67 and contributors): Apache License 2.0, whose full text is in `LICENSE-APACHE`.

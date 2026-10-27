@@ -18,6 +18,7 @@ const FETCH_WEIGHT: u8 = 219;
 pub enum Destination {
 	Document,
 	Fetch,
+	Image,
 }
 
 pub const fn profile(major: u32) -> Option<Profile> {
@@ -34,7 +35,7 @@ pub fn chrome_emulation(destination: Destination) -> Emulation {
 	if let Some(options) = emulation.http2_options.as_mut() {
 		let weight = match destination {
 			Destination::Document => DOCUMENT_WEIGHT,
-			Destination::Fetch => FETCH_WEIGHT,
+			Destination::Fetch | Destination::Image => FETCH_WEIGHT,
 		};
 		options.headers_stream_dependency = Some(StreamDependency::new(StreamId::zero(), weight, true));
 	}

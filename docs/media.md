@@ -26,7 +26,7 @@ The on-disk cache (`<cache>/media/<2 hex>/<sha256>`) is pruned by the store, see
 
 ## Fetching and decoding
 
-- One pooled `reqwest` client, HTTPS only (loopback HTTP for mockcord), redirects re-checked against a host allowlist, bodies capped at 64 MiB.
+- One pooled `wreq` client from `net::client_builder(Destination::Image, ..)`, so CDN and GIF fetches present Chrome's TLS ClientHello and HTTP/2 settings, with an image's HEADERS weight (220), as the REST client does (`docs/fingerprint.md`, "TLS and HTTP/2 handshake"). HTTPS only (loopback HTTP for mockcord); every redirect is re-checked against the host allowlist and at most 5 are followed; bodies are capped at 64 MiB, whether or not the length is declared. An allowlist entry may name a port (`localhost:8443`), which only tests use; `MediaFetcherBuilder::trust` takes a test-only root the same way (`net::Trust`).
 - At most 6 requests in flight (`fetch::DEFAULT_CONCURRENCY`). Two requests for the same URL share one download.
 - Decoding runs on the blocking pool, at most 2 at a time (`DEFAULT_DECODE_WORKERS`). PNG and APNG, JPEG, GIF, WebP and animated WebP decode with the `image` crate. Images larger than twice the hint are shrunk to it.
 - A failed load is not retried for 60 s, unless it is a refreshable attachment (below).

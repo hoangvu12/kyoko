@@ -107,7 +107,8 @@ pub use hidden::{
 pub use images::{
 	app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url, device_pixels,
 	embed_icon_request, embed_request, emoji_request, gif_still_request, guild_icon_request, is_image,
-	is_video, local_audio, local_media, media_fetcher, refresh_command, sticker_request,
+	is_video, local_audio, local_media, media_fetcher, media_fetcher_builder, refresh_command,
+	sticker_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use inbox_popout::{

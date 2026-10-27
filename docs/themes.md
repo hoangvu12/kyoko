@@ -40,7 +40,7 @@ https://raw.githubusercontent.com/someone/ocean/main/ocean.theme.css
 - A line that starts with `@light` or `@dark` applies only while the base theme is light or dark.
 - A link must be a direct link to the file (a raw GitHub link, GitHub Pages, a CDN), not a web page. A link ending in `.json`, or a file that is a JSON object, is read as a kyoko theme; anything else as CSS.
 
-The session downloads the links, never the interface: over HTTPS only (an `http:` link, a redirect to `http:` or a link with a user name is refused), with no Discord token, cookies or super properties, at most 512 KB each, giving up after 20 seconds, at most 3 redirects. The links download at startup once the session is signed in, when you save the list and when you press Refresh. Each good download is cached in `<cache dir>/theme-links/`, and when a download fails the card shows the error and keeps using the last good copy, offline too. Before you sign in, the cached copies apply. One failing link never stops the others.
+The session downloads the links, never the interface, with the same Chrome TLS client as REST (`net::client_builder`, `docs/fingerprint.md`): over HTTPS only (an `http:` link, a redirect to `http:` or a link with a user name is refused), with no Discord token, cookies or super properties, at most 512 KB each, giving up after 20 seconds, at most 3 redirects. The links download at startup once the session is signed in, when you save the list and when you press Refresh. Each good download is cached in `<cache dir>/theme-links/`, and when a download fails the card shows the error and keeps using the last good copy, offline too. Before you sign in, the cached copies apply. One failing link never stops the others.
 
 ## Importing a Vencord or BetterDiscord theme
 
