@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Layout rules for 1 to 10 images written in `docs/` (from observation and public sources)
 - [ ] The timeline lays out multi-image messages that way; single images keep their aspect ratio within the max box
