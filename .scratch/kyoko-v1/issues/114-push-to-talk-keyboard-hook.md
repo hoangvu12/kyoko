@@ -6,7 +6,7 @@
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Push to talk no longer uses `RegisterHotKey`; a low-level hook reports press and release of the bound keys and always passes the input on (`CallNextHookEx`, never a non-zero return)
 - [ ] Key repeat while held sends no extra presses; releasing any key of the combination releases; losing the hook (the hook thread stops) releases the mic, never leaves it open
