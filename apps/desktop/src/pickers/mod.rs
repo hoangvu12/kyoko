@@ -721,7 +721,7 @@ impl ExpressionPicker {
 			.h(TAB_HEIGHT)
 			.children(Tab::ALL.into_iter().map(|choice| {
 				let (tab, query) = (self.tab.clone(), self.query.clone());
-				let active = self.tab.clone();
+				let (active, labelled) = (self.tab.clone(), self.tab.clone());
 				row()
 					.id(format!("picker-tab-{}", choice.label().to_lowercase()))
 					.h(TAB_HEIGHT)
@@ -732,21 +732,28 @@ impl ExpressionPicker {
 					.text_size(tok("font_size_sm"))
 					.line_height(18.)
 					.font_weight(600)
+					.text_color(tok("text_4"))
+					.hover(|style| style.text_color(tok("text_3")))
 					.reactive_style(move || {
 						if active.get() == choice {
-							Styles::new().bg(tok("bg_2")).text_color(tok("text_2"))
+							Styles::new().bg(tok("bg_2"))
 						} else {
-							Styles::new().text_color(tok("text_4"))
+							Styles::new()
 						}
 					})
-					.hover(|style| style.text_color(tok("text_3")))
 					.on_click(move || {
 						if tab.with_untracked(|current| *current) != choice {
 							query.set(String::new());
 							tab.set(choice);
 						}
 					})
-					.child(text(choice.label()))
+					.child(text(choice.label()).reactive_style(move || {
+						if labelled.get() == choice {
+							Styles::new().text_color(tok("text_2"))
+						} else {
+							Styles::new()
+						}
+					}))
 			}))
 	}
 }

@@ -348,9 +348,9 @@ end)
 
 local function tones(row: state.SidebarRow, selected: boolean): (string, string)
 	if selected then
-		return theme.color.text_2, theme.color.text_3
+		return theme.color.text_2, theme.color.text_2
 	elseif row.muted or row.locked then
-		return theme.color.text_5, theme.color.text_5
+		return theme.color.text_5, theme.color.text_4
 	elseif badge(row.id).unread then
 		return theme.color.text_3, theme.color.text_3
 	end
@@ -581,7 +581,7 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 					min_w = 0,
 					truncate = true,
 					line_height = theme.size.line_height_md,
-					color = rest,
+					color = lit,
 					weight = theme.weight.medium,
 				},
 				ui.show(

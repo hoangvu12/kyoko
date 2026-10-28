@@ -78,7 +78,8 @@ local function sort_button()
 	}
 end
 
-local function tab(item: { key: string, label: string })
+local tab = ui.component(function(item: { key: string, label: string })
+	local hovered = ui.use_state(false)
 	local function chosen(): boolean
 		return panel().tab == item.key
 	end
@@ -94,20 +95,28 @@ local function tab(item: { key: string, label: string })
 		rounded = theme.size.radius_sm,
 		cursor = "pointer",
 		bg = function()
-			return if chosen() then theme.color.active else "#00000000"
+			if chosen() then
+				return theme.color.active
+			end
+			return if hovered:get() then theme.color.hover else "#00000000"
 		end,
-		hover = { bg = theme.color.hover },
 		text_size = theme.size.font_size_sm,
 		line_height = theme.size.line_height_sm,
 		weight = theme.weight.medium,
 		color = function()
-			return if chosen() then theme.color.text_2 else theme.color.text_4
+			if chosen() then
+				return theme.color.text_2
+			end
+			return if hovered:get() then theme.color.text_3 else theme.color.text_4
+		end,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
 		end,
 		on_click = function()
 			actions.search_tab(item.key)
 		end,
 	}
-end
+end)
 
 local function header()
 	local tabs = {}
@@ -303,9 +312,11 @@ local function results()
 	}
 end
 
-local function page_button(label: any, id: string, chosen: () -> boolean, target: () -> number, shown: () -> boolean)
-	return ui.show(shown, ui.button {
-		id = id,
+local page_face = ui.component(function(props: { label: any, id: string, chosen: () -> boolean, target: () -> number })
+	local hovered = ui.use_state(false)
+	local chosen = props.chosen
+	return ui.button {
+		id = props.id,
 		w = theme.size.button_size,
 		h = theme.size.button_size,
 		p = 0,
@@ -316,17 +327,29 @@ local function page_button(label: any, id: string, chosen: () -> boolean, target
 		items = "center",
 		cursor = "pointer",
 		bg = function()
-			return if chosen() then theme.color.accent_3 else "#00000000"
+			if chosen() then
+				return if hovered:get() then theme.color.accent_4 else theme.color.accent_3
+			end
+			return if hovered:get() then theme.color.hover else "#00000000"
 		end,
-		hover = { bg = theme.color.hover },
 		color = function()
-			return if chosen() then theme.color.text_0 else theme.color.text_3
+			if chosen() then
+				return theme.color.text_0
+			end
+			return if hovered:get() then theme.color.text_2 else theme.color.text_3
+		end,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
 		end,
 		on_click = function()
-			actions.search_page(target())
+			actions.search_page(props.target())
 		end,
-		label,
-	})
+		props.label,
+	}
+end)
+
+local function page_button(label: any, id: string, chosen: () -> boolean, target: () -> number, shown: () -> boolean)
+	return ui.show(shown, page_face { label = label, id = id, chosen = chosen, target = target })
 end
 
 local function first_shown(): number

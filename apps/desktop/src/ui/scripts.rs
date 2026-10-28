@@ -1724,6 +1724,81 @@ fn hover_slides_and_the_home_spin_stay_still_under_reduced_motion() {
 	}
 }
 
+#[test]
+fn hovered_and_selected_text_never_turns_darker() {
+	let mut app = TestApp::new(|runtime| {
+		Catalog::load(&[themes_dir()]).install(runtime, "midnight");
+		let host = ScriptHost::new(runtime, ui_dir().join("app.luau"));
+		for name in host_names() {
+			host.action(name.clone(), |_| {});
+			host.function(name, |_| Value::Nil);
+		}
+		host
+	});
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(
+		&mut app,
+		"a server with its channels",
+		"general",
+		&[
+			("login.screen", json!("main")),
+			("rail.items", rail_items()),
+			("rail.open_folders", json!(["1"])),
+			("sidebar.guild_id", json!("10")),
+			("sidebar.guild_name", json!("Kyoko")),
+			("sidebar.rows", sidebar_rows()),
+			("timeline.channel_id", json!("20")),
+		],
+	);
+	for (label, place) in [
+		("the selected channel", "general"),
+		("an unselected channel", "Lounge"),
+		("the selected server", "K"),
+		("an unselected server", "G"),
+	] {
+		let rest = text_node(&mut app, place);
+		let before = text_color(&mut app, rest);
+		let area = app.ui.scene.borrow().bounds(rest);
+		hover(&mut app, area.x + area.width / 2., area.y + area.height / 2.);
+		let lit = text_node(&mut app, place);
+		let after = text_color(&mut app, lit);
+		hover(&mut app, 1., 1.);
+		assert!(
+			brightness(after) >= brightness(before),
+			"{label} turned darker on hover: {before:?} to {after:?}"
+		);
+		if label.starts_with("the selected") {
+			assert_eq!(before, after, "{label} keeps its selected colour on hover");
+		}
+	}
+}
+
+fn text_node(app: &mut TestApp, wanted: &str) -> zgx::scene::NodeId {
+	let scene = app.ui.scene.borrow();
+	let mut stack = vec![scene.root()];
+	while let Some(node) = stack.pop() {
+		if let zgx::scene::NodeKind::Text { text, .. } = scene.kind(node)
+			&& text.as_ref() == wanted
+		{
+			return node;
+		}
+		stack.extend(scene.children(node).iter().copied());
+	}
+	panic!("no text `{wanted}`")
+}
+
+fn text_color(app: &mut TestApp, node: zgx::scene::NodeId) -> zgx::scene::Color {
+	match app.ui.scene.borrow().kind(node) {
+		zgx::scene::NodeKind::Text { color, .. } => *color,
+		_ => panic!("not a text node"),
+	}
+}
+
+fn brightness(color: zgx::scene::Color) -> f32 {
+	let zgx::scene::Color(red, green, blue, alpha) = color;
+	(0.2126 * f32::from(red) + 0.7152 * f32::from(green) + 0.0722 * f32::from(blue)) * f32::from(alpha) / 255.
+}
+
 fn hover(app: &mut TestApp, x: f32, y: f32) {
 	app.ui.dispatch(zgx::input::InputEvent::PointerMove { x, y });
 	app.settle();

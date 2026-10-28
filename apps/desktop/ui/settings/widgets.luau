@@ -326,6 +326,7 @@ M.button = ui.component(function(props: { text: string, tone: string?, small: bo
 		end
 		return if hover then theme.color.button_secondary_hover else theme.color.button_secondary
 	end
+	local ink = if tone == "primary" or tone == "danger" then theme.color.text_on_brand else theme.color.text_3
 	return ui.button {
 		id = props.id,
 		h = if props.small then SMALL_BUTTON else BUTTON,
@@ -342,7 +343,7 @@ M.button = ui.component(function(props: { text: string, tone: string?, small: bo
 			hovered:set(inside)
 		end,
 		on_click = props.on_click,
-		ui.text { props.text, literal = true, text_size = theme.size.font_sm, color = theme.color.text_on_brand },
+		ui.text { props.text, literal = true, text_size = theme.size.font_sm, color = ink },
 	}
 end)
 

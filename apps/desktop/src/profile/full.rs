@@ -278,7 +278,14 @@ fn board(layer: &Rc<ProfileLayer>, shown: &Shown) -> View {
 		.children(
 			FullTab::ALL
 				.iter()
-				.map(|tab| tab_button(&chosen, *tab, tab.caption(&shown.card)))
+				.map(|tab| {
+					tab_button(
+						&chosen,
+						layer.runtime.signal(false),
+						*tab,
+						tab.caption(&shown.card),
+					)
+				})
 				.collect::<Vec<_>>(),
 		);
 	let body = {
@@ -298,8 +305,8 @@ fn board(layer: &Rc<ProfileLayer>, shown: &Shown) -> View {
 	)
 }
 
-fn tab_button(selected: &Signal<FullTab>, tab: FullTab, caption: String) -> View {
-	let (pick, current) = (selected.clone(), selected.clone());
+fn tab_button(selected: &Signal<FullTab>, hovered: Signal<bool>, tab: FullTab, caption: String) -> View {
+	let (pick, current, tracker) = (selected.clone(), selected.clone(), hovered.clone());
 	div()
 		.id(format!("full-profile-tab-{}", tab.key()))
 		.pt(tok("space_16"))
@@ -311,11 +318,24 @@ fn tab_button(selected: &Signal<FullTab>, tab: FullTab, caption: String) -> View
 		})
 		.reactive_style(move || {
 			let active = current.get() == tab;
+			let ink = match (active, hovered.get()) {
+				(true, _) => "text_2",
+				(false, true) => "text_3",
+				(false, false) => "text_4",
+			};
 			Styles::new()
 				.border_color(tok(if active { "accent_2" } else { "bg_4" }))
-				.text_color(tok(if active { "text_2" } else { "text_4" }))
+				.text_color(tok(ink))
 		})
-		.hover(|style| style.text_color(tok("text_3")))
+		.on_event(move |event| match event.event {
+			InputEvent::PointerEnter => {
+				tracker.set(true);
+			}
+			InputEvent::PointerLeave => {
+				tracker.set(false);
+			}
+			_ => {}
+		})
 		.on_click(move || {
 			pick.set(tab);
 		})

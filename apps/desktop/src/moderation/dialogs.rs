@@ -219,7 +219,6 @@ fn nickname(act: &Rc<Act>, guild_id: Snowflake, user_id: Snowflake, value: &Sign
 				.line_height(tok("line_height_sm"))
 				.font_weight(500)
 				.text_color(tok("accent_1"))
-				.hover(|style| style.text_color(tok("accent_2")))
 				.child(text("Reset Nickname"))
 				.on_click(move || {
 					reset.send(Command::SetNickname {

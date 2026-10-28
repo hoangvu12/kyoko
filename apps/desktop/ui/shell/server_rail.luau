@@ -21,32 +21,20 @@ local glyph_size = theme.number(theme.size.icon_size_md)
 local guild_style = {
 	rest_bg = theme.color.hover,
 	rest_fg = theme.color.text_3,
-	active_bg = theme.color.accent_2,
-	active_fg = theme.color.text_0,
+	active_bg = theme.color.active,
+	active_fg = theme.color.text_1,
 }
 
 local home_style = {
 	rest_bg = theme.color.hover,
 	rest_fg = theme.color.text_4,
-	hover_bg = theme.color.active,
-	hover_fg = theme.color.text_1,
-	active_bg = theme.color.accent_2,
-	active_fg = theme.color.text_0,
-}
-
-local action_style = {
-	rest_bg = theme.color.hover,
-	rest_fg = theme.color.text_3,
-	active_bg = theme.color.accent_2,
-	active_fg = theme.color.bg_4,
-}
-
-local folder_style = {
-	rest_bg = theme.color.hover,
-	rest_fg = theme.color.text_3,
 	active_bg = theme.color.active,
-	active_fg = theme.color.text_3,
+	active_fg = theme.color.text_1,
 }
+
+local action_style = guild_style
+
+local folder_style = guild_style
 
 local function by_key(item: state.RailItem)
 	return item.key

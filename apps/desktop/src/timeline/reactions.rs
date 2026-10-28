@@ -326,13 +326,17 @@ impl Reactions {
 						..Default::default()
 					})
 					.border_color(tok("accent_2"))
+					.text_color(tok("text_2"))
+				})
+				.when(!selected, |tab| {
+					tab.text_color(tok("text_4"))
+						.hover(|style| style.text_color(tok("text_3")))
 				})
 				.child(
 					text(label)
 						.text_size(tok("font_size_md"))
 						.line_height(tok("line_height_label"))
-						.font_weight(500)
-						.text_color(tok(if selected { "text_2" } else { "text_4" })),
+						.font_weight(500),
 				)
 				.when(burst, |tab| tab.child(icon("sparkle", TAB_SPARKLE, "purple_2")))
 				.on_click(move || {
