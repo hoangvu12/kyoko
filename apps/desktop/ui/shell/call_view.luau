@@ -280,6 +280,40 @@ local function tile_view(tile: state.CallTile, size: () -> number, focused: any)
 				}
 			),
 		},
+		ui.show(
+			tile.video == "camera",
+			ui.image {
+				id = "call_video_" .. tile.id,
+				src = "host:video/" .. tile.id,
+				absolute = true,
+				left = 0,
+				top = 0,
+				w = size,
+				h = function()
+					return size() * TILE_RATIO
+				end,
+				fit = "cover",
+			}
+		),
+		ui.show(
+			function()
+				return tile.video == "camera" and not state.voice.video_available:get()
+			end,
+			ui.text {
+				"Video unavailable",
+				id = "call_video_unavailable_" .. tile.id,
+				absolute = true,
+				top = gap(),
+				left = gap(),
+				px = theme.size.space_8,
+				py = theme.size.space_2,
+				rounded = theme.size.radius_sm,
+				bg = theme.color.overlay_button_background,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				color = theme.color.text_2,
+			}
+		),
 		ui.row {
 			absolute = true,
 			left = gap(),
@@ -329,6 +363,29 @@ local stage = ui.component(function()
 		local inset = stage_padding() * 2
 		return tile_width(#tiles:get(), (area.width or 0) - inset, (area.height or 0) - inset)
 	end
+	local reported = ""
+	ui.effect(function()
+		local width = size()
+		local focus = focused:get()
+		local views = {}
+		local keys = {}
+		for _, tile in tiles:get() do
+			if tile.video == "camera" then
+				table.insert(views, {
+					id = tile.id,
+					w = width,
+					h = width * TILE_RATIO,
+					focused = focus == tile.id,
+				})
+				table.insert(keys, string.format("%s:%d:%s", tile.id, width, tostring(focus == tile.id)))
+			end
+		end
+		local key = table.concat(keys, ",")
+		if key ~= reported then
+			reported = key
+			actions.set_video_views(views)
+		end
+	end)
 	return ui.div {
 		ref = area,
 		id = "call_stage",

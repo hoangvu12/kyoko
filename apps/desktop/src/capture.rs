@@ -125,6 +125,7 @@ pub enum Screen {
 	ProfileMenu,
 	VoicePanel,
 	VoiceCall,
+	VoiceVideo,
 	VoiceRowHover,
 }
 
@@ -326,6 +327,7 @@ impl Screen {
 			"profile-menu" => Some(Screen::ProfileMenu),
 			"voice-panel" => Some(Screen::VoicePanel),
 			"voice-call" => Some(Screen::VoiceCall),
+			"voice-video" => Some(Screen::VoiceVideo),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			other => settings_page(other)
 				.map(Screen::Settings)
@@ -403,6 +405,7 @@ impl Screen {
 			| Screen::ProfileMenu
 			| Screen::VoicePanel
 			| Screen::VoiceCall
+			| Screen::VoiceVideo
 			| Screen::VoiceRowHover => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken

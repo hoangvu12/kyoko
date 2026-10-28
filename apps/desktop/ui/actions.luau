@@ -549,4 +549,8 @@ function M.set_mic_test(running: boolean)
 	ui.invoke("voice.mic_test", running)
 end
 
+function M.set_video_views(views: { any })
+	ui.invoke("voice.video_views", views)
+end
+
 return M

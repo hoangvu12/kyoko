@@ -78,3 +78,32 @@ Voice messages and audio attachments play through the same pipeline as images: n
 - Playing (`audio::Deck`): one voice at a time, rendered on the output's own thread with a linear resampler to the device rate. 1.5x and 2x keep the pitch (WSOLA: 30 ms Hann windows at 50% overlap, an 8 ms search for the best-matching continuation). Mute sets the gain to 0.
 - Outputs (`audio::Sink`): `Device` opens the default output device with cpal only while something plays and closes it on pause; `Silent` is a real-time clock that consumes the samples without sound (mock runs); `Manual` advances only when `AudioPlayer::pump` is called (tests, and the frozen clock of captures).
 - `bridge::AudioPlayer` is the controller: `toggle`, `seek(fraction)`, `cycle_speed`, `toggle_mute`, `probe` (reads an audio file's length, through `MediaService::audio`), `left(channel)` and `stop`, and `state(track)` with the phase (idle, loading, playing, paused, failed), position, duration, speed and mute. Starting a track pauses the one that was playing and keeps its place; each track remembers its position and speed until `stop`. The end of a track rewinds it.
+
+## Video
+
+Camera video from other people in a call (v1 103) reaches the window as zgx host images, like pictures, but from the voice connection instead of the gallery. The receive path is in `docs/voice.md`, "Video"; this section is about turning frames into pixels on screen and what that costs.
+
+- `crates/voice` decodes H.264 with Media Foundation on its own `video-decode` thread (NV12 out). There is no other decoder: openh264 stays out of the build (patents, the user's call in v1 96). Without an H.264 decoder MFT (Windows N without the Media Feature Pack) frames are dropped, the desktop's startup probe (`voice::video::available`, on its own thread, so COM never starts on the UI thread) publishes `voice.video_available = false` and camera tiles say "Video unavailable" over the avatar.
+- `session::VideoFeed` is the connection's `VideoSink`. For a tile on screen (`Command::SetVideoViews`, below) it converts the decoded frame to RGBA at the tile's size in device pixels (`voice::video::Picture::from_nv12`: nearest sampling, BT.601 limited range through lookup tables, never larger than the source) on the decode thread, and keeps only the newest picture per person until the window drains it. A tile that is not on screen costs a decode but no conversion.
+- Frame rate caps: a focused tile shows at most 30 frames a second (`FOCUSED_MAX_FPS`), a thumbnail 15 (`THUMBNAIL_MAX_FPS`); a frame that arrives sooner than three quarters of the gap after the last shown one is skipped, so a 30 fps source shows every second frame and arrival jitter does not drop a thumbnail to 10.
+- The desktop (`src/ui/video_surface.rs`) wakes on the feed, drains it and hands each picture to zgx as `host.image("video/<user id>", ImageData)`; the `Arc<[u8]>` moves, nothing is copied. `Clear` (the camera stopped, the call ended) removes the image. zgx gives every `ImageData` a new id, so each frame is a new texture upload, and the previous frame's texture is freed when the node's image changes (zgx-gpu's `node_images`).
+
+### Upload cost (the v1 103 spike)
+
+Measured 2026-10-28 on this machine (Windows 11, 20 logical processors, the dev profile: workspace crates at `opt-level = 1`, dependencies at 3), with other builds running, so each number is the median of three 16-second runs. The source is a 1280x720 30 fps H.264 clip (`ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=30 -t 4 -pix_fmt nv12 -c:v h264_mf -hw_encoding 0 -rate_control quality -quality 40 -g 60 -bf 0 -f h264`, not committed) played by `mockcord --cameras <tiles>:30:<clip>` into the `voice-video` capture screen with the call view open; CPU is the kyoko process's CPU time over wall time, GPU the sum of its `\GPU Engine(pid_*)\Utilization Percentage` counters, and `ZGX_GPU_STATS=1` gave the frame and texture figures (tile sizes from the resident texture bytes; the window was 1920x1200 at 150%).
+
+| Call view | CPU (one core = 100%) | GPU engines | Shown |
+|---|---|---|---|
+| no video (baseline) | 3.4% | 0% | |
+| 1 tile, shipped caps (thumbnail, about 630x354 px, 15 fps) | 28.5% | 2.4% | 15 fps, 13 MB/s of RGBA |
+| 4 tiles, shipped caps (thumbnails, about 525x295 px each, 15 fps) | 66% | 4.2% | 60 pictures/s, 37 MB/s |
+| 1 tile, uncapped (native 1280x720 RGBA, 30 fps) | 79% | 4.2% | 30 fps, 110 MB/s |
+| 4 tiles, uncapped | 184% | 5.9% | 120 pictures/s, 442 MB/s |
+
+Per stage (`cargo run -p kyoko-voice --example video_cost -- <clip> <mode>`, CPU time of the process):
+
+- Media Foundation decode of a 720p frame: 6.6 ms of CPU (3.7 ms of wall time; the software MFT uses several threads), so about 20% of a core per 720p30 stream, whatever the tile size. Every frame must be decoded.
+- NV12 to RGBA: 5.3 ms at 1280x720, 2.7 ms at 942x530, 0.9 ms at 470x264 (one thread; 17 ms at 720p before the lookup tables).
+- The zgx upload is the rest: about 8 to 10 ms of CPU per 720p frame on the render thread (the straight-alpha premultiply in `upload_image` and a fresh texture each frame), against well under a millisecond of GPU time. Uploading full 720p frames at 30 fps is what makes the uncapped rows expensive, so the caps stay: pictures at tile size, thumbnails at 15 fps.
+
+Findings for later tickets: decode dominates once the pictures are small, and on Discord a thumbnail's wants of 50 make the SFU send the lower simulcast layer, which cuts it further (mockcord always sends the full clip). Hardware decode (Media Foundation with a D3D11 device manager) and a zgx surface that takes NV12 textures (zgx has no Windows native surface; `NativeSurface` is macOS only) would remove most of the remaining cost; neither is needed for 4 tiles.

@@ -198,6 +198,7 @@ impl Link {
 			}
 		}
 		self.publish_speaking(state);
+		self.sync_video();
 	}
 
 	fn publish_speaking(&self, state: &State) {

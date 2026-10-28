@@ -339,3 +339,69 @@ fn edit_channel_and_invite_need_their_rights_on_a_voice_row() {
 		"nor does a text row get a gear"
 	);
 }
+
+fn camera_call_values() -> Vec<(&'static str, serde_json::Value)> {
+	let mut values = call_values();
+	for (key, value) in &mut values {
+		if *key == "voice.call" {
+			value["tiles"][1]["video"] = json!("camera");
+		}
+	}
+	values
+}
+
+fn reported_view(calls: &Calls) -> serde_json::Value {
+	let views = last_call(calls, "voice.video_views").expect("the call view reports its video tiles");
+	let views = views.as_array().expect("a list of views").clone();
+	assert_eq!(views.len(), 1, "only the camera tile is reported: {views:?}");
+	views[0].clone()
+}
+
+#[test]
+fn a_camera_tile_shows_the_member_video_and_reports_its_size_and_focus() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(&mut app, "a camera in the call", "grace", &camera_call_values());
+	assert!(
+		app.find("call_video_31").is_some(),
+		"the camera tile hosts the video"
+	);
+	assert!(app.find("call_video_30").is_none(), "an audio tile has no video");
+	let thumbnail = reported_view(&calls);
+	assert_eq!(thumbnail["id"], json!("31"));
+	assert_eq!(thumbnail["focused"], json!(false));
+	let width = thumbnail["w"].as_f64().expect("a width");
+	let height = thumbnail["h"].as_f64().expect("a height");
+	assert_eq!(width, f64::from(app.bounds("call_tile_31").width));
+	assert!(
+		(height - width * 9. / 16.).abs() < 1.,
+		"the view is the 16:9 tile: {width}x{height}"
+	);
+
+	app.click("call_tile_31");
+	app.frames(2);
+	let focused = reported_view(&calls);
+	assert_eq!(
+		focused["focused"],
+		json!(true),
+		"a focused tile asks for full quality"
+	);
+	assert!(
+		focused["w"].as_f64().expect("a width") > width,
+		"the focused tile is larger than the thumbnail"
+	);
+
+	assert!(app.find("call_video_unavailable_31").is_none());
+	shows(
+		&mut app,
+		"no h264 decoder",
+		"grace",
+		&[("voice.video_available", json!(false))],
+	);
+	assert!(
+		app.find("call_video_unavailable_31").is_some(),
+		"without Media Foundation the camera tile says video is unavailable"
+	);
+}

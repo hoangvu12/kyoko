@@ -3706,6 +3706,7 @@ dependencies = [
  "kyoko-state",
  "kyoko-store",
  "kyoko-twemoji",
+ "kyoko-voice",
  "mlua",
  "mockcord",
  "qrcode",

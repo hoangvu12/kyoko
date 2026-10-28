@@ -813,6 +813,7 @@ M.voice = {
 	speaking = ui.shared("voice.speaking", {} :: { [string]: boolean }),
 	devices = ui.shared("voice.devices", { inputs = {}, outputs = {} } :: AudioDevices),
 	mic_test = ui.shared("voice.mic_test", { running = false, level = 0 } :: MicTest),
+	video_available = ui.shared("voice.video_available", true),
 }
 
 return M

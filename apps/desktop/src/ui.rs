@@ -37,6 +37,7 @@ mod settings;
 mod sign_in;
 mod themes;
 mod threads;
+mod video_surface;
 mod voice_call;
 mod voice_panel;
 mod voice_settings;
@@ -223,6 +224,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_connection());
 			cx.tasks.spawn(link.clone().follow_speaking());
 			cx.tasks.spawn(link.clone().follow_audio_devices());
+			cx.tasks.spawn(link.clone().follow_video());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -521,6 +523,7 @@ pub(crate) struct Link {
 	voice: voice_panel::VoicePanelView,
 	call: voice_call::CallView,
 	voice_settings: voice_settings::VoiceSettingsView,
+	video: video_surface::VideoSurface,
 }
 
 impl Link {
@@ -676,6 +679,7 @@ impl Link {
 			voice: voice_panel::VoicePanelView::new(host),
 			call,
 			voice_settings: voice_settings::VoiceSettingsView::new(host),
+			video: video_surface::VideoSurface::new(host),
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -705,6 +709,7 @@ impl Link {
 		Link::install_voice(host, &link);
 		Link::install_call(host, &link);
 		Link::install_voice_settings(host, &link);
+		Link::install_video(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -951,6 +956,7 @@ impl Link {
 			capture::Screen::GameActivity => self.drive_game_activity().await,
 			capture::Screen::VoicePanel => self.drive_voice_panel().await,
 			capture::Screen::VoiceCall => self.drive_voice_call().await,
+			capture::Screen::VoiceVideo => self.drive_voice_video().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
@@ -1501,6 +1507,7 @@ impl Link {
 		self.inbox.close();
 		self.connection_wakes.close();
 		self.call.close();
+		self.video.close();
 		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();
