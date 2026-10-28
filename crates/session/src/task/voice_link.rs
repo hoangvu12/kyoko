@@ -7,7 +7,8 @@ use store::VoiceSettings;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use voice::{
-	AudioIo, InputMode, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions, VoiceParams,
+	AudioIo, ConnectionKind, InputMode, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions,
+	VoiceParams,
 };
 
 use super::{Core, Internal};
@@ -113,6 +114,7 @@ impl Core {
 		if self.voice.target == Some(target) {
 			return;
 		}
+		self.end_streams(true);
 		self.drop_connection();
 		self.voice.target = Some(target);
 		self.voice.session_id = None;
@@ -143,6 +145,7 @@ impl Core {
 	pub(super) fn voice_ready(&mut self, regions: Vec<String>) {
 		self.voice.regions = regions;
 		if self.voice.target.is_some() {
+			self.end_streams(false);
 			self.drop_connection();
 			self.voice.session_id = None;
 			self.voice.server = None;
@@ -322,6 +325,10 @@ impl Core {
 		}
 	}
 
+	pub(super) fn voice_session_id(&self) -> Option<String> {
+		self.voice.session_id.clone()
+	}
+
 	pub(super) fn voice_connection(&self) -> Option<Arc<VoiceConnection>> {
 		self.voice.connection.clone()
 	}
@@ -421,6 +428,7 @@ impl Core {
 	}
 
 	pub(super) fn close_voice(&mut self) {
+		self.end_streams(false);
 		self.drop_connection();
 	}
 
@@ -490,6 +498,7 @@ impl Core {
 		let Some(target) = self.voice.target.take() else {
 			return;
 		};
+		self.end_streams(notify_gateway);
 		self.drop_connection();
 		self.voice.session_id = None;
 		self.voice.server = None;
@@ -555,7 +564,7 @@ impl Core {
 		});
 	}
 
-	fn voice_options(&self) -> VoiceOptions {
+	pub(super) fn voice_options(&self) -> VoiceOptions {
 		let audio = self.audio_io();
 		let trust = self.voice_shared.setup.lock().trust.clone();
 		VoiceOptions {
@@ -563,6 +572,7 @@ impl Core {
 			trust,
 			user_agent: self.rest.identity().fingerprint().user_agent().to_owned(),
 			locale: self.locale.clone(),
+			kind: ConnectionKind::Voice,
 		}
 	}
 

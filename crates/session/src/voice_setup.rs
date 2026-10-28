@@ -36,4 +36,7 @@ pub(crate) struct VoiceShared {
 	pub(crate) mic_check: Mutex<Option<Arc<MicCheck>>>,
 	pub(crate) feed: VideoFeed,
 	pub(crate) views: Mutex<Vec<VideoView>>,
+	pub(crate) stream_connection: Mutex<Option<Arc<VoiceConnection>>>,
+	pub(crate) stream_feed: VideoFeed,
+	pub(crate) stream_views: Mutex<Vec<VideoView>>,
 }

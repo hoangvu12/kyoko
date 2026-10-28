@@ -697,6 +697,13 @@ pub enum Command {
 	StartMicTest,
 	StopMicTest,
 	SetVideoViews(Vec<VideoView>),
+	WatchStream {
+		stream_key: String,
+	},
+	StopWatchingStream {
+		stream_key: String,
+	},
+	SetStreamViews(Vec<VideoView>),
 }
 
 impl Command {

@@ -208,6 +208,14 @@ impl Session {
 		self.voice.feed.clone()
 	}
 
+	pub fn stream_feed(&self) -> crate::VideoFeed {
+		self.voice.stream_feed.clone()
+	}
+
+	pub fn stream_connection(&self) -> Option<Arc<voice::VoiceConnection>> {
+		self.voice.stream_connection.lock().clone()
+	}
+
 	pub fn shutdown(mut self) {
 		self.gateway.shutdown();
 		let _ = self.commands.try_send(Command::Shutdown);

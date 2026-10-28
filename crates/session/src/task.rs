@@ -66,6 +66,7 @@ mod reads;
 mod search;
 mod status;
 mod storage;
+mod streams;
 mod subscriptions;
 mod themes;
 mod uploads;
@@ -193,6 +194,15 @@ pub(crate) enum Internal {
 		generation: u64,
 		event: voice::VoiceEvent,
 	},
+	StreamTimeout(u64),
+	StreamConnected {
+		generation: u64,
+		result: Result<Arc<voice::VoiceConnection>, voice::VoiceError>,
+	},
+	StreamEvent {
+		generation: u64,
+		event: voice::VoiceEvent,
+	},
 	MicCheckStarted {
 		generation: u64,
 		result: Result<Arc<voice::MicCheck>, voice::VoiceError>,
@@ -284,6 +294,7 @@ pub(crate) struct Core {
 	favorite_writes: favorite_writes::FavoriteWrites,
 	mentions: mentions::Mentions,
 	voice: voice_link::VoiceLink,
+	streams: streams::StreamLink,
 	mic_test: mic_test::MicTestRun,
 	voice_shared: Arc<VoiceShared>,
 }
@@ -381,6 +392,7 @@ impl Core {
 			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
 			mentions: mentions::Mentions::default(),
 			voice: voice_link::VoiceLink::default(),
+			streams: streams::StreamLink::default(),
 			mic_test: mic_test::MicTestRun::default(),
 			voice_shared: parts.voice,
 		}
@@ -686,6 +698,11 @@ impl Core {
 			DispatchEvent::VoiceStateUpdate(voice) => self.voice_state_update(&voice),
 			DispatchEvent::VoiceServerUpdate(update) => self.voice_server_update(update),
 			DispatchEvent::ChannelUpdate(channel) => self.voice_channel_updated(channel.id),
+			DispatchEvent::StreamCreate(stream) | DispatchEvent::StreamUpdate(stream) => {
+				self.stream_created(&stream);
+			}
+			DispatchEvent::StreamServerUpdate(update) => self.stream_server_updated(update),
+			DispatchEvent::StreamDelete(delete) => self.stream_deleted(&delete),
 			_ => {}
 		}
 	}
@@ -838,6 +855,9 @@ impl Core {
 			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
 			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
 			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
+			Internal::StreamTimeout(generation) => self.on_stream_timeout(generation),
+			Internal::StreamConnected { generation, result } => self.on_stream_connected(generation, result),
+			Internal::StreamEvent { generation, event } => self.on_stream_event(generation, event),
 			Internal::MicCheckStarted { generation, result } => self.on_mic_check_started(generation, result),
 			Internal::MicTestLevel { generation, level_db } => self.on_mic_test_level(generation, level_db),
 		}
@@ -1050,6 +1070,9 @@ impl Core {
 			Command::StartMicTest => self.start_mic_test(),
 			Command::StopMicTest => self.stop_mic_test(),
 			Command::SetVideoViews(views) => self.set_video_views(views),
+			Command::WatchStream { stream_key } => self.watch_stream(stream_key),
+			Command::StopWatchingStream { stream_key } => self.stop_watching(&stream_key),
+			Command::SetStreamViews(views) => self.set_stream_views(views),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

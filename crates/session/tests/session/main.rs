@@ -37,6 +37,7 @@ mod safety;
 mod search;
 mod status;
 mod storage;
+mod streams;
 mod theme_links;
 mod threads;
 mod tls_fingerprint;
