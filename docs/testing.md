@@ -194,6 +194,8 @@ The listener is `mockcord::hello::HelloListener`, behind mockcord's `tls` featur
 
 `kyoko-bridge`'s tests turn the feature on too: `crates/bridge/tests/bridge/qr_login.rs` points `QrConfig.gateway_url` (and `QrConfig.trust`) at a listener to check the remote-auth socket's wss ClientHello against the same fixture, and that a refused upgrade over TLS (the listener's 404) ends the code with a network error naming the status, after an upgrade with ALPN `http/1.1`, the web client's `User-Agent`, `Origin` and `Accept-Language`.
 
+The listener records every connection it accepts, and other programs on a developer machine probe newly opened localhost ports (Roboco sends a plaintext `HEAD /` with `Connection: close` within half a second). A test that counts connections counts only those that opened with a TLS ClientHello, which kyoko always sends and a plaintext probe never does, as `media_queue::a_burst_of_images_to_one_host_shares_one_http2_connection` does. Counting only connections that carried a request would miss the handshakes wreq starts for a cold burst and then leaves idle once one negotiates `h2` (with the per-host gate off, 10 handshakes of which 1 or 2 carry the images).
+
 A new `CHROME_MAJOR` without recorded fixtures fails these tests (`docs/fingerprint.md`, "Bumping Chrome"). Fixtures must hold no secrets: the page sets its own test cookies, and a capture runs on a fresh profile. Results and the Chrome-against-wreq comparison are in `docs/fingerprint.md`, "TLS and HTTP/2 handshake".
 
 ### WebRTC offer and DTLS hello

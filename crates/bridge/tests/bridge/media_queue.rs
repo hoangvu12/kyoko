@@ -5,7 +5,7 @@ use media::{
 	Gallery, ImageName, ImageRequest, Limits, MediaFetcher, MediaService, Protocol, Shape, SizeHint, Status,
 	Variant,
 };
-use mockcord::hello::{HelloListener, IMAGE_PATH, Mode, chrome_fixture};
+use mockcord::hello::{Connection, HelloListener, IMAGE_PATH, Mode, chrome_fixture};
 use parking_lot::Mutex;
 use protocol::fingerprint::{CHROME_MAJOR, Fingerprint};
 use session::Trust;
@@ -191,7 +191,11 @@ async fn a_burst_of_images_to_one_host_shares_one_http2_connection() {
 		let _ = fetch.await.expect("the fetch task finishes");
 	}
 	assert_eq!(fetcher.protocol(&url(0)), Protocol::Http2);
-	let connections = listener.connections();
+	let connections: Vec<Connection> = listener
+		.connections()
+		.into_iter()
+		.filter(|connection| connection.hello.is_some())
+		.collect();
 	assert_eq!(
 		connections.len(),
 		1,
