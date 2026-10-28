@@ -12,6 +12,7 @@ use crate::ratchet::KeyRatchet;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Codec {
 	Opus,
+	H264,
 }
 
 #[derive(Debug, Default)]

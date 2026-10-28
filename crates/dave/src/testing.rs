@@ -54,11 +54,19 @@ impl Member {
 	}
 
 	pub fn encrypt(&self, frame: &[u8]) -> Option<Vec<u8>> {
-		self.crypto.encrypt(Codec::Opus, frame)
+		self.encrypt_as(Codec::Opus, frame)
 	}
 
 	pub fn decrypt(&self, sender: u64, payload: &[u8]) -> Option<Vec<u8>> {
-		self.crypto.decrypt(Codec::Opus, Some(sender), payload)
+		self.decrypt_as(Codec::Opus, sender, payload)
+	}
+
+	pub fn encrypt_as(&self, codec: Codec, frame: &[u8]) -> Option<Vec<u8>> {
+		self.crypto.encrypt(codec, frame)
+	}
+
+	pub fn decrypt_as(&self, codec: Codec, sender: u64, payload: &[u8]) -> Option<Vec<u8>> {
+		self.crypto.decrypt(codec, Some(sender), payload)
 	}
 
 	fn on_json(&mut self, op: u8, data: &Value) -> Vec<Outgoing> {

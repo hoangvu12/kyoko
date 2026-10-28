@@ -1,7 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-use crate::frame::{self, Cipher, GENERATION_SHIFT_BITS, Parsed};
+use crate::codec;
+use crate::frame::{self, Cipher, GENERATION_SHIFT_BITS, Parsed, Range};
 use crate::ratchet::KeyRatchet;
 use crate::transform::Codec;
 
@@ -12,6 +13,7 @@ const MAX_GENERATION_GAP: u32 = 250;
 const MAX_MISSING_NONCES: usize = 1000;
 const MAX_FRAMES_PER_SECOND: u64 = 50 + 2 * 60;
 const NONCE_MASK: u32 = (1 << GENERATION_SHIFT_BITS) - 1;
+const MAX_CIPHERTEXT_ATTEMPTS: usize = 10;
 
 type BigNonce = u64;
 
@@ -208,11 +210,21 @@ impl Encryptor {
 
 	pub fn seal(&mut self, codec: Codec, media: &[u8]) -> Option<Vec<u8>> {
 		match codec {
-			Codec::Opus => self.seal_once(media),
+			Codec::Opus => self.seal_once(media, &[]),
+			Codec::H264 => {
+				let processed = codec::process_h264(media).unwrap_or_else(|| codec::Processed {
+					frame: media.to_vec(),
+					ranges: Vec::new(),
+				});
+				(0..MAX_CIPHERTEXT_ATTEMPTS).find_map(|_| {
+					let sealed = self.seal_once(&processed.frame, &processed.ranges)?;
+					codec::ciphertext_is_packetizable(&sealed, &processed.ranges).then_some(sealed)
+				})
+			}
 		}
 	}
 
-	fn seal_once(&mut self, media: &[u8]) -> Option<Vec<u8>> {
+	fn seal_once(&mut self, media: &[u8], ranges: &[Range]) -> Option<Vec<u8>> {
 		self.nonce = self.nonce.wrapping_add(1);
 		let generation = frame::wrapped_generation(self.generation, self.nonce >> GENERATION_SHIFT_BITS);
 		if generation != self.generation || self.cipher.is_none() {
@@ -223,6 +235,6 @@ impl Encryptor {
 			self.generation = generation;
 			self.cipher = Some(Cipher::new(&key)?);
 		}
-		frame::seal(self.cipher.as_mut()?, self.nonce, media, &[])
+		frame::seal(self.cipher.as_mut()?, self.nonce, media, ranges)
 	}
 }
