@@ -6,7 +6,7 @@ Plan ticket V10 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â
 
 **Blocked by:** 103
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test: watching sends op 20, connects to the stream endpoint with `server_id` = `rtc_server_id`, joins the DAVE group `rtc_server_id - 1`, and decodes the fixture stream; the parent voice connection is unaffected
 - [ ] `stream_full` and `user_requested` deletes end the view with the right text; leaving voice ends every stream view

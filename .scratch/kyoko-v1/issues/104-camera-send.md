@@ -6,7 +6,7 @@ Plan ticket V8 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 103
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test (fake capture source): Camera on sends op 4 `self_video: true`, op 12 with the Ready-assigned SSRCs for both layers, and DAVE-encrypted H264 with playout-delay; wants of 0 pause a layer; Camera off clears
 - [ ] MF unavailable (N edition) shows "video unavailable" without breaking audio
