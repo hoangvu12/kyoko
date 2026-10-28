@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Download it into its own new folder outside the repo (untrusted file; neutral User-Agent `kyoko-dev`); crop a square on her face; produce the sizes kyoko needs (exe `.ico` 16/24/32/48/64/256, tray, window, the login and loading marks where `kyoko_mark` is used, README if it shows a logo)
 - [ ] Replace the old logo everywhere it's used; the app icon in the taskbar and tray shows the new one; captures of login and the window title checked by eye
