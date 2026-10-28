@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Measure first with mockcord's `--crowded-expressions` and `media_delay` (79's rig): first-rows time for the emoji picker and for a channel with many images
 - [ ] Requests to the same CDN host share one HTTP/2 connection with a higher in-flight limit (pick a number that matches what Chrome does for images on one origin; write the source); disk-cache checks don't hold a network slot
