@@ -205,7 +205,9 @@ pub use timeline::{
 	replacement_channel,
 };
 pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};
-pub use voice_call::{CallTile, Pace, SPEAKING_PACE, SpeakingPace, VoiceCall, voice_call, voice_speaking};
+pub use voice_call::{
+	CallStream, CallTile, Pace, SPEAKING_PACE, SpeakingPace, VoiceCall, voice_call, voice_speaking,
+};
 pub use voice_panel::{VoiceControls, VoicePanel, voice_controls, voice_panel};
 pub use web_login::{
 	PageCookie, Profile, WebEnd, WebLoginConfig, WebPage, WebSignIn, WebStage, sweep_profiles,

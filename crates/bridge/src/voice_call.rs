@@ -21,12 +21,28 @@ pub struct CallTile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallStream {
+	pub user_id: Snowflake,
+	pub name: String,
+	pub stream_key: String,
+	pub watching: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VoiceCall {
 	pub channel_id: Snowflake,
 	pub guild_id: Option<Snowflake>,
 	pub name: String,
 	pub connected: bool,
 	pub tiles: Vec<CallTile>,
+	pub streams: Vec<CallStream>,
+}
+
+pub fn stream_key(guild_id: Option<Snowflake>, channel_id: Snowflake, user_id: Snowflake) -> String {
+	match guild_id {
+		Some(guild_id) => format!("guild:{guild_id}:{channel_id}:{user_id}"),
+		None => format!("call:{channel_id}:{user_id}"),
+	}
 }
 
 pub fn voice_call(state: &State) -> Option<VoiceCall> {
@@ -84,6 +100,19 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 		})
 		.collect();
 	tiles.sort_by_cached_key(|tile| (tile.name.to_lowercase(), tile.user_id));
+	let streams = tiles
+		.iter()
+		.filter(|tile| tile.live && !tile.me)
+		.map(|tile| {
+			let stream_key = stream_key(guild_id, channel_id, tile.user_id);
+			CallStream {
+				user_id: tile.user_id,
+				name: tile.name.clone(),
+				watching: session.watching.as_deref() == Some(stream_key.as_str()),
+				stream_key,
+			}
+		})
+		.collect();
 	let name = state
 		.channel(channel_id)
 		.and_then(|channel| channel.name.clone())
@@ -94,6 +123,7 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 		name,
 		connected: session.status == VoiceStatus::Connected,
 		tiles,
+		streams,
 	})
 }
 

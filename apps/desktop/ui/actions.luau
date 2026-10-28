@@ -553,4 +553,16 @@ function M.set_video_views(views: { any })
 	ui.invoke("voice.video_views", views)
 end
 
+function M.set_stream_views(views: { any })
+	ui.invoke("voice.stream_views", views)
+end
+
+function M.watch_stream(key: string)
+	ui.invoke("voice.watch_stream", { key = key })
+end
+
+function M.stop_watching(key: string)
+	ui.invoke("voice.stop_watching", { key = key })
+end
+
 return M

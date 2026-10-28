@@ -957,6 +957,8 @@ impl Link {
 			capture::Screen::VoicePanel => self.drive_voice_panel().await,
 			capture::Screen::VoiceCall => self.drive_voice_call().await,
 			capture::Screen::VoiceVideo => self.drive_voice_video().await,
+			capture::Screen::VoiceStream => self.drive_voice_stream().await,
+			capture::Screen::VoiceStreamWatching => self.drive_voice_stream_watching().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled

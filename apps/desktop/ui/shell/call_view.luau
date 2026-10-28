@@ -91,6 +91,20 @@ local function header()
 	}
 end
 
+local function live_badge()
+	return ui.text {
+		"LIVE",
+		shrink = 0,
+		px = theme.size.space_4,
+		rounded = theme.size.radius_sm,
+		bg = theme.color.red_3,
+		text_size = theme.size.font_size_xs,
+		line_height = theme.size.line_height_sm,
+		weight = theme.weight.bold,
+		color = theme.color.text_0,
+	}
+end
+
 local function state_icons(tile: state.CallTile): { any }
 	local icons = {}
 	if tile.local_muted then
@@ -255,7 +269,7 @@ local function tile_view(tile: state.CallTile, size: () -> number, focused: any)
 		items = "center",
 		cursor = "pointer",
 		on_click = function()
-			focused:set(if focused:get() == tile.id then "" else tile.id)
+			focused:set(if focused:get() == tile.key then "" else tile.key)
 		end,
 		context_menu_style = menu_style,
 		context_menu = if tile.me
@@ -337,10 +351,180 @@ local function tile_view(tile: state.CallTile, size: () -> number, focused: any)
 				weight = theme.weight.medium,
 				color = theme.color.text_1,
 			},
+			ui.show(tile.live, live_badge()),
 			table.unpack(state_icons(tile)),
 		},
 	}
 end
+
+local function stream_button(props: { id: string, label: string, on_click: () -> (), primary: boolean })
+	return ui.button {
+		props.label,
+		id = props.id,
+		h = theme.size.button_height_md,
+		px = theme.size.space_16,
+		py = 0,
+		shrink = 0,
+		rounded = theme.size.radius_sm,
+		border = 0,
+		focus = { border = 0 },
+		cursor = "pointer",
+		bg = if props.primary then theme.color.accent_3 else theme.color.overlay_button_background,
+		hover = { bg = if props.primary then theme.color.accent_4 else theme.color.bg_1 },
+		text_size = theme.size.font_size_sm,
+		line_height = theme.size.line_height_label,
+		weight = theme.weight.medium,
+		color = if props.primary then theme.color.text_0 else theme.color.text_1,
+		on_click = props.on_click,
+	}
+end
+
+local stream_tile = ui.component(function(props: { tile: state.CallTile, size: () -> number, focused: any })
+	local tile = props.tile
+	local size = props.size
+	local focused = props.focused
+	local hovered = ui.use_state(false)
+	local function height(): number
+		return size() * TILE_RATIO
+	end
+	local function face(): number
+		return math.min(avatar_size(), height() * AVATAR_SHARE)
+	end
+	local function controls_shown(): boolean
+		return hovered:get() or focused:get() == tile.key
+	end
+	return ui.div {
+		id = "call_stream_" .. tile.id,
+		relative = true,
+		shrink = 0,
+		w = size,
+		h = height,
+		rounded = theme.size.radius_md,
+		overflow = "hidden",
+		bg = theme.color.bg_1,
+		justify = "center",
+		items = "center",
+		cursor = if tile.watching then "pointer" else nil,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		on_click = if tile.watching
+			then function()
+				focused:set(if focused:get() == tile.key then "" else tile.key)
+			end
+			else nil,
+		ui.column {
+			items = "center",
+			gap = theme.size.space_12,
+			ui.div {
+				w = face,
+				h = face,
+				rounded = face,
+				overflow = "hidden",
+				bg = theme.color.bg_3,
+				ui.show(
+					tile.avatar ~= "",
+					ui.image {
+						src = tile.avatar,
+						w = face,
+						h = face,
+						fit = "cover",
+					}
+				),
+			},
+			ui.show(
+				not tile.watching,
+				stream_button {
+					id = "call_watch_" .. tile.id,
+					label = "Watch Stream",
+					primary = true,
+					on_click = function()
+						actions.watch_stream(tile.stream_key)
+					end,
+				}
+			),
+		},
+		ui.show(
+			tile.watching,
+			ui.image {
+				id = "call_stream_video_" .. tile.id,
+				src = "host:stream/" .. tile.id,
+				absolute = true,
+				left = 0,
+				top = 0,
+				w = size,
+				h = height,
+				fit = "contain",
+			}
+		),
+		ui.show(
+			function()
+				return tile.watching and not state.voice.video_available:get()
+			end,
+			ui.text {
+				"Video unavailable",
+				id = "call_stream_unavailable_" .. tile.id,
+				absolute = true,
+				top = gap(),
+				left = gap(),
+				px = theme.size.space_8,
+				py = theme.size.space_2,
+				rounded = theme.size.radius_sm,
+				bg = theme.color.overlay_button_background,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				color = theme.color.text_2,
+			}
+		),
+		ui.show(
+			function()
+				return tile.watching and controls_shown()
+			end,
+			ui.div {
+				absolute = true,
+				top = gap(),
+				right = gap(),
+				stream_button {
+					id = "call_stop_watching_" .. tile.id,
+					label = "Stop Watching",
+					primary = false,
+					on_click = function()
+						if focused:get() == tile.key then
+							focused:set("")
+						end
+						actions.stop_watching(tile.stream_key)
+					end,
+				},
+			}
+		),
+		ui.row {
+			absolute = true,
+			left = gap(),
+			bottom = gap(),
+			max_w = function()
+				return size() - gap() * 2
+			end,
+			items = "center",
+			gap = theme.size.space_4,
+			px = theme.size.space_8,
+			py = theme.size.space_2,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.overlay_button_background,
+			icon { name = "screen_share", size = badge_icon(), color = theme.color.text_2 },
+			ui.text {
+				tile.name,
+				literal = true,
+				min_w = 0,
+				truncate = true,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				weight = theme.weight.medium,
+				color = theme.color.text_1,
+			},
+			live_badge(),
+		},
+	}
+end)
 
 local stage = ui.component(function()
 	local area = ui.ref()
@@ -352,7 +536,7 @@ local stage = ui.component(function()
 			return tiles
 		end
 		for _, tile in tiles do
-			if tile.id == focus then
+			if tile.key == focus then
 				return { tile }
 			end
 		end
@@ -363,27 +547,53 @@ local stage = ui.component(function()
 		local inset = stage_padding() * 2
 		return tile_width(#tiles:get(), (area.width or 0) - inset, (area.height or 0) - inset)
 	end
+	local watched = {}
+	ui.effect(function()
+		local now = {}
+		for _, tile in call().tiles do
+			if tile.stream and tile.watching then
+				now[tile.key] = true
+				if not watched[tile.key] then
+					focused:set(tile.key)
+				end
+			end
+		end
+		watched = now
+	end)
 	local reported = ""
+	local reported_streams = ""
 	ui.effect(function()
 		local width = size()
 		local focus = focused:get()
 		local views = {}
 		local keys = {}
+		local streams = {}
+		local stream_keys = {}
 		for _, tile in tiles:get() do
-			if tile.video == "camera" then
-				table.insert(views, {
-					id = tile.id,
-					w = width,
-					h = width * TILE_RATIO,
-					focused = focus == tile.id,
-				})
-				table.insert(keys, string.format("%s:%d:%s", tile.id, width, tostring(focus == tile.id)))
+			local view = {
+				id = tile.id,
+				w = width,
+				h = width * TILE_RATIO,
+				focused = focus == tile.key,
+			}
+			local key = string.format("%s:%d:%s", tile.id, width, tostring(view.focused))
+			if tile.stream and tile.watching then
+				table.insert(streams, view)
+				table.insert(stream_keys, key)
+			elseif tile.video == "camera" then
+				table.insert(views, view)
+				table.insert(keys, key)
 			end
 		end
 		local key = table.concat(keys, ",")
 		if key ~= reported then
 			reported = key
 			actions.set_video_views(views)
+		end
+		local stream_key = table.concat(stream_keys, ",")
+		if stream_key ~= reported_streams then
+			reported_streams = stream_key
+			actions.set_stream_views(streams)
 		end
 	end)
 	return ui.div {
@@ -397,6 +607,9 @@ local stage = ui.component(function()
 		items = "center",
 		overflow = "hidden",
 		ui.each(tiles, function(tile: state.CallTile)
+			if tile.stream then
+				return stream_tile { tile = tile, size = size, focused = focused }
+			end
 			return tile_view(tile, size, focused)
 		end, {
 			key = function(tile: state.CallTile)

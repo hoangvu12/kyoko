@@ -405,3 +405,84 @@ fn a_camera_tile_shows_the_member_video_and_reports_its_size_and_focus() {
 		"without Media Foundation the camera tile says video is unavailable"
 	);
 }
+
+fn stream_call_values(watching: bool) -> Vec<(&'static str, serde_json::Value)> {
+	let mut values = call_values();
+	for (key, value) in &mut values {
+		if *key == "voice.call" {
+			value["tiles"][1]["live"] = json!(true);
+			let stream = json!({
+				"key": "s31", "id": "31", "name": "grace", "avatar": "", "me": false, "muted": false,
+				"deafened": false, "video": "stream", "live": true, "volume": 100, "local_muted": false,
+				"stream": true, "stream_key": "guild:20:21:31", "watching": watching,
+			});
+			value["tiles"]
+				.as_array_mut()
+				.expect("the tiles")
+				.insert(1, stream);
+		}
+	}
+	values
+}
+
+#[test]
+fn a_stream_tile_watches_focuses_reports_its_view_and_stops_watching() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(
+		&mut app,
+		"a stream in the call",
+		"Watch Stream",
+		&stream_call_values(false),
+	);
+	assert!(
+		app.find("call_stream_31").is_some(),
+		"the streamer gets a stream tile"
+	);
+	assert!(app.find("call_tile_31").is_some(), "and keeps their own tile");
+	assert!(
+		app.find("call_stream_video_31").is_none(),
+		"nothing streams before Watch Stream"
+	);
+	assert!(
+		calls
+			.borrow()
+			.iter()
+			.all(|(name, _)| name != "voice.watch_stream")
+	);
+	app.click("call_watch_31");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.watch_stream"),
+		Some(json!({ "key": "guild:20:21:31" }))
+	);
+
+	shows(
+		&mut app,
+		"watching the stream",
+		"Stop Watching",
+		&stream_call_values(true),
+	);
+	assert!(
+		app.find("call_stream_video_31").is_some(),
+		"the stream video shows"
+	);
+	assert!(
+		app.find("call_tile_30").is_none(),
+		"a watched stream takes the stage"
+	);
+	let views = last_call(&calls, "voice.stream_views").expect("the stream view is reported");
+	let views = views.as_array().expect("a list of views");
+	assert_eq!(views.len(), 1);
+	assert_eq!(views[0]["id"], json!("31"));
+	assert_eq!(views[0]["focused"], json!(true));
+
+	app.click("call_stop_watching_31");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.stop_watching"),
+		Some(json!({ "key": "guild:20:21:31" }))
+	);
+}

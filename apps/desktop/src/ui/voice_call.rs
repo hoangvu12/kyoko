@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Instant;
 
-use bridge::{CallTile, Inbox, Pace, SpeakingPace, VoiceCall, VoiceVideo};
+use bridge::{CallStream, CallTile, Inbox, Pace, SpeakingPace, VoiceCall, VoiceVideo};
 use media::ImageName;
 use protocol::Snowflake;
 use session::Command;
@@ -16,6 +16,7 @@ use crate::rail::Icons;
 
 const TILE_AVATAR_POINTS: f64 = 80.;
 const CAPTURE_SPEECH_FRAMES: usize = 1_500;
+const STREAM_CAPTURE_FRAMES: u64 = 3;
 const CAPTURE_TONE_HZ: f32 = 440.;
 const CAPTURE_TONE_LEVEL: f32 = 0.2;
 const CAPTURE_RATE: f32 = 48_000.;
@@ -112,6 +113,18 @@ impl Link {
 		host.action("voice.user_volume", move |argument| {
 			if let (Some(link), Some((user_id, volume))) = (actions.upgrade(), user_volume(&argument)) {
 				link.send(Command::SetUserVolume { user_id, volume });
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.watch_stream", move |argument| {
+			if let (Some(link), Some(stream_key)) = (actions.upgrade(), stream_key(&argument)) {
+				link.send(Command::WatchStream { stream_key });
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.stop_watching", move |argument| {
+			if let (Some(link), Some(stream_key)) = (actions.upgrade(), stream_key(&argument)) {
+				link.send(Command::StopWatchingStream { stream_key });
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -252,6 +265,37 @@ impl Link {
 		tracing::info!("opened the call view for the capture");
 	}
 
+	fn shown_stream(&self) -> Option<String> {
+		self.call
+			.published
+			.borrow()
+			.as_ref()
+			.and_then(|(open, call)| call.as_ref().filter(|_| *open))
+			.and_then(|call| call.streams.first())
+			.map(|stream| stream.stream_key.clone())
+	}
+
+	pub(super) async fn drive_voice_stream(&self) {
+		self.drive_voice_call().await;
+		self.until_capture(|link| link.shown_stream().is_some()).await;
+		tracing::info!("a stream tile shows for the capture");
+	}
+
+	pub(super) async fn drive_voice_stream_watching(&self) {
+		self.drive_voice_stream().await;
+		let Some(stream_key) = self.shown_stream() else {
+			tracing::warn!("no stream to watch");
+			return;
+		};
+		self.send(Command::WatchStream { stream_key });
+		self.until_capture(|link| link.stream_frames_shown() >= STREAM_CAPTURE_FRAMES)
+			.await;
+		tracing::info!(
+			frames = self.stream_frames_shown(),
+			"stream frames are showing for the capture"
+		);
+	}
+
 	pub(super) fn call_images(&self) -> Vec<String> {
 		self.call.images()
 	}
@@ -272,6 +316,13 @@ fn user_volume(argument: &Value) -> Option<(Snowflake, u8)> {
 		_ => return None,
 	};
 	Some((user_id, volume as u8))
+}
+
+fn stream_key(argument: &Value) -> Option<String> {
+	match field(argument, "key")? {
+		Value::Str(key) if !key.is_empty() => Some(key.to_string()),
+		_ => None,
+	}
 }
 
 fn local_mute(argument: &Value) -> Option<(Snowflake, bool)> {
@@ -309,7 +360,14 @@ fn call_value(open: bool, call: Option<&VoiceCall>, tiles: &[(&CallTile, Option<
 			Value::List(
 				tiles
 					.iter()
-					.map(|(tile, avatar)| tile_value(tile, avatar.as_deref()))
+					.flat_map(|(tile, avatar)| {
+						let stream = call
+							.and_then(|call| {
+								call.streams.iter().find(|stream| stream.user_id == tile.user_id)
+							})
+							.map(|stream| stream_value(stream, avatar.as_deref()));
+						stream.into_iter().chain([tile_value(tile, avatar.as_deref())])
+					})
 					.collect(),
 			),
 		),
@@ -335,6 +393,29 @@ fn tile_value(tile: &CallTile, avatar: Option<&str>) -> Value {
 		("live", tile.live.into()),
 		("volume", f64::from(tile.volume).into()),
 		("local_muted", tile.local_muted.into()),
+		("stream", false.into()),
+		("stream_key", "".into()),
+		("watching", false.into()),
+	])
+}
+
+fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
+	let avatar = avatar.map(|name| format!("host:{name}")).unwrap_or_default();
+	record([
+		("key", format!("s{}", stream.user_id).as_str().into()),
+		("id", stream.user_id.to_string().as_str().into()),
+		("name", stream.name.as_str().into()),
+		("avatar", avatar.as_str().into()),
+		("me", false.into()),
+		("muted", false.into()),
+		("deafened", false.into()),
+		("video", "stream".into()),
+		("live", true.into()),
+		("volume", f64::from(state::USER_VOLUME_DEFAULT).into()),
+		("local_muted", false.into()),
+		("stream", true.into()),
+		("stream_key", stream.stream_key.as_str().into()),
+		("watching", stream.watching.into()),
 	])
 }
 

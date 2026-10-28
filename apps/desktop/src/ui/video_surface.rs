@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use bridge::Inbox;
 use protocol::Snowflake;
-use session::{Command, VideoFeed, VideoUpdate, VideoView};
+use session::{Command, Session, VideoFeed, VideoUpdate, VideoView};
 use zgx::image::ImageData;
 use zgx_script::{ScriptHost, Shared, Value};
 
@@ -21,14 +21,42 @@ struct Reported {
 	focused: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Source {
+	Camera,
+	Stream,
+}
+
+impl Source {
+	fn image_name(self, user_id: Snowflake) -> String {
+		match self {
+			Self::Camera => format!("video/{user_id}"),
+			Self::Stream => format!("stream/{user_id}"),
+		}
+	}
+
+	fn feed(self, session: &Session) -> VideoFeed {
+		match self {
+			Self::Camera => session.video_feed(),
+			Self::Stream => session.stream_feed(),
+		}
+	}
+
+	fn command(self, views: Vec<VideoView>) -> Command {
+		match self {
+			Self::Camera => Command::SetVideoViews(views),
+			Self::Stream => Command::SetStreamViews(views),
+		}
+	}
+}
+
 enum Wake {
-	Frames,
+	Frames(Source),
 	Available(bool),
 }
 
-pub(super) struct VideoSurface {
-	wakes: Inbox<Wake>,
-	available: Shared,
+struct Lane {
+	source: Source,
 	feed: RefCell<Option<VideoFeed>>,
 	shown: RefCell<HashSet<Snowflake>>,
 	reported: RefCell<Vec<Reported>>,
@@ -36,8 +64,24 @@ pub(super) struct VideoSurface {
 	frames: Cell<u64>,
 }
 
-fn image_name(user_id: Snowflake) -> String {
-	format!("video/{user_id}")
+impl Lane {
+	fn new(source: Source) -> Self {
+		Self {
+			source,
+			feed: RefCell::new(None),
+			shown: RefCell::new(HashSet::new()),
+			reported: RefCell::new(Vec::new()),
+			sent: RefCell::new(None),
+			frames: Cell::new(0),
+		}
+	}
+}
+
+pub(super) struct VideoSurface {
+	wakes: Inbox<Wake>,
+	available: Shared,
+	cameras: Lane,
+	streams: Lane,
 }
 
 impl VideoSurface {
@@ -53,11 +97,8 @@ impl VideoSurface {
 		Self {
 			wakes,
 			available: host.shared("voice.video_available", Value::Bool(true)),
-			feed: RefCell::new(None),
-			shown: RefCell::new(HashSet::new()),
-			reported: RefCell::new(Vec::new()),
-			sent: RefCell::new(None),
-			frames: Cell::new(0),
+			cameras: Lane::new(Source::Camera),
+			streams: Lane::new(Source::Stream),
 		}
 	}
 
@@ -65,47 +106,65 @@ impl VideoSurface {
 		self.wakes.close();
 	}
 
-	fn frames_shown(&self) -> u64 {
-		self.frames.get()
+	fn lane(&self, source: Source) -> &Lane {
+		match source {
+			Source::Camera => &self.cameras,
+			Source::Stream => &self.streams,
+		}
+	}
+
+	fn lanes(&self) -> [&Lane; 2] {
+		[&self.cameras, &self.streams]
 	}
 }
 
 impl Link {
 	pub(super) fn install_video(host: &ScriptHost, link: &Rc<Link>) {
-		let actions = Rc::downgrade(link);
-		host.action("voice.video_views", move |argument| {
-			if let Some(link) = actions.upgrade() {
-				*link.video.reported.borrow_mut() = reported_views(&argument);
-				link.send_video_views();
-			}
-		});
+		for (action, source) in [
+			("voice.video_views", Source::Camera),
+			("voice.stream_views", Source::Stream),
+		] {
+			let actions = Rc::downgrade(link);
+			host.action(action, move |argument| {
+				if let Some(link) = actions.upgrade() {
+					*link.video.lane(source).reported.borrow_mut() = reported_views(&argument);
+					link.send_video_views(link.video.lane(source));
+				}
+			});
+		}
 	}
 
 	pub(super) fn sync_video(&self) {
-		let feed = self.flow.borrow().session().map(session::Session::video_feed);
-		let attached = self.video.feed.borrow().clone();
-		let same = match (&feed, &attached) {
-			(Some(feed), Some(attached)) => feed.same(attached),
-			(None, None) => true,
-			_ => false,
-		};
-		if !same {
-			self.clear_video();
-			if let Some(feed) = &feed {
-				let wakes = self.video.wakes.clone();
-				feed.set_waker(move || wakes.push(Wake::Frames));
+		for lane in self.video.lanes() {
+			let feed = self
+				.flow
+				.borrow()
+				.session()
+				.map(|session| lane.source.feed(session));
+			let attached = lane.feed.borrow().clone();
+			let same = match (&feed, &attached) {
+				(Some(feed), Some(attached)) => feed.same(attached),
+				(None, None) => true,
+				_ => false,
+			};
+			if !same {
+				self.clear_video(lane);
+				if let Some(feed) = &feed {
+					let wakes = self.video.wakes.clone();
+					let source = lane.source;
+					feed.set_waker(move || wakes.push(Wake::Frames(source)));
+				}
+				*lane.feed.borrow_mut() = feed;
+				lane.sent.borrow_mut().take();
 			}
-			*self.video.feed.borrow_mut() = feed;
-			self.video.sent.borrow_mut().take();
+			self.send_video_views(lane);
 		}
-		self.send_video_views();
 	}
 
-	fn send_video_views(&self) {
+	fn send_video_views(&self, lane: &Lane) {
 		let scale = self.scale_factor();
 		let views: Vec<VideoView> = if self.call_open() {
-			self.video
-				.reported
+			lane.reported
 				.borrow()
 				.iter()
 				.map(|view| VideoView {
@@ -118,58 +177,64 @@ impl Link {
 		} else {
 			Vec::new()
 		};
-		if self.video.sent.borrow().as_ref() == Some(&views) {
+		if lane.sent.borrow().as_ref() == Some(&views) {
 			return;
 		}
-		*self.video.sent.borrow_mut() = Some(views.clone());
-		self.send(Command::SetVideoViews(views));
+		*lane.sent.borrow_mut() = Some(views.clone());
+		self.send(lane.source.command(views));
 	}
 
-	fn clear_video(&self) {
-		let shown: Vec<Snowflake> = self.video.shown.borrow_mut().drain().collect();
+	fn clear_video(&self, lane: &Lane) {
+		let shown: Vec<Snowflake> = lane.shown.borrow_mut().drain().collect();
 		for user_id in shown {
-			self.host.image(&image_name(user_id), None);
+			self.host.image(&lane.source.image_name(user_id), None);
 		}
 	}
 
 	pub(super) async fn follow_video(self: Rc<Self>) {
 		while let Some(wakes) = self.video.wakes.next().await {
+			let mut woken = Vec::new();
 			for wake in &wakes {
-				if let Wake::Available(available) = wake {
-					if !available {
-						tracing::warn!("video unavailable: no Media Foundation h264 decoder");
+				match wake {
+					Wake::Available(available) => {
+						if !available {
+							tracing::warn!("video unavailable: no Media Foundation h264 decoder");
+						}
+						self.video.available.set((*available).into());
 					}
-					self.video.available.set((*available).into());
+					Wake::Frames(source) if !woken.contains(source) => woken.push(*source),
+					Wake::Frames(_) => {}
 				}
 			}
-			if !wakes.iter().any(|wake| matches!(wake, Wake::Frames)) {
-				continue;
-			}
-			let feed = self.video.feed.borrow().clone();
-			let Some(feed) = feed else {
-				continue;
-			};
-			for update in feed.drain() {
-				self.show_video(update);
+			for source in woken {
+				let lane = self.video.lane(source);
+				let feed = lane.feed.borrow().clone();
+				let Some(feed) = feed else {
+					continue;
+				};
+				for update in feed.drain() {
+					self.show_video(lane, update);
+				}
 			}
 		}
 	}
 
-	fn show_video(&self, update: VideoUpdate) {
+	fn show_video(&self, lane: &Lane, update: VideoUpdate) {
 		match update {
 			VideoUpdate::Show { user_id, picture } => {
 				match ImageData::new(picture.width, picture.height, picture.rgba) {
 					Ok(image) => {
-						self.video.shown.borrow_mut().insert(user_id);
-						self.video.frames.set(self.video.frames.get() + 1);
-						self.host.image(&image_name(user_id), Some(Arc::new(image)));
+						lane.shown.borrow_mut().insert(user_id);
+						lane.frames.set(lane.frames.get() + 1);
+						self.host
+							.image(&lane.source.image_name(user_id), Some(Arc::new(image)));
 					}
 					Err(error) => tracing::warn!(error, "a video frame was not usable"),
 				}
 			}
 			VideoUpdate::Clear { user_id } => {
-				self.video.shown.borrow_mut().remove(&user_id);
-				self.host.image(&image_name(user_id), None);
+				lane.shown.borrow_mut().remove(&user_id);
+				self.host.image(&lane.source.image_name(user_id), None);
 			}
 		}
 	}
@@ -178,12 +243,16 @@ impl Link {
 impl Link {
 	pub(super) async fn drive_voice_video(&self) {
 		self.drive_voice_call().await;
-		self.until_capture(|link| link.video.frames_shown() >= CAPTURE_FRAMES)
+		self.until_capture(|link| link.video.cameras.frames.get() >= CAPTURE_FRAMES)
 			.await;
 		tracing::info!(
-			frames = self.video.frames_shown(),
+			frames = self.video.cameras.frames.get(),
 			"camera frames are showing for the capture"
 		);
+	}
+
+	pub(super) fn stream_frames_shown(&self) -> u64 {
+		self.video.streams.frames.get()
 	}
 }
 

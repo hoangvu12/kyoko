@@ -768,6 +768,9 @@ export type CallTile = {
 	live: boolean,
 	volume: number,
 	local_muted: boolean,
+	stream: boolean,
+	stream_key: string,
+	watching: boolean,
 }
 export type VoiceCall = {
 	open: boolean,
