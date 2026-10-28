@@ -2009,10 +2009,14 @@ pub(super) fn rail_items() -> serde_json::Value {
 		json!({
 			"kind": "guild", "key": format!("g{id}"), "id": id, "name": name,
 			"acronym": &name[..1], "letter": &name[..1], "icon": "", "unread": unread, "mentions": mentions,
+			"voice": [], "voice_more": 0,
 		})
 	};
+	let mut kyoko = guild("10", "Kyoko", true, 3);
+	kyoko["voice"] = json!([{ "key": "51", "avatar": "" }, { "key": "52", "avatar": "" }]);
+	kyoko["voice_more"] = json!(2);
 	json!([
-		guild("10", "Kyoko", true, 3),
+		kyoko,
 		{
 			"kind": "folder", "key": "f1", "id": "1", "name": "Friends", "color": "#5865f2",
 			"tint": "#5865f266", "unread": false, "mentions": 0,

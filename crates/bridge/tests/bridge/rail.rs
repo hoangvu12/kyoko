@@ -83,3 +83,77 @@ async fn a_mention_shows_on_the_rail_live_and_marking_the_guild_read_clears_it()
 		.await;
 	running.stop().await;
 }
+
+fn voice_state(guild_id: Snowflake, channel_id: Option<Snowflake>, user_id: Snowflake) -> serde_json::Value {
+	serde_json::json!({
+		"guild_id": guild_id.to_string(),
+		"channel_id": channel_id.map(|id| id.to_string()),
+		"user_id": user_id.to_string(),
+		"session_id": "rail",
+		"deaf": false,
+		"mute": false,
+		"self_deaf": false,
+		"self_mute": false,
+		"self_video": false,
+		"suppress": false,
+	})
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_rail_follows_who_is_in_voice_in_each_server() {
+	let mut running = Running::start("rail-voice").await;
+	running
+		.until("a server with people in voice", |view| {
+			view.rail.guilds().any(|guild| !guild.voice.is_empty())
+		})
+		.await;
+	let guild_id = running
+		.view
+		.rail
+		.guilds()
+		.find(|guild| !guild.voice.is_empty())
+		.map(|guild| guild.id)
+		.expect("a server with people in voice");
+	let (mut present, voice_channel) = {
+		let state = running.session().state().clone();
+		let state = state.read();
+		let guild = state.guild(guild_id).expect("the server is in state");
+		let present: Vec<Snowflake> = guild.voice_states.keys().copied().collect();
+		let channel = state
+			.guild_channel_tree(guild_id)
+			.into_iter()
+			.flat_map(|node| node.children)
+			.find(|row| row.kind == ChannelType::GuildVoice)
+			.map(|row| row.id)
+			.expect("a voice channel");
+		(present, channel)
+	};
+	let mut listed = guild(&running.view.rail, guild_id).expect("the server").voice;
+	listed.sort();
+	present.sort();
+	assert_eq!(listed, present);
+
+	for user_id in &present {
+		running
+			.server
+			.control()
+			.dispatch("VOICE_STATE_UPDATE", &voice_state(guild_id, None, *user_id));
+	}
+	running
+		.until("the server to show nobody in voice", |view| {
+			guild(&view.rail, guild_id).is_some_and(|guild| guild.voice.is_empty())
+		})
+		.await;
+
+	let joiner = present[0];
+	running.server.control().dispatch(
+		"VOICE_STATE_UPDATE",
+		&voice_state(guild_id, Some(voice_channel), joiner),
+	);
+	running
+		.until("the joiner to show on the rail", |view| {
+			guild(&view.rail, guild_id).is_some_and(|guild| guild.voice == vec![joiner])
+		})
+		.await;
+	running.stop().await;
+}

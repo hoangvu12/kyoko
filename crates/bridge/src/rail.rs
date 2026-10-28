@@ -16,6 +16,7 @@ pub struct RailGuild {
 	pub icon: Option<String>,
 	pub unread: bool,
 	pub mentions: u32,
+	pub voice: Vec<Snowflake>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,8 +75,11 @@ impl Rail {
 	}
 
 	pub fn apply(&mut self, state: &State, changes: &Changes) -> bool {
-		let relevant =
-			changes.guild_list || changes.read_state || changes.user_settings || changes.private_channels;
+		let relevant = changes.guild_list
+			|| changes.read_state
+			|| changes.user_settings
+			|| changes.private_channels
+			|| !changes.voice.is_empty();
 		if !relevant {
 			return false;
 		}
@@ -98,7 +102,7 @@ pub fn acronym(name: &str) -> String {
 		.collect()
 }
 
-fn rail_guild(summary: &GuildSummary) -> RailGuild {
+fn rail_guild(state: &State, summary: &GuildSummary) -> RailGuild {
 	RailGuild {
 		id: summary.id,
 		name: summary.name.clone(),
@@ -106,7 +110,29 @@ fn rail_guild(summary: &GuildSummary) -> RailGuild {
 		icon: summary.icon.clone(),
 		unread: summary.unread && !summary.muted,
 		mentions: summary.mentions,
+		voice: in_voice(state, summary.id),
 	}
+}
+
+fn in_voice(state: &State, guild_id: Snowflake) -> Vec<Snowflake> {
+	let Some(guild) = state.guild(guild_id) else {
+		return Vec::new();
+	};
+	let mut users: Vec<(String, Snowflake)> = guild
+		.voice_states
+		.values()
+		.filter(|voice| {
+			voice
+				.channel_id
+				.is_some_and(|channel_id| !state.is_hidden(channel_id))
+		})
+		.map(|voice| {
+			let name = state.display_name(Some(guild_id), voice.user_id).to_lowercase();
+			(name, voice.user_id)
+		})
+		.collect();
+	users.sort();
+	users.into_iter().map(|(_, user_id)| user_id).collect()
 }
 
 fn rail_items(state: &State) -> Vec<RailItem> {
@@ -117,7 +143,9 @@ fn rail_items(state: &State) -> Vec<RailItem> {
 		.guild_layout()
 		.into_iter()
 		.filter_map(|entry| match entry {
-			RailEntry::Guild(id) => by_id.get(&id).map(|summary| RailItem::Guild(rail_guild(summary))),
+			RailEntry::Guild(id) => by_id
+				.get(&id)
+				.map(|summary| RailItem::Guild(rail_guild(state, summary))),
 			RailEntry::Folder {
 				id,
 				name,
@@ -127,7 +155,7 @@ fn rail_items(state: &State) -> Vec<RailItem> {
 				let guilds: Vec<RailGuild> = guilds
 					.iter()
 					.filter_map(|id| by_id.get(id))
-					.map(|summary| rail_guild(summary))
+					.map(|summary| rail_guild(state, summary))
 					.collect();
 				if guilds.is_empty() {
 					return None;

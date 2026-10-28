@@ -1,3 +1,4 @@
+export type RailVoice = { key: string, avatar: string }
 export type RailGuild = {
 	kind: string,
 	key: string,
@@ -8,6 +9,8 @@ export type RailGuild = {
 	icon: string,
 	unread: boolean,
 	mentions: number,
+	voice: { RailVoice }?,
+	voice_more: number?,
 }
 export type RailFolder = {
 	kind: string,

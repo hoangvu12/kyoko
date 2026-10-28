@@ -16,6 +16,7 @@ pub const SCROLL_PASSES: usize = 10;
 pub const BUG_TITLE_TEXT: &str = "Reaction tooltip wraps to three lines";
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
+pub const RAIL_FIRST_GUILD: (f32, f32) = (45., 155.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const GAME_ACTIVITY_BUTTON: (f32, f32) = (194., 760.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
@@ -51,6 +52,7 @@ pub enum Opening {
 pub enum Screen {
 	FirstChannel,
 	RailFolders,
+	RailHover,
 	Composer,
 	ComposerReply,
 	SilentTyping,
@@ -209,6 +211,7 @@ impl Screen {
 		match name {
 			"app-frame" | "server-rail" | "channel-sidebar" | "timeline" => Some(Screen::FirstChannel),
 			"server-rail-folder" => Some(Screen::RailFolders),
+			"server-rail-hover" => Some(Screen::RailHover),
 			"composer" => Some(Screen::Composer),
 			"composer-reply" => Some(Screen::ComposerReply),
 			"composer-silent-typing" => Some(Screen::SilentTyping),
@@ -332,6 +335,7 @@ impl Screen {
 		match self {
 			Screen::FirstChannel
 			| Screen::RailFolders
+			| Screen::RailHover
 			| Screen::SidebarCollapsed
 			| Screen::NewestImage
 			| Screen::Showcase(_)

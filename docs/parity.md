@@ -690,3 +690,11 @@ Kyoko only (`--apps kyoko`); compare by eye with Discord. The app's mock voice r
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `voice-panel` | 98 | Default selection, then join the open server's first voice channel (Lounge) through `voice.join` and wait for Voice Connected: the voice panel between the channel sidebar and the user panel, Lounge / server name, Disconnect. | yes |
+
+### 83 Server rail hover card
+
+Kyoko only (`--apps kyoko`): no Midnight mockup has the rail's hover card; compare by eye with Discord and "Server rail" in `docs/ui.md`. Mockcord puts two or three people in each server's Lounge and Gaming, so every server tile carries the speaker badge.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `server-rail-hover` | 83 | Default selection, then point at the first server in the open mock folder at (45, 155) and wait for its hover card: the name, the speaker and the voice avatars. | yes |

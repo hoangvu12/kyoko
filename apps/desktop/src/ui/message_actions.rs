@@ -120,6 +120,16 @@ impl Link {
 		}
 	}
 
+	pub(super) async fn point_at_rail(&self) {
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
+			tracing::warn!("the window is gone");
+			return;
+		};
+		let (x, y) = capture::RAIL_FIRST_GUILD;
+		ui.dispatch(InputEvent::PointerMove { x, y });
+		zgx::timer::sleep(capture::SETTLE).await;
+	}
+
 	pub(super) async fn point_at_last_message(&self, open_menu: bool) {
 		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
 			tracing::warn!("the window is gone");

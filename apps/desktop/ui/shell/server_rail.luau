@@ -132,6 +132,87 @@ local function guild_preview(guild: state.RailGuild)
 	end
 end
 
+local function voice_avatar(person: state.RailVoice)
+	return ui.div {
+		w = theme.size.voice_row_avatar,
+		h = theme.size.voice_row_avatar,
+		shrink = 0,
+		rounded = theme.size.voice_row_avatar,
+		overflow = "hidden",
+		bg = theme.color.bg_2,
+		if person.avatar ~= ""
+			then ui.image {
+				src = person.avatar,
+				w = theme.size.voice_row_avatar,
+				h = theme.size.voice_row_avatar,
+				fit = "cover",
+			}
+			else nil,
+	}
+end
+
+local function voice_row(guild: state.RailGuild)
+	local people = {}
+	for _, person in guild.voice or {} do
+		table.insert(people, voice_avatar(person))
+	end
+	local more = guild.voice_more or 0
+	return ui.row {
+		id = "rail_tooltip_voice",
+		items = "center",
+		gap = theme.number(theme.size.space_8),
+		icon { name = "volume_fill", size = theme.number(theme.size.icon_size_md)(), color = theme.color.text_4 },
+		ui.row {
+			items = "center",
+			gap = theme.number(theme.size.space_4),
+			table.unpack(people),
+		},
+		if more > 0
+			then ui.text {
+				"+" .. more,
+				text_size = theme.size.font_size_xs,
+				weight = theme.weight.semibold,
+				color = theme.color.text_4,
+			}
+			else nil,
+	}
+end
+
+local function in_voice(guild: state.RailGuild): boolean
+	return guild.voice ~= nil and #guild.voice > 0
+end
+
+local function card(name: string, voice: any)
+	return ui.column {
+		max_w = theme.size.reaction_tooltip_width,
+		px = theme.size.space_12,
+		py = theme.size.space_8,
+		gap = theme.number(theme.size.space_8),
+		bg = theme.color.bg_3,
+		border = theme.size.border_thickness,
+		border_color = theme.color.border,
+		rounded = theme.size.radius_sm,
+		ui.text {
+			name,
+			literal = true,
+			text_size = theme.size.font_size_md,
+			weight = theme.weight.semibold,
+			color = theme.color.text_2,
+		},
+		voice,
+	}
+end
+
+local function guild_card(guild: state.RailGuild)
+	return card(guild.name, if in_voice(guild) then voice_row(guild) else nil)
+end
+
+local card_offset = theme.number(theme.size.space_8)
+
+local function card_placement()
+	return { side = "right", align = "center", offset = card_offset() }
+end
+
 local function slot(tile: any, before: string, target: string)
 	return ui.div {
 		relative = true,
@@ -146,7 +227,9 @@ local function guild_tile(guild: state.RailGuild)
 	local tile = rail_tile {
 		face = guild_face(guild),
 		style = guild_style,
-		tooltip = guild.name,
+		tooltip = guild_card(guild),
+		tooltip_placement = card_placement(),
+		speaker = in_voice(guild),
 		on_click = actions.select_guild(guild.id),
 		selected = function()
 			return state.sidebar.guild_id:get() == guild.id
@@ -232,7 +315,8 @@ local function folder_tile(folder: state.RailFolder, open: boolean)
 			else folder_style,
 		size = if open then theme.size.guildbar_avatar_size else theme.size.folder_size,
 		radius = theme.size.radius_lg,
-		tooltip = folder.name,
+		tooltip = card(folder.name, nil),
+		tooltip_placement = card_placement(),
 		on_click = actions.toggle_folder(folder.id),
 		unread = if open
 			then nil

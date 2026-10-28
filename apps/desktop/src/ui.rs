@@ -921,6 +921,7 @@ impl Link {
 		self.until_settled(&capture, false).await;
 		match &capture.screen {
 			capture::Screen::RailFolders => self.rail.open_all(),
+			capture::Screen::RailHover => self.point_at_rail().await,
 			capture::Screen::NewestImage => self.reveal(None).await,
 			capture::Screen::Showcase(section) => {
 				self.reveal(Some(&mockcord::fixtures::showcase::marker(section)))

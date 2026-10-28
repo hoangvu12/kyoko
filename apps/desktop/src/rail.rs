@@ -14,6 +14,8 @@ use crate::stable::StableRows;
 use crate::ui::{Link, record};
 
 const ICON_POINTS: f64 = 48.;
+const VOICE_AVATAR_POINTS: f64 = 24.;
+const VOICE_AVATARS: usize = 4;
 const OPEN_FOLDERS_KEY: &str = "rail.open_folders";
 const FOLDER_TINT_ALPHA: u32 = 0x66;
 const SERVER_DIRECTORY: &str = "https://discord.com/servers";
@@ -21,6 +23,7 @@ const SERVER_DIRECTORY: &str = "https://discord.com/servers";
 pub(crate) struct RailView {
 	rail: RefCell<Rail>,
 	icons: RefCell<HashMap<(Snowflake, String), ImageName>>,
+	avatars: RefCell<HashMap<(Snowflake, Option<String>), ImageName>>,
 	open_folders: RefCell<BTreeSet<u64>>,
 	store: RefCell<Option<Arc<Store>>>,
 	items: Shared,
@@ -34,6 +37,7 @@ impl RailView {
 		Self {
 			rail: RefCell::new(Rail::default()),
 			icons: RefCell::new(HashMap::new()),
+			avatars: RefCell::new(HashMap::new()),
 			open_folders: RefCell::new(BTreeSet::new()),
 			store: RefCell::new(None),
 			items: host.shared("rail.items", Value::List(Rc::new([]))),
@@ -51,6 +55,7 @@ impl RailView {
 	pub(crate) fn reset(&self) {
 		*self.rail.borrow_mut() = Rail::default();
 		self.icons.borrow_mut().clear();
+		self.avatars.borrow_mut().clear();
 		self.stable.forget();
 		self.items.set(Value::List(Rc::new([])));
 		self.home_mentions.set(0.0.into());
@@ -85,10 +90,33 @@ impl RailView {
 			.iter()
 			.filter_map(|(id, name)| name.clone().map(|name| (*id, name)))
 			.collect();
-		let items = rail.items().iter().map(|item| item_value(item, &icons));
+		let avatars: HashMap<Snowflake, String> = rail
+			.guilds()
+			.flat_map(|guild| guild.voice.iter().take(VOICE_AVATARS))
+			.filter_map(|user_id| Some((*user_id, self.avatar(state, *user_id, &images)?)))
+			.collect();
+		let lookup = Names {
+			icons: &icons,
+			avatars: &avatars,
+		};
+		let items = rail.items().iter().map(|item| item_value(item, &lookup));
 		self.items.set(Value::List(self.stable.rows(items)));
 		self.home_mentions.set(f64::from(rail.home_mentions()).into());
-		Some(icons.into_values().collect())
+		Some(icons.into_values().chain(avatars.into_values()).collect())
+	}
+
+	fn avatar(&self, state: &State, user_id: Snowflake, images: &Icons<'_>) -> Option<String> {
+		let user = state.user(user_id)?;
+		let key = (user_id, user.avatar.clone());
+		let mut avatars = self.avatars.borrow_mut();
+		if let Some(name) = avatars.get(&key) {
+			return Some(name.as_str().to_owned());
+		}
+		let request = bridge::avatar_request(images.cdn, user, VOICE_AVATAR_POINTS, images.scale, false)?;
+		let name = images.gallery.request(request);
+		let text = name.as_str().to_owned();
+		avatars.insert(key, name);
+		Some(text)
 	}
 
 	fn icon_name(&self, guild: &RailGuild, images: &Icons<'_>) -> Option<String> {
@@ -270,11 +298,33 @@ fn tint(color: u32) -> String {
 	format!("#{:06x}{FOLDER_TINT_ALPHA:02x}", color & 0xff_ffff)
 }
 
-fn guild_value(guild: &RailGuild, icons: &HashMap<Snowflake, String>) -> Value {
-	let icon = icons
-		.get(&guild.id)
-		.map(|name| format!("host:{name}"))
-		.unwrap_or_default();
+struct Names<'a> {
+	icons: &'a HashMap<Snowflake, String>,
+	avatars: &'a HashMap<Snowflake, String>,
+}
+
+fn host_name(name: Option<&String>) -> String {
+	name.map(|name| format!("host:{name}")).unwrap_or_default()
+}
+
+fn voice_value(guild: &RailGuild, avatars: &HashMap<Snowflake, String>) -> Value {
+	let shown = guild
+		.voice
+		.iter()
+		.take(VOICE_AVATARS)
+		.map(|user_id| {
+			record([
+				("key", user_id.to_string().as_str().into()),
+				("avatar", host_name(avatars.get(user_id)).as_str().into()),
+			])
+		})
+		.collect();
+	Value::List(shown)
+}
+
+fn guild_value(guild: &RailGuild, names: &Names<'_>) -> Value {
+	let icon = host_name(names.icons.get(&guild.id));
+	let more = guild.voice.len().saturating_sub(VOICE_AVATARS) as f64;
 	record([
 		("kind", "guild".into()),
 		("key", format!("g{}", guild.id).as_str().into()),
@@ -288,14 +338,16 @@ fn guild_value(guild: &RailGuild, icons: &HashMap<Snowflake, String>) -> Value {
 		("icon", icon.as_str().into()),
 		("unread", guild.unread.into()),
 		("mentions", f64::from(guild.mentions).into()),
+		("voice", voice_value(guild, names.avatars)),
+		("voice_more", more.into()),
 	])
 }
 
-fn folder_value(folder: &RailFolder, icons: &HashMap<Snowflake, String>) -> Value {
+fn folder_value(folder: &RailFolder, names: &Names<'_>) -> Value {
 	let guilds = folder
 		.guilds
 		.iter()
-		.map(|guild| guild_value(guild, icons))
+		.map(|guild| guild_value(guild, names))
 		.collect();
 	record([
 		("kind", "folder".into()),
@@ -310,9 +362,9 @@ fn folder_value(folder: &RailFolder, icons: &HashMap<Snowflake, String>) -> Valu
 	])
 }
 
-fn item_value(item: &RailItem, icons: &HashMap<Snowflake, String>) -> Value {
+fn item_value(item: &RailItem, names: &Names<'_>) -> Value {
 	match item {
-		RailItem::Guild(guild) => guild_value(guild, icons),
-		RailItem::Folder(folder) => folder_value(folder, icons),
+		RailItem::Guild(guild) => guild_value(guild, names),
+		RailItem::Folder(folder) => folder_value(folder, names),
 	}
 }

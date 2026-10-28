@@ -1,6 +1,7 @@
 local theme = require("../theme")
 local unread_pill = require("./unread_pill")
 local mention_badge = require("./mention_badge")
+local icon = require("./icon")
 
 export type Style = {
 	rest_bg: string,
@@ -16,7 +17,8 @@ export type Drop = { drop: string, target: string, accepts: (payload: any) -> bo
 export type Props = {
 	face: (foreground: () -> string, hovered: any) -> any,
 	style: Style,
-	tooltip: string,
+	tooltip: any,
+	tooltip_placement: any?,
 	on_click: any,
 	id: string?,
 	size: string?,
@@ -24,6 +26,7 @@ export type Props = {
 	selected: (() -> boolean)?,
 	unread: (() -> boolean)?,
 	mentions: (() -> number)?,
+	speaker: boolean?,
 	drag: (() -> any)?,
 	preview: ((payload: any) -> any)?,
 	onto: Drop?,
@@ -41,6 +44,28 @@ end
 local selected_pill = theme.number(theme.size.guild_pill_selected_height)
 local hover_pill = theme.number(theme.size.guild_pill_hover_height)
 local unread_pill_height = theme.number(theme.size.guild_pill_unread_height)
+local badge_inset = theme.number(theme.size.space_4)
+
+local function speaker_badge()
+	return ui.div {
+		id = "rail_voice_badge",
+		absolute = true,
+		top = -badge_inset(),
+		right = -badge_inset(),
+		w = theme.size.icon_size_md,
+		ui.row {
+			w = theme.size.icon_size_md,
+			h = theme.size.icon_size_md,
+			justify = "center",
+			items = "center",
+			rounded = theme.size.icon_size_md,
+			bg = theme.color.bg_1,
+			border = theme.size.space_2,
+			border_color = theme.color.bg_4,
+			icon { name = "volume_fill", size = theme.number(theme.size.icon_size_xs)(), color = theme.color.text_2 },
+		},
+	}
+end
 
 return ui.component(function(props: Props)
 	local hovered = ui.use_state(false)
@@ -86,6 +111,7 @@ return ui.component(function(props: Props)
 		justify = "center",
 		cursor = "pointer",
 		tooltip = props.tooltip,
+		tooltip_placement = props.tooltip_placement,
 		on_hover = function(inside: boolean)
 			hovered:set(inside)
 		end,
@@ -148,6 +174,7 @@ return ui.component(function(props: Props)
 				bottom = -6,
 				mention_badge { count = mentions, ring = theme.color.bg_4 },
 			}),
+			if props.speaker then speaker_badge() else nil,
 		},
 	}
 end)
