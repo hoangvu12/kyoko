@@ -44,13 +44,12 @@ fn the_call_view_shows_the_tiles_and_its_controls_and_menu_reach_the_host() {
 		assert!(bounds.width > 0. && bounds.height > 0., "{tile} is laid out");
 	}
 	assert!(app.find("call_view").is_some(), "the call view takes the page");
-	app.click("call_camera");
 	app.click("call_screen");
 	app.frames(2);
-	assert!(
-		calls.borrow().is_empty(),
-		"camera and screen share wait for their tickets"
-	);
+	assert!(calls.borrow().is_empty(), "screen share waits for its ticket");
+	app.click("call_camera");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.toggle_camera"), Some(json!(true)));
 	app.click("call_mute");
 	app.click("call_deafen");
 	app.click("call_open_chat");
@@ -58,6 +57,7 @@ fn the_call_view_shows_the_tiles_and_its_controls_and_menu_reach_the_host() {
 	app.frames(2);
 	let names: Vec<String> = calls.borrow().iter().map(|(name, _)| name.clone()).collect();
 	for wanted in [
+		"voice.toggle_camera",
 		"voice.toggle_mute",
 		"voice.toggle_deafen",
 		"voice.open_chat",
@@ -578,5 +578,55 @@ fn the_full_window_stream_view_shows_the_stream_sets_its_volume_and_closes() {
 	assert!(
 		app.find("stream_viewer").is_none(),
 		"Stop Watching closes the view"
+	);
+}
+
+fn own_camera_values() -> Vec<(&'static str, serde_json::Value)> {
+	let mut values = call_values();
+	for (key, value) in &mut values {
+		if *key == "voice.call" {
+			value["tiles"][0]["video"] = json!("camera");
+		}
+	}
+	values.push((
+		"voice.controls",
+		json!({ "muted": false, "deafened": false, "server_muted": false, "server_deafened": false, "camera": true }),
+	));
+	values
+}
+
+#[test]
+fn your_camera_shows_on_your_own_tile_and_the_button_turns_it_off() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(&mut app, "your camera in the call", "ada", &own_camera_values());
+	assert!(
+		app.find("call_video_30").is_some(),
+		"your own tile shows your camera"
+	);
+	let view = reported_view(&calls);
+	assert_eq!(
+		view["id"],
+		json!("30"),
+		"your own preview is sized like any camera tile"
+	);
+	app.click("call_camera");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.toggle_camera"), Some(json!(true)));
+
+	calls.borrow_mut().clear();
+	shows(
+		&mut app,
+		"no h264 codec",
+		"ada",
+		&[("voice.video_available", json!(false))],
+	);
+	app.click("call_camera");
+	app.frames(2);
+	assert!(
+		last_call(&calls, "voice.toggle_camera").is_none(),
+		"without Media Foundation the camera button does nothing"
 	);
 }

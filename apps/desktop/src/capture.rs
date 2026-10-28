@@ -18,6 +18,8 @@ pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
 pub const RAIL_FIRST_GUILD: (f32, f32) = (45., 155.);
 pub const SIDEBAR_FIRST_VOICE: (f32, f32) = (200., 459.);
+pub const SETTINGS_CONTENT: (f32, f32) = (760., 420.);
+pub const SETTINGS_VIDEO_SCROLL: f32 = 640.;
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const GAME_ACTIVITY_BUTTON: (f32, f32) = (194., 760.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
@@ -132,6 +134,8 @@ pub enum Screen {
 	VoiceStreamViewer,
 	VoiceRowHover,
 	PushToTalkSettings,
+	VoiceCamera,
+	SettingsCamera,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -337,6 +341,8 @@ impl Screen {
 			"voice-stream" => Some(Screen::VoiceStream),
 			"voice-stream-watching" => Some(Screen::VoiceStreamWatching),
 			"voice-stream-viewer" => Some(Screen::VoiceStreamViewer),
+			"voice-camera" => Some(Screen::VoiceCamera),
+			"settings-voice-camera" => Some(Screen::SettingsCamera),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			"settings-voice-push-to-talk" => Some(Screen::PushToTalkSettings),
 			other => settings_page(other)
@@ -421,7 +427,9 @@ impl Screen {
 			| Screen::VoiceStream
 			| Screen::VoiceStreamWatching
 			| Screen::VoiceStreamViewer
-			| Screen::VoiceRowHover => Some(Opening::First),
+			| Screen::VoiceRowHover
+			| Screen::VoiceCamera
+			| Screen::SettingsCamera => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

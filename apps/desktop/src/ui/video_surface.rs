@@ -264,6 +264,18 @@ impl Link {
 			.map(|view| view.width)
 			.fold(0., f64::max)
 	}
+
+	pub(super) async fn drive_voice_camera(&self) {
+		self.drive_voice_call().await;
+		self.send(Command::SetSelfVideo(true));
+		let me = self.state().and_then(|shared| shared.read().current_user_id());
+		self.until_capture(|link| {
+			me.is_some_and(|me| link.video.cameras.shown.borrow().contains(&me))
+				&& link.video.cameras.frames.get() >= CAPTURE_FRAMES
+		})
+		.await;
+		tracing::info!("your camera is showing for the capture");
+	}
 }
 
 fn device_pixels(points: f64, scale: f64) -> u32 {

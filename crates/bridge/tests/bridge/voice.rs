@@ -1,12 +1,13 @@
 use std::time::{Duration, Instant};
 
-use bridge::{Pace, SPEAKING_PACE, SpeakingPace, VoiceVideo, voice_call, voice_speaking};
+use bridge::{Pace, SPEAKING_PACE, SpeakingPace, VoiceVideo, voice_call, voice_controls, voice_speaking};
 use protocol::Snowflake;
 use state::{Event, LocalEvent, State, UserAudio, VideoKind, VoiceStatus};
 
 const CHANNEL: Snowflake = Snowflake(800_000_000_000_000_001);
 const GRACE: Snowflake = Snowflake(800_000_000_000_000_002);
 const LINUS: Snowflake = Snowflake(800_000_000_000_000_003);
+const ADA: Snowflake = Snowflake(800_000_000_000_000_004);
 
 fn local(state: &mut State, event: LocalEvent) {
 	state.apply(&Event::Local(event));
@@ -145,4 +146,36 @@ fn a_members_op_12_camera_makes_their_tile_a_camera_tile_until_it_stops() {
 		None,
 		"the camera tile ends with the video"
 	);
+}
+
+fn signed_in_call() -> State {
+	let mut state = State::new();
+	let ready: protocol::Ready = serde_json::from_value(serde_json::json!({
+		"user": { "id": ADA.to_string(), "username": "ada" },
+		"session_id": "camera",
+	}))
+	.expect("a minimal ready");
+	state.apply(&Event::Ready(&ready));
+	local(
+		&mut state,
+		LocalEvent::VoiceConnection {
+			status: VoiceStatus::Connected,
+			channel_id: CHANNEL,
+			guild_id: None,
+		},
+	);
+	state
+}
+
+#[test]
+fn turning_your_camera_on_makes_your_own_tile_a_camera_tile_and_lights_the_button() {
+	let mut state = signed_in_call();
+	assert_eq!(tile_video(&state, ADA), None, "your tile starts as an audio tile");
+	assert!(!voice_controls(&state).camera);
+	local(&mut state, LocalEvent::CameraChanged(true));
+	assert_eq!(tile_video(&state, ADA), Some(VoiceVideo::Camera));
+	assert!(voice_controls(&state).camera, "the camera button shows it on");
+	local(&mut state, LocalEvent::CameraChanged(false));
+	assert_eq!(tile_video(&state, ADA), None);
+	assert!(!voice_controls(&state).camera);
 }

@@ -66,6 +66,7 @@ fn controls_value(controls: VoiceControls) -> Value {
 		("deafened", controls.deafened.into()),
 		("server_muted", controls.server_muted.into()),
 		("server_deafened", controls.server_deafened.into()),
+		("camera", controls.camera.into()),
 	])
 }
 
@@ -97,6 +98,14 @@ impl Link {
 				&& let Some(controls) = link.voice_controls()
 			{
 				link.send(Command::SetSelfDeaf(!controls.deafened));
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.toggle_camera", move |_| {
+			if let Some(link) = actions.upgrade()
+				&& let Some(controls) = link.voice_controls()
+			{
+				link.send(Command::SetSelfVideo(!controls.camera));
 			}
 		});
 		let actions = Rc::downgrade(link);

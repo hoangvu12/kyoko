@@ -226,6 +226,8 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_connection());
 			cx.tasks.spawn(link.clone().follow_speaking());
 			cx.tasks.spawn(link.clone().follow_audio_devices());
+			cx.tasks.spawn(link.clone().follow_cameras());
+			cx.tasks.spawn(link.clone().follow_camera_preview());
 			cx.tasks.spawn(link.clone().follow_video());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
@@ -967,6 +969,8 @@ impl Link {
 			capture::Screen::VoiceStream => self.drive_voice_stream().await,
 			capture::Screen::VoiceStreamWatching => self.drive_voice_stream_watching().await,
 			capture::Screen::VoiceStreamViewer => self.drive_voice_stream_viewer().await,
+			capture::Screen::VoiceCamera => self.drive_voice_camera().await,
+			capture::Screen::SettingsCamera => self.drive_settings_camera().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
@@ -1523,6 +1527,7 @@ impl Link {
 		self.connection_wakes.close();
 		self.call.close();
 		self.video.close();
+		self.voice_settings.close();
 		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();

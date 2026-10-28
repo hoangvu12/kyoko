@@ -88,8 +88,10 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 				me: mine,
 				muted: member.muted || (mine && (session.self_mute || session.self_deaf)),
 				deafened: member.deafened || (mine && session.self_deaf),
-				video: if session.remote_video.contains_key(&member.user_id) {
+				video: if session.remote_video.contains_key(&member.user_id) || (mine && session.camera_on) {
 					Some(VoiceVideo::Camera)
+				} else if mine && member.video == Some(VoiceVideo::Camera) {
+					None
 				} else {
 					member.video
 				},

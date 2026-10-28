@@ -784,9 +784,12 @@ export type VoiceControls = {
 	deafened: boolean,
 	server_muted: boolean,
 	server_deafened: boolean,
+	camera: boolean,
 }
 
 export type AudioDevice = { id: string, name: string }
+
+export type Camera = { id: string, name: string }
 
 export type AudioDevices = { inputs: { AudioDevice }, outputs: { AudioDevice } }
 
@@ -805,6 +808,7 @@ M.voice = {
 		deafened = false,
 		server_muted = false,
 		server_deafened = false,
+		camera = false,
 	} :: VoiceControls),
 	call = ui.shared("voice.call", {
 		open = false,
@@ -817,6 +821,8 @@ M.voice = {
 	devices = ui.shared("voice.devices", { inputs = {}, outputs = {} } :: AudioDevices),
 	mic_test = ui.shared("voice.mic_test", { running = false, level = 0 } :: MicTest),
 	video_available = ui.shared("voice.video_available", true),
+	cameras = ui.shared("voice.cameras", {} :: { Camera }),
+	camera_preview = ui.shared("voice.camera_preview", false),
 }
 
 export type SideButton = { binding: string, serial: number }

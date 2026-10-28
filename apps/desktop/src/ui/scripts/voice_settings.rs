@@ -52,6 +52,10 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 			("login.screen", json!("main")),
 			("settings.values", voice_values(|_| {})),
 			("voice.devices", devices()),
+			(
+				"voice.cameras",
+				json!([{ "id": "camera-1", "name": "Desk Camera" }]),
+			),
 			("settings.page", json!("voice")),
 		],
 	);
@@ -66,6 +70,9 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		"Automatically determine input sensitivity",
 		"Noise Suppression",
 		"Echo Cancellation",
+		"Video Settings",
+		"Camera",
+		"Test Video",
 	] {
 		assert!(texts.iter().any(|text| text == shown), "{shown} is not shown");
 	}
@@ -100,6 +107,38 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	app.frames(2);
 	assert_eq!(last_call(&calls, "voice.mic_test"), Some(json!(false)));
 
+	app.click("voice_camera_test");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.camera_preview"), Some(json!(true)));
+	shows(
+		&mut app,
+		"a running camera preview",
+		"Stop Video",
+		&[("voice.camera_preview", json!(true))],
+	);
+	assert!(
+		app.find("voice_camera_preview_image").is_some(),
+		"the preview shows the camera"
+	);
+	let preview = app.bounds("voice_camera_preview");
+	assert!(
+		(preview.height - preview.width * 9. / 16.).abs() < 1.,
+		"the preview is 16:9"
+	);
+	app.click("voice_camera_stop");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.camera_preview"), Some(json!(false)));
+	shows(
+		&mut app,
+		"a stopped camera preview",
+		"Test Video",
+		&[("voice.camera_preview", json!(false))],
+	);
+	app.click("voice_camera_device");
+	app.frames(2);
+	app.click("voice_camera_device_2");
+	app.frames(2);
+
 	app.click("voice_input_device");
 	app.frames(2);
 	app.click("voice_input_device_3");
@@ -115,6 +154,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		json!({ "key": "voice.push_to_talk", "value": true }),
 		json!({ "key": "voice.auto_sensitivity", "value": false }),
 		json!({ "key": "voice.noise_suppression", "value": true }),
+		json!({ "key": "voice.camera_device", "value": "camera-1" }),
 	] {
 		assert!(written.contains(&wanted), "{wanted} was not written: {written:?}");
 	}

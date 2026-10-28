@@ -529,6 +529,10 @@ function M.toggle_deafen()
 	return ui.action("voice.toggle_deafen")
 end
 
+function M.toggle_camera()
+	ui.invoke("voice.toggle_camera", true)
+end
+
 function M.open_call()
 	return ui.action("voice.open_call")
 end
@@ -571,6 +575,10 @@ end
 
 function M.set_stream_volume(id: string, volume: number)
 	ui.invoke("voice.stream_volume", { id = id, volume = volume })
+end
+
+function M.set_camera_preview(running: boolean)
+	ui.invoke("voice.camera_preview", running)
 end
 
 return M

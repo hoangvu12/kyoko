@@ -16,6 +16,7 @@ pub struct VoiceControls {
 	pub deafened: bool,
 	pub server_muted: bool,
 	pub server_deafened: bool,
+	pub camera: bool,
 }
 
 fn status_label(status: &VoiceStatus) -> Option<&'static str> {
@@ -61,5 +62,6 @@ pub fn voice_controls(state: &State) -> VoiceControls {
 		deafened: chosen.self_deaf,
 		server_muted: own.is_some_and(|own| own.mute),
 		server_deafened: own.is_some_and(|own| own.deaf),
+		camera: state.voice().is_some_and(|session| session.camera_on),
 	}
 }

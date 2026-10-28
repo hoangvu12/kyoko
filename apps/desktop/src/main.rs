@@ -405,6 +405,7 @@ fn session_starter(
 	let build_source = backend.build_source.clone();
 	let mock_voice = backend.mock_origin.is_some().then(|| session::VoiceSetup {
 		audio: session::AudioIo::Manual,
+		camera: session::CameraIo::Pattern,
 		trust: backend
 			.voice_root
 			.as_deref()

@@ -876,12 +876,21 @@ local control = ui.component(function(props: {
 	tooltip: string | () -> string,
 	on_click: any?,
 	red: (() -> boolean)?,
-	disabled: boolean?,
+	lit: (() -> boolean)?,
+	disabled: (boolean | () -> boolean)?,
 })
 	local hovered = ui.use_state(false)
-	local disabled = props.disabled == true
+	local function disabled(): boolean
+		if type(props.disabled) == "function" then
+			return props.disabled()
+		end
+		return props.disabled == true
+	end
 	local function red(): boolean
 		return props.red ~= nil and props.red()
+	end
+	local function lit(): boolean
+		return props.lit ~= nil and props.lit()
 	end
 	return ui.button {
 		id = props.id,
@@ -894,12 +903,19 @@ local control = ui.component(function(props: {
 		rounded = theme.size.call_control_size,
 		justify = "center",
 		items = "center",
-		opacity = if disabled then 0.5 else 1,
-		cursor = if disabled then "not-allowed" else "pointer",
+		opacity = function()
+			return if disabled() then 0.5 else 1
+		end,
+		cursor = function()
+			return if disabled() then "not-allowed" else "pointer"
+		end,
 		bg = function()
-			local lifted = hovered:get() and not disabled
+			local lifted = hovered:get() and not disabled()
 			if red() then
 				return if lifted then theme.color.red_4 else theme.color.red_3
+			end
+			if lit() then
+				return theme.color.active
 			end
 			return if lifted then theme.color.bg_1 else theme.color.bg_2
 		end,
@@ -907,12 +923,15 @@ local control = ui.component(function(props: {
 			hovered:set(inside)
 		end,
 		tooltip = if type(props.tooltip) == "function" then ui.text { props.tooltip } else props.tooltip,
-		on_click = if disabled then nil else props.on_click,
+		on_click = props.on_click,
 		icon {
 			name = props.name,
 			size = theme.number(theme.size.icon_size_lg)(),
 			color = function()
-				return if red() then theme.color.text_0 else theme.color.text_2
+				if red() then
+					return theme.color.text_0
+				end
+				return if lit() then theme.color.text_1 else theme.color.text_2
 			end,
 		},
 	}
@@ -937,7 +956,29 @@ local function bottom_bar()
 		gap = theme.size.space_12,
 		pb = theme.size.space_24,
 		pt = theme.size.space_8,
-		control { id = "call_camera", name = "video", tooltip = "Turn On Camera", disabled = true },
+		control {
+			id = "call_camera",
+			name = function()
+				return if controls().camera then "video" else "video_off"
+			end,
+			tooltip = function()
+				if not state.voice.video_available:get() then
+					return "Video unavailable"
+				end
+				return if controls().camera then "Turn Off Camera" else "Turn On Camera"
+			end,
+			lit = function()
+				return controls().camera
+			end,
+			disabled = function()
+				return not state.voice.video_available:get()
+			end,
+			on_click = function()
+				if state.voice.video_available:get() then
+					actions.toggle_camera()
+				end
+			end,
+		},
 		control { id = "call_screen", name = "screen_share", tooltip = "Share Your Screen", disabled = true },
 		control {
 			id = "call_mute",

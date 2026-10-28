@@ -8,6 +8,7 @@ local SENSITIVITY_FLOOR_DB = -100
 local VOLUME_MAX = 200
 local DEFAULT_DEVICE = "Default"
 local RELEASE_DELAY_MAX_MS = 2000
+local PREVIEW_RATIO = 9 / 16
 
 local function push_to_talk(): boolean
 	return kit.value("voice.push_to_talk") == true
@@ -77,6 +78,104 @@ local function pair(left: any, right: any)
 		gap = theme.size.space_16,
 		ui.column { grow = 1, basis = 0, min_w = 0, gap = theme.size.space_8, left },
 		ui.column { grow = 1, basis = 0, min_w = 0, gap = theme.size.space_8, right },
+	}
+end
+
+local function cameras(): { state.AudioDevice }
+	return state.voice.cameras:get()
+end
+
+local function previewing(): boolean
+	return state.voice.camera_preview:get()
+end
+
+local function video_available(): boolean
+	return state.voice.video_available:get()
+end
+
+local function camera_preview()
+	local box = ui.ref()
+	return ui.div {
+		ref = box,
+		id = "voice_camera_preview",
+		relative = true,
+		w_full = true,
+		h = function()
+			return (box.width or 0) * PREVIEW_RATIO
+		end,
+		rounded = theme.size.radius_md,
+		overflow = "hidden",
+		bg = theme.color.bg_2,
+		justify = "center",
+		items = "center",
+		ui.show(
+			previewing,
+			ui.image {
+				id = "voice_camera_preview_image",
+				src = "host:video/preview",
+				absolute = true,
+				left = 0,
+				top = 0,
+				w_full = true,
+				h_full = true,
+				fit = "cover",
+			}
+		),
+		ui.show(function()
+			return not previewing()
+		end, ui.presence(function()
+			return if video_available() then "ready" else "unavailable"
+		end, function()
+			if not video_available() then
+				return kit.text(
+					"Video unavailable",
+					theme.size.font_size_md,
+					theme.size.line_height_label,
+					theme.color.text_4,
+					{ id = "voice_camera_unavailable" }
+				)
+			end
+			return kit.button {
+				id = "voice_camera_test",
+				text = "Test Video",
+				tone = "primary",
+				height = theme.size.button_height_md,
+				on_click = function()
+					actions.set_camera_preview(true)
+				end,
+			}
+		end)),
+	}
+end
+
+local function camera()
+	return ui.column {
+		w_full = true,
+		gap = theme.size.space_8,
+		kit.caption("Camera"),
+		device_select("voice_camera_device", "voice.camera_device", cameras),
+		ui.column {
+			w_full = true,
+			pt = theme.size.space_8,
+			gap = theme.size.space_12,
+			camera_preview(),
+			ui.show(
+				previewing,
+				ui.row {
+					w_full = true,
+					justify = "end",
+					kit.button {
+						id = "voice_camera_stop",
+						text = "Stop Video",
+						tone = "secondary",
+						height = theme.size.button_height_md,
+						on_click = function()
+							actions.set_camera_preview(false)
+						end,
+					},
+				}
+			),
+		},
 	}
 end
 
@@ -388,6 +487,18 @@ return {
 					keywords = "threshold gate decibels db",
 					visible = manual_sensitivity,
 					build = sensitivity_row,
+				},
+			},
+		},
+		{
+			key = "video",
+			title = "Video Settings",
+			rows = {
+				{
+					kind = "block",
+					title = "Camera",
+					keywords = "camera webcam video preview test video",
+					build = camera,
 				},
 			},
 		},
