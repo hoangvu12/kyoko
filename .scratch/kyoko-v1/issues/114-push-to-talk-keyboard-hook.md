@@ -6,19 +6,19 @@
 
 **Blocked by:** none
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] Push to talk no longer uses `RegisterHotKey`; a low-level hook reports press and release of the bound keys and always passes the input on (`CallNextHookEx`, never a non-zero return)
-- [ ] Key repeat while held sends no extra presses; releasing any key of the combination releases; losing the hook (the hook thread stops) releases the mic, never leaves it open
-- [ ] Mouse 4 and Mouse 5 can be recorded as a push-to-talk binding and work through the mouse hook
-- [ ] Release delay setting (`voice.push_to_talk_release_delay`, 0–2000 ms, default 20) on the Voice page under Push to Talk; session test: the mic stays open for the delay after release and closes after it; a press within the delay keeps it open
-- [ ] The hook exists only in Push to Talk mode with a binding; switching to Voice Activity or clearing the binding removes it
-- [ ] Hook callback does no work beyond matching and posting the event (Windows drops slow low-level hooks); matching logic tested without a real hook (fed key events, checks the pressed/released stream); in-process UI test for recording Mouse 4; settings capture checked by eye
-- [ ] `docs/voice.md` and `docs/desktop.md` updated; 100's deviation note no longer applies
+- [x] Push to talk no longer uses `RegisterHotKey`; a low-level hook reports press and release of the bound keys and always passes the input on (`CallNextHookEx`, never a non-zero return)
+- [x] Key repeat while held sends no extra presses; releasing any key of the combination releases; losing the hook (the hook thread stops) releases the mic, never leaves it open
+- [x] Mouse 4 and Mouse 5 can be recorded as a push-to-talk binding and work through the mouse hook
+- [x] Release delay setting (`voice.push_to_talk_release_delay`, 0–2000 ms, default 20) on the Voice page under Push to Talk; session test: the mic stays open for the delay after release and closes after it; a press within the delay keeps it open
+- [x] The hook exists only in Push to Talk mode with a binding; switching to Voice Activity or clearing the binding removes it
+- [x] Hook callback does no work beyond matching and posting the event (Windows drops slow low-level hooks); matching logic tested without a real hook (fed key events, checks the pressed/released stream); in-process UI test for recording Mouse 4; settings capture checked by eye
+- [x] `docs/voice.md` and `docs/desktop.md` updated; 100's deviation note no longer applies
 
-- [ ] Recovery: Windows silently removes a low-level hook that takes too long (`LowLevelHooksTimeout`, capped at 1000 ms since Windows 10 1709) and doesn't say so. Reinstall the hooks periodically or when PTT is held with no events, and rebuild modifier state with `GetKeyState` after a reinstall
-- [ ] Stuck keys: PTT goes off on session lock (`WTSRegisterSessionNotification`), on hook loss and on reinstall; injected input (`LLKHF_INJECTED`, `LLMHF_INJECTED`) is ignored
-- [ ] The Push to Talk section notes, as Discord's support page does, that a game run as administrator needs kyoko run as administrator too (low-level hooks don't see input while an elevated window has focus)
+- [x] Recovery: Windows silently removes a low-level hook that takes too long (`LowLevelHooksTimeout`, capped at 1000 ms since Windows 10 1709) and doesn't say so. Reinstall the hooks periodically or when PTT is held with no events, and rebuild modifier state with `GetKeyState` after a reinstall
+- [x] Stuck keys: PTT goes off on session lock (`WTSRegisterSessionNotification`), on hook loss and on reinstall; injected input (`LLKHF_INJECTED`, `LLMHF_INJECTED`) is ignored
+- [x] The Push to Talk section notes, as Discord's support page does, that a game run as administrator needs kyoko run as administrator too (low-level hooks don't see input while an elevated window has focus)
 
 ## Research (2026-10-29, orchestrator's research agent; facts and ideas only, no code copied)
 
@@ -28,3 +28,18 @@
 - Discord: the RPC docs give the PTT release delay range as 0–2000 ms and list keyboard keys, mouse buttons, modifiers and gamepad buttons as PTT bindings (https://docs.discord.com/developers/topics/rpc). The 20 ms default is from third-party guides only: confirm it in the public web bundle. Discord's support page advises running Discord as administrator for elevated games (https://support.discord.com/hc/en-us/articles/205082178).
 - Dorion (Tauri Discord client) does global PTT with a livesplit-hotkey fork: a `WH_KEYBOARD_LL` hook that calls `CallNextHookEx`. Vesktop's attempt was closed because Electron's globalShortcut can't see key-up and swallows the key.
 - Crates: `global-hotkey` uses RegisterHotKey (same problem as today); `rdev`, `inputbot`, `willhook` use LL hooks but none handles timeout recovery or stuck keys better than a small hand-written module. Nothing documented about anti-cheats flagging LL hooks.
+
+## Answer
+
+Merged to main as `bd9c20a` (worker `da8bc0ff`, lane A; full verify re-run by the orchestrator: all green; kyoko-only captures `settings-voice`, `settings-voice-push-to-talk` (new), `settings-keybinds` checked by eye). Docs: `docs/voice.md`, `docs/desktop.md` ("Push to talk"), `docs/ui.md`, `docs/parity.md`.
+
+- Root cause: `RegisterHotKey` gives a key combination to one app only, so a bound game key never reached the game. Discord watches input instead of claiming it.
+- Platform: `crates/platform/src/push_to_talk/`: a pure `Matcher` (binding parse, held keys, repeat and injected input dropped, release and resync), a pure watchdog `verdict()`, and `TalkHook`, a thread with `WH_KEYBOARD_LL` + `WH_MOUSE_LL` and a message loop whose callbacks only match and post, then return `CallNextHookEx`. Mouse 4/5 parse to `XBUTTON1`/`XBUTTON2`. Dropping `Hooked` (any thread end, panics included) releases the mic.
+- Recovery: a 250 ms watchdog reinstalls (new hooks first, then the old removed, modifiers rebuilt with `GetAsyncKeyState`) when PTT is held but the key is physically up, when the system saw input over 1 s after the hooks' last event, or after 60 s idle. PTT goes off on session lock (`WTSRegisterSessionNotification` on a message-only window), reinstall and hook loss.
+- Desktop: `integration.rs` drops the push-to-talk `RegisterHotKey`; `listen_for_talk` runs the hook only in Push to Talk mode with a binding and drops it (releasing) on any change. The toggle-window hotkey (40) is unchanged.
+- Release delay: setting `voice.push_to_talk_release_delay`, 0-2000 ms, default 20; the session starts a timer on release (`Internal::PushToTalkReleased`) and a press cancels it. `VoiceConnection::transmitting()` added.
+- Discord facts (public web bundle, no token, User-Agent `kyoko-dev`): default `pttReleaseDelay=20`, setting id `voice_push_to_talk_release_delay_setting`, `setPTTActive` clears the release timer on press. 0-2000 from the RPC docs; the slider label couldn't be confirmed (lazy chunk).
+- UI: the Push to Talk section gained a background-use note, the administrator note and the delay slider (`kit.slider` gained `unit` and `id`); the Keybinds note wraps. Mouse 4/5 recording: zgx passes only the primary button to Luau and modal events stop at their focus scope, so the recorder asks the host (`keybinds.side_buttons`) to listen on the current focus scope, which publishes `keybinds.side_button`.
+- Tests: eight platform matcher tests, session `the_release_delay_holds_the_mic_open_and_a_press_inside_it_keeps_it_open`, UI `mouse_4_records_as_the_push_to_talk_shortcut_and_the_release_delay_shows`. The real hook ran once by hand on `--mock` (installed, no spurious reinstalls over ~65 s); an actual press wasn't tested (no OS input on the shared desktop; injected input is ignored by design).
+- Deviations: modifiers rebuilt with `GetAsyncKeyState` (the hook thread has no input queue, so `GetKeyState` would be stale); hook loss detected via `GetLastInputInfo`; extra modifiers held with the binding still talk, as in Discord; fixed 100's recorder bug (`row:focus()` raised a Luau error on every Record click; the button has its own id `voice_push_to_talk_record_button`); `windows` features `Win32_Graphics_Gdi`, `Win32_System_LibraryLoader`, `Win32_System_Threading` added.
+- For later: while an elevated window has focus the watchdog reinstalls about once a second (harmless, debug log). Raw Input stays the fallback if antivirus or mouse-polling complaints come up. Rust-side listeners for input inside settings must listen on the focus scope (`ui.input.focus_scope()`); root listeners never see events inside a modal.
