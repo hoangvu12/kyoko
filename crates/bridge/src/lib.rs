@@ -124,7 +124,10 @@ pub use inbox_popout::{
 	ForYouEntry, InboxTab, MentionCard, MentionGroup, Place, UnreadGroup, UnreadRow, for_you, mention_groups,
 	unread_groups,
 };
-pub use lightbox::{LIGHTBOX_SHARE, LightboxImage, LightboxSource, lightbox_box, lightbox_request};
+pub use lightbox::{
+	LIGHTBOX_SHARE, LightboxImage, LightboxSource, VIEWER_MAX_ZOOM, VIEWER_ZOOM_STEP, ViewerAuthor, Viewing,
+	Zoom, lightbox_box, lightbox_request, message_images, viewer_file_name,
+};
 pub use login::{MfaMethod, MfaMethods, QrEvent, REMOTE_AUTH_URL, Scanner};
 pub use login_column::{LoginChoice, LoginColumn};
 pub use member_list::{

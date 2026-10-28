@@ -44,4 +44,5 @@ mod themes;
 mod threads;
 mod timeline;
 mod toasts;
+mod viewer;
 mod web_login;
