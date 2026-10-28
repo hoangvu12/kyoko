@@ -6,7 +6,7 @@ Plan ticket V2 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 97
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test: joining a guild voice channel sends op 4 with that guild and channel id (never a DM), connects to the announced endpoint, and `state.voice()` shows it connected; moving channels reconnects with the new token; Disconnect sends op 4 with `channel_id: null`
 - [ ] Mute stops sending and resends op 4 `self_mute`; deafen also stops playback and implies mute; server mute and deafen from VOICE_STATE_UPDATE show
