@@ -85,6 +85,13 @@ impl Rooms {
 			.find_map(|member| member.decrypt(sender, payload))
 	}
 
+	pub fn open_video(&self, channel_id: u64, sender: u64, frame: &[u8]) -> Option<Vec<u8>> {
+		self.rooms
+			.get(&channel_id)?
+			.members()
+			.find_map(|member| member.decrypt_as(dave::Codec::H264, sender, frame))
+	}
+
 	pub fn seal(&self, channel_id: u64, user_id: u64, frame: &[u8]) -> Option<Vec<u8>> {
 		match self.rooms.get(&channel_id).and_then(|room| room.member(user_id)) {
 			Some(member) => member.encrypt(frame),

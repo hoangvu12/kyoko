@@ -1,14 +1,22 @@
 pub(crate) mod hub;
+pub(crate) mod outgoing;
+pub(crate) mod packetize;
 pub(crate) mod receive;
 pub(crate) mod rtp;
+pub(crate) mod send;
 pub(crate) mod wants;
 
 use std::sync::Arc;
 
 use protocol::Snowflake;
 
-pub use ::video::{H264Decoder, Picture, VideoError, VideoFrame, available, fit};
+pub use ::video::{
+	CameraInfo, CameraPreview, EncodedFrame, EncoderConfig, H264Decoder, H264Encoder, Picture, TestPattern,
+	VideoCodecs, VideoError, VideoFrame, VideoQuality, VideoSource, available, cameras, fit, open_camera,
+	scale_nv12,
+};
 pub use hub::VideoStats;
+pub use outgoing::VideoLayer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VideoStream {

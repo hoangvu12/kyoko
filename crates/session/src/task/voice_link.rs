@@ -33,14 +33,22 @@ struct Server {
 }
 
 #[derive(Default)]
+pub(crate) struct CameraLink {
+	pub(super) on: bool,
+	pub(super) starting: bool,
+	pub(super) wanted: bool,
+}
+
+#[derive(Default)]
 pub(crate) struct VoiceLink {
 	target: Option<Target>,
 	session_id: Option<String>,
 	server: Option<Server>,
-	connection: Option<Arc<VoiceConnection>>,
+	pub(super) connection: Option<Arc<VoiceConnection>>,
 	pump: Option<JoinHandle<()>>,
 	connecting: bool,
-	generation: u64,
+	pub(super) generation: u64,
+	pub(super) camera: CameraLink,
 	self_mute: bool,
 	self_deaf: bool,
 	server_mute: bool,
@@ -275,6 +283,7 @@ impl Core {
 				tracing::debug!(epoch, version, members = members.len(), "voice e2ee epoch");
 			}
 			VoiceEvent::DaveFailure(reason) => tracing::warn!(%reason, "voice e2ee failure"),
+			VoiceEvent::CameraStopped => self.camera_stopped(),
 			VoiceEvent::Stats { .. } => {}
 		}
 	}
@@ -499,6 +508,10 @@ impl Core {
 			self_deaf: self.voice.self_deaf,
 		});
 		self.apply_to_connection();
+		self.resend_voice_state();
+	}
+
+	pub(super) fn resend_voice_state(&self) {
 		if let Some(target) = self.voice.target
 			&& let Err(error) = self.send_voice_state(target.guild_id, Some(target.channel_id))
 		{
@@ -519,7 +532,7 @@ impl Core {
 			channel_id,
 			self_mute: self.voice.sends_muted(),
 			self_deaf: self.voice.self_deaf,
-			self_video: false,
+			self_video: self.voice.camera.on,
 			preferred_region: self.voice.regions.first().map(String::as_str),
 			preferred_regions: &self.voice.regions,
 			flags: ALLOW_VOICE_RECORDING,
@@ -571,6 +584,8 @@ impl Core {
 			connection.disconnect();
 		}
 		*self.voice_shared.connection.lock() = None;
+		self.voice.camera = CameraLink::default();
+		self.apply_local(LocalEvent::CameraChanged(false));
 		self.detach_video();
 	}
 

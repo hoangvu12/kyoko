@@ -3,7 +3,7 @@ use std::time::Duration;
 use mockcord::{CAMERA_HEIGHT, CAMERA_WIDTH, ScriptedCamera, VoiceControl};
 use protocol::{ChannelType, Snowflake};
 use serde_json::json;
-use session::{Command, Trust, VideoUpdate, VideoView, VoiceSetup};
+use session::{CameraIo, Command, Trust, VideoUpdate, VideoView, VoiceSetup};
 use state::{State, VoiceStatus};
 use voice::AudioIo;
 
@@ -61,6 +61,8 @@ async fn join_lounge(name: &'static str, dave: bool) -> Call {
 				.expect("mockcord's voice server runs on tls"),
 		),
 		join_timeout: JOIN_TIMEOUT,
+		camera: CameraIo::Pattern,
+		..VoiceSetup::default()
 	});
 	let control = running.voice();
 	if dave {

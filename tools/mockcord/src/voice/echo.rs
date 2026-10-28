@@ -8,7 +8,9 @@ use aes_gcm::aead::{AeadCore, AeadInOut, KeyInit, Nonce};
 use chacha20poly1305::XChaCha20Poly1305;
 use tokio::net::UdpSocket;
 
-use super::recording::{VoicePacket, VoiceRtcp};
+use super::assemble;
+use super::recording::{VoicePacket, VoiceRtcp, VoiceVideoFrame};
+use super::video::H264_PAYLOAD_TYPE;
 use super::{AES_GCM_MODE, Voice, XCHACHA_MODE};
 
 pub(super) const OPUS_FRAME_SAMPLES: u32 = 960;
@@ -34,6 +36,9 @@ const DISCOVERY_RESPONSE: u16 = 2;
 const DISCOVERY_ADDRESS_START: usize = 8;
 const DISCOVERY_PORT_START: usize = 72;
 const UDP_BUFFER_BYTES: usize = 2048;
+const PAYLOAD_TYPE_MASK: u8 = 0x7f;
+const MARKER_FLAG: u8 = 0x80;
+const EXTENSION_WORD_LEN: usize = 4;
 
 enum Cipher {
 	Aes(Box<Aes256Gcm>),
@@ -195,6 +200,10 @@ fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
 	let (header, body) = sealed.split_at(header_len);
 	let mut payload = body.to_vec();
 	cipher.open(counter, header, &mut payload)?;
+	if packet[1] & PAYLOAD_TYPE_MASK == H264_PAYLOAD_TYPE {
+		record_video(voice, ssrc, header, &payload);
+		return None;
+	}
 	let opened = voice.open_dave(ssrc, &payload);
 	voice.record(|log| {
 		log.packets.push(VoicePacket {
@@ -211,4 +220,44 @@ fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
 	echo_header.extend_from_slice(&payload);
 	echo_header.extend_from_slice(counter);
 	Some(echo_header)
+}
+
+fn record_video(voice: &Voice, ssrc: u32, header: &[u8], payload: &[u8]) {
+	let extension_len = if header[0] & EXTENSION_FLAG != 0 {
+		usize::from(u16::from_be_bytes([
+			header[header.len() - 2],
+			header[header.len() - 1],
+		])) * EXTENSION_WORD_LEN
+	} else {
+		0
+	};
+	let Some((elements, media)) = payload.split_at_checked(extension_len) else {
+		return;
+	};
+	let sequence = u16::from_be_bytes([header[2], header[3]]);
+	let timestamp = u32::from_be_bytes([header[4], header[5], header[6], header[7]]);
+	let marker = header[1] & MARKER_FLAG != 0;
+	let assembled = voice.assembler.lock().push(
+		ssrc,
+		sequence,
+		timestamp,
+		marker,
+		assemble::extensions(elements),
+		media,
+	);
+	let Some(frame) = assembled else {
+		return;
+	};
+	let opened = voice.open_video(ssrc, &frame.data);
+	voice.record(|log| {
+		log.video.push(VoiceVideoFrame {
+			ssrc,
+			timestamp: frame.timestamp,
+			extensions: frame.extensions,
+			sealed: frame.data,
+			opened,
+			complete: frame.complete,
+			at: Instant::now(),
+		});
+	});
 }

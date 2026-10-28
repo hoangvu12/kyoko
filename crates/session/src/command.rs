@@ -708,6 +708,7 @@ pub enum Command {
 		user_id: Snowflake,
 		volume: u8,
 	},
+	SetSelfVideo(bool),
 }
 
 impl Command {

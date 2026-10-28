@@ -70,6 +70,7 @@ mod streams;
 mod subscriptions;
 mod themes;
 mod uploads;
+mod voice_camera;
 mod voice_link;
 mod voice_video;
 
@@ -211,6 +212,10 @@ pub(crate) enum Internal {
 	MicTestLevel {
 		generation: u64,
 		level_db: f32,
+	},
+	CameraStarted {
+		generation: u64,
+		result: Result<(), voice::video::VideoError>,
 	},
 }
 
@@ -862,6 +867,7 @@ impl Core {
 			Internal::StreamEvent { generation, event } => self.on_stream_event(generation, event),
 			Internal::MicCheckStarted { generation, result } => self.on_mic_check_started(generation, result),
 			Internal::MicTestLevel { generation, level_db } => self.on_mic_test_level(generation, level_db),
+			Internal::CameraStarted { generation, result } => self.on_camera_started(generation, result),
 		}
 	}
 
@@ -1076,6 +1082,7 @@ impl Core {
 			Command::StopWatchingStream { stream_key } => self.stop_watching(&stream_key),
 			Command::SetStreamViews(views) => self.set_stream_views(views),
 			Command::SetStreamVolume { user_id, volume } => self.set_stream_volume(user_id, volume),
+			Command::SetSelfVideo(on) => self.set_self_video(on),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

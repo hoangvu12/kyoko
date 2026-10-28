@@ -190,6 +190,8 @@ pub struct Ready {
 	pub modes: Vec<String>,
 	#[serde(default, deserialize_with = "lenient_strings")]
 	pub experiments: Vec<String>,
+	#[serde(default, deserialize_with = "lenient_streams")]
+	pub streams: Vec<VideoStreamState>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -233,7 +235,43 @@ pub struct VideoStreamState {
 	#[serde(default, deserialize_with = "lenient")]
 	pub ssrc: Option<u32>,
 	#[serde(default, deserialize_with = "lenient")]
+	pub rtx_ssrc: Option<u32>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub rid: Option<String>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub quality: Option<u8>,
+	#[serde(default, deserialize_with = "lenient")]
 	pub active: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VideoState {
+	pub audio_ssrc: u32,
+	pub video_ssrc: u32,
+	pub rtx_ssrc: u32,
+	pub streams: Vec<StreamAnnouncement>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StreamAnnouncement {
+	#[serde(rename = "type")]
+	pub kind: &'static str,
+	pub rid: String,
+	pub ssrc: u32,
+	pub active: bool,
+	pub quality: u8,
+	pub rtx_ssrc: u32,
+	pub max_bitrate: u32,
+	pub max_framerate: u32,
+	pub max_resolution: Resolution,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Resolution {
+	#[serde(rename = "type")]
+	pub kind: &'static str,
+	pub width: u32,
+	pub height: u32,
 }
 
 #[derive(Debug, Deserialize)]

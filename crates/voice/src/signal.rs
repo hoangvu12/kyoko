@@ -21,6 +21,7 @@ use crate::connection::ConnectionKind;
 use crate::crypto::EncryptionMode;
 use crate::error::{Result, VoiceError};
 use crate::transport::{Discovered, Transport};
+use crate::video::VideoLayer;
 use crate::wire::{
 	self, CAMERA_LAYERS, CODECS, DAVE_PROTOCOL_VERSION, HeartbeatAck, Hello, Identify, Outbound,
 	ProtocolData, RawFrame, Ready, SCREEN_LAYERS, SelectProtocol, SessionDescription, SinkWants,
@@ -426,6 +427,7 @@ pub(crate) struct Established {
 	pub transport: Arc<dyn Transport>,
 	pub mode: EncryptionMode,
 	pub dave_version: u8,
+	pub layers: Vec<VideoLayer>,
 }
 
 pub(crate) async fn establish(credentials: &Credentials) -> Result<Established> {
@@ -471,7 +473,33 @@ async fn handshake(credentials: &Credentials) -> Result<Established> {
 		transport: Arc::new(transport),
 		mode,
 		dave_version: description.dave_protocol_version.unwrap_or_default(),
+		layers: assigned_layers(&ready),
 	})
+}
+
+fn assigned_layers(ready: &Ready) -> Vec<VideoLayer> {
+	let mut layers: Vec<VideoLayer> = ready
+		.streams
+		.iter()
+		.filter_map(|stream| {
+			let ssrc = stream.ssrc.filter(|ssrc| *ssrc != 0)?;
+			let rid = stream.rid.clone().filter(|rid| !rid.is_empty())?;
+			let quality = stream.quality.or_else(|| rid.parse().ok())?.min(FULL_QUALITY);
+			Some(VideoLayer {
+				rid,
+				quality,
+				ssrc,
+				rtx_ssrc: stream
+					.rtx_ssrc
+					.filter(|rtx| *rtx != 0)
+					.unwrap_or_else(|| ssrc.wrapping_add(1)),
+			})
+		})
+		.filter(|layer| layer.quality > 0)
+		.collect();
+	layers.sort_by_key(|layer| std::cmp::Reverse(layer.quality));
+	layers.dedup_by_key(|layer| layer.ssrc);
+	layers
 }
 
 pub(crate) async fn resume(credentials: &Credentials, last_seq: i64) -> Result<Link> {

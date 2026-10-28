@@ -60,8 +60,8 @@ pub use scenario::{HeartbeatAcks, Reply};
 pub use server::{Server, login_page_url, remote_auth_url};
 pub use voice::{
 	AES_GCM_MODE, CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, MockStream, ScriptedCamera, VOICE_TOKEN,
-	VoiceControl, VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket, XCHACHA_MODE,
-	camera_frames, clip_frames,
+	VoiceControl, VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket, VoiceVideoFrame,
+	XCHACHA_MODE, camera_frames, clip_frames,
 };
 pub use web::{
 	DEVICE_COOKIE, LOGIN_PAGE, SIGNED_DEVICE_COOKIE, VISITOR_COOKIE, device_cookie_value, installation_id,

@@ -1,3 +1,4 @@
+mod assemble;
 mod echo;
 mod listener;
 mod recording;
@@ -27,11 +28,12 @@ use tokio::task::JoinHandle;
 
 use crate::json::parse_id;
 
-pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket};
+pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket, VoiceVideoFrame};
 pub use stream::{MockStream, go_live};
 pub use video::Cameras;
 pub use video::{CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, ScriptedCamera, camera_frames, clip_frames};
 
+use assemble::Assembler;
 use listener::{ConnectionId, VoiceListener};
 use room::{Mail, Rooms};
 
@@ -42,6 +44,12 @@ pub const XCHACHA_MODE: &str = "aead_xchacha20_poly1305_rtpsize";
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 41_250;
 const FIRST_SSRC: u32 = 4_000;
 const SSRC_STRIDE: u32 = 2;
+const SSRCS_PER_STREAM: u32 = 2;
+const MAX_OFFERED_STREAMS: usize = 4;
+const RTCP_FEEDBACK_VERSION: u8 = 0x80;
+const PICTURE_LOSS_FORMAT: u8 = 1;
+const PAYLOAD_SPECIFIC_FEEDBACK: u8 = 206;
+const PICTURE_LOSS_WORDS: u16 = 2;
 const SCRIPTED: u64 = 0;
 const KEY_LEN: usize = 32;
 const BROADCAST_CAPACITY: usize = 64;
@@ -70,7 +78,14 @@ struct Session {
 	user_id: Option<u64>,
 	channel_id: Option<u64>,
 	ssrc: u32,
+	video_ssrcs: Vec<u32>,
 	seq: i64,
+}
+
+impl Session {
+	fn owns(&self, ssrc: u32) -> bool {
+		self.ssrc == ssrc || self.video_ssrcs.contains(&ssrc)
+	}
 }
 
 struct Voice {
@@ -97,6 +112,7 @@ struct Voice {
 	mail: broadcast::Sender<(u64, u64, Wire)>,
 	cameras: Option<Cameras>,
 	streams: Mutex<stream::Streams>,
+	assembler: Mutex<Assembler>,
 }
 
 impl Voice {
@@ -128,7 +144,7 @@ impl Voice {
 
 	fn speaker(&self, ssrc: u32) -> Option<(u64, u64)> {
 		let sessions = self.sessions.lock();
-		let session = sessions.values().find(|session| session.ssrc == ssrc)?;
+		let session = sessions.values().find(|session| session.owns(ssrc))?;
 		Some((session.user_id?, session.channel_id?))
 	}
 
@@ -176,6 +192,19 @@ impl Voice {
 	fn open_dave(&self, ssrc: u32, payload: &[u8]) -> Option<Vec<u8>> {
 		let (user_id, channel_id) = self.speaker(ssrc)?;
 		self.rooms.lock().open(channel_id, user_id, payload)
+	}
+
+	fn open_video(&self, ssrc: u32, frame: &[u8]) -> Option<Vec<u8>> {
+		let (user_id, channel_id) = self.speaker(ssrc)?;
+		self.rooms.lock().open_video(channel_id, user_id, frame)
+	}
+
+	fn audio_ssrc_of(&self, ssrc: u32) -> Option<u32> {
+		self.sessions
+			.lock()
+			.values()
+			.find(|session| session.owns(ssrc))
+			.map(|session| session.ssrc)
 	}
 }
 
@@ -350,6 +379,33 @@ impl VoiceControl {
 		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 
+	pub fn sink_wants(&self, wants: Value) {
+		let frame = json!({ "op": 15, "d": wants });
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
+	}
+
+	pub fn request_keyframe(&self, media_ssrc: u32) -> bool {
+		let voice = &self.0;
+		let Some(audio_ssrc) = voice.audio_ssrc_of(media_ssrc) else {
+			return false;
+		};
+		let (Some(address), Some(mode)) = (
+			voice.clients.lock().get(&audio_ssrc).copied(),
+			voice.modes.lock().get(&audio_ssrc).cloned(),
+		) else {
+			return false;
+		};
+		let mut header = vec![
+			RTCP_FEEDBACK_VERSION | PICTURE_LOSS_FORMAT,
+			PAYLOAD_SPECIFIC_FEEDBACK,
+		];
+		header.extend_from_slice(&PICTURE_LOSS_WORDS.to_be_bytes());
+		header.extend_from_slice(&0u32.to_be_bytes());
+		let counter = voice.media_counter.fetch_add(1, Ordering::Relaxed).to_be_bytes();
+		echo::seal_packet(&mode, &voice.key, &counter, &header, &media_ssrc.to_be_bytes())
+			.is_some_and(|packet| voice.udp.try_send_to(&packet, address).is_ok())
+	}
+
 	pub fn connect_as(&self, user_id: u64) {
 		let frame = json!({ "op": 11, "d": { "user_ids": [user_id.to_string()] } });
 		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
@@ -410,6 +466,7 @@ pub async fn spawn(shutdown: watch::Receiver<bool>, cameras: Option<Cameras>) ->
 		mail: broadcast::channel(MAIL_CAPACITY).0,
 		cameras,
 		streams: Mutex::new(stream::Streams::default()),
+		assembler: Mutex::new(Assembler::default()),
 	});
 	let url = bound.url.clone();
 	let (listener, accepting) = VoiceListener::start(bound, voice.clone());
@@ -559,6 +616,10 @@ async fn on_text(voice: &Arc<Voice>, socket: &mut WebSocket, peer: &mut Peer, te
 			speaking(voice, peer, data);
 			return Flow::Continue;
 		}
+		Some(12) => {
+			relay_video(voice, peer, data);
+			return Flow::Continue;
+		}
 		Some(7) => match resume(voice, peer, data) {
 			Ok(resumed) => resumed,
 			Err(code) => return Flow::Close(code),
@@ -647,13 +708,37 @@ fn identify(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> 
 		return Err(AUTHENTICATION_FAILED);
 	}
 	let session_id = session_key(data);
-	let ssrc = voice.next_ssrc.fetch_add(SSRC_STRIDE, Ordering::Relaxed);
+	let offered: Vec<&Value> = data["streams"]
+		.as_array()
+		.map(|streams| streams.iter().take(MAX_OFFERED_STREAMS).collect())
+		.unwrap_or_default();
+	let stride = SSRC_STRIDE + SSRCS_PER_STREAM * offered.len() as u32;
+	let ssrc = voice.next_ssrc.fetch_add(stride, Ordering::Relaxed);
+	let streams: Vec<Value> = offered
+		.iter()
+		.enumerate()
+		.map(|(index, offer)| {
+			let video_ssrc = ssrc + SSRC_STRIDE + SSRCS_PER_STREAM * index as u32;
+			json!({
+				"type": "video",
+				"ssrc": video_ssrc,
+				"rtx_ssrc": video_ssrc + 1,
+				"rid": offer["rid"],
+				"quality": offer["quality"],
+				"active": false,
+			})
+		})
+		.collect();
 	voice.sessions.lock().insert(
 		session_id.clone(),
 		Session {
 			user_id: parse_id(&data["user_id"]),
 			channel_id: parse_id(&data["channel_id"]),
 			ssrc,
+			video_ssrcs: streams
+				.iter()
+				.filter_map(|stream| stream["ssrc"].as_u64().and_then(|ssrc| u32::try_from(ssrc).ok()))
+				.collect(),
 			seq: -1,
 		},
 	);
@@ -667,7 +752,7 @@ fn identify(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> 
 			"port": voice.udp_port,
 			"modes": modes,
 			"experiments": ["fixed_keyframe_interval"],
-			"streams": [],
+			"streams": streams,
 		},
 	}))
 }
@@ -677,12 +762,23 @@ fn select_protocol(voice: &Voice, peer: &Peer, data: &Value) -> Result<Value, u1
 	if !voice.settings.lock().modes.iter().any(|offered| offered == mode) {
 		return Err(UNKNOWN_ENCRYPTION_MODE);
 	}
-	let ssrc = peer
+	let (ssrc, video_ssrcs) = peer
 		.session_id
 		.as_ref()
-		.and_then(|session_id| voice.sessions.lock().get(session_id).map(|session| session.ssrc))
+		.and_then(|session_id| {
+			voice
+				.sessions
+				.lock()
+				.get(session_id)
+				.map(|session| (session.ssrc, session.video_ssrcs.clone()))
+		})
 		.ok_or(SESSION_INVALID)?;
-	voice.modes.lock().insert(ssrc, mode.to_owned());
+	{
+		let mut modes = voice.modes.lock();
+		for owned in std::iter::once(ssrc).chain(video_ssrcs) {
+			modes.insert(owned, mode.to_owned());
+		}
+	}
 	let dave_version = voice.settings.lock().dave_version;
 	Ok(json!({
 		"op": 4,
@@ -719,6 +815,20 @@ fn speaking(voice: &Voice, peer: &Peer, data: &Value) {
 	});
 	let channel = voice.member_of(Some(session_id)).map(|(_, channel)| channel);
 	let _ = voice.broadcasts.send((peer.connection, channel, frame));
+}
+
+fn relay_video(voice: &Voice, peer: &Peer, data: &Value) {
+	let Some((user_id, channel)) = voice.member_of(peer.session_id.as_deref()) else {
+		return;
+	};
+	let mut state = data.clone();
+	if let Some(object) = state.as_object_mut() {
+		object.remove("rtx_ssrc");
+		object.insert("user_id".to_owned(), json!(user_id.to_string()));
+	}
+	let _ = voice
+		.broadcasts
+		.send((peer.connection, Some(channel), json!({ "op": 12, "d": state })));
 }
 
 fn resume(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> {

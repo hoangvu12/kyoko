@@ -17,7 +17,10 @@ use crate::signal::{Body, Credentials, Established, Exit, Frame, Link, establish
 use crate::transport::Transport;
 use crate::video::hub::RemoteVideo;
 use crate::video::wants::sink_wants;
-use crate::wire::{ClientDisconnect, ClientsConnect, Speaking, VideoAnnouncement, close, opcode};
+use crate::wire::{
+	ClientDisconnect, ClientsConnect, Resolution, Speaking, StreamAnnouncement, VideoAnnouncement,
+	VideoState, close, opcode,
+};
 
 const RESUME_ATTEMPTS: u32 = 5;
 const FRESH_ATTEMPTS: u32 = 3;
@@ -80,6 +83,8 @@ pub(crate) struct Supervisor {
 	dave: DaveSession,
 	outbox: Vec<Outgoing>,
 	sent_wants: Option<Value>,
+	camera: bool,
+	announce: bool,
 }
 
 impl Supervisor {
@@ -94,6 +99,7 @@ impl Supervisor {
 	) -> Result<Self> {
 		let ssrc = established.transport.ssrc();
 		let dave_version = established.dave_version;
+		shared.video.outgoing.set_layers(established.layers);
 		let media = spawn_media(
 			established.transport,
 			&shared,
@@ -118,6 +124,8 @@ impl Supervisor {
 			dave,
 			outbox: Vec::new(),
 			sent_wants: Some(handshake_wants()),
+			camera: false,
+			announce: false,
 		};
 		supervisor.outbox = supervisor.dave.on_protocol_version(dave_version);
 		supervisor.replay_backlog();
@@ -160,6 +168,9 @@ impl Supervisor {
 			if let Err(exit) = self.flush_wants().await {
 				return Drive::Exit(exit);
 			}
+			if let Err(exit) = self.flush_camera().await {
+				return Drive::Exit(exit);
+			}
 			tokio::select! {
 				frame = self.link.next() => match frame {
 					Ok(frame) => self.on_frame(frame),
@@ -174,6 +185,19 @@ impl Supervisor {
 						}
 					}
 					Some(Control::VideoWants) => {}
+					Some(Control::CameraOn) => {
+						self.camera = true;
+						self.announce = true;
+					}
+					Some(Control::CameraOff) => {
+						if std::mem::take(&mut self.camera) {
+							self.announce = false;
+							self.shared.video.outgoing.set_sending(false);
+							if let Err(exit) = self.link.send(opcode::VIDEO, self.cleared_video()).await {
+								return Drive::Exit(exit);
+							}
+						}
+					}
 					None => return Drive::Shutdown,
 				},
 				_ = self.signals.shutdown.changed() => return Drive::Shutdown,
@@ -236,6 +260,7 @@ impl Supervisor {
 				let outgoing = self.dave.on_json(op, &data);
 				self.outbox.extend(outgoing);
 			}
+			opcode::MEDIA_SINK_WANTS => self.on_sink_wants(&data),
 			opcode::HEARTBEAT_ACK => self.on_ack(),
 			_ => {}
 		}
@@ -332,6 +357,79 @@ impl Supervisor {
 		Ok(())
 	}
 
+	async fn flush_camera(&mut self) -> std::result::Result<(), Exit> {
+		if !std::mem::take(&mut self.announce) || !self.camera {
+			return Ok(());
+		}
+		self.link.send(opcode::VIDEO, self.video_state()).await?;
+		self.shared.video.outgoing.set_sending(true);
+		Ok(())
+	}
+
+	fn video_state(&self) -> VideoState {
+		let outgoing = &self.shared.video.outgoing;
+		let quality = outgoing.quality();
+		let layers = outgoing.layers();
+		let streams: Vec<StreamAnnouncement> = layers
+			.iter()
+			.map(|state| {
+				let layer = quality.layer(state.layer.quality);
+				StreamAnnouncement {
+					kind: "video",
+					rid: state.layer.rid.clone(),
+					ssrc: state.layer.ssrc,
+					active: state.wanted(),
+					quality: state.layer.quality,
+					rtx_ssrc: state.layer.rtx_ssrc,
+					max_bitrate: layer.bitrate,
+					max_framerate: layer.fps,
+					max_resolution: Resolution {
+						kind: "fixed",
+						width: layer.width,
+						height: layer.height,
+					},
+				}
+			})
+			.collect();
+		let primary = layers.first();
+		VideoState {
+			audio_ssrc: self.ssrc,
+			video_ssrc: primary.map_or(0, |state| state.layer.ssrc),
+			rtx_ssrc: primary.map_or(0, |state| state.layer.rtx_ssrc),
+			streams,
+		}
+	}
+
+	fn cleared_video(&self) -> VideoState {
+		VideoState {
+			audio_ssrc: self.ssrc,
+			video_ssrc: 0,
+			rtx_ssrc: 0,
+			streams: Vec::new(),
+		}
+	}
+
+	fn on_sink_wants(&mut self, data: &Value) {
+		let Some(wants) = data.as_object() else {
+			return;
+		};
+		let level = |ssrc: u32| {
+			wants
+				.get(&ssrc.to_string())
+				.or_else(|| wants.get("any"))
+				.and_then(Value::as_u64)
+		};
+		let mut changed = false;
+		for state in self.shared.video.outgoing.layers() {
+			if let Some(level) = level(state.layer.ssrc) {
+				changed |= state.set_wanted(level > 0);
+			}
+		}
+		if changed && self.camera {
+			self.announce = true;
+		}
+	}
+
 	fn on_speaking(&mut self, event: &Speaking) {
 		let Some(user_id) = event.user_id else {
 			return;
@@ -418,6 +516,7 @@ impl Supervisor {
 			return Recovery::Stopped(StopReason::Unreachable);
 		}
 		self.sent_wants = None;
+		self.announce = self.camera;
 		self.replay_backlog();
 		self.shared.hub.emit(VoiceEvent::Resumed);
 		Recovery::Recovered
@@ -446,6 +545,9 @@ impl Supervisor {
 			}
 		}
 		self.link = established.link;
+		self.shared.video.outgoing.set_sending(false);
+		self.shared.video.outgoing.set_layers(established.layers);
+		self.announce = self.camera;
 		self.outbox = self.dave.on_protocol_version(established.dave_version);
 		self.replay_backlog();
 		self.shared.hub.emit(VoiceEvent::Connected {

@@ -109,6 +109,44 @@ impl VoiceRtcp {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct VoiceVideoFrame {
+	pub ssrc: u32,
+	pub timestamp: u32,
+	pub extensions: Vec<(u8, Vec<u8>)>,
+	pub sealed: Vec<u8>,
+	pub opened: Option<Vec<u8>>,
+	pub complete: bool,
+	pub at: Instant,
+}
+
+impl VoiceVideoFrame {
+	pub const PLAYOUT_DELAY: u8 = 6;
+	pub const RID: u8 = 11;
+	const IDR: u8 = 5;
+	const TYPE_MASK: u8 = 0x1f;
+
+	pub fn extension(&self, id: u8) -> Option<&[u8]> {
+		self.extensions
+			.iter()
+			.find(|(found, _)| *found == id)
+			.map(|(_, data)| data.as_slice())
+	}
+
+	pub fn rid(&self) -> Option<String> {
+		self.extension(Self::RID)
+			.map(|rid| String::from_utf8_lossy(rid).into_owned())
+	}
+
+	pub fn is_keyframe(&self) -> bool {
+		self.opened.as_deref().is_some_and(|frame| {
+			frame
+				.windows(5)
+				.any(|window| window[..4] == [0, 0, 0, 1] && window[4] & Self::TYPE_MASK == Self::IDR)
+		})
+	}
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct VoiceRecording {
 	pub sockets: Vec<VoiceSocket>,
@@ -117,6 +155,7 @@ pub struct VoiceRecording {
 	pub closes: Vec<(u64, Option<u16>)>,
 	pub packets: Vec<VoicePacket>,
 	pub rtcp: Vec<VoiceRtcp>,
+	pub video: Vec<VoiceVideoFrame>,
 }
 
 impl VoiceRecording {
@@ -130,6 +169,10 @@ impl VoiceRecording {
 
 	pub fn packets_from(&self, ssrc: u32) -> impl Iterator<Item = &VoicePacket> {
 		self.packets.iter().filter(move |packet| packet.ssrc == ssrc)
+	}
+
+	pub fn video_from(&self, ssrc: u32) -> impl Iterator<Item = &VoiceVideoFrame> {
+		self.video.iter().filter(move |frame| frame.ssrc == ssrc)
 	}
 
 	pub fn picture_losses(&self, media_ssrc: u32) -> usize {

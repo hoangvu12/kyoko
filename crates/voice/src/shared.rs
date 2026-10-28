@@ -51,6 +51,8 @@ pub struct MixedFrame {
 pub(crate) enum Control {
 	Speaking(bool),
 	VideoWants,
+	CameraOn,
+	CameraOff,
 }
 
 pub(crate) struct Counters {

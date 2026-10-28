@@ -16,7 +16,10 @@ use crate::shared::{AudioDevicesInUse, Control, InputMode, MixedFrame, Shared, V
 use crate::signal::{Browser, Credentials, establish};
 use crate::supervisor::{Signals, Supervisor};
 use crate::transform::DaveTransform;
-use crate::video::{VideoSink, VideoStats, VideoWant};
+use crate::video::send::{Camera, CameraSender};
+use crate::video::{
+	VideoCodecs, VideoError, VideoLayer, VideoQuality, VideoSink, VideoSource, VideoStats, VideoWant,
+};
 
 const MAX_VOLUME: f32 = 2.0;
 const DEFAULT_LOCALE: &str = "en-US";
@@ -87,6 +90,7 @@ impl Default for VoiceOptions {
 }
 
 pub struct VoiceConnection {
+	user_id: Snowflake,
 	shared: Arc<Shared>,
 	dave: Arc<DaveStats>,
 	control: mpsc::UnboundedSender<Control>,
@@ -157,6 +161,7 @@ impl VoiceConnection {
 		)?;
 		tokio::spawn(supervisor.run());
 		Ok(Self {
+			user_id: params.user_id,
 			shared,
 			dave: dave_stats,
 			control,
@@ -288,6 +293,55 @@ impl VoiceConnection {
 		let _ = self.control.send(Control::VideoWants);
 	}
 
+	pub async fn start_camera(
+		&self,
+		source: Box<dyn VideoSource>,
+		quality: VideoQuality,
+		codecs: VideoCodecs,
+	) -> std::result::Result<(), VideoError> {
+		let outgoing = &self.shared.video.outgoing;
+		if outgoing.sender.lock().is_some() {
+			return Err(VideoError::Busy);
+		}
+		outgoing.set_quality(quality);
+		let camera = Camera {
+			source,
+			quality,
+			codecs,
+			user_id: self.user_id,
+		};
+		let (sender, started) = CameraSender::spawn(camera, self.shared.clone())?;
+		started.await.map_err(|_| VideoError::Stopped)??;
+		*outgoing.sender.lock() = Some(sender);
+		let _ = self.control.send(Control::CameraOn);
+		Ok(())
+	}
+
+	pub fn stop_camera(&self) {
+		let Some(sender) = self.shared.video.outgoing.sender.lock().take() else {
+			return;
+		};
+		drop(sender);
+		let _ = self.control.send(Control::CameraOff);
+		if let Some(sink) = self.shared.video.sink() {
+			sink.ended(self.user_id);
+		}
+	}
+
+	pub fn camera_on(&self) -> bool {
+		self.shared.video.outgoing.sender.lock().is_some()
+	}
+
+	pub fn video_layers(&self) -> Vec<VideoLayer> {
+		self.shared
+			.video
+			.outgoing
+			.layers()
+			.iter()
+			.map(|state| state.layer.clone())
+			.collect()
+	}
+
 	pub fn video_users(&self) -> Vec<Snowflake> {
 		let mut users: Vec<Snowflake> = self.shared.video.remote.lock().keys().copied().collect();
 		users.sort_unstable();
@@ -311,12 +365,14 @@ impl VoiceConnection {
 	}
 
 	pub fn disconnect(&self) {
+		self.shared.video.outgoing.sender.lock().take();
 		let _ = self.shutdown.send(true);
 	}
 }
 
 impl Drop for VoiceConnection {
 	fn drop(&mut self) {
+		self.shared.video.outgoing.sender.lock().take();
 		let _ = self.shutdown.send(true);
 	}
 }

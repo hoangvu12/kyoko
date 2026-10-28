@@ -5,7 +5,7 @@ use mockcord::{GatewayFrame, VOICE_TOKEN, VoiceControl, VoiceFrame, VoicePacket,
 use opus::{Application, Channels, Encoder};
 use protocol::{ChannelType, Opcode, Snowflake};
 use serde_json::{Value, json};
-use session::{Command, Trust, VoiceSetup};
+use session::{CameraIo, Command, Trust, VoiceSetup};
 use state::{State, UserAudio, VoiceStatus};
 use store::VoiceSettings;
 use voice::{AudioIo, FRAME_SAMPLES, SILENCE_FRAME};
@@ -87,7 +87,11 @@ pub(crate) async fn start(name: &'static str) -> Voice {
 }
 
 pub(crate) fn manual_audio(running: &Running) {
-	running.session().set_voice_setup(VoiceSetup {
+	running.session().set_voice_setup(manual_setup(running));
+}
+
+pub(crate) fn manual_setup(running: &Running) -> VoiceSetup {
+	VoiceSetup {
 		audio: AudioIo::Manual,
 		trust: Trust::only(
 			running
@@ -96,7 +100,9 @@ pub(crate) fn manual_audio(running: &Running) {
 				.expect("mockcord's voice server runs on tls"),
 		),
 		join_timeout: JOIN_TIMEOUT,
-	});
+		camera: CameraIo::Pattern,
+		..VoiceSetup::default()
+	}
 }
 
 impl Voice {
@@ -129,13 +135,22 @@ impl Voice {
 			.await;
 	}
 
-	async fn voice_until(&self, what: &str, done: impl Fn(&VoiceRecording) -> bool) -> VoiceRecording {
+	pub(crate) async fn voice_until(
+		&self,
+		what: &str,
+		done: impl Fn(&VoiceRecording) -> bool,
+	) -> VoiceRecording {
 		let control = self.running.voice();
 		self.running.eventually(what, || done(&control.recording())).await;
 		control.recording()
 	}
 
-	async fn op_4(&self, since: Instant, what: &str, wanted: impl Fn(&GatewayFrame) -> bool) -> GatewayFrame {
+	pub(crate) async fn op_4(
+		&self,
+		since: Instant,
+		what: &str,
+		wanted: impl Fn(&GatewayFrame) -> bool,
+	) -> GatewayFrame {
 		self.running
 			.until_wire(what, |recording| {
 				recording
@@ -249,7 +264,7 @@ fn tone_frame_at(index: usize, amplitude: f32) -> Vec<i16> {
 		.collect()
 }
 
-fn for_channel(frame: &GatewayFrame, channel_id: Option<Snowflake>) -> bool {
+pub(crate) fn for_channel(frame: &GatewayFrame, channel_id: Option<Snowflake>) -> bool {
 	frame.data["channel_id"] == channel_id.map_or(Value::Null, |id| json!(id.to_string()))
 }
 

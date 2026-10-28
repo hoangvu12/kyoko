@@ -18,10 +18,16 @@ const DISCOVERY_REQUEST: u16 = 1;
 const DISCOVERY_RESPONSE: u16 = 2;
 const ADDRESS_RANGE: std::ops::Range<usize> = 8..72;
 const PORT_START: usize = 72;
+const RTCP_HEADER_LEN: usize = 8;
+const PSFB_PAYLOAD_TYPE: u8 = 206;
+const PLI_FORMAT: u8 = 1;
+const FIR_FORMAT: u8 = 4;
+const RTCP_FORMAT_MASK: u8 = 0x1f;
+const SSRC_LEN: usize = 4;
 
-pub(crate) struct Inbound {
-	pub header: Header,
-	pub payload: Vec<u8>,
+pub(crate) enum Inbound {
+	Media { header: Header, payload: Vec<u8> },
+	KeyframeRequest { media_ssrc: u32 },
 }
 
 pub(crate) trait Transport: Send + Sync {
@@ -94,14 +100,25 @@ pub(crate) struct UdpTransport {
 impl UdpTransport {
 	fn open(&self, packet: &[u8]) -> Option<Inbound> {
 		if rtp::is_rtcp(packet) {
-			return None;
+			return self.open_feedback(packet);
 		}
 		let header = rtp::parse(packet)?;
 		let payload = self
 			.cipher
 			.open(packet, header.header_len)
 			.and_then(|plain| header.into_payload(plain))?;
-		Some(Inbound { header, payload })
+		Some(Inbound::Media { header, payload })
+	}
+
+	fn open_feedback(&self, packet: &[u8]) -> Option<Inbound> {
+		let format = packet[0] & RTCP_FORMAT_MASK;
+		if packet[1] != PSFB_PAYLOAD_TYPE || !matches!(format, PLI_FORMAT | FIR_FORMAT) {
+			return None;
+		}
+		let body = self.cipher.open(packet, RTCP_HEADER_LEN)?;
+		let ssrc_at = if format == FIR_FORMAT { SSRC_LEN } else { 0 };
+		let media_ssrc = u32::from_be_bytes(body.get(ssrc_at..ssrc_at + SSRC_LEN)?.try_into().ok()?);
+		Some(Inbound::KeyframeRequest { media_ssrc })
 	}
 
 	async fn next(&self, buffer: &mut [u8]) -> io::Result<Option<Inbound>> {

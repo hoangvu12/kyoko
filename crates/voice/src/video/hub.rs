@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use parking_lot::Mutex;
 use protocol::Snowflake;
 
+use super::outgoing::Outgoing;
 use super::{VideoSink, VideoWant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -13,6 +14,8 @@ pub struct VideoStats {
 	pub frames_decoded: u64,
 	pub frames_dropped: u64,
 	pub keyframe_requests: u64,
+	pub frames_encoded: u64,
+	pub frames_sent: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +34,7 @@ pub(crate) struct VideoHub {
 	pub decoded: AtomicU64,
 	pub dropped: AtomicU64,
 	pub keyframe_requests: AtomicU64,
+	pub outgoing: Outgoing,
 }
 
 impl VideoHub {
@@ -60,6 +64,8 @@ impl VideoHub {
 			frames_decoded: self.decoded.load(Ordering::Relaxed),
 			frames_dropped: self.dropped.load(Ordering::Relaxed),
 			keyframe_requests: self.keyframe_requests.load(Ordering::Relaxed),
+			frames_encoded: self.outgoing.encoded.load(Ordering::Relaxed),
+			frames_sent: self.outgoing.sent.load(Ordering::Relaxed),
 		}
 	}
 }

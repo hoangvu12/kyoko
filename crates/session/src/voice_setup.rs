@@ -3,17 +3,27 @@ use std::time::Duration;
 
 use net::Trust;
 use parking_lot::Mutex;
+use voice::video::VideoCodecs;
 use voice::{AudioIo, MicCheck, VoiceConnection};
 
 use crate::video_feed::{VideoFeed, VideoView};
 
 const JOIN_TIMEOUT: Duration = Duration::from_secs(15);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CameraIo {
+	#[default]
+	Devices,
+	Pattern,
+}
+
 #[derive(Clone)]
 pub struct VoiceSetup {
 	pub audio: AudioIo,
 	pub trust: Trust,
 	pub join_timeout: Duration,
+	pub camera: CameraIo,
+	pub codecs: VideoCodecs,
 }
 
 impl Default for VoiceSetup {
@@ -25,6 +35,8 @@ impl Default for VoiceSetup {
 			},
 			trust: Trust::default(),
 			join_timeout: JOIN_TIMEOUT,
+			camera: CameraIo::Devices,
+			codecs: VideoCodecs::System,
 		}
 	}
 }

@@ -20,6 +20,7 @@ use crate::rtp;
 use crate::shared::{Control, InputMode, MixedFrame, Shared};
 use crate::transform::{Codec, FrameTransform};
 use crate::transport::{Inbound, Transport};
+use crate::video::packetize;
 use crate::video::receive::VideoReceive;
 use crate::wire::{H264_PAYLOAD_TYPE, OPUS_PAYLOAD_TYPE};
 
@@ -51,6 +52,7 @@ pub(crate) struct Media {
 	mixer: Mixer,
 	streams: HashMap<u32, RemoteStream>,
 	video: VideoReceive,
+	video_sequences: HashMap<u32, u16>,
 	frame: Vec<f32>,
 	sequence: u16,
 	timestamp: u32,
@@ -86,6 +88,7 @@ impl Media {
 			gate: VoiceGate::default(),
 			mixer: Mixer::new(STEREO_FRAME_SAMPLES),
 			streams: HashMap::new(),
+			video_sequences: HashMap::new(),
 			frame: vec![0.0; FRAME_SAMPLES],
 			sequence: rand::random(),
 			timestamp: rand::random(),
@@ -98,14 +101,17 @@ impl Media {
 
 	pub async fn run(mut self) {
 		let transport = self.transport.clone();
+		let shared = self.shared.clone();
 		let mut ticker = interval(TICK);
 		ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 		let mut housekeeping = Instant::now();
 		let mut buffer = [0u8; RECEIVE_BUFFER_BYTES];
 		loop {
 			tokio::select! {
+				() = shared.video.outgoing.ready.notified() => self.send_video(),
 				received = transport.receive(&mut buffer) => match received {
-					Ok(Some(inbound)) => self.on_packet(inbound, Instant::now()),
+					Ok(Some(Inbound::Media { header, payload })) => self.on_packet(&header, payload, Instant::now()),
+					Ok(Some(Inbound::KeyframeRequest { media_ssrc })) => self.on_keyframe_request(media_ssrc),
 					Ok(None) => {}
 					Err(error) => {
 						warn!(%error, "voice udp receive failed");
@@ -249,10 +255,43 @@ impl Media {
 		}
 	}
 
-	fn on_packet(&mut self, inbound: Inbound, now: Instant) {
-		let Inbound { header, payload } = inbound;
+	fn send_video(&mut self) {
+		let outgoing = &self.shared.video.outgoing;
+		while let Some(unit) = outgoing.pop() {
+			let Some(sealed) = self.transform.lock().encrypt(Codec::H264, &unit.data) else {
+				outgoing.dropped.fetch_add(1, Ordering::Relaxed);
+				continue;
+			};
+			let extensions = packetize::extensions(&unit.rid);
+			let sequence = self.video_sequences.entry(unit.ssrc).or_insert_with(rand::random);
+			for payload in packetize::payload_frame(&sealed) {
+				let header = packetize::header(
+					H264_PAYLOAD_TYPE,
+					payload.marker,
+					*sequence,
+					unit.timestamp,
+					unit.ssrc,
+					extensions.len(),
+				);
+				*sequence = sequence.wrapping_add(1);
+				let mut body = Vec::with_capacity(extensions.len() + payload.data.len());
+				body.extend_from_slice(&extensions);
+				body.extend_from_slice(&payload.data);
+				self.transport.send(&header, &body);
+			}
+			outgoing.sent.fetch_add(1, Ordering::Relaxed);
+		}
+	}
+
+	fn on_keyframe_request(&self, media_ssrc: u32) {
+		if let Some(layer) = self.shared.video.outgoing.layer(media_ssrc) {
+			layer.request_keyframe();
+		}
+	}
+
+	fn on_packet(&mut self, header: &rtp::Header, payload: Vec<u8>, now: Instant) {
 		if header.payload_type == H264_PAYLOAD_TYPE && header.ssrc != self.transport.ssrc() {
-			self.video.on_packet(&header, &payload, now);
+			self.video.on_packet(header, &payload, now);
 			return;
 		}
 		if header.payload_type != OPUS_PAYLOAD_TYPE || header.ssrc == self.transport.ssrc() {

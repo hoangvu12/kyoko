@@ -70,6 +70,7 @@ pub enum VoiceEvent {
 		members: Vec<Snowflake>,
 	},
 	DaveFailure(String),
+	CameraStopped,
 	Stats {
 		ping_ms: u32,
 		packets_lost: u64,
