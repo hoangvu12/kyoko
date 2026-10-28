@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Viewer opens from attachments and embed images, full window over a scrim, Esc and click outside close
 - [ ] Toolbar: zoom in/out (and wheel zoom, drag to pan, double-click to reset), forward (opens kyoko's forward dialog), save (Windows save dialog, original file), open in browser, copy image, copy link, close; left/right between images of the same message
