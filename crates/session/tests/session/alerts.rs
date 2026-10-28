@@ -338,6 +338,7 @@ async fn a_plugin_hook_can_veto_an_alert() {
 
 struct SlowVeto {
 	asked: AtomicUsize,
+	answered: AtomicUsize,
 }
 
 impl SessionHooks for SlowVeto {
@@ -348,6 +349,7 @@ impl SessionHooks for SlowVeto {
 	fn allow_notification(&self, message: &Message) -> Result<bool> {
 		self.asked.fetch_add(1, Ordering::SeqCst);
 		std::thread::sleep(Duration::from_millis(100));
+		self.answered.fetch_add(1, Ordering::SeqCst);
 		Ok(message.content != QUIET)
 	}
 }
@@ -356,6 +358,7 @@ impl SessionHooks for SlowVeto {
 async fn the_hook_hears_only_alerts_the_burst_limit_would_show() {
 	let hook = Arc::new(SlowVeto {
 		asked: AtomicUsize::new(0),
+		answered: AtomicUsize::new(0),
 	});
 	let running = Running::start_with(Options::new("alerts-reserve").hooks(hook.clone())).await;
 	let scene = scene(&running).await;
@@ -363,10 +366,21 @@ async fn the_hook_hears_only_alerts_the_burst_limit_would_show() {
 	for _ in 0..3 {
 		scene.post_dm(&running, QUIET).await;
 	}
+	running
+		.eventually("the hook to veto the quiet alerts", || {
+			hook.answered.load(Ordering::SeqCst) == 3
+		})
+		.await;
 	tokio::time::sleep(SETTLE).await;
 	for step in 0..5 {
 		scene.post_dm(&running, &format!("ring {step}")).await;
 	}
+	running
+		.eventually("the hook to answer the alerts it heard", || {
+			seen.collect(&running);
+			hook.answered.load(Ordering::SeqCst) >= 6 && seen.contents().len() >= 3
+		})
+		.await;
 	tokio::time::sleep(SETTLE).await;
 	seen.collect(&running);
 	let mut shown = seen.contents();
