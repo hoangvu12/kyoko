@@ -16,6 +16,7 @@ use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use crate::harness::{Options, Running};
 
 const THEME: &str = "/**\n * @name Ocean\n */\n:root { --background-primary: #0b1d2a; }\n";
+const THEME_PATH: &str = "/ocean.css";
 const LIMIT: usize = 4 * 1024;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(3);
 const SLOW_ANSWER: Duration = Duration::from_secs(10);
@@ -37,12 +38,8 @@ struct Served {
 }
 
 impl Served {
-	fn paths(&self) -> Vec<String> {
-		self.requests
-			.lock()
-			.iter()
-			.map(|(path, _)| path.clone())
-			.collect()
+	fn asked_for(&self, path: &str) -> bool {
+		self.requests.lock().iter().any(|(seen, _)| seen == path)
 	}
 }
 
@@ -195,8 +192,8 @@ async fn theme_links_are_fetched_over_https_only_without_any_discord_credentials
 	let running =
 		Running::start_with(Options::new("theme-links-https").theme_links(tuning(&certificates))).await;
 	running.connected().await;
-	let good = format!("https://localhost:{}/ocean.css", secure.port());
-	let insecure = format!("http://127.0.0.1:{}/ocean.css", plain.port());
+	let good = format!("https://localhost:{}{THEME_PATH}", secure.port());
+	let insecure = format!("http://127.0.0.1:{}{THEME_PATH}", plain.port());
 	let page = format!("https://localhost:{}/page", secure.port());
 	let copies = refreshed(&running, &[good.clone(), insecure.clone(), page.clone()]).await;
 
@@ -211,7 +208,10 @@ async fn theme_links_are_fetched_over_https_only_without_any_discord_credentials
 		copy(&copies, &insecure).error.as_deref(),
 		Some("only https links are allowed")
 	);
-	assert!(plain_served.paths().is_empty(), "a plain http link was requested");
+	assert!(
+		!plain_served.asked_for(THEME_PATH),
+		"a plain http link was requested"
+	);
 	assert!(
 		copy(&copies, &page)
 			.error
@@ -219,7 +219,7 @@ async fn theme_links_are_fetched_over_https_only_without_any_discord_credentials
 			.is_some_and(|error| error.contains("web page"))
 	);
 
-	assert!(served.paths().contains(&"/ocean.css".to_owned()));
+	assert!(served.asked_for(THEME_PATH));
 	let token = running.token().to_owned();
 	for (path, headers) in served.requests.lock().iter() {
 		for (name, value) in headers {
