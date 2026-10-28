@@ -6,7 +6,7 @@ Plan ticket V4 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 98
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session tests: a device change while connected restarts audio without reconnecting; the threshold gates sending; push to talk sends only while held; noise suppression toggles the chain
 - [ ] Mic test runs without joining; the level meter updates; settings survive a restart

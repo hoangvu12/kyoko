@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Voice rows show Open Chat, Invite to Voice and Edit Channel on hover (and while focused), with tooltips; Edit Channel only with Manage Channels; text rows keep their own hover buttons
 - [ ] Open Chat opens the voice channel's text chat; Invite opens kyoko's invite dialog for that channel (v1 35); Edit Channel opens channel settings (95; until 95 lands, the existing server settings page or nothing, but never a dead button)
