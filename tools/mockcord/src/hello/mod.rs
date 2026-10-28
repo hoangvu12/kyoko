@@ -4,7 +4,7 @@ mod dtls;
 mod h2;
 mod http1;
 mod ja4;
-mod listener;
+pub(crate) mod listener;
 mod names;
 mod order;
 mod summary;

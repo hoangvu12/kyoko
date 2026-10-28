@@ -29,6 +29,7 @@ pub struct Server {
 	address: SocketAddr,
 	stop: watch::Sender<bool>,
 	tasks: Vec<JoinHandle<()>>,
+	voice: voice::VoiceControl,
 }
 
 pub fn remote_auth_url(origin: &str) -> String {
@@ -75,6 +76,7 @@ impl Server {
 			address,
 			stop,
 			tasks,
+			voice: voice.control,
 		})
 	}
 
@@ -96,6 +98,14 @@ impl Server {
 
 	pub fn gateway_url(&self) -> &str {
 		&self.shared.urls.gateway
+	}
+
+	pub fn voice_url(&self) -> &str {
+		&self.shared.urls.voice
+	}
+
+	pub fn voice(&self) -> voice::VoiceControl {
+		self.voice.clone()
 	}
 
 	pub fn remote_auth_url(&self) -> String {

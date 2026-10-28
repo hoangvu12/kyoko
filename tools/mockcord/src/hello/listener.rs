@@ -138,7 +138,7 @@ impl HelloListener {
 		let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await?;
 		let port = listener.local_addr()?.port();
 		let certificates = certificates().map_err(io::Error::other)?;
-		let acceptor = acceptor(&certificates)?;
+		let acceptor = acceptor(&certificates, &[b"h2", b"http/1.1"])?;
 		let connections = Connections::default();
 		let shared = connections.clone();
 		let task = tokio::spawn(async move {
@@ -331,10 +331,10 @@ async fn serve_http1<S: AsyncRead + AsyncWrite + Unpin>(mut tls: S, record: &Rec
 	}
 }
 
-struct Replay {
-	prefix: Vec<u8>,
-	at: usize,
-	inner: TcpStream,
+pub(crate) struct Replay {
+	pub prefix: Vec<u8>,
+	pub at: usize,
+	pub inner: TcpStream,
 }
 
 impl AsyncRead for Replay {
@@ -368,13 +368,13 @@ impl AsyncWrite for Replay {
 	}
 }
 
-struct Certificates {
-	root_pem: String,
+pub(crate) struct Certificates {
+	pub root_pem: String,
 	server: CertificateDer<'static>,
 	key: PrivateKeyDer<'static>,
 }
 
-fn certificates() -> Result<Certificates, rcgen::Error> {
+pub(crate) fn certificates() -> Result<Certificates, rcgen::Error> {
 	let root_key = KeyPair::generate()?;
 	let mut root_params = CertificateParams::new(Vec::<String>::new())?;
 	root_params
@@ -398,14 +398,14 @@ fn certificates() -> Result<Certificates, rcgen::Error> {
 	})
 }
 
-fn acceptor(certificates: &Certificates) -> io::Result<TlsAcceptor> {
+pub(crate) fn acceptor(certificates: &Certificates, alpn: &[&[u8]]) -> io::Result<TlsAcceptor> {
 	let mut config = ServerConfig::builder_with_provider(Arc::new(aws_lc_rs::default_provider()))
 		.with_safe_default_protocol_versions()
 		.map_err(io::Error::other)?
 		.with_no_client_auth()
 		.with_single_cert(vec![certificates.server.clone()], certificates.key.clone_key())
 		.map_err(io::Error::other)?;
-	config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+	config.alpn_protocols = alpn.iter().map(|protocol| protocol.to_vec()).collect();
 	config.session_storage = Arc::new(NoServerSessionStorage {});
 	config.send_tls13_tickets = 0;
 	Ok(TlsAcceptor::from(Arc::new(config)))

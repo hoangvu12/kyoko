@@ -1,78 +1,314 @@
-use cpal::traits::HostTrait;
-use nnnoiseless::DenoiseState;
-use opus::{Application, Channels, Decoder, Encoder};
-use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler};
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::mpsc;
+use std::thread::{self, JoinHandle};
 
-use crate::text;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{
+	Device, DeviceId, Error, ErrorKind, FromSample, Host, SampleFormat, SizedSample, Stream, StreamConfig,
+};
+use parking_lot::Mutex;
+use tracing::warn;
 
-const RATE: u32 = 48_000;
-const FRAME: usize = 960;
-const FRAMES: usize = 10;
-const PCM_SCALE: f32 = 32_768.0;
+use crate::error::{Result, VoiceError};
 
-pub fn tone(frames: usize, channels: usize) -> Vec<f32> {
-	(0..frames)
-		.flat_map(|index| {
-			let phase = index as f32 * 1_000.0 * std::f32::consts::TAU / RATE as f32;
-			std::iter::repeat_n(phase.sin() * 0.25, channels)
+const CAPTURE_LIMIT_SECONDS: usize = 2;
+const PLAYBACK_LIMIT_SECONDS: usize = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceInfo {
+	pub id: String,
+	pub name: String,
+	pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AudioDevices {
+	pub inputs: Vec<DeviceInfo>,
+	pub outputs: Vec<DeviceInfo>,
+}
+
+pub fn devices() -> AudioDevices {
+	let host = cpal::default_host();
+	let default_input = host.default_input_device().and_then(|device| device.id().ok());
+	let default_output = host.default_output_device().and_then(|device| device.id().ok());
+	AudioDevices {
+		inputs: host
+			.input_devices()
+			.map(|found| describe(found, default_input.as_ref()))
+			.unwrap_or_default(),
+		outputs: host
+			.output_devices()
+			.map(|found| describe(found, default_output.as_ref()))
+			.unwrap_or_default(),
+	}
+}
+
+fn describe(found: impl Iterator<Item = Device>, default: Option<&DeviceId>) -> Vec<DeviceInfo> {
+	found
+		.filter_map(|device| {
+			let id = device.id().ok()?;
+			let name = device.description().ok()?.name().to_owned();
+			Some(DeviceInfo {
+				is_default: default == Some(&id),
+				id: id.to_string(),
+				name,
+			})
 		})
 		.collect()
 }
 
-pub fn opus_round_trip() -> Result<String, String> {
-	let mut encoder = Encoder::new(RATE, Channels::Mono, Application::Voip).map_err(text)?;
-	let mut decoder = Decoder::new(RATE, Channels::Stereo).map_err(text)?;
-	let input = tone(FRAME, 1);
-	let mut packet = [0u8; 1275];
-	let mut stereo = vec![0.0f32; FRAME * 2];
-	let mut bytes = 0;
-	let mut decoded = 0;
-	for _ in 0..FRAMES {
-		let length = encoder.encode_float(&input, &mut packet).map_err(text)?;
-		bytes += length;
-		decoded += decoder
-			.decode_float(&packet[..length], &mut stereo, false)
-			.map_err(text)?;
+pub(crate) struct Rings {
+	capture: Mutex<VecDeque<f32>>,
+	playback: Mutex<VecDeque<f32>>,
+	capture_rate: AtomicU32,
+	playback_rate: AtomicU32,
+}
+
+impl Rings {
+	pub fn new() -> Self {
+		Self {
+			capture: Mutex::new(VecDeque::new()),
+			playback: Mutex::new(VecDeque::new()),
+			capture_rate: AtomicU32::new(0),
+			playback_rate: AtomicU32::new(0),
+		}
 	}
-	Ok(format!(
-		"{FRAMES} frames of a 1 kHz tone took {bytes} bytes, {decoded} samples per channel came back, {}",
-		opus::version()
-	))
+
+	pub fn capture_rate(&self) -> u32 {
+		self.capture_rate.load(Ordering::Acquire)
+	}
+
+	pub fn playback_rate(&self) -> u32 {
+		self.playback_rate.load(Ordering::Acquire)
+	}
+
+	pub fn drain_capture(&self, into: &mut Vec<f32>) {
+		into.extend(self.capture.lock().drain(..));
+	}
+
+	pub fn playback_len(&self) -> usize {
+		self.playback.lock().len()
+	}
+
+	pub fn push_playback(&self, stereo: &[f32]) {
+		let limit = self.playback_rate() as usize * 2 * PLAYBACK_LIMIT_SECONDS;
+		let mut ring = self.playback.lock();
+		ring.extend(stereo);
+		let excess = ring.len().saturating_sub(limit);
+		ring.drain(..excess);
+	}
+
+	pub fn clear_playback(&self) {
+		self.playback.lock().clear();
+	}
+
+	fn push_capture(&self, mono: impl Iterator<Item = f32>) {
+		let limit = self.capture_rate() as usize * CAPTURE_LIMIT_SECONDS;
+		let mut ring = self.capture.lock();
+		ring.extend(mono);
+		let excess = ring.len().saturating_sub(limit);
+		ring.drain(..excess);
+	}
 }
 
-pub fn resample() -> Result<String, String> {
-	let mut fft = Fft::<f32>::new(44_100, RATE as usize, 441, 2, FixedSync::Input).map_err(text)?;
-	let frames_in = fft.input_frames_next();
-	let input = tone(frames_in, 2);
-	let mut output = vec![0.0f32; fft.output_frames_max() * 2];
-	let source = InterleavedSlice::new(&input, 2, frames_in).map_err(text)?;
-	let frames_out = fft.output_frames_next();
-	let mut sink = InterleavedSlice::new_mut(&mut output, 2, frames_out).map_err(text)?;
-	let (read, written) = fft.process_into_buffer(&source, &mut sink, None).map_err(text)?;
-	Ok(format!("{read} frames at 44.1 kHz became {written} at 48 kHz"))
+enum Command {
+	Input(Option<String>),
+	Output(Option<String>),
+	Stop,
 }
 
-pub fn denoise() -> Result<String, String> {
-	let mut state = DenoiseState::new();
-	let input = tone(DenoiseState::FRAME_SIZE, 1)
-		.into_iter()
-		.map(|sample| sample * PCM_SCALE)
-		.collect::<Vec<_>>();
-	let mut output = [0.0f32; DenoiseState::FRAME_SIZE];
-	let voice = state.process_frame(&mut output, &input);
-	Ok(format!(
-		"one {}-sample frame, voice probability {voice:.2}",
-		DenoiseState::FRAME_SIZE
-	))
+pub(crate) struct AudioEngine {
+	commands: mpsc::Sender<Command>,
+	thread: Option<JoinHandle<()>>,
 }
 
-pub fn devices() -> Result<String, String> {
+impl AudioEngine {
+	pub fn start(rings: Arc<Rings>, input: Option<String>, output: Option<String>) -> Result<Self> {
+		let (commands, receiver) = mpsc::channel();
+		let (ready_sender, ready) = mpsc::channel();
+		let thread = thread::Builder::new()
+			.name("voice-audio".to_owned())
+			.spawn(move || run(&rings, input, output, &receiver, &ready_sender))
+			.map_err(|error| VoiceError::Audio(error.to_string()))?;
+		let _ = ready.recv();
+		Ok(Self {
+			commands,
+			thread: Some(thread),
+		})
+	}
+
+	pub fn set_input(&self, id: Option<String>) {
+		let _ = self.commands.send(Command::Input(id));
+	}
+
+	pub fn set_output(&self, id: Option<String>) {
+		let _ = self.commands.send(Command::Output(id));
+	}
+}
+
+impl Drop for AudioEngine {
+	fn drop(&mut self) {
+		let _ = self.commands.send(Command::Stop);
+		if let Some(thread) = self.thread.take() {
+			let _ = thread.join();
+		}
+	}
+}
+
+fn run(
+	rings: &Arc<Rings>,
+	input: Option<String>,
+	output: Option<String>,
+	commands: &mpsc::Receiver<Command>,
+	ready: &mpsc::Sender<()>,
+) {
 	let host = cpal::default_host();
-	let inputs = host.input_devices().map_err(text)?.count();
-	let outputs = host.output_devices().map_err(text)?.count();
-	Ok(format!(
-		"{} host, {inputs} inputs, {outputs} outputs",
-		host.id().name()
-	))
+	let mut input_stream = open_input(&host, input.as_deref(), rings);
+	let mut output_stream = open_output(&host, output.as_deref(), rings);
+	let _ = ready.send(());
+	while let Ok(command) = commands.recv() {
+		match command {
+			Command::Input(id) => {
+				drop(input_stream.take());
+				input_stream = open_input(&host, id.as_deref(), rings);
+			}
+			Command::Output(id) => {
+				drop(output_stream.take());
+				output_stream = open_output(&host, id.as_deref(), rings);
+			}
+			Command::Stop => break,
+		}
+	}
+	drop((input_stream, output_stream));
+}
+
+fn find_device(host: &Host, id: Option<&str>, input: bool) -> Option<Device> {
+	let requested = id
+		.and_then(|id| id.parse::<DeviceId>().ok())
+		.and_then(|id| host.device_by_id(&id));
+	if requested.is_none() && id.is_some() {
+		warn!("requested audio device not found, using the default");
+	}
+	requested.or_else(|| {
+		if input {
+			host.default_input_device()
+		} else {
+			host.default_output_device()
+		}
+	})
+}
+
+fn open_input(host: &Host, id: Option<&str>, rings: &Arc<Rings>) -> Option<Stream> {
+	rings.capture_rate.store(0, Ordering::Release);
+	let device = find_device(host, id, true)?;
+	match build_input(&device, rings) {
+		Ok(stream) => Some(stream),
+		Err(error) => {
+			warn!(%error, "failed to open the input device");
+			None
+		}
+	}
+}
+
+fn open_output(host: &Host, id: Option<&str>, rings: &Arc<Rings>) -> Option<Stream> {
+	rings.playback_rate.store(0, Ordering::Release);
+	rings.clear_playback();
+	let device = find_device(host, id, false)?;
+	match build_output(&device, rings) {
+		Ok(stream) => Some(stream),
+		Err(error) => {
+			warn!(%error, "failed to open the output device");
+			None
+		}
+	}
+}
+
+fn unsupported_format(format: SampleFormat) -> Error {
+	Error::with_message(ErrorKind::UnsupportedConfig, format!("sample format {format}"))
+}
+
+fn build_input(device: &Device, rings: &Arc<Rings>) -> std::result::Result<Stream, Error> {
+	let supported = device.default_input_config()?;
+	let config = supported.config();
+	let stream = match supported.sample_format() {
+		SampleFormat::F32 => input_stream::<f32>(device, config, rings),
+		SampleFormat::I16 => input_stream::<i16>(device, config, rings),
+		SampleFormat::U16 => input_stream::<u16>(device, config, rings),
+		SampleFormat::I32 => input_stream::<i32>(device, config, rings),
+		format => return Err(unsupported_format(format)),
+	}?;
+	rings.capture_rate.store(config.sample_rate, Ordering::Release);
+	stream.play()?;
+	Ok(stream)
+}
+
+fn build_output(device: &Device, rings: &Arc<Rings>) -> std::result::Result<Stream, Error> {
+	let supported = device.default_output_config()?;
+	let config = supported.config();
+	let stream = match supported.sample_format() {
+		SampleFormat::F32 => output_stream::<f32>(device, config, rings),
+		SampleFormat::I16 => output_stream::<i16>(device, config, rings),
+		SampleFormat::U16 => output_stream::<u16>(device, config, rings),
+		SampleFormat::I32 => output_stream::<i32>(device, config, rings),
+		format => return Err(unsupported_format(format)),
+	}?;
+	rings.playback_rate.store(config.sample_rate, Ordering::Release);
+	stream.play()?;
+	Ok(stream)
+}
+
+fn input_stream<T>(
+	device: &Device,
+	config: StreamConfig,
+	rings: &Arc<Rings>,
+) -> std::result::Result<Stream, Error>
+where
+	T: SizedSample,
+	f32: FromSample<T>,
+{
+	let channels = usize::from(config.channels);
+	let rings = rings.clone();
+	device.build_input_stream(
+		config,
+		move |data: &[T], _| {
+			rings.push_capture(data.chunks_exact(channels).map(|frame| {
+				frame.iter().map(|sample| sample.to_sample::<f32>()).sum::<f32>() / channels as f32
+			}));
+		},
+		|error| warn!(%error, "input stream error"),
+		None,
+	)
+}
+
+fn output_stream<T>(
+	device: &Device,
+	config: StreamConfig,
+	rings: &Arc<Rings>,
+) -> std::result::Result<Stream, Error>
+where
+	T: SizedSample + FromSample<f32>,
+{
+	let channels = usize::from(config.channels);
+	let rings = rings.clone();
+	device.build_output_stream(
+		config,
+		move |data: &mut [T], _| {
+			let mut ring = rings.playback.lock();
+			for frame in data.chunks_exact_mut(channels) {
+				let (Some(left), Some(right)) = (ring.pop_front(), ring.pop_front()) else {
+					break;
+				};
+				if channels == 1 {
+					frame[0] = T::from_sample((left + right) * 0.5);
+				} else {
+					frame[0] = T::from_sample(left);
+					frame[1] = T::from_sample(right);
+				}
+			}
+		},
+		|error| warn!(%error, "output stream error"),
+		None,
+	)
 }

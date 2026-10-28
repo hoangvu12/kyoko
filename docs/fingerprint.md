@@ -198,7 +198,7 @@ Native Windows builds of `btls-sys` assemble BoringSSL's assembly unless they cr
 
 ## Voice
 
-**Decided (the user, 2026-10-28): UDP, option A.** See "Decision" below. Kyoko has no voice yet. `crates/voice` is a build trial that no kyoko crate depends on; nothing below changed what kyoko sends. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
+**Decided (the user, 2026-10-28): UDP, option A.** See "Decision" below. `crates/voice` now holds the connection core (ticket 97, `docs/voice.md`), which nothing in kyoko calls yet; the build trial lives on as its `voice_trial` example. The voice upgrade presents the gateway's Chrome wss ClientHello and `UPGRADE_ORDER`, with no Cookie. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
 
 ### What the web client does
 
@@ -246,7 +246,7 @@ BoringSSL itself does DTLS: the pinned `btls` (kyoko's TLS library since ticket 
 
 ### Build trial
 
-`crates/voice` (`cargo run -p kyoko-voice --example voice_trial --features openh264`) builds oxidcord's voice dependencies and runs each once: libopus 1.6.1 encode and decode (`opus` 0.4 on `opusic-sys` 0.7.6, bundled), `rubato` 5.0.1 resampling, `nnnoiseless` 0.5.2, cpal's WASAPI devices, both AEAD transport modes, a two-member DAVE MLS group on `openmls` 0.9.2 with `openmls_rust_crypto` 0.6 (P-256 suite, welcome, agreed media key, HMAC ratchet step), Media Foundation H.264 transforms (3 hardware and 1 software encoder, 1 decoder here), `GraphicsCaptureSession::IsSupported`, and with `--features openh264` an `openh264` 0.9.9 encode and decode. All pass on this machine.
+`crates/voice` (`cargo run -p kyoko-voice --example voice_trial --features openh264`, `crates/voice/examples/voice_trial/`) builds oxidcord's voice dependencies and runs each once: libopus 1.6.1 encode and decode (`opus` 0.4 on `opusic-sys` 0.7.6, bundled), `rubato` 5.0.1 resampling, `nnnoiseless` 0.5.2, cpal's WASAPI devices, both AEAD transport modes, a two-member DAVE MLS group on `openmls` 0.9.2 with `openmls_rust_crypto` 0.6 (P-256 suite, welcome, agreed media key, HMAC ratchet step), Media Foundation H.264 transforms (3 hardware and 1 software encoder, 1 decoder here), `GraphicsCaptureSession::IsSupported`, and with `--features openh264` an `openh264` 0.9.9 encode and decode. All pass on this machine.
 
 - **libopus under kyoko's toolchain file.** It builds with `HOST_CMAKE_TOOLCHAIN_FILE=.cargo/boringssl-no-asm.cmake` unchanged. `CMakeCache.txt` shows the toolchain file, `-MD`, and `OPUS_X86_MAY_HAVE_SSE`, `SSE2`, `SSE4_1` and `AVX2` all `ON` (runtime dispatch; `PRESUME_SSE`/`SSE2` `ON`). `opus.lib` (3.4 MB) holds `silk_NSQ_del_dec_sse4_1`, `celt_pitch_xcorr_avx2` and `opus_select_arch`, and references `MSVCRT` only, no `LIBCMT`. No fix needed. `OPENSSL_NO_ASM` is irrelevant to libopus.
 - **openh264.** Its build script finds no NASM and falls back to plain C ("Failed to compile NASM files, not using any assembly"), so a software encode would be slower than Cisco's binary.

@@ -1,63 +1,33 @@
+mod atomic;
 mod audio;
-mod dave;
-mod seal;
-#[cfg(feature = "openh264")]
-mod software;
-#[cfg(windows)]
-mod windows_media;
+mod chain;
+mod codec;
+mod connection;
+mod crypto;
+mod denoise;
+mod error;
+mod event;
+mod gate;
+mod jitter;
+mod media;
+mod mixer;
+mod remote;
+mod resample;
+mod rtp;
+mod shared;
+mod signal;
+mod supervisor;
+mod transform;
+mod transport;
+mod wire;
 
-use std::fmt;
-
-pub struct Check {
-	pub name: &'static str,
-	pub outcome: Result<String, String>,
-}
-
-pub struct Trial {
-	pub checks: Vec<Check>,
-}
-
-impl Trial {
-	pub fn passed(&self) -> bool {
-		self.checks.iter().all(|check| check.outcome.is_ok())
-	}
-}
-
-impl fmt::Display for Trial {
-	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-		for check in &self.checks {
-			match &check.outcome {
-				Ok(detail) => writeln!(formatter, "ok      {}: {detail}", check.name)?,
-				Err(error) => writeln!(formatter, "FAILED  {}: {error}", check.name)?,
-			}
-		}
-		Ok(())
-	}
-}
-
-pub fn trial() -> Trial {
-	let mut checks = vec![
-		check("opus", audio::opus_round_trip),
-		check("rubato", audio::resample),
-		check("rnnoise", audio::denoise),
-		check("cpal", audio::devices),
-		check("transport seal", seal::round_trip),
-		check("dave mls", dave::two_members),
-	];
-	#[cfg(windows)]
-	checks.extend([
-		check("media foundation", windows_media::h264_transforms),
-		check("graphics capture", windows_media::capture_supported),
-	]);
-	#[cfg(feature = "openh264")]
-	checks.push(check("openh264", software::round_trip));
-	Trial { checks }
-}
-
-fn check(name: &'static str, run: fn() -> Result<String, String>) -> Check {
-	Check { name, outcome: run() }
-}
-
-fn text(error: impl fmt::Display) -> String {
-	error.to_string()
-}
+pub use audio::{AudioDevices, DeviceInfo, devices};
+pub use codec::{FRAME_SAMPLES, SAMPLE_RATE, SILENCE_FRAME};
+pub use connection::{AudioIo, VoiceConnection, VoiceOptions, VoiceParams};
+pub use crypto::EncryptionMode;
+pub use error::{Result, VoiceError};
+pub use event::{StopReason, VoiceEvent};
+pub use jitter::{JitterBuffer, Playout, Push};
+pub use mixer::Mixer;
+pub use shared::{InputMode, MixedFrame, VoiceStats};
+pub use transform::{Codec, FrameTransform, Passthrough};

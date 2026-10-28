@@ -100,18 +100,22 @@ impl GatewayFrame {
 	}
 
 	pub fn keys(&self, path: &[&str]) -> Vec<String> {
-		let mut raw = self.raw.clone();
-		for segment in path {
-			let Some(nested) = ordered_fields(&raw)
-				.into_iter()
-				.find_map(|(name, value)| (name == *segment).then_some(value))
-			else {
-				return Vec::new();
-			};
-			raw = nested;
-		}
-		ordered_fields(&raw).into_iter().map(|(name, _)| name).collect()
+		field_names(&self.raw, path)
 	}
+}
+
+pub(crate) fn field_names(raw: &str, path: &[&str]) -> Vec<String> {
+	let mut raw = raw.to_owned();
+	for segment in path {
+		let Some(nested) = ordered_fields(&raw)
+			.into_iter()
+			.find_map(|(name, value)| (name == *segment).then_some(value))
+		else {
+			return Vec::new();
+		};
+		raw = nested;
+	}
+	ordered_fields(&raw).into_iter().map(|(name, _)| name).collect()
 }
 
 struct OrderedFields(Vec<(String, String)>);
