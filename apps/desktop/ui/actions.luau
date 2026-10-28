@@ -549,6 +549,10 @@ function M.set_mic_test(running: boolean)
 	ui.invoke("voice.mic_test", running)
 end
 
+function M.listen_side_buttons(listening: boolean)
+	ui.invoke("keybinds.side_buttons", listening)
+end
+
 function M.set_video_views(views: { any })
 	ui.invoke("voice.video_views", views)
 end

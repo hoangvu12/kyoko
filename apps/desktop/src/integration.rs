@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use bridge::{DeepLink, Inbox, SettingKey, parse_deep_link};
 use platform::hotkeys::{HotkeyEvent, Hotkeys};
+use platform::push_to_talk::{Binding, TalkHook};
 use platform::tray::TrayEvent;
 use protocol::Snowflake;
 use session::Command;
@@ -23,12 +24,12 @@ pub const BACKGROUND_FLAG: &str = "--background";
 const DISCORD_SCHEME: &str = "discord";
 const DISCORD_SCHEME_NAME: &str = "Discord Protocol";
 const TOGGLE_WINDOW: &str = "toggle_window";
-const PUSH_TO_TALK: &str = "push_to_talk";
 const FOCUS_POLL: Duration = Duration::from_millis(500);
 const ATTENTION_DELAY: Duration = Duration::from_millis(750);
 const HOST_PREFIX: &str = "host:";
 const KEYBIND_INVALID: &str = "That key combination can't be used.";
 const KEYBINDS_UNAVAILABLE: &str = "Global keybinds are unavailable on this system.";
+const PUSH_TO_TALK_UNAVAILABLE: &str = "Push to talk could not watch the keyboard.";
 const TEST_BODY: &str = "Desktop notifications are working.";
 const TEST_NOTE_KEY: &str = "notifications.test";
 const TEST_SENT: &str = "Notification sent.";
@@ -117,6 +118,7 @@ pub struct Integration {
 	toast_id: &'static str,
 	tray: RefCell<Option<TrayIcon>>,
 	hotkeys: RefCell<Option<Hotkeys>>,
+	talk: RefCell<Option<TalkHook>>,
 	visible: Cell<bool>,
 	viewing: Cell<Option<bool>>,
 	generation: Cell<u64>,
@@ -144,12 +146,12 @@ impl Integration {
 			})
 		};
 		let hotkeys = hotkeys(&desktop.store.settings.read(), &desktop.requests);
-		let talk_key = push_to_talk_binding(&desktop.store.settings.read());
 		let integration = Rc::new(Integration {
 			window: cx.window.clone(),
 			tasks: cx.tasks.clone(),
 			link: link.clone(),
 			hotkeys: RefCell::new(hotkeys),
+			talk: RefCell::new(None),
 			store: desktop.store,
 			requests: desktop.requests,
 			toast_id: desktop.toast_id,
@@ -180,7 +182,7 @@ impl Integration {
 		let focus = Rc::downgrade(&integration);
 		cx.tasks.spawn(async move { watch_focus(focus).await });
 		integration.watch_settings(host);
-		integration.rebind(PUSH_TO_TALK, talk_key.as_deref());
+		integration.listen_for_talk(&integration.store.settings.read());
 		if desktop.background && integration.tray.borrow().is_some() {
 			integration.hide();
 		}
@@ -192,6 +194,7 @@ impl Integration {
 		self.requests.close();
 		self.tray.borrow_mut().take();
 		self.hotkeys.borrow_mut().take();
+		self.talk.borrow_mut().take();
 	}
 
 	fn handle(&self, request: Request) {
@@ -219,8 +222,7 @@ impl Integration {
 					integration.rebind(TOGGLE_WINDOW, settings.keybinds.toggle_window.as_deref())
 				}
 				SettingKey::PushToTalkKey | SettingKey::VoicePushToTalk => {
-					let binding = push_to_talk_binding(settings);
-					integration.rebind(PUSH_TO_TALK, binding.as_deref())
+					integration.listen_for_talk(settings)
 				}
 				SettingKey::OpenOnLogin | SettingKey::DiscordLinks => {
 					apply_startup_settings(settings);
@@ -244,9 +246,6 @@ impl Integration {
 		{
 			tracing::debug!(%error, hotkey = id, "the old hotkey was not registered");
 		}
-		if id == PUSH_TO_TALK {
-			self.link.send(Command::SetPushToTalk(false));
-		}
 		let binding = binding.map(str::trim).filter(|binding| !binding.is_empty())?;
 		if slot.is_none() {
 			*slot = new_hotkeys(&self.requests);
@@ -262,6 +261,30 @@ impl Integration {
 			Err(error) => {
 				tracing::warn!(%error, binding, hotkey = id, "the hotkey could not be registered");
 				Some(KEYBIND_INVALID.to_owned())
+			}
+		}
+	}
+
+	fn listen_for_talk(&self, settings: &Settings) -> Option<String> {
+		if self.talk.borrow_mut().take().is_some() {
+			tracing::info!("push to talk hook removed");
+		}
+		self.link.send(Command::SetPushToTalk(false));
+		let binding = push_to_talk_binding(settings)?;
+		let Ok(parsed) = binding.parse::<Binding>() else {
+			tracing::warn!(binding, "the push to talk binding is not a key");
+			return Some(KEYBIND_INVALID.to_owned());
+		};
+		let requests = self.requests.clone();
+		match TalkHook::start(parsed, move |held| requests.push(Request::PushToTalk(held))) {
+			Ok(hook) => {
+				tracing::info!(binding, "push to talk hook installed");
+				*self.talk.borrow_mut() = Some(hook);
+				None
+			}
+			Err(error) => {
+				tracing::warn!(%error, binding, "the push to talk hook could not be installed");
+				Some(PUSH_TO_TALK_UNAVAILABLE.to_owned())
 			}
 		}
 	}
@@ -445,15 +468,17 @@ fn push_to_talk_binding(settings: &Settings) -> Option<String> {
 	settings
 		.voice
 		.push_to_talk
-		.then(|| settings.keybinds.push_to_talk.clone())
+		.then_some(settings.keybinds.push_to_talk.as_deref())
 		.flatten()
+		.map(str::trim)
+		.filter(|binding| !binding.is_empty())
+		.map(str::to_owned)
 }
 
 fn new_hotkeys(requests: &Inbox<Request>) -> Option<Hotkeys> {
 	let requests = requests.clone();
 	let created = Hotkeys::new(move |event: HotkeyEvent| match event.id.as_str() {
 		TOGGLE_WINDOW if event.pressed => requests.push(Request::Toggle),
-		PUSH_TO_TALK => requests.push(Request::PushToTalk(event.pressed)),
 		_ => {}
 	});
 	match created {

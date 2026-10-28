@@ -186,6 +186,7 @@ pub(crate) enum Internal {
 	EmojiRanked(Option<state::EmojiRanking>),
 	FavoritesSaved(favorite_writes::FavoriteKind, bool),
 	VoiceJoinTimeout(u64),
+	PushToTalkReleased(u64),
 	VoiceConnected {
 		generation: u64,
 		result: Result<Arc<voice::VoiceConnection>, voice::VoiceError>,
@@ -853,6 +854,7 @@ impl Core {
 			}),
 			Internal::EmojiRanked(ranking) => self.emoji_ranked(ranking),
 			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
+			Internal::PushToTalkReleased(press) => self.push_to_talk_released(press),
 			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
 			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
 			Internal::StreamTimeout(generation) => self.on_stream_timeout(generation),

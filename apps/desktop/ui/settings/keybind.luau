@@ -1,4 +1,6 @@
 local theme = require("../theme")
+local state = require("../state")
+local actions = require("../actions")
 local widgets = require("./widgets")
 local icon_button = require("@components/icon_button")
 
@@ -11,6 +13,7 @@ local function describe(binding: string): string
 		local trimmed = string.gsub(part, "^%s*(.-)%s*$", "%1")
 		trimmed = string.gsub(trimmed, "^Key(%u)$", "%1")
 		trimmed = string.gsub(trimmed, "^Digit(%d)$", "%1")
+		trimmed = string.gsub(trimmed, "^Mouse(%d)$", "Mouse %1")
 		table.insert(parts, string.upper(trimmed))
 	end
 	return table.concat(parts, " + ")
@@ -37,18 +40,39 @@ local function binding_of(event: any): string?
 	return table.concat(parts, "+")
 end
 
-return ui.component(function(props: { key: string, label: string, id: string? })
+local function side_serial(): number
+	local pressed = state.keybinds.side_button:get()
+	return if pressed then pressed.serial else 0
+end
+
+return ui.component(function(props: { key: string, label: string, id: string?, mouse: boolean? })
 	local recording = ui.use_state(false)
-	local row = ui.ref()
+	local armed = ui.use_state(0)
 	local function current(): string
 		local found = widgets.value(props.key)
 		return if type(found) == "string" then found else ""
+	end
+	if props.mouse then
+		local listening = false
+		ui.effect(function()
+			local wanted = recording:get()
+			if wanted ~= listening then
+				listening = wanted
+				actions.listen_side_buttons(wanted)
+			end
+		end)
+		ui.effect(function()
+			local pressed = state.keybinds.side_button:get()
+			if pressed and recording:get() and pressed.serial ~= armed:get() then
+				recording:set(false)
+				widgets.set(props.key, pressed.binding)
+			end
+		end)
 	end
 	return ui.column {
 		w_full = true,
 		gap = theme.size.space_4,
 		ui.row {
-			ref = row,
 			w_full = true,
 			items = "center",
 			gap = theme.size.space_16,
@@ -90,7 +114,7 @@ return ui.component(function(props: { key: string, label: string, id: string? })
 				bg = theme.color.bg_2,
 				widgets.label(function()
 					if recording:get() then
-						return "Press a key..."
+						return if props.mouse then "Press a key or side button..." else "Press a key..."
 					end
 					local found = current()
 					return if found == "" then "Not set" else describe(found)
@@ -99,12 +123,12 @@ return ui.component(function(props: { key: string, label: string, id: string? })
 				end, { weight = theme.weight.semibold, literal = true }),
 			},
 			widgets.button {
-				id = props.id,
+				id = if props.id then props.id .. "_button" else nil,
 				text = "Record Keybind",
 				tone = "secondary",
 				on_click = function()
+					armed:set(side_serial())
 					recording:set(true)
-					row:focus()
 				end,
 			},
 			icon_button {

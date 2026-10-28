@@ -24,6 +24,7 @@ export type Row = {
 	max: number?,
 	step: number?,
 	scale: number?,
+	unit: string?,
 	reset: number?,
 	id: string?,
 	visible: (() -> boolean)?,
@@ -401,6 +402,7 @@ M.slider = ui.component(function(props: Row)
 		gap = theme.size.space_16,
 		ui.div {
 			ref = track,
+			id = props.id,
 			relative = true,
 			grow = 1,
 			h = theme.size.slider_grabber_size,
@@ -457,7 +459,7 @@ M.slider = ui.component(function(props: Row)
 			},
 		},
 		M.text(function()
-			return string.format("%d%%", math.floor(current() * (props.scale or 100) + 0.5))
+			return string.format("%d%s", math.floor(current() * (props.scale or 100) + 0.5), props.unit or "%")
 		end, theme.size.font_size_sm, theme.size.line_height_label, theme.color.text_4, {
 			w = theme.size.space_56,
 			shrink = 0,

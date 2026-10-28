@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use gateway::{SendError, VoiceStateRequest};
 use protocol::{ChannelType, Snowflake, Token, VoiceServerUpdate, VoiceState};
@@ -45,6 +46,7 @@ pub(crate) struct VoiceLink {
 	server_mute: bool,
 	server_deaf: bool,
 	transmitting: bool,
+	presses: u64,
 	regions: Vec<String>,
 }
 
@@ -328,6 +330,27 @@ impl Core {
 	}
 
 	pub(super) fn set_push_to_talk(&mut self, held: bool) {
+		self.voice.presses += 1;
+		let delay = self.store.settings.read().voice.push_to_talk_release_delay;
+		if held || delay == 0 || !self.voice.transmitting {
+			self.transmit(held);
+			return;
+		}
+		let press = self.voice.presses;
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			sleep(Duration::from_millis(u64::from(delay))).await;
+			let _ = internal.send(Internal::PushToTalkReleased(press));
+		});
+	}
+
+	pub(super) fn push_to_talk_released(&mut self, press: u64) {
+		if press == self.voice.presses {
+			self.transmit(false);
+		}
+	}
+
+	fn transmit(&mut self, held: bool) {
 		self.voice.transmitting = held;
 		if let Some(connection) = &self.voice.connection {
 			connection.set_transmitting(held);

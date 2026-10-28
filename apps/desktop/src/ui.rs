@@ -87,6 +87,7 @@ const UI_DIR_VARIABLE: &str = "KYOKO_UI_DIR";
 const THEMES_DIR_VARIABLE: &str = "KYOKO_THEMES_DIR";
 const FRAME_POLL: Duration = Duration::from_millis(50);
 const FRAME_TRIES: usize = 100;
+const PUSH_TO_TALK_SCROLL: f32 = 420.;
 const TIMELINE_SLOT: &str = "timeline";
 const WEB_LOGIN_SLOT: &str = "web_login";
 const COMPOSER_FLOAT: &str = "composer_float";
@@ -1017,10 +1018,14 @@ impl Link {
 				self.drive_clone_dialog().await;
 				self.until_capture(|link| link.community_settled()).await;
 			}
-			capture::Screen::Settings(_) => {
+			capture::Screen::Settings(_) | capture::Screen::PushToTalkSettings => {
 				self.drive_settings(capture.screen);
 				let started = Instant::now();
 				while !self.settings_settled() && started.elapsed() < capture::LIMIT {
+					zgx::timer::sleep(capture::POLL).await;
+				}
+				if capture.screen == capture::Screen::PushToTalkSettings {
+					self.scroll_settings(PUSH_TO_TALK_SCROLL);
 					zgx::timer::sleep(capture::POLL).await;
 				}
 			}

@@ -19,6 +19,8 @@ const ACCOUNT_AVATAR: f64 = 80.;
 const WEB_APP: &str = "https://discord.com/channels/@me";
 const DEFAULT_PAGE: &str = "my-account";
 const PAGE_LIMIT: usize = 64;
+const VOICE_PAGE: &str = "voice";
+const SCROLL_POINT: f32 = 0.6;
 
 pub type SettingHook = Box<dyn Fn(SettingKey, &Settings) -> Option<String>>;
 
@@ -391,9 +393,31 @@ impl Link {
 			.is_none_or(|name| shown.contains(name.as_str()))
 	}
 
+	pub(super) fn scroll_settings(&self, by: f32) {
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(zgx::widgets::WeakUi::upgrade) else {
+			return;
+		};
+		let window = {
+			let scene = ui.scene.borrow();
+			scene.bounds(scene.root())
+		};
+		ui.dispatch(zgx::input::InputEvent::Scroll {
+			x: window.width * SCROLL_POINT,
+			y: window.height * SCROLL_POINT,
+			delta_x: 0.,
+			delta_y: by,
+		});
+	}
+
 	pub(super) fn drive_settings(&self, screen: capture::Screen) {
-		if let capture::Screen::Settings(page) = screen {
-			self.open_settings(page);
+		match screen {
+			capture::Screen::Settings(page) => self.open_settings(page),
+			capture::Screen::PushToTalkSettings => {
+				self.set_setting("voice.push_to_talk", &serde_json::Value::Bool(true));
+				self.set_setting("keybinds.push_to_talk", &serde_json::Value::from("Mouse4"));
+				self.open_settings(VOICE_PAGE);
+			}
+			_ => {}
 		}
 	}
 }

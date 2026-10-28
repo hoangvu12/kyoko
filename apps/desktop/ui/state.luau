@@ -819,4 +819,10 @@ M.voice = {
 	video_available = ui.shared("voice.video_available", true),
 }
 
+export type SideButton = { binding: string, serial: number }
+
+M.keybinds = {
+	side_button = ui.shared("keybinds.side_button", nil :: SideButton?),
+}
+
 return M

@@ -18,6 +18,7 @@ const HOSTS_LIMIT: usize = 256;
 const DEVICE_LIMIT: usize = 512;
 const VOLUME_MAX: i64 = 200;
 const SENSITIVITY_MIN_DB: i64 = -100;
+const RELEASE_DELAY_MAX_MS: i64 = 2000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Applies {
@@ -67,6 +68,7 @@ pub enum SettingKey {
 	VoiceInputVolume,
 	VoiceOutputVolume,
 	VoicePushToTalk,
+	VoicePushToTalkReleaseDelay,
 	VoiceAutoSensitivity,
 	VoiceSensitivity,
 	VoiceNoiseSuppression,
@@ -74,7 +76,7 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
-	pub const ALL: [SettingKey; 43] = [
+	pub const ALL: [SettingKey; 44] = [
 		Self::Theme,
 		Self::Locale,
 		Self::CompactMessages,
@@ -114,6 +116,7 @@ impl SettingKey {
 		Self::VoiceInputVolume,
 		Self::VoiceOutputVolume,
 		Self::VoicePushToTalk,
+		Self::VoicePushToTalkReleaseDelay,
 		Self::VoiceAutoSensitivity,
 		Self::VoiceSensitivity,
 		Self::VoiceNoiseSuppression,
@@ -161,6 +164,7 @@ impl SettingKey {
 			Self::VoiceInputVolume => "voice.input_volume",
 			Self::VoiceOutputVolume => "voice.output_volume",
 			Self::VoicePushToTalk => "voice.push_to_talk",
+			Self::VoicePushToTalkReleaseDelay => "voice.push_to_talk_release_delay",
 			Self::VoiceAutoSensitivity => "voice.auto_sensitivity",
 			Self::VoiceSensitivity => "voice.sensitivity_db",
 			Self::VoiceNoiseSuppression => "voice.noise_suppression",
@@ -228,6 +232,7 @@ impl SettingKey {
 			Self::VoiceInputVolume => Value::from(settings.voice.input_volume),
 			Self::VoiceOutputVolume => Value::from(settings.voice.output_volume),
 			Self::VoicePushToTalk => Value::from(settings.voice.push_to_talk),
+			Self::VoicePushToTalkReleaseDelay => Value::from(settings.voice.push_to_talk_release_delay),
 			Self::VoiceAutoSensitivity => Value::from(settings.voice.auto_sensitivity),
 			Self::VoiceSensitivity => Value::from(settings.voice.sensitivity_db),
 			Self::VoiceNoiseSuppression => Value::from(settings.voice.noise_suppression),
@@ -285,6 +290,12 @@ impl SettingKey {
 			Self::VoiceInputVolume => set_whole(&mut settings.voice.input_volume, value, 0, VOLUME_MAX),
 			Self::VoiceOutputVolume => set_whole(&mut settings.voice.output_volume, value, 0, VOLUME_MAX),
 			Self::VoicePushToTalk => set_flag(&mut settings.voice.push_to_talk, value),
+			Self::VoicePushToTalkReleaseDelay => set_whole(
+				&mut settings.voice.push_to_talk_release_delay,
+				value,
+				0,
+				RELEASE_DELAY_MAX_MS,
+			),
 			Self::VoiceAutoSensitivity => set_flag(&mut settings.voice.auto_sensitivity, value),
 			Self::VoiceSensitivity => {
 				set_whole(&mut settings.voice.sensitivity_db, value, SENSITIVITY_MIN_DB, 0)
@@ -305,6 +316,7 @@ impl SettingKey {
 				| Self::VoiceInputVolume
 				| Self::VoiceOutputVolume
 				| Self::VoicePushToTalk
+				| Self::VoicePushToTalkReleaseDelay
 				| Self::VoiceAutoSensitivity
 				| Self::VoiceSensitivity
 				| Self::VoiceNoiseSuppression

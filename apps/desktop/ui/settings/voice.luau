@@ -7,6 +7,7 @@ local keybind = require("./keybind")
 local SENSITIVITY_FLOOR_DB = -100
 local VOLUME_MAX = 200
 local DEFAULT_DEVICE = "Default"
+local RELEASE_DELAY_MAX_MS = 2000
 
 local function push_to_talk(): boolean
 	return kit.value("voice.push_to_talk") == true
@@ -347,10 +348,30 @@ return {
 								key = "keybinds.push_to_talk",
 								label = "Push to Talk",
 								id = "voice_push_to_talk_record",
+								mouse = true,
 							},
-							kit.hint("Hold the shortcut to talk. It works while Kyoko is in the background."),
+							kit.hint(
+								"Hold the shortcut to talk. It works while Kyoko is in the background, and the key still reaches the app you are using."
+							),
+							kit.hint(
+								"A game run as administrator needs Kyoko run as administrator too, or the shortcut won't work while the game is focused."
+							),
 						}
 					end,
+				},
+				{
+					kind = "slider",
+					key = "voice.push_to_talk_release_delay",
+					id = "voice_release_delay",
+					title = "Push to Talk Release Delay",
+					note = "How long your mic stays open after you let go of the shortcut.",
+					keywords = "ptt release delay hold",
+					visible = push_to_talk,
+					min = 0,
+					max = RELEASE_DELAY_MAX_MS,
+					step = 1,
+					scale = 1,
+					unit = " ms",
 				},
 				{
 					key = "voice.auto_sensitivity",

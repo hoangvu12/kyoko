@@ -8,6 +8,7 @@ pub mod instance;
 pub mod keyboard;
 pub mod notifications;
 pub mod open;
+pub mod push_to_talk;
 pub mod relaunch;
 pub mod system_theme;
 pub mod tray;

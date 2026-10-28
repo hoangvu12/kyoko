@@ -131,6 +131,7 @@ pub enum Screen {
 	VoiceStreamWatching,
 	VoiceStreamViewer,
 	VoiceRowHover,
+	PushToTalkSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -337,6 +338,7 @@ impl Screen {
 			"voice-stream-watching" => Some(Screen::VoiceStreamWatching),
 			"voice-stream-viewer" => Some(Screen::VoiceStreamViewer),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
+			"settings-voice-push-to-talk" => Some(Screen::PushToTalkSettings),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -367,6 +369,7 @@ impl Screen {
 			| Screen::MemberList
 			| Screen::MemberListScrolled
 			| Screen::Settings(_)
+			| Screen::PushToTalkSettings
 			| Screen::UserPanel
 			| Screen::StatusMenu
 			| Screen::AccountSwitcher

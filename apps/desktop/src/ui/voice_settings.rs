@@ -4,6 +4,8 @@ use std::rc::Rc;
 use bridge::Inbox;
 use session::{AudioDevices, Command, DeviceInfo};
 use state::{MIC_TEST_FLOOR_DB, State};
+use zgx::input::{EventPhase, InputBinding, InputEvent, Modifiers, PointerButton};
+use zgx::widgets::{Ui, WeakUi};
 use zgx_script::{ScriptHost, Shared, Value};
 
 use super::{Link, record};
@@ -11,10 +13,13 @@ use super::{Link, record};
 const VOICE_PAGE: &str = "voice";
 const MOCK_MICROPHONE: (&str, &str) = ("mock-microphone", "Mock Microphone");
 const MOCK_SPEAKERS: (&str, &str) = ("mock-speakers", "Mock Speakers");
+const SIDE_BUTTON_KEY: &str = "keybinds.side_button";
 
 pub(super) struct VoiceSettingsView {
 	devices: Shared,
 	mic_test: Shared,
+	side_button: Shared,
+	side_listener: RefCell<Option<InputBinding>>,
 	found: Inbox<AudioDevices>,
 	listing: Cell<bool>,
 	shown: RefCell<Option<Option<f32>>>,
@@ -25,6 +30,8 @@ impl VoiceSettingsView {
 		Self {
 			devices: host.shared("voice.devices", devices_value(&AudioDevices::default())),
 			mic_test: host.shared("voice.mic_test", mic_test_value(None)),
+			side_button: host.shared(SIDE_BUTTON_KEY, Value::Nil),
+			side_listener: RefCell::new(None),
 			found: Inbox::new(),
 			listing: Cell::new(false),
 			shown: RefCell::new(None),
@@ -38,6 +45,51 @@ impl VoiceSettingsView {
 		self.mic_test.set(mic_test_value(level_db));
 		*self.shown.borrow_mut() = Some(level_db);
 	}
+}
+
+pub(super) fn listen_for_side_buttons(ui: &Ui, pressed: Shared) -> InputBinding {
+	let scope = ui.input.focus_scope().unwrap_or_else(|| ui.scene.borrow().root());
+	let serial = Cell::new(0.);
+	ui.input.listen(scope, move |event| {
+		if event.phase != EventPhase::Capture {
+			return;
+		}
+		let InputEvent::PointerDown {
+			button: PointerButton::Other(number),
+			..
+		} = event.event
+		else {
+			return;
+		};
+		let Some(binding) = side_binding(number, event.pointer_modifiers()) else {
+			return;
+		};
+		serial.set(serial.get() + 1.);
+		pressed.set(record([
+			("binding", binding.as_str().into()),
+			("serial", serial.get().into()),
+		]));
+	})
+}
+
+fn side_binding(number: u16, held: Modifiers) -> Option<String> {
+	let button = match number {
+		4 => "Mouse4",
+		5 => "Mouse5",
+		_ => return None,
+	};
+	let modifiers = [
+		(held.control, "ctrl"),
+		(held.alt, "alt"),
+		(held.shift, "shift"),
+		(held.meta, "super"),
+	];
+	let parts: Vec<&str> = modifiers
+		.into_iter()
+		.filter_map(|(held, name)| held.then_some(name))
+		.chain([button])
+		.collect();
+	Some(parts.join("+"))
 }
 
 fn device_list(devices: &[DeviceInfo]) -> Value {
@@ -92,6 +144,20 @@ impl Link {
 				});
 			}
 		});
+		let listens = Rc::downgrade(link);
+		host.action("keybinds.side_buttons", move |argument| {
+			if let Some(link) = listens.upgrade() {
+				link.listen_side_buttons(matches!(argument, Value::Bool(true)));
+			}
+		});
+	}
+
+	fn listen_side_buttons(&self, listening: bool) {
+		let ui = listening
+			.then(|| self.ui.borrow().as_ref().and_then(WeakUi::upgrade))
+			.flatten();
+		let listener = ui.map(|ui| listen_for_side_buttons(&ui, self.voice_settings.side_button.clone()));
+		*self.voice_settings.side_listener.borrow_mut() = listener;
 	}
 
 	pub(super) fn voice_settings_apply(&self, state: &State) {

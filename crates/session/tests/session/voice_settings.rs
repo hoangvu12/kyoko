@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use protocol::Opcode;
 use session::Command;
@@ -15,6 +16,7 @@ const SECOND_SPEAKERS: &str = "mock-speakers-2";
 const MIC_TEST_SPEECH_DB: f32 = -30.0;
 const MIC_TEST_QUIET_DB: f32 = -70.0;
 const LOUDER_INPUT: u8 = 150;
+const RELEASE_DELAY_MS: u16 = 1500;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_device_change_while_connected_restarts_audio_without_reconnecting() {
@@ -160,6 +162,67 @@ async fn push_to_talk_sends_only_while_held_and_survives_a_restart() {
 	voice.change_voice_settings(|settings| settings.push_to_talk = false);
 	voice
 		.speaks(ssrc, "voice activity sends again without the key")
+		.await;
+	voice.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_release_delay_holds_the_mic_open_and_a_press_inside_it_keeps_it_open() {
+	let voice = start("voice-release-delay").await;
+	voice
+		.running
+		.store()
+		.update_settings(|settings| {
+			settings.voice.push_to_talk = true;
+			settings.voice.push_to_talk_release_delay = RELEASE_DELAY_MS;
+		})
+		.expect("the settings save");
+	voice.join(voice.lounge);
+	voice.connected_to(voice.lounge).await;
+	let ssrc = voice.ssrc();
+	let connection = voice
+		.running
+		.session()
+		.voice_connection()
+		.expect("a running voice connection");
+	let delay = Duration::from_millis(u64::from(RELEASE_DELAY_MS));
+
+	voice.command(Command::SetPushToTalk(true));
+	voice.speaks(ssrc, "speech while the key is held").await;
+	let released = voice.command(Command::SetPushToTalk(false));
+	voice.speaks(ssrc, "speech inside the release delay").await;
+	assert!(
+		released.elapsed() < delay,
+		"the speech was heard before the delay ran out"
+	);
+	voice
+		.running
+		.eventually("the mic to close after the delay", || !connection.transmitting())
+		.await;
+	assert!(released.elapsed() >= delay, "the mic closed only after the delay");
+	voice
+		.stays_silent(ssrc, "nothing is sent once the delay is over")
+		.await;
+
+	voice.command(Command::SetPushToTalk(true));
+	voice.command(Command::SetPushToTalk(false));
+	tokio::time::sleep(SETTLE).await;
+	voice.command(Command::SetPushToTalk(true));
+	tokio::time::sleep(delay).await;
+	assert!(
+		connection.transmitting(),
+		"a press inside the delay keeps the mic open"
+	);
+	voice
+		.speaks(ssrc, "speech after the first delay would have ended")
+		.await;
+
+	voice.command(Command::SetPushToTalk(false));
+	voice
+		.running
+		.eventually("the mic to close after the last release", || {
+			!connection.transmitting()
+		})
 		.await;
 	voice.stop().await;
 }

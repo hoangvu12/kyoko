@@ -1,6 +1,10 @@
 use serde_json::json;
+use zgx::input::{InputEvent, Key, PointerButton};
+use zgx_script::Value;
+use zgx_script::testing::TestApp;
 
 use super::{Calls, WIDE, last_call, recording_app, shows};
+use crate::ui::voice_settings::listen_for_side_buttons;
 
 const LEVEL: f64 = 0.6;
 const TALL: f32 = 1600.;
@@ -139,7 +143,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	shows(
 		&mut app,
 		"push to talk",
-		"Hold the shortcut to talk. It works while Kyoko is in the background.",
+		"Push to Talk Release Delay",
 		&[(
 			"settings.values",
 			voice_values(|settings| settings.voice.push_to_talk = true),
@@ -149,5 +153,120 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	assert!(
 		app.find("voice_auto_sensitivity").is_none(),
 		"push to talk has no input sensitivity"
+	);
+}
+
+fn press_side_button(app: &mut TestApp, id: &str, number: u16) {
+	let bounds = app.bounds(id);
+	let (x, y) = (bounds.x + bounds.width / 2., bounds.y + bounds.height / 2.);
+	app.ui.dispatch(InputEvent::PointerDown {
+		x,
+		y,
+		button: PointerButton::Other(number),
+	});
+	app.ui.dispatch(InputEvent::PointerUp {
+		x,
+		y,
+		button: PointerButton::Other(number),
+	});
+	app.settle();
+	app.frames(2);
+}
+
+fn talk_bindings(calls: &Calls) -> Vec<serde_json::Value> {
+	setting_calls(calls)
+		.into_iter()
+		.filter(|call| call["key"] == "keybinds.push_to_talk")
+		.map(|call| call["value"].clone())
+		.collect()
+}
+
+#[test]
+fn mouse_4_records_as_the_push_to_talk_shortcut_and_the_release_delay_shows() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, TALL);
+	shows(
+		&mut app,
+		"push to talk",
+		"Push to Talk Release Delay",
+		&[
+			("login.screen", json!("main")),
+			(
+				"settings.values",
+				voice_values(|settings| settings.voice.push_to_talk = true),
+			),
+			("settings.page", json!("voice")),
+		],
+	);
+	let texts = app.texts();
+	for shown in [
+		"20 ms",
+		"A game run as administrator needs Kyoko run as administrator too, or the shortcut won't work while the game is focused.",
+	] {
+		assert!(texts.iter().any(|text| text == shown), "{shown} is not shown");
+	}
+	assert!(
+		app.bounds("voice_release_delay").width > 0.,
+		"the delay slider is laid out"
+	);
+
+	press_side_button(&mut app, "voice_push_to_talk_record", 5);
+	assert!(
+		talk_bindings(&calls).is_empty(),
+		"a side button does nothing until recording starts"
+	);
+
+	app.click("voice_push_to_talk_record_button");
+	app.frames(2);
+	assert!(
+		app.texts()
+			.iter()
+			.any(|text| text == "Press a key or side button..."),
+		"the recorder waits for a key or a side button"
+	);
+	assert_eq!(
+		last_call(&calls, "keybinds.side_buttons"),
+		Some(json!(true)),
+		"recording asks the host for side buttons"
+	);
+	let pressed = app.host.shared("keybinds.side_button", Value::Nil);
+	let listener = listen_for_side_buttons(&app.ui, pressed);
+	press_side_button(&mut app, "voice_push_to_talk_record", 4);
+	assert_eq!(talk_bindings(&calls), [json!("Mouse4")]);
+	assert!(
+		app.texts()
+			.iter()
+			.all(|text| text != "Press a key or side button..."),
+		"recording ends with the side button"
+	);
+	assert_eq!(
+		last_call(&calls, "keybinds.side_buttons"),
+		Some(json!(false)),
+		"the host stops listening once recording ends"
+	);
+	drop(listener);
+
+	app.click("voice_push_to_talk_record_button");
+	app.frames(2);
+	app.key(Key::Function(13));
+	app.frames(2);
+	assert_eq!(
+		talk_bindings(&calls),
+		[json!("Mouse4"), json!("F13")],
+		"keys still record after a side button"
+	);
+
+	shows(
+		&mut app,
+		"a mouse binding",
+		"MOUSE 4",
+		&[(
+			"settings.values",
+			voice_values(|settings| {
+				settings.voice.push_to_talk = true;
+				settings.keybinds.push_to_talk = Some("Mouse4".to_owned());
+			}),
+		)],
 	);
 }

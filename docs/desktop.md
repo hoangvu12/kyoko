@@ -1,6 +1,6 @@
 # Desktop integration
 
-Kyoko's Windows integration: notifications, the tray, a global hotkey, start at sign-in, the image clipboard, single instance and deep links. The rules live in `state` and `session`, the OS calls in `crates/platform`, and the glue in `apps/desktop/src/integration.rs`.
+Kyoko's Windows integration: notifications, the tray, a global hotkey, push to talk, start at sign-in, the image clipboard, single instance and deep links. The rules live in `state` and `session`, the OS calls in `crates/platform`, and the glue in `apps/desktop/src/integration.rs`.
 
 ## Notifications
 
@@ -37,9 +37,21 @@ These Windows toasts are separate from the in-window toasts of ticket 38 (`docs/
 - The icon shows a red badge when any channel or DM has mentions, a white dot when something unmuted is unread, and the plain icon otherwise. The tooltip says "Kyoko: N mentions" or "Kyoko: unread messages". It is recomputed from `State::attention()` at most every 750 ms after read state, guild, DM or settings changes.
 - Closing the window hides it to the tray when `window.minimize_to_tray` is on (the default, as in oxidcord) and a tray exists; otherwise it quits. Quit from the tray always quits.
 - `keybinds.toggle_window` (default unset; for example `ctrl+alt+shift+KeyK`, global-hotkey syntax) toggles the window from anywhere. It is registered at startup and again whenever the Keybinds page changes it; a binding Windows refuses shows as a note under the field.
-- `keybinds.push_to_talk` (default unset) is held to talk while Voice & Video's input mode is Push to Talk; it is registered only in that mode, and its press and release become `Command::SetPushToTalk` (`docs/voice.md`, "Settings").
+- `keybinds.push_to_talk` (default unset) is held to talk while Voice & Video's input mode is Push to Talk. It is not a hotkey: see "Push to talk" below.
 - Every 500 ms the desktop checks whether the foreground window belongs to kyoko and sends `Command::SetViewing` when that changes, and `SetViewing(false)` when the window is hidden. This also pauses automatic read acks while kyoko is in the background.
 - Windows may refuse to bring the window forward (focus-stealing rules) when it is shown while another app is active. Showing from a hidden state, a second launch or a toast normally succeeds.
+
+## Push to talk
+
+`platform::push_to_talk::TalkHook` watches the push-to-talk binding as Discord's desktop app does: low-level hooks (`WH_KEYBOARD_LL`, `WH_MOUSE_LL`) that always return `CallNextHookEx`, so the key or button still reaches the focused app (a game keeps its key). `RegisterHotKey`, which gives a combination to one app alone, is used only by `keybinds.toggle_window`.
+
+- The integration starts the hook when Push to Talk is the input mode and a binding is set, and drops it when either changes. Its press and release arrive as `Request::PushToTalk` and become `Command::SetPushToTalk`; the release delay runs in the session (`docs/voice.md`, "Settings").
+- Bindings use the recorder's syntax (`ctrl+alt+shift+super+KeyV`, DOM key codes) plus `Mouse4` and `Mouse5` (the mouse side buttons, `XBUTTON1`, `XBUTTON2`). `push_to_talk::Binding` parses them to virtual keys; a binding it can't parse shows "That key combination can't be used." under the field.
+- The hooks run on their own thread (`kyoko-push-to-talk`) with a message loop. The callbacks copy the virtual key and up or down into `push_to_talk::Matcher` and return: Windows drops a low-level hook that takes too long (`LowLevelHooksTimeout`, at most 1000 ms since Windows 10 1709) without saying so. The matcher reports a change only: a key-down for a key already down (auto-repeat) is dropped, the combination is held while its key and every modifier it names are down (either side of a modifier counts, extra keys don't matter), and releasing any of them releases. Injected input (`LLKHF_INJECTED`, `LLMHF_INJECTED`) is ignored.
+- Recovery: every 250 ms the thread checks its health (`push_to_talk::verdict`). Held while `GetAsyncKeyState` says a key of the binding is up (a missed release, as when an elevated window had focus): release and reinstall. Input the system saw (`GetLastInputInfo`) more than a second after the hooks' last event: they were removed, so reinstall. Idle for a minute: reinstall anyway. A reinstall installs the new hooks before removing the old, turns push to talk off and rebuilds the held modifiers with `GetAsyncKeyState` (the hook thread has no input queue for `GetKeyState` to read).
+- Stuck keys: push to talk goes off on session lock (`WTSRegisterSessionNotification` on a message-only window), on a reinstall, and when the thread stops for any reason (dropping the hook, a panic), so the mic is never left open.
+- Low-level hooks don't see input while an elevated window (a game run as administrator) has focus; the Voice page says so, as Discord's support page does.
+- Mouse 4 and 5 reach the recorder through Rust: zgx gives Luau handlers only the primary button. While a recorder with `mouse = true` records, it invokes `keybinds.side_buttons` (true, then false), and the desktop listens (`ui::voice_settings::listen_for_side_buttons`) on the current focus scope (the settings dialog; events inside a modal stop there), publishing each side-button press as `keybinds.side_button` (`{ binding, serial }`, modifiers included). The recorder takes the first press after it started.
 
 ## Start at sign-in
 

@@ -251,6 +251,10 @@ impl VoiceConnection {
 		self.shared.transmitting.store(transmitting, Ordering::Relaxed);
 	}
 
+	pub fn transmitting(&self) -> bool {
+		self.shared.transmitting.load(Ordering::Relaxed)
+	}
+
 	pub fn set_noise_suppression(&self, enabled: bool) {
 		self.shared.noise_suppression.store(enabled, Ordering::Relaxed);
 	}

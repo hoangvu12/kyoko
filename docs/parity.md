@@ -408,6 +408,7 @@ The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page
 | `settings-safety` | M19 | As above, on Safety & Privacy. | yes |
 | `settings-storage` | M19 | As above, on Storage. | yes |
 | `settings-voice` | 100 | As above, on Voice & Video: the mock input and output devices, both volumes, the mic test meter, Voice Activity with automatic sensitivity, Noise Suppression off and Echo Cancellation unavailable. Nothing is recorded or played: `--mock` uses the manual audio path. | yes |
+| `settings-voice-push-to-talk` | 114 | As above, after the capture turns on Push to Talk with the binding `Mouse4`: the Push to Talk shortcut showing MOUSE 4, the notes on background use and elevated games, and the Push to Talk Release Delay slider at 20 ms. Capture runs install no hook. | yes |
 | `settings-system` | M19 | As above, on System. | yes |
 | `settings-themes` | 57 | As above, on Themes. Oxidcord shows Built In, an empty From Plugins and its catalog URL; kyoko shows its Local Themes tab (the notice on how themes are read, the folder card, Built In with each card's version, author and description, and an empty Local Themes); the links box is on the Online Themes tab. | yes |
 
