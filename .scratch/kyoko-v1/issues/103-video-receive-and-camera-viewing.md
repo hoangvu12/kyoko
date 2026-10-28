@@ -10,7 +10,7 @@ Plan ticket V7 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 101
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test: a scripted member's op 12 plus H264 fixture frames (DAVE on) produce decoded frames for that user; a PLI is sent on loss; op 13 ends the tile
 - [ ] Wants: a focused tile asks for 100, a thumbnail 50, off-screen 0
