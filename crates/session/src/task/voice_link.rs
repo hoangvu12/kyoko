@@ -3,9 +3,12 @@ use std::sync::Arc;
 use gateway::{SendError, VoiceStateRequest};
 use protocol::{ChannelType, Snowflake, Token, VoiceServerUpdate, VoiceState};
 use state::{LocalEvent, UserAudio, VoiceStatus};
+use store::VoiceSettings;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use voice::{AudioIo, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions, VoiceParams};
+use voice::{
+	AudioIo, InputMode, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions, VoiceParams,
+};
 
 use super::{Core, Internal};
 use crate::persist::{self, SavedUserAudio};
@@ -13,6 +16,8 @@ use crate::persist::{self, SavedUserAudio};
 const ALLOW_VOICE_RECORDING: u64 = 1 << 1;
 const JOIN_FAILED: &str = "Couldn't connect to voice. The channel may be full.";
 const NOT_A_VOICE_CHANNEL: &str = "That isn't a voice channel.";
+const AUTO_SENSITIVITY_DB: f32 = -50.0;
+const FULL_VOLUME_PERCENT: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Target {
@@ -38,6 +43,7 @@ pub(crate) struct VoiceLink {
 	self_deaf: bool,
 	server_mute: bool,
 	server_deaf: bool,
+	transmitting: bool,
 	regions: Vec<String>,
 }
 
@@ -53,6 +59,26 @@ impl VoiceLink {
 	fn output_off(&self) -> bool {
 		self.self_deaf || self.server_deaf
 	}
+}
+
+fn input_mode(settings: &VoiceSettings) -> InputMode {
+	if settings.push_to_talk {
+		InputMode::PushToTalk
+	} else {
+		InputMode::VoiceActivity
+	}
+}
+
+fn sensitivity_db(settings: &VoiceSettings) -> f32 {
+	if settings.auto_sensitivity {
+		AUTO_SENSITIVITY_DB
+	} else {
+		f32::from(settings.sensitivity_db)
+	}
+}
+
+pub(super) fn volume(percent: u8) -> f32 {
+	f32::from(percent) / FULL_VOLUME_PERCENT
 }
 
 fn stop_reason(reason: StopReason) -> Option<String> {
@@ -272,6 +298,54 @@ impl Core {
 		self.apply_user_audio();
 	}
 
+	pub(super) fn apply_voice_settings(&mut self) {
+		let settings = self.store.settings.read().voice.clone();
+		if let Some(connection) = &self.voice.connection {
+			let in_use = connection.audio_devices();
+			if in_use.input != settings.input_device {
+				connection.set_input_device(settings.input_device.clone());
+			}
+			if in_use.output != settings.output_device {
+				connection.set_output_device(settings.output_device.clone());
+			}
+			self.apply_voice_settings_to(connection, &settings);
+		}
+		self.mic_test_follow(&settings);
+	}
+
+	pub(super) fn set_push_to_talk(&mut self, held: bool) {
+		self.voice.transmitting = held;
+		if let Some(connection) = &self.voice.connection {
+			connection.set_transmitting(held);
+		}
+	}
+
+	pub(super) fn voice_connection(&self) -> Option<Arc<VoiceConnection>> {
+		self.voice.connection.clone()
+	}
+
+	pub(super) fn audio_io(&self) -> AudioIo {
+		match self.voice_shared.setup.lock().audio {
+			AudioIo::Devices { .. } => {
+				let settings = self.store.settings.read();
+				AudioIo::Devices {
+					input: settings.voice.input_device.clone(),
+					output: settings.voice.output_device.clone(),
+				}
+			}
+			AudioIo::Manual => AudioIo::Manual,
+		}
+	}
+
+	fn apply_voice_settings_to(&self, connection: &VoiceConnection, settings: &VoiceSettings) {
+		connection.set_input_volume(volume(settings.input_volume));
+		connection.set_output_volume(volume(settings.output_volume));
+		connection.set_input_mode(input_mode(settings));
+		connection.set_vad_threshold_db(sensitivity_db(settings));
+		connection.set_noise_suppression(settings.noise_suppression);
+		connection.set_transmitting(self.voice.transmitting);
+	}
+
 	pub(super) fn voice_channel_updated(&self, channel_id: Snowflake) {
 		if self
 			.voice
@@ -433,6 +507,7 @@ impl Core {
 	}
 
 	fn drop_connection(&mut self) {
+		self.stop_mic_test();
 		self.voice.generation += 1;
 		self.voice.connecting = false;
 		if let Some(pump) = self.voice.pump.take() {
@@ -478,26 +553,19 @@ impl Core {
 	}
 
 	fn voice_options(&self) -> VoiceOptions {
-		let setup = self.voice_shared.setup.lock().clone();
-		let audio = match setup.audio {
-			AudioIo::Devices { .. } => {
-				let settings = self.store.settings.read();
-				AudioIo::Devices {
-					input: settings.voice.input_device.clone(),
-					output: settings.voice.output_device.clone(),
-				}
-			}
-			AudioIo::Manual => AudioIo::Manual,
-		};
+		let audio = self.audio_io();
+		let trust = self.voice_shared.setup.lock().trust.clone();
 		VoiceOptions {
 			audio,
-			trust: setup.trust,
+			trust,
 			user_agent: self.rest.identity().fingerprint().user_agent().to_owned(),
 			locale: self.locale.clone(),
 		}
 	}
 
 	fn adopt_connection(&mut self, connection: Arc<VoiceConnection>) {
+		let settings = self.store.settings.read().voice.clone();
+		self.apply_voice_settings_to(&connection, &settings);
 		self.apply_to_connection_of(&connection);
 		self.apply_user_audio_to(&connection);
 		self.apply_bitrate_to(&connection);

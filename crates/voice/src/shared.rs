@@ -10,6 +10,7 @@ use crate::atomic::AtomicF32;
 use crate::audio::{AudioEngine, Rings};
 use crate::codec::DEFAULT_BITRATE_BPS;
 use crate::event::{EventHub, VoiceEvent};
+use crate::gate::LEVEL_FLOOR_DB;
 use crate::talk::Talkers;
 
 const NO_PING: u32 = u32::MAX;
@@ -31,6 +32,13 @@ pub struct VoiceStats {
 	pub packets_late: u64,
 	pub packets_lost: u64,
 	pub jitter_ms: f32,
+	pub frames_denoised: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AudioDevicesInUse {
+	pub input: Option<String>,
+	pub output: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +56,7 @@ pub(crate) struct Counters {
 	pub received: AtomicU64,
 	pub late: AtomicU64,
 	pub lost: AtomicU64,
+	pub denoised: AtomicU64,
 	pub jitter_ms: AtomicF32,
 	ping_ms: AtomicU32,
 }
@@ -59,6 +68,7 @@ impl Counters {
 			received: AtomicU64::new(0),
 			late: AtomicU64::new(0),
 			lost: AtomicU64::new(0),
+			denoised: AtomicU64::new(0),
 			jitter_ms: AtomicF32::new(0.0),
 			ping_ms: AtomicU32::new(NO_PING),
 		}
@@ -76,6 +86,7 @@ impl Counters {
 			packets_late: self.late.load(Ordering::Relaxed),
 			packets_lost: self.lost.load(Ordering::Relaxed),
 			jitter_ms: self.jitter_ms.load(),
+			frames_denoised: self.denoised.load(Ordering::Relaxed),
 		}
 	}
 }
@@ -90,7 +101,11 @@ pub(crate) struct Shared {
 	pub input_volume: AtomicF32,
 	pub output_volume: AtomicF32,
 	pub input_level: AtomicF32,
+	pub input_db: AtomicF32,
 	pub output_level: AtomicF32,
+	pub devices: Mutex<AudioDevicesInUse>,
+	pub audio_restarts: AtomicU64,
+	pub restart_capture: AtomicBool,
 	pub user_volumes: Mutex<HashMap<Snowflake, f32>>,
 	pub ssrc_users: Mutex<HashMap<u32, Snowflake>>,
 	pub bitrate: AtomicU32,
@@ -116,7 +131,11 @@ impl Shared {
 			input_volume: AtomicF32::new(1.0),
 			output_volume: AtomicF32::new(1.0),
 			input_level: AtomicF32::new(0.0),
+			input_db: AtomicF32::new(LEVEL_FLOOR_DB),
 			output_level: AtomicF32::new(0.0),
+			devices: Mutex::new(AudioDevicesInUse::default()),
+			audio_restarts: AtomicU64::new(0),
+			restart_capture: AtomicBool::new(false),
 			user_volumes: Mutex::new(HashMap::new()),
 			ssrc_users: Mutex::new(HashMap::new()),
 			bitrate: AtomicU32::new(DEFAULT_BITRATE_BPS),

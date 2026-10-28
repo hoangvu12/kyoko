@@ -43,4 +43,5 @@ mod tls_fingerprint;
 mod uploads;
 mod versions;
 mod voice;
+mod voice_settings;
 mod wire;

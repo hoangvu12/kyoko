@@ -85,6 +85,6 @@ pub use views::{
 	RelationshipRow, RenderedMessage, UserOverride,
 };
 pub use voice::{
-	Call, MicTest, StreamInfo, StreamSummary, USER_VOLUME_DEFAULT, USER_VOLUME_MAX, UserAudio, VideoKind,
-	VoiceLevels, VoiceSelf, VoiceSession, VoiceStats, VoiceStatus,
+	Call, MIC_TEST_FLOOR_DB, MicTest, StreamInfo, StreamSummary, USER_VOLUME_DEFAULT, USER_VOLUME_MAX,
+	UserAudio, VideoKind, VoiceLevels, VoiceSelf, VoiceSession, VoiceStats, VoiceStatus,
 };

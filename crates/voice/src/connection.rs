@@ -12,7 +12,7 @@ use crate::codec::{MAX_BITRATE_BPS, MIN_BITRATE_BPS};
 use crate::error::{Result, VoiceError};
 use crate::event::VoiceEvent;
 use crate::media::SharedTransform;
-use crate::shared::{InputMode, MixedFrame, Shared, VoiceStats};
+use crate::shared::{AudioDevicesInUse, InputMode, MixedFrame, Shared, VoiceStats};
 use crate::signal::{Browser, Credentials, establish};
 use crate::supervisor::{Signals, Supervisor};
 use crate::transform::DaveTransform;
@@ -93,6 +93,10 @@ impl VoiceConnection {
 		let shared = Arc::new(Shared::new(rings.clone()));
 		let audio_io = match options.audio {
 			AudioIo::Devices { input, output } => {
+				*shared.devices.lock() = AudioDevicesInUse {
+					input: input.clone(),
+					output: output.clone(),
+				};
 				let engine = tokio::task::spawn_blocking(move || AudioEngine::start(rings, input, output))
 					.await
 					.map_err(|error| VoiceError::Audio(error.to_string()))??;
@@ -145,15 +149,28 @@ impl VoiceConnection {
 	}
 
 	pub fn set_input_device(&self, id: Option<String>) {
+		self.shared.devices.lock().input.clone_from(&id);
+		self.shared.restart_capture.store(true, Ordering::Relaxed);
+		self.shared.audio_restarts.fetch_add(1, Ordering::Relaxed);
 		if let Some(engine) = self.shared.engine.lock().as_ref() {
 			engine.set_input(id);
 		}
 	}
 
 	pub fn set_output_device(&self, id: Option<String>) {
+		self.shared.devices.lock().output.clone_from(&id);
+		self.shared.audio_restarts.fetch_add(1, Ordering::Relaxed);
 		if let Some(engine) = self.shared.engine.lock().as_ref() {
 			engine.set_output(id);
 		}
+	}
+
+	pub fn audio_devices(&self) -> AudioDevicesInUse {
+		self.shared.devices.lock().clone()
+	}
+
+	pub fn audio_restarts(&self) -> u64 {
+		self.shared.audio_restarts.load(Ordering::Relaxed)
 	}
 
 	pub fn set_user_volume(&self, user_id: Snowflake, volume: f32) {
@@ -208,6 +225,10 @@ impl VoiceConnection {
 
 	pub fn input_level(&self) -> f32 {
 		self.shared.input_level.load()
+	}
+
+	pub fn input_level_db(&self) -> f32 {
+		self.shared.input_db.load()
 	}
 
 	pub fn output_level(&self) -> f32 {

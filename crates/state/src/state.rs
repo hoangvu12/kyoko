@@ -27,7 +27,8 @@ use crate::versions::CacheVersions;
 use crate::views::RenderedMessage;
 use crate::views::UserOverride;
 use crate::voice::{
-	Call, MicTest, StreamSummary, UserAudio, VoiceLevels, VoiceSelf, VoiceSession, VoiceStats,
+	Call, MIC_TEST_FLOOR_DB, MicTest, StreamSummary, UserAudio, VoiceLevels, VoiceSelf, VoiceSession,
+	VoiceStats,
 };
 
 pub const TYPING_TIMEOUT: Duration = Duration::from_secs(10);
@@ -670,20 +671,13 @@ impl State {
 					video_bitrate_bps: *video_bitrate_bps,
 				});
 			}
-			LocalEvent::MicTestStarted { seconds } => {
+			LocalEvent::MicTestStarted => {
 				return self.mic_test_changed(Some(MicTest {
-					level: 0.0,
-					remaining_secs: *seconds,
+					level_db: MIC_TEST_FLOOR_DB,
 				}));
 			}
-			LocalEvent::MicTestLevel {
-				level,
-				remaining_secs,
-			} => {
-				return self.mic_test_changed(Some(MicTest {
-					level: *level,
-					remaining_secs: *remaining_secs,
-				}));
+			LocalEvent::MicTestLevel { level_db } => {
+				return self.mic_test_changed(Some(MicTest { level_db: *level_db }));
 			}
 			LocalEvent::MicTestFinished => return self.mic_test_changed(None),
 			LocalEvent::AccountSwitchRequested(user_id) => {

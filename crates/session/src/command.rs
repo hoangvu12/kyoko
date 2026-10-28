@@ -691,6 +691,10 @@ pub enum Command {
 		user_id: Snowflake,
 		muted: bool,
 	},
+	ApplyVoiceSettings,
+	SetPushToTalk(bool),
+	StartMicTest,
+	StopMicTest,
 }
 
 impl Command {

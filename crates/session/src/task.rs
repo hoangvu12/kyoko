@@ -57,6 +57,7 @@ mod layout;
 mod locks;
 mod member_requests;
 mod mentions;
+mod mic_test;
 mod moderation;
 mod outbox;
 mod profiles;
@@ -191,6 +192,14 @@ pub(crate) enum Internal {
 		generation: u64,
 		event: voice::VoiceEvent,
 	},
+	MicCheckStarted {
+		generation: u64,
+		result: Result<Arc<voice::MicCheck>, voice::VoiceError>,
+	},
+	MicTestLevel {
+		generation: u64,
+		level_db: f32,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -274,6 +283,7 @@ pub(crate) struct Core {
 	favorite_writes: favorite_writes::FavoriteWrites,
 	mentions: mentions::Mentions,
 	voice: voice_link::VoiceLink,
+	mic_test: mic_test::MicTestRun,
 	voice_shared: Arc<VoiceShared>,
 }
 
@@ -370,6 +380,7 @@ impl Core {
 			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
 			mentions: mentions::Mentions::default(),
 			voice: voice_link::VoiceLink::default(),
+			mic_test: mic_test::MicTestRun::default(),
 			voice_shared: parts.voice,
 		}
 	}
@@ -823,6 +834,8 @@ impl Core {
 			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
 			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
 			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
+			Internal::MicCheckStarted { generation, result } => self.on_mic_check_started(generation, result),
+			Internal::MicTestLevel { generation, level_db } => self.on_mic_test_level(generation, level_db),
 		}
 	}
 
@@ -1028,6 +1041,10 @@ impl Core {
 			Command::SetSelfDeaf(deafened) => self.set_self_deaf(deafened),
 			Command::SetUserVolume { user_id, volume } => self.set_user_volume(user_id, volume),
 			Command::SetUserMuted { user_id, muted } => self.set_user_muted(user_id, muted),
+			Command::ApplyVoiceSettings => self.apply_voice_settings(),
+			Command::SetPushToTalk(held) => self.set_push_to_talk(held),
+			Command::StartMicTest => self.start_mic_test(),
+			Command::StopMicTest => self.stop_mic_test(),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

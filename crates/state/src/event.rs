@@ -162,12 +162,9 @@ pub enum LocalEvent {
 		e2ee: bool,
 		video_bitrate_bps: u32,
 	},
-	MicTestStarted {
-		seconds: u32,
-	},
+	MicTestStarted,
 	MicTestLevel {
-		level: f32,
-		remaining_secs: u32,
+		level_db: f32,
 	},
 	MicTestFinished,
 	AccountSwitchRequested(Snowflake),

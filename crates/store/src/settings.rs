@@ -346,7 +346,7 @@ impl Default for VoiceSettings {
 			input_volume: 100,
 			output_volume: 100,
 			push_to_talk: false,
-			noise_suppression: true,
+			noise_suppression: false,
 			auto_sensitivity: true,
 			sensitivity_db: -50,
 			camera_device: None,

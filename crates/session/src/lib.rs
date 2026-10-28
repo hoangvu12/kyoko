@@ -37,5 +37,5 @@ pub use store::Retention;
 pub use theme_links::{
 	MAX_THEME_BYTES, MAX_THEME_LINKS, ThemeLinkCopy, ThemeLinkTuning, cached_copies, check_link, unique_links,
 };
-pub use voice::AudioIo;
+pub use voice::{AudioDevices, AudioIo, DeviceInfo, devices as audio_devices};
 pub use voice_setup::VoiceSetup;

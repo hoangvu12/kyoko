@@ -31,6 +31,7 @@ pub struct VoiceSelf {
 }
 
 pub const USER_VOLUME_MAX: u8 = 200;
+pub const MIC_TEST_FLOOR_DB: f32 = -100.0;
 pub const USER_VOLUME_DEFAULT: u8 = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,8 +72,7 @@ pub struct VoiceLevels {
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct MicTest {
-	pub level: f32,
-	pub remaining_secs: u32,
+	pub level_db: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]

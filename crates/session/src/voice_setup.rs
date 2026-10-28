@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use net::Trust;
 use parking_lot::Mutex;
-use voice::{AudioIo, VoiceConnection};
+use voice::{AudioIo, MicCheck, VoiceConnection};
 
 const JOIN_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -31,4 +31,5 @@ impl Default for VoiceSetup {
 pub(crate) struct VoiceShared {
 	pub(crate) setup: Mutex<VoiceSetup>,
 	pub(crate) connection: Mutex<Option<Arc<VoiceConnection>>>,
+	pub(crate) mic_check: Mutex<Option<Arc<MicCheck>>>,
 }

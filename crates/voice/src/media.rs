@@ -12,7 +12,7 @@ use tracing::{debug, warn};
 use crate::chain::{CaptureChain, PlaybackChain};
 use crate::codec::{DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, VoiceEncoder};
 use crate::denoise::Denoiser;
-use crate::gate::{VoiceGate, meter_level, rms, to_db};
+use crate::gate::{VoiceGate, decayed_db, meter_level, rms, to_db};
 use crate::jitter::Push;
 use crate::mixer::Mixer;
 use crate::remote::{Frame, RemoteStream};
@@ -142,6 +142,9 @@ impl Media {
 	}
 
 	fn capture_tick(&mut self, now: Instant) {
+		if self.shared.restart_capture.swap(false, Ordering::Relaxed) {
+			self.capture = CaptureChain::default();
+		}
 		if self.audio_io {
 			if let Err(error) = self.capture.pull(&self.shared.rings) {
 				warn!(%error, "capture resampling failed");
@@ -179,8 +182,13 @@ impl Media {
 			.store(input_level.max(previous * METER_DECAY));
 		if self.shared.noise_suppression.load(Ordering::Relaxed) {
 			self.denoiser.process(frame);
+			self.shared.counters.denoised.fetch_add(1, Ordering::Relaxed);
 		}
-		if self.should_transmit(to_db(rms(frame))) {
+		let level_db = to_db(rms(frame));
+		self.shared
+			.input_db
+			.store(decayed_db(level_db, self.shared.input_db.load()));
+		if self.should_transmit(level_db) {
 			self.silence_left = SILENCE_FRAMES_BEFORE_PAUSE;
 			if !self.speaking {
 				self.speaking = true;

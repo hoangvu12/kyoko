@@ -7,15 +7,16 @@ use protocol::{ChannelType, Opcode, Snowflake};
 use serde_json::{Value, json};
 use session::{Command, Trust, VoiceSetup};
 use state::{State, UserAudio, VoiceStatus};
+use store::VoiceSettings;
 use voice::{AudioIo, FRAME_SAMPLES, SILENCE_FRAME};
 
 use crate::harness::{Options, Running};
 
 const JOIN_TIMEOUT: Duration = Duration::from_millis(400);
 const VOICE_IDENTIFY: i64 = 0;
-const SETTLE: Duration = Duration::from_millis(150);
-const QUIET_WINDOW: Duration = Duration::from_millis(600);
-const TONE_FRAMES: usize = 60;
+pub(crate) const SETTLE: Duration = Duration::from_millis(150);
+pub(crate) const QUIET_WINDOW: Duration = Duration::from_millis(600);
+pub(crate) const TONE_FRAMES: usize = 60;
 const HELD_PACKETS: usize = 20;
 const TONE_HZ: f32 = 1_000.0;
 const TONE_AMPLITUDE: f32 = 0.25;
@@ -47,14 +48,14 @@ const WARMUP_FRAMES: usize = 5;
 const CHANNEL_BITRATE: i64 = 96_000;
 const RAISED_BITRATE: i64 = 128_000;
 
-struct Voice {
-	running: Running,
-	guild_id: Snowflake,
-	lounge: Snowflake,
-	gaming: Snowflake,
+pub(crate) struct Voice {
+	pub(crate) running: Running,
+	pub(crate) guild_id: Snowflake,
+	pub(crate) lounge: Snowflake,
+	pub(crate) gaming: Snowflake,
 }
 
-async fn start(name: &'static str) -> Voice {
+pub(crate) async fn start(name: &'static str) -> Voice {
 	let running = Running::start_with(Options::new(name)).await;
 	running.connected().await;
 	let guild_id = Snowflake(running.fixtures().guilds[0].id);
@@ -76,6 +77,16 @@ async fn start(name: &'static str) -> Voice {
 		};
 		(named("Lounge"), named("Gaming"))
 	};
+	manual_audio(&running);
+	Voice {
+		running,
+		guild_id,
+		lounge,
+		gaming,
+	}
+}
+
+pub(crate) fn manual_audio(running: &Running) {
 	running.session().set_voice_setup(VoiceSetup {
 		audio: AudioIo::Manual,
 		trust: Trust::only(
@@ -86,29 +97,23 @@ async fn start(name: &'static str) -> Voice {
 		),
 		join_timeout: JOIN_TIMEOUT,
 	});
-	Voice {
-		running,
-		guild_id,
-		lounge,
-		gaming,
-	}
 }
 
 impl Voice {
-	fn join(&self, channel_id: Snowflake) -> Instant {
+	pub(crate) fn join(&self, channel_id: Snowflake) -> Instant {
 		self.command(Command::JoinVoice {
 			guild_id: self.guild_id,
 			channel_id,
 		})
 	}
 
-	fn command(&self, command: Command) -> Instant {
+	pub(crate) fn command(&self, command: Command) -> Instant {
 		let sent = Instant::now();
 		self.running.session().send(command);
 		sent
 	}
 
-	async fn connected_to(&self, channel_id: Snowflake) {
+	pub(crate) async fn connected_to(&self, channel_id: Snowflake) {
 		self.running
 			.until("the voice connection to come up", |state| {
 				state.voice().is_some_and(|voice| {
@@ -142,7 +147,7 @@ impl Voice {
 			.await
 	}
 
-	fn ssrc(&self) -> u32 {
+	pub(crate) fn ssrc(&self) -> u32 {
 		self.running
 			.session()
 			.voice_connection()
@@ -150,21 +155,29 @@ impl Voice {
 			.expect("a running voice connection")
 	}
 
-	fn feed_tone(&self) {
+	pub(crate) fn feed_tone(&self) {
+		self.feed_tone_at(TONE_AMPLITUDE);
+	}
+
+	fn feed_tone_at(&self, amplitude: f32) {
 		let connection = self
 			.running
 			.session()
 			.voice_connection()
 			.expect("a running voice connection");
 		for index in 0..TONE_FRAMES {
-			connection.feed_input(&tone_frame(index));
+			connection.feed_input(&tone_frame_at(index, amplitude));
 		}
 	}
 
-	async fn stays_silent(&self, ssrc: u32, why: &str) {
+	pub(crate) async fn stays_silent(&self, ssrc: u32, why: &str) {
+		self.stays_silent_at(ssrc, TONE_AMPLITUDE, why).await;
+	}
+
+	pub(crate) async fn stays_silent_at(&self, ssrc: u32, amplitude: f32, why: &str) {
 		tokio::time::sleep(SETTLE).await;
 		let quiet_from = Instant::now();
-		self.feed_tone();
+		self.feed_tone_at(amplitude);
 		tokio::time::sleep(QUIET_WINDOW).await;
 		assert_eq!(
 			spoken_after(&self.running.voice().recording(), ssrc, quiet_from),
@@ -173,11 +186,23 @@ impl Voice {
 		);
 	}
 
-	async fn speaks(&self, ssrc: u32, what: &str) {
+	pub(crate) async fn speaks(&self, ssrc: u32, what: &str) {
+		self.speaks_at(ssrc, TONE_AMPLITUDE, what).await;
+	}
+
+	pub(crate) async fn speaks_at(&self, ssrc: u32, amplitude: f32, what: &str) {
 		let from = Instant::now();
-		self.feed_tone();
+		self.feed_tone_at(amplitude);
 		self.voice_until(what, |recording| spoken_after(recording, ssrc, from) > 0)
 			.await;
+	}
+
+	pub(crate) fn change_voice_settings(&self, change: impl FnOnce(&mut VoiceSettings)) {
+		self.running
+			.store()
+			.update_settings(|settings| change(&mut settings.voice))
+			.expect("the settings save");
+		self.command(Command::ApplyVoiceSettings);
 	}
 
 	fn own_voice_state(&self, mute: bool, deaf: bool) {
@@ -206,16 +231,20 @@ impl Voice {
 		);
 	}
 
-	async fn stop(self) {
+	pub(crate) async fn stop(self) {
 		self.running.stop().await;
 	}
 }
 
-fn tone_frame(index: usize) -> Vec<i16> {
+pub(crate) fn tone_frame(index: usize) -> Vec<i16> {
+	tone_frame_at(index, TONE_AMPLITUDE)
+}
+
+fn tone_frame_at(index: usize, amplitude: f32) -> Vec<i16> {
 	(0..FRAME_SAMPLES)
 		.map(|sample| {
 			let at = (index * FRAME_SAMPLES + sample) as f32 / SAMPLE_RATE;
-			((at * TONE_HZ * std::f32::consts::TAU).sin() * TONE_AMPLITUDE * f32::from(i16::MAX)) as i16
+			((at * TONE_HZ * std::f32::consts::TAU).sin() * amplitude * f32::from(i16::MAX)) as i16
 		})
 		.collect()
 }
@@ -224,7 +253,7 @@ fn for_channel(frame: &GatewayFrame, channel_id: Option<Snowflake>) -> bool {
 	frame.data["channel_id"] == channel_id.map_or(Value::Null, |id| json!(id.to_string()))
 }
 
-fn identifies(recording: &VoiceRecording) -> Vec<&VoiceFrame> {
+pub(crate) fn identifies(recording: &VoiceRecording) -> Vec<&VoiceFrame> {
 	recording.frames_with(VOICE_IDENTIFY).collect()
 }
 

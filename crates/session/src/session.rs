@@ -200,6 +200,10 @@ impl Session {
 		self.voice.connection.lock().clone()
 	}
 
+	pub fn mic_check(&self) -> Option<Arc<voice::MicCheck>> {
+		self.voice.mic_check.lock().clone()
+	}
+
 	pub fn shutdown(mut self) {
 		self.gateway.shutdown();
 		let _ = self.commands.try_send(Command::Shutdown);
