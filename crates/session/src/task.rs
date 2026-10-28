@@ -666,7 +666,10 @@ impl Core {
 				let settings = self.state.read().guild_settings_cache();
 				self.persist.submit(Job::GuildSettings(settings));
 			}
-			DispatchEvent::UserSettingsProtoUpdate(_) => self.keep_intended_status(),
+			DispatchEvent::UserSettingsProtoUpdate(_) => {
+				self.keep_intended_status();
+				self.keep_intended_favorites();
+			}
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
 			DispatchEvent::GuildMembersChunk(chunk) => {

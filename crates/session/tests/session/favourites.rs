@@ -6,7 +6,7 @@ use mockcord::Recording;
 use parking_lot::Mutex;
 use protocol::{
 	FavoriteGif, ProtoStatusSettings, Snowflake, decode_favorite_emojis, decode_favorite_gifs,
-	encode_status_settings,
+	encode_favorite_emojis, encode_status_settings,
 };
 use serde_json::json;
 use session::{Command, EmojiRankRequest, RestTuning, SessionHooks};
@@ -297,6 +297,11 @@ async fn a_favourited_emoji_is_read_then_written_to_the_frecency_proto_and_unfav
 			running.mock().favorite_emojis() == after
 		})
 		.await;
+	running
+		.until("the removal kept", |state: &State| {
+			state.favorite_emojis() == after.as_slice()
+		})
+		.await;
 	tokio::time::sleep(QUIET).await;
 	let writes = written_emojis(&running.mock().recording());
 	assert_eq!(writes, vec![expected, after.clone()], "one whole list per change");
@@ -304,6 +309,84 @@ async fn a_favourited_emoji_is_read_then_written_to_the_frecency_proto_and_unfav
 		running.session().state().read().favorite_emojis(),
 		after.as_slice()
 	);
+	running.stop().await;
+}
+
+fn echo_emojis(running: &Running, favorites: &[String]) {
+	running.mock().dispatch(
+		"USER_SETTINGS_PROTO_UPDATE",
+		&json!({ "settings": { "type": 2, "proto": encode_favorite_emojis(favorites) }, "partial": true }),
+	);
+}
+
+async fn past_the_echo(running: &Running) {
+	let marker = ProtoStatusSettings {
+		status: Some("idle".to_owned()),
+		..ProtoStatusSettings::default()
+	};
+	running.mock().dispatch(
+		"USER_SETTINGS_PROTO_UPDATE",
+		&json!({ "settings": { "type": 1, "proto": encode_status_settings(&marker) }, "partial": true }),
+	);
+	running
+		.until("the update sent after the echo", |state: &State| {
+			state.status_settings().status.as_deref() == Some("idle")
+		})
+		.await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_late_echo_of_an_earlier_favourite_write_keeps_the_newer_choice() {
+	let running = Running::start_with(Options::new("emoji-favourites-echo").rest(RestTuning {
+		settings_delay: Duration::from_millis(50),
+		mutation_gap: Duration::ZERO,
+		..RestTuning::default()
+	}))
+	.await;
+	running.connected().await;
+	let seeded = running.mock().favorite_emojis();
+	running.session().send(Command::SetEmojiFavorite {
+		entry: "smile".to_owned(),
+		favorite: true,
+	});
+	let mut expected = seeded.clone();
+	expected.push("smile".to_owned());
+	running
+		.eventually("the favourite stored by Discord", || {
+			running.mock().favorite_emojis() == expected
+		})
+		.await;
+	running.mock().hold_requests("PATCH", FRECENCY);
+	running.session().send(Command::SetEmojiFavorite {
+		entry: seeded[0].clone(),
+		favorite: false,
+	});
+	let after: Vec<String> = expected.iter().skip(1).cloned().collect();
+	running
+		.until("the removal", |state: &State| {
+			state.favorite_emojis() == after.as_slice()
+		})
+		.await;
+	echo_emojis(&running, &expected);
+	past_the_echo(&running).await;
+	assert_eq!(
+		running.session().state().read().favorite_emojis(),
+		after.as_slice(),
+		"the echo of the first write does not undo the removal waiting to be saved"
+	);
+	running.mock().release_requests();
+	running
+		.eventually("the removal stored by Discord", || {
+			running.mock().favorite_emojis() == after
+		})
+		.await;
+	running
+		.until("the removal kept", |state: &State| {
+			state.favorite_emojis() == after.as_slice()
+		})
+		.await;
+	let writes = written_emojis(&running.mock().recording());
+	assert_eq!(writes, vec![expected, after], "the removal is what was saved");
 	running.stop().await;
 }
 

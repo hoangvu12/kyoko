@@ -22,6 +22,7 @@ pub(super) struct Writer<T> {
 	due: Option<Instant>,
 	sent: Option<Vec<T>>,
 	confirmed: Option<Vec<T>>,
+	intended: Option<Vec<T>>,
 }
 
 impl<T: Clone + PartialEq> Writer<T> {
@@ -32,6 +33,7 @@ impl<T: Clone + PartialEq> Writer<T> {
 			due: None,
 			sent: None,
 			confirmed: None,
+			intended: None,
 		}
 	}
 
@@ -39,16 +41,26 @@ impl<T: Clone + PartialEq> Writer<T> {
 		self.due.filter(|_| self.sent.is_none())
 	}
 
-	fn changed(&mut self, current: Vec<T>) {
+	fn changed(&mut self, current: Vec<T>, next: Vec<T>) {
 		if self.confirmed.is_none() {
 			self.confirmed = Some(current);
 		}
+		self.intended = Some(next);
 		self.due = Some(Instant::now() + self.delay);
+	}
+
+	fn differing(&self, shown: &[T]) -> Option<Vec<T>> {
+		self.intended
+			.clone()
+			.filter(|intended| intended.as_slice() != shown)
 	}
 
 	fn settled(&mut self, saved: bool) -> Option<Option<Vec<T>>> {
 		let sent = self.sent.take();
 		let waiting = self.due.is_some();
+		if !waiting {
+			self.intended = None;
+		}
 		match (saved, waiting) {
 			(true, true) => self.confirmed = sent,
 			(true, false) => self.confirmed = None,
@@ -172,7 +184,7 @@ impl Core {
 		let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or_default();
 		let current = self.state.read().command_uses().to_vec();
 		let next = state::command_used(&current, key, now_ms);
-		self.favorite_writes.commands.changed(current);
+		self.favorite_writes.commands.changed(current, next.clone());
 		self.on_loaded(Loaded::CommandUses(next));
 	}
 
@@ -182,7 +194,7 @@ impl Core {
 		if next == current {
 			return;
 		}
-		self.favorite_writes.gifs.changed(current);
+		self.favorite_writes.gifs.changed(current, next.clone());
 		self.on_loaded(Loaded::FavoriteGifs(next));
 	}
 
@@ -192,8 +204,35 @@ impl Core {
 		if next == current {
 			return;
 		}
-		self.favorite_writes.emojis.changed(current);
+		self.favorite_writes.emojis.changed(current, next.clone());
 		self.on_loaded(Loaded::FavoriteEmojis(next));
+	}
+
+	pub(super) fn keep_intended_favorites(&mut self) {
+		let kept: Vec<Loaded> = {
+			let state = self.state.read();
+			let writes = &self.favorite_writes;
+			[
+				writes
+					.gifs
+					.differing(state.favorite_gifs())
+					.map(Loaded::FavoriteGifs),
+				writes
+					.emojis
+					.differing(state.favorite_emojis())
+					.map(Loaded::FavoriteEmojis),
+				writes
+					.commands
+					.differing(state.command_uses())
+					.map(Loaded::CommandUses),
+			]
+			.into_iter()
+			.flatten()
+			.collect()
+		};
+		for loaded in kept {
+			self.on_loaded(loaded);
+		}
 	}
 
 	pub(super) fn frecency_arrived(&mut self) {
