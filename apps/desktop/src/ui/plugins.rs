@@ -322,6 +322,14 @@ impl Link {
 		self.press_at(x, y).await;
 	}
 
+	pub(super) async fn drive_plugin_permissions(&self) {
+		self.open_settings("plugins");
+		self.until_capture(|link| link.settings_settled()).await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		let (x, y) = capture::CLEAR_URLS_SWITCH;
+		self.press_at(x, y).await;
+	}
+
 	pub(super) async fn drive_game_activity(&self) {
 		self.until_capture(|link| link.plugins.slots.is_mounted(GAME_ACTIVITY_TOGGLE))
 			.await;

@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local widgets = require("./widgets")
 local kit = require("./kit")
+local dialog = require("./dialog")
 
 local CHIP = 20
 local CHIP_FILL = 0.18
@@ -16,6 +17,7 @@ local PROMPT_WIDTH = 520
 local SAVE_DELAY = 500
 
 local opened = ui.state("plugins_opened", "")
+local list_offset = 0
 local prompt = ui.state("plugins_prompt", "")
 local prompt_open = ui.state("plugins_prompt_open", false)
 local filter = ui.state("plugins_filter", "")
@@ -127,6 +129,36 @@ local function toggle(plugin: state.Plugin, on: boolean)
 	end
 end
 
+local function page_offset(): any
+	return dialog.offsets.settings
+end
+
+local function open_detail(id: string)
+	local offset = page_offset()
+	list_offset = if offset then offset:get() else 0
+	opened:set(id)
+	if offset then
+		offset:set(0)
+	end
+end
+
+local function close_detail()
+	opened:set("")
+end
+
+local function restore_list_offset(list: any)
+	ui.effect(function()
+		local height = list.height or 0
+		local wanted = list_offset
+		local offset = page_offset()
+		if not offset or wanted <= 0 or height <= wanted then
+			return
+		end
+		list_offset = 0
+		offset:set(wanted)
+	end)
+end
+
 local function settings_button(plugin: state.Plugin)
 	return ui.button {
 		id = "plugin_settings_" .. plugin.id,
@@ -144,7 +176,7 @@ local function settings_button(plugin: state.Plugin)
 		items = "center",
 		hover = { brightness = 1.3 },
 		on_click = function()
-			opened:set(plugin.id)
+			open_detail(plugin.id)
 		end,
 		icon { name = "settings", size = theme.size.icon_size_md :: any, color = theme.color.text_5 },
 	}
@@ -314,7 +346,10 @@ local function filter_field()
 end
 
 local function installed()
+	local list = ui.ref()
+	restore_list_offset(list)
 	return ui.column {
+		ref = list,
 		w_full = true,
 		gap = theme.size.space_24,
 		ui.column {
@@ -793,20 +828,29 @@ local function permission_row(permission: state.PluginPermission)
 		w_full = true,
 		gap = theme.size.space_2,
 		ui.row {
+			w_full = true,
 			items = "center",
 			gap = theme.size.space_8,
-			widgets.label(permission.text, theme.size.font_sm, theme.color.text_normal, {
-				literal = true,
+			kit.text(permission.text, theme.size.font_size_sm, theme.size.line_height_sm, theme.color.text_3, {
 				wrap = true,
 				weight = theme.weight.medium,
+				grow = 1,
 				shrink = 1,
 				min_w = 0,
 			}),
-			if permission.sensitive then chip("Sensitive", theme.color.warning) else nil,
-			if permission.reserved then chip("Not used yet", theme.color.text_muted) else nil,
+			if permission.sensitive then chip("Sensitive", theme.color.yellow_2) else nil,
+			if permission.reserved then chip("Not used yet", theme.color.text_4) else nil,
 		},
-		widgets.label(permission.name, theme.size.font_tiny, theme.color.text_muted, { literal = true, font = theme.font.code }),
+		kit.text(permission.name, theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4, {
+			font = theme.font.code,
+		}),
 	}
+end
+
+local function caption(content: string)
+	return kit.text(string.upper(content), theme.size.font_size_xs, theme.size.line_height_xs, theme.color.text_4, {
+		weight = theme.weight.bold,
+	})
 end
 
 local function detail(id: string)
@@ -829,10 +873,11 @@ local function detail(id: string)
 			items = "center",
 			gap = theme.size.space_12,
 			widgets.button {
+				id = "plugin_back",
 				text = "Plugins",
 				small = true,
 				on_click = function()
-					opened:set("")
+					close_detail()
 				end,
 			},
 			widgets.label(plugin.name, theme.size.font_md, theme.color.header_primary, {
@@ -877,59 +922,57 @@ local function prompt_body(id: string)
 		table.insert(rows, permission_row(permission))
 		table.insert(names, permission.name)
 	end
+	local function close()
+		prompt_open:set(false)
+	end
 	return ui.column {
 		w_full = true,
-		gap = theme.size.space_16,
-		widgets.label("Allow " .. plugin.name .. "?", theme.size.font_lg, theme.color.header_primary, {
-			literal = true,
-			weight = theme.weight.semibold,
-		}),
-		ui.row {
-			items = "center",
-			gap = theme.size.space_8,
-			widgets.hint("Version " .. plugin.version),
-			chip(plugin.origin_label, origin_color(plugin.origin)),
-		},
-		if #rows > 0
-			then ui.column {
-				w_full = true,
-				gap = theme.size.space_12,
-				widgets.heading("This plugin asks for"),
-				table.unpack(rows),
-			}
-			else widgets.hint("This plugin does not ask for any permission."),
-		ui.row {
-			w_full = true,
-			justify = "end",
-			gap = theme.size.space_8,
-			widgets.button {
-				text = "Cancel",
-				on_click = function()
-					prompt_open:set(false)
-				end,
+		min_h = 0,
+		dialog.popup_header("plugin_prompt_close", "Allow " .. plugin.name .. "?", close),
+		dialog.popup_body(
+			ui.row {
+				items = "center",
+				gap = theme.size.space_8,
+				kit.hint("Version " .. plugin.version),
+				chip(plugin.origin_label, origin_color(plugin.origin)),
 			},
-			widgets.button {
+			if #rows > 0
+				then ui.column {
+					w_full = true,
+					gap = theme.size.space_12,
+					caption("This plugin asks for"),
+					table.unpack(rows),
+				}
+				else kit.hint("This plugin does not ask for any permission.")
+		),
+		dialog.popup_footer(
+			kit.button {
+				id = "plugin_cancel",
+				text = "Cancel",
+				height = theme.size.button_height_md,
+				on_click = close,
+			},
+			kit.button {
 				id = "plugin_allow",
 				text = if #rows > 0 then "Allow" else "Enable",
 				tone = "primary",
+				height = theme.size.button_height_md,
 				on_click = function()
-					prompt_open:set(false)
+					close()
 					actions.plugin_action("approve", { id = id, permissions = names })
 				end,
-			},
-		},
+			}
+		),
 	}
 end
 
 local function permission_prompt()
-	return ui.modal {
-		open = prompt_open,
+	return dialog.popup {
+		id = "plugin_prompt",
 		label = "Plugin permissions",
-		w = PROMPT_WIDTH,
-		p = theme.size.space_16,
-		rounded = theme.size.radius_md,
-		bg = theme.color.background_primary,
-		ui.presence(function(): string?
+		open = prompt_open,
+		width = PROMPT_WIDTH,
+		content = ui.presence(function(): string?
 			local id = prompt:get()
 			return if id ~= "" then id else nil
 		end, prompt_body),

@@ -14,6 +14,7 @@ mod channel_settings;
 mod decorations;
 mod hidden;
 mod login;
+mod plugin_page;
 mod plugins;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
@@ -1736,7 +1737,7 @@ fn values_of(settings: &store::Settings) -> serde_json::Value {
 	)
 }
 
-fn setting_values(typing_animation: bool) -> serde_json::Value {
+pub(super) fn setting_values(typing_animation: bool) -> serde_json::Value {
 	let mut settings = store::Settings::default();
 	settings.chat.typing_animation = typing_animation;
 	serde_json::Value::Object(

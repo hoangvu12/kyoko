@@ -422,6 +422,7 @@ The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `settings-text-replace` | 46 | Default selection. Kyoko sets three TextReplace rules (a plain rule, a Luau pattern rule and a rule with an "only if" condition) and turns TextReplace on through `PluginHost`, opens settings on Plugins, then presses TextReplace's Settings button through the window (`capture::TEXT_REPLACE_SETTINGS`). Oxidcord has no plugins and no such screen, so capture it with `--apps kyoko` and check it by eye. | yes |
+| `settings-plugin-permissions` | 84 | Default selection. Kyoko opens settings on Plugins and presses ClearURLs' switch through the window (`capture::CLEAR_URLS_SWITCH`); the plugin was never approved, so its permission prompt opens: Midnight's dialog (`bg_4`, `radius_lg`, title, body, footer band) on its own `overlay` scrim over the settings dialog. Kyoko only, `--apps kyoko`; no Midnight mockup, check it by eye. | yes |
 
 ### 47 SilentTyping
 

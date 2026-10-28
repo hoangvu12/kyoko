@@ -40,8 +40,135 @@ export type Spec = {
 
 local M = {}
 
+M.window = nil :: any
+M.offsets = {} :: { [string]: any }
+
 local function n(token: string): number
 	return theme.number(token)()
+end
+
+local function window_size(): (number, number)
+	local window = M.window
+	if not window then
+		return 0, 0
+	end
+	return window.width or 0, window.height or 0
+end
+
+function M.popup(props: { id: string, label: string, open: any, width: any?, content: any })
+	local panel = nil :: any
+	ui.effect(function()
+		if props.open:get() and panel and not motion.reduced() then
+			anime.animate(panel, {
+				y = { -OPEN_TRAVEL, 0 },
+				opacity = { 0, 1 },
+				duration = OPEN_DURATION,
+				ease = OPEN_EASE,
+			})
+		end
+	end)
+	return ui.modal {
+		open = props.open,
+		label = props.label,
+		p = 0,
+		border = 0,
+		rounded = 0,
+		bg = CLEAR,
+		w = function()
+			return (window_size())
+		end,
+		h = function()
+			local _, height = window_size()
+			return height
+		end,
+		max_w = function()
+			return (window_size())
+		end,
+		max_h = function()
+			local _, height = window_size()
+			return height
+		end,
+		ui.column {
+			id = props.id .. "_scrim",
+			w_full = true,
+			h_full = true,
+			items = "center",
+			justify = "center",
+			bg = theme.color.overlay,
+			on_click = function()
+				props.open:set(false)
+			end,
+			ui.column {
+				id = props.id,
+				w = props.width or theme.size.modal_width_sm,
+				max_h = function()
+					local _, height = window_size()
+					return math.max(0, height - n(theme.size.gap) * 2)
+				end,
+				overflow = "hidden",
+				bg = theme.color.bg_4,
+				border = theme.size.border_thickness,
+				border_color = theme.color.border,
+				rounded = theme.size.radius_lg,
+				color = theme.color.text_3,
+				on_click = function() end,
+				on_mount = function(element: any)
+					panel = element
+				end,
+				props.content,
+			},
+		},
+	}
+end
+
+function M.popup_header(id: string, title: any, on_close: () -> ())
+	return ui.row {
+		w_full = true,
+		shrink = 0,
+		items = "start",
+		justify = "between",
+		gap = theme.size.space_16,
+		pt = theme.size.space_16,
+		px = theme.size.space_16,
+		kit.text(title, theme.size.font_size_lg, theme.size.line_height_lg, theme.color.text_2, {
+			weight = theme.weight.semibold,
+			wrap = true,
+			grow = 1,
+			min_w = 0,
+		}),
+		M.close_button { id = id, label = "Close", on_click = on_close },
+	}
+end
+
+function M.popup_body(...: any)
+	return ui.scroll {
+		w_full = true,
+		shrink = 1,
+		min_h = 0,
+		ui.column {
+			w_full = true,
+			gap = theme.size.space_16,
+			p = theme.size.space_16,
+			...,
+		},
+	}
+end
+
+function M.popup_footer(...: any)
+	return ui.column {
+		w_full = true,
+		shrink = 0,
+		ui.div { w_full = true, h = theme.size.border_thickness, bg = theme.color.border },
+		ui.row {
+			w_full = true,
+			items = "center",
+			justify = "end",
+			gap = theme.size.space_8,
+			p = theme.size.space_16,
+			bg = theme.color.bg_4,
+			...,
+		},
+	}
 end
 
 M.nav_item = ui.component(function(props: {
@@ -183,6 +310,7 @@ function M.frame(spec: Spec)
 	local prefix = spec.prefix
 	local open = ui.state(prefix .. ".open", false)
 	local offset = ui.state(prefix .. ".offset", 0)
+	M.offsets[prefix] = offset
 	local nav_offset = ui.state(prefix .. ".nav_offset", 0)
 	local current_heading = ui.state(prefix .. ".heading", "")
 	local nav_view = nil :: any
@@ -739,6 +867,7 @@ function M.frame(spec: Spec)
 	end
 
 	local window = ui.ref()
+	M.window = window
 	sync()
 	return ui.div {
 		absolute = true,

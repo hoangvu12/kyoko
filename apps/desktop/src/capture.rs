@@ -19,6 +19,7 @@ pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const GAME_ACTIVITY_BUTTON: (f32, f32) = (194., 760.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
+pub const CLEAR_URLS_SWITCH: (f32, f32) = (723., 476.);
 pub const PROFILE_ANCHOR: (f32, f32) = (348., 404.);
 pub const SEARCH_QUERY: &str = "the";
 pub const SWITCHER_QUERY: &str = "gen";
@@ -54,6 +55,7 @@ pub enum Screen {
 	ComposerReply,
 	SilentTyping,
 	TextReplaceSettings,
+	PluginPermissions,
 	LoginTos,
 	LoginToken,
 	LoginQrScanned,
@@ -210,6 +212,7 @@ impl Screen {
 			"composer-reply" => Some(Screen::ComposerReply),
 			"composer-silent-typing" => Some(Screen::SilentTyping),
 			"settings-text-replace" => Some(Screen::TextReplaceSettings),
+			"settings-plugin-permissions" => Some(Screen::PluginPermissions),
 			"login-tos" => Some(Screen::LoginTos),
 			"login-token" => Some(Screen::LoginToken),
 			"login-qr-scanned" => Some(Screen::LoginQrScanned),
@@ -336,6 +339,7 @@ impl Screen {
 			| Screen::ComposerReply
 			| Screen::SilentTyping
 			| Screen::TextReplaceSettings
+			| Screen::PluginPermissions
 			| Screen::MessageHover
 			| Screen::MessageMenu
 			| Screen::OwnMessage(_)

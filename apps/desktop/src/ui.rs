@@ -954,6 +954,7 @@ impl Link {
 			}
 			capture::Screen::SilentTyping => self.drive_silent_typing().await,
 			capture::Screen::TextReplaceSettings => self.drive_text_replace().await,
+			capture::Screen::PluginPermissions => self.drive_plugin_permissions().await,
 			capture::Screen::MessageHover => self.point_at_last_message(false).await,
 			capture::Screen::MessageMenu => self.point_at_last_message(true).await,
 			capture::Screen::OwnMessage(shot) => self.drive_own_message(*shot).await,
