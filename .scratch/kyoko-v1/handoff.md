@@ -1,5 +1,39 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: twelfth orchestrator hands off (roboco chat `22c07f0d`, "kyoko orchestrator 12", same machine, main `6a41204` + this note)
+
+Everything below still applies unless this section says otherwise. Handed off because my context grew large (2026-10-29).
+
+### Decisions the user made this session
+
+- **DAVE crypto on BoringSSL, "do like Discord"** (2026-10-28): libdave runs on OpenSSL/BoringSSL; kyoko keeps oxidcord's protocol code with its own openmls provider on btls. Done in 99; RUSTSEC-2026-0387 ignore removed.
+- Nothing else is waiting on the user. Open offers to them: (1) launch kyoko on their account for **102, their first real voice call** (all of 98-101 and 100 are in; recipe in the tenth orchestrator's section; rebuild the main checkout first; look only), (2) a fix for push to talk stealing its key combination from other apps (100 uses a Windows hotkey; Discord uses a keyboard hook) if they want it, (3) whether to chase the HTTP/2 priority-chaining gap that 93 made more visible (`docs/fingerprint.md`).
+
+### Merged this session (Answers written for each)
+
+82 image grid, 84 plugin dialog, 98 voice join/panel/mute, 109 theme_links flake, 83 rail hover card and voice badge, 99 DAVE on BoringSSL, 85 hover text rule, 89 image viewer, 90 new logo (un1rock art, credited), 101 call view and speaking, 93 image fetch queue (one HTTP/2 connection per host, visible first), 94 voice row hover buttons, 100 Voice & Video settings, 110 media-queue test flake (Roboco's own probe), 111 favourites echo bug (real fix) and one-ping test, 103 camera video receive, 112 viewing barrier in tests, 106 Go Live viewing. New tickets 109-113 were mine.
+
+### State now (all three lanes running; completion notices go to `22c07f0d`: poll with `list_chats` parent `22c07f0d` and `read_chat`, or send each a short note so its next turn reports to you)
+
+- **Lane A** `kyoko-lane-a`: **113** stream audio and full-window stream viewer, worker `d9d6b49d`, base `6a41204`.
+- **Lane B** `kyoko-lane-b`: **104** camera send, worker `1e626948`, base `ab7bf65`; told about 106 and that 91 moves the MF decoder; must rebase onto 106 (tiles focus by `key`, `video_surface.rs` two lanes).
+- **Lane C** `kyoko-lane-c`: **91** inline video, worker `5d0cc41b`, base `7893d58`; first commit moves MF decode/convert out of `crates/voice/src/video/` into a shared crate (one decoder for calls and messages).
+
+### What's left
+
+- Running: 104, 113, 91.
+- Then: 105 screen capture and Go Live picker (after 104), 107 going live (after 105 and 106). 74 part 2b Chrome 157 bump after 2026-11-03. 75 crash needs a real run with stderr. 102 is the user's real call (`ready-for-human`). 108 DM calls (`needs-triage`). Skipped: 39, 58.
+- Small leftovers: libopus (BSD-3) missing from `THIRD_PARTY_NOTICES.md` (from 97); 112's note on the kept test; 103's note (MF hardware decode + an NV12 zgx surface would cut most video CPU).
+
+### Gotchas this session
+
+- Workers end their turn while checks run almost every time: when a "finished" notice has a short last message ("waiting on X"), send "keep going in this turn, poll until done, then report". My queued "main moved" notes also fire "finished" notices; read one message further back.
+- When I verify a lane, tell its worker "don't rerun anything, reply ok" first, or its own checks collide with mine in the same target.
+- Roboco's desktop app probes newly opened localhost ports (plaintext `GET`/`HEAD /`): any test counting connections or requests on a fresh listener must count only its own (109, 110).
+- Flake list in rules.md was trimmed (favourites, one_ping, alerts::channel_in_view, kept removed; composer::a_server_gate added). sccache dropouts still happen: rerun with `verify-rest.sh`.
+- Usage limits stopped workers once for ~3 h; resend "resume" after.
+- Disk: ~110-135 GB free after cleaning; clean a lane's `target` right after its merge when the lane goes idle.
+
 ## Latest: eleventh orchestrator hands off (roboco chat `8e102e63`, "kyoko orchestrator 11", same machine, main `c4ad329` + this note)
 
 Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-28).
