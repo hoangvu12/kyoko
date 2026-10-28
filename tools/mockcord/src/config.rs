@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -8,6 +10,40 @@ pub enum AutocompleteReply {
 	Answer,
 	Stall,
 	Fail,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CameraPlan {
+	pub tiles: usize,
+	pub fps: u32,
+	pub clip: Option<PathBuf>,
+}
+
+impl FromStr for CameraPlan {
+	type Err = String;
+
+	fn from_str(text: &str) -> Result<Self, Self::Err> {
+		const USAGE: &str = "cameras: expected <tiles>:<fps>[:<clip>]";
+		let mut parts = text.splitn(3, ':');
+		let tiles: usize = parts
+			.next()
+			.and_then(|part| part.trim().parse().ok())
+			.ok_or(USAGE)?;
+		let fps: u32 = parts
+			.next()
+			.and_then(|part| part.trim().parse().ok())
+			.ok_or(USAGE)?;
+		let clip = parts
+			.next()
+			.map(str::trim)
+			.filter(|path| !path.is_empty())
+			.map(PathBuf::from);
+		Ok(Self {
+			tiles,
+			fps: fps.max(1),
+			clip,
+		})
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +92,7 @@ pub struct MockConfig {
 	pub build_number: u64,
 	pub bucket_limit: u32,
 	pub bucket_window: Duration,
+	pub cameras: Option<CameraPlan>,
 }
 
 impl Default for MockConfig {
@@ -88,6 +125,7 @@ impl Default for MockConfig {
 			build_number: 424_242,
 			bucket_limit: 5,
 			bucket_window: Duration::from_secs(2),
+			cameras: None,
 		}
 	}
 }

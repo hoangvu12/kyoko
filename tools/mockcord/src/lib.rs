@@ -37,7 +37,7 @@ mod web;
 pub use alt::{ALT_USER_ID, ALT_USERNAME};
 pub use cdn::{ANIMATION_FRAMES, FRAME_DELAY_MS, MEDIA_FRAMES, Signature};
 pub use community::{COMMUNITY_INVITE, COMMUNITY_NAME, CommunityGuild};
-pub use config::{AutocompleteReply, InteractionTiming, MockConfig};
+pub use config::{AutocompleteReply, CameraPlan, InteractionTiming, MockConfig};
 pub use control::Control;
 pub use fixtures::{FixtureSummary, Fixtures};
 pub use password::{
@@ -58,8 +58,9 @@ pub use rest::{
 pub use scenario::{HeartbeatAcks, Reply};
 pub use server::{Server, login_page_url, remote_auth_url};
 pub use voice::{
-	AES_GCM_MODE, VOICE_TOKEN, VoiceControl, VoiceFrame, VoicePacket, VoiceRecording, VoiceSocket,
-	XCHACHA_MODE,
+	AES_GCM_MODE, CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, ScriptedCamera, VOICE_TOKEN, VoiceControl,
+	VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket, XCHACHA_MODE, camera_frames,
+	clip_frames,
 };
 pub use web::{
 	DEVICE_COOKIE, LOGIN_PAGE, SIGNED_DEVICE_COOKIE, VISITOR_COOKIE, device_cookie_value, installation_id,

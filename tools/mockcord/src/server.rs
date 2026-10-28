@@ -52,7 +52,11 @@ impl Server {
 		let address = listener.local_addr()?;
 		let fixtures = Fixtures::generate(&config, config.anchor.unwrap_or_else(fixture_anchor));
 		let (stop, stopped) = watch::channel(false);
-		let voice = voice::spawn(stopped.clone()).await?;
+		let cameras = config
+			.cameras
+			.as_ref()
+			.map(|plan| voice::Cameras::new(plan, &fixtures));
+		let voice = voice::spawn(stopped.clone(), cameras).await?;
 		let urls = Urls {
 			origin: format!("http://{address}"),
 			rest: format!("http://{address}/api/v9"),

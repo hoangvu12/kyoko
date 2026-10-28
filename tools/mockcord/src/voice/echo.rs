@@ -8,7 +8,7 @@ use aes_gcm::aead::{AeadCore, AeadInOut, KeyInit, Nonce};
 use chacha20poly1305::XChaCha20Poly1305;
 use tokio::net::UdpSocket;
 
-use super::recording::VoicePacket;
+use super::recording::{VoicePacket, VoiceRtcp};
 use super::{AES_GCM_MODE, Voice, XCHACHA_MODE};
 
 pub(super) const OPUS_FRAME_SAMPLES: u32 = 960;
@@ -24,6 +24,9 @@ const EXTENSION_FLAG: u8 = 0x10;
 const CSRC_COUNT_MASK: u8 = 0x0f;
 const RTCP_PAYLOAD_TYPES: std::ops::RangeInclusive<u8> = 192..=223;
 const SSRC_RANGE: std::ops::Range<usize> = 8..12;
+const RTCP_HEADER_LEN: usize = 8;
+const RTCP_SENDER_RANGE: std::ops::Range<usize> = 4..8;
+const RTCP_FORMAT_MASK: u8 = 0x1f;
 const DISCOVERY_PACKET_LEN: usize = 74;
 const DISCOVERY_LENGTH_FIELD: u16 = 70;
 const DISCOVERY_REQUEST: u16 = 1;
@@ -150,8 +153,35 @@ fn header_len(packet: &[u8]) -> Option<usize> {
 	Some(length)
 }
 
+fn record_rtcp(voice: &Voice, packet: &[u8]) -> Option<()> {
+	if packet.len() < RTCP_HEADER_LEN + TAG_LEN + COUNTER_LEN {
+		return None;
+	}
+	let sender_ssrc = u32::from_be_bytes(packet[RTCP_SENDER_RANGE].try_into().ok()?);
+	let mode = voice.modes.lock().get(&sender_ssrc).cloned()?;
+	let cipher = Cipher::new(&mode, &voice.key)?;
+	let (sealed, counter) = packet.split_at(packet.len() - COUNTER_LEN);
+	let (header, body) = sealed.split_at(RTCP_HEADER_LEN);
+	let mut body = body.to_vec();
+	cipher.open(counter, header, &mut body)?;
+	voice.record(|log| {
+		log.rtcp.push(VoiceRtcp {
+			sender_ssrc,
+			packet_type: header[1],
+			format: header[0] & RTCP_FORMAT_MASK,
+			body,
+			at: Instant::now(),
+		});
+	});
+	Some(())
+}
+
 fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
-	if packet.len() < RTP_HEADER_LEN || RTCP_PAYLOAD_TYPES.contains(&packet[1]) {
+	if packet.len() < RTP_HEADER_LEN {
+		return None;
+	}
+	if RTCP_PAYLOAD_TYPES.contains(&packet[1]) {
+		record_rtcp(voice, packet);
 		return None;
 	}
 	let header_len = header_len(packet)?;

@@ -87,6 +87,28 @@ pub struct VoicePacket {
 	pub at: Instant,
 }
 
+#[derive(Debug, Clone)]
+pub struct VoiceRtcp {
+	pub sender_ssrc: u32,
+	pub packet_type: u8,
+	pub format: u8,
+	pub body: Vec<u8>,
+	pub at: Instant,
+}
+
+impl VoiceRtcp {
+	pub const PAYLOAD_SPECIFIC_FEEDBACK: u8 = 206;
+	pub const PICTURE_LOSS: u8 = 1;
+
+	pub fn is_picture_loss(&self) -> bool {
+		self.packet_type == Self::PAYLOAD_SPECIFIC_FEEDBACK && self.format == Self::PICTURE_LOSS
+	}
+
+	pub fn media_ssrc(&self) -> Option<u32> {
+		Some(u32::from_be_bytes(self.body.get(..4)?.try_into().ok()?))
+	}
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct VoiceRecording {
 	pub sockets: Vec<VoiceSocket>,
@@ -94,6 +116,7 @@ pub struct VoiceRecording {
 	pub sent: Vec<VoiceFrame>,
 	pub closes: Vec<(u64, Option<u16>)>,
 	pub packets: Vec<VoicePacket>,
+	pub rtcp: Vec<VoiceRtcp>,
 }
 
 impl VoiceRecording {
@@ -107,6 +130,13 @@ impl VoiceRecording {
 
 	pub fn packets_from(&self, ssrc: u32) -> impl Iterator<Item = &VoicePacket> {
 		self.packets.iter().filter(move |packet| packet.ssrc == ssrc)
+	}
+
+	pub fn picture_losses(&self, media_ssrc: u32) -> usize {
+		self.rtcp
+			.iter()
+			.filter(|rtcp| rtcp.is_picture_loss() && rtcp.media_ssrc() == Some(media_ssrc))
+			.count()
 	}
 
 	pub fn socket(&self, id: u64) -> Option<&VoiceSocket> {

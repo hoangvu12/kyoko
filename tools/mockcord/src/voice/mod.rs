@@ -2,6 +2,7 @@ mod echo;
 mod listener;
 mod recording;
 mod room;
+mod video;
 
 use std::collections::HashMap;
 use std::io;
@@ -25,7 +26,9 @@ use tokio::task::JoinHandle;
 
 use crate::json::parse_id;
 
-pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceSocket};
+pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket};
+pub use video::Cameras;
+pub use video::{CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, ScriptedCamera, camera_frames, clip_frames};
 
 use listener::{ConnectionId, VoiceListener};
 use room::{Mail, Rooms};
@@ -90,6 +93,7 @@ struct Voice {
 	media_counter: AtomicU32,
 	rooms: Mutex<Rooms>,
 	mail: broadcast::Sender<(u64, Wire)>,
+	cameras: Option<Cameras>,
 }
 
 impl Voice {
@@ -150,6 +154,15 @@ impl Voice {
 		}
 	}
 
+	fn start_cameras(self: &Arc<Self>, peer: &Peer) {
+		let (Some(cameras), Some((_, channel_id))) =
+			(&self.cameras, self.member_of(peer.session_id.as_deref()))
+		else {
+			return;
+		};
+		cameras.start(&VoiceControl(self.clone()), channel_id);
+	}
+
 	fn open_dave(&self, ssrc: u32, payload: &[u8]) -> Option<Vec<u8>> {
 		let (user_id, channel_id) = self.speaker(ssrc)?;
 		self.rooms.lock().open(channel_id, user_id, payload)
@@ -160,6 +173,10 @@ impl Voice {
 pub struct VoiceControl(Arc<Voice>);
 
 impl VoiceControl {
+	fn shutdown(&self) -> watch::Receiver<bool> {
+		self.0.shutdown.clone()
+	}
+
 	pub fn root_pem(&self) -> Option<&str> {
 		self.0.root_pem.as_deref()
 	}
@@ -249,10 +266,23 @@ impl VoiceControl {
 	}
 
 	pub fn send_as(&self, channel_id: u64, user_id: u64, ssrc: u32, sequence: u16, frame: &[u8]) -> usize {
-		let voice = &self.0;
-		let Some(payload) = voice.rooms.lock().seal(channel_id, user_id, frame) else {
+		let Some(payload) = self.0.rooms.lock().seal(channel_id, user_id, frame) else {
 			return 0;
 		};
+		let timestamp = u32::from(sequence).wrapping_mul(echo::OPUS_FRAME_SAMPLES);
+		let mut header = vec![RTP_VERSION, OPUS_PAYLOAD_TYPE];
+		header.extend_from_slice(&sequence.to_be_bytes());
+		header.extend_from_slice(&timestamp.to_be_bytes());
+		header.extend_from_slice(&ssrc.to_be_bytes());
+		self.send_rtp(channel_id, &header, &payload)
+	}
+
+	pub fn seal_video(&self, channel_id: u64, user_id: u64, frame: &[u8]) -> Option<Vec<u8>> {
+		self.0.rooms.lock().seal_video(channel_id, user_id, frame)
+	}
+
+	pub fn send_rtp(&self, channel_id: u64, header: &[u8], payload: &[u8]) -> usize {
+		let voice = &self.0;
 		let targets: Vec<(SocketAddr, String)> = {
 			let sessions = voice.sessions.lock();
 			let clients = voice.clients.lock();
@@ -263,15 +293,10 @@ impl VoiceControl {
 				.filter_map(|session| Some((*clients.get(&session.ssrc)?, modes.get(&session.ssrc)?.clone())))
 				.collect()
 		};
-		let timestamp = u32::from(sequence).wrapping_mul(echo::OPUS_FRAME_SAMPLES);
-		let mut header = vec![RTP_VERSION, OPUS_PAYLOAD_TYPE];
-		header.extend_from_slice(&sequence.to_be_bytes());
-		header.extend_from_slice(&timestamp.to_be_bytes());
-		header.extend_from_slice(&ssrc.to_be_bytes());
 		let mut sent = 0;
 		for (address, mode) in targets {
 			let counter = voice.media_counter.fetch_add(1, Ordering::Relaxed).to_be_bytes();
-			let Some(packet) = echo::seal_packet(&mode, &voice.key, &counter, &header, &payload) else {
+			let Some(packet) = echo::seal_packet(&mode, &voice.key, &counter, header, payload) else {
 				continue;
 			};
 			if voice.udp.try_send_to(&packet, address).is_ok() {
@@ -279,6 +304,50 @@ impl VoiceControl {
 			}
 		}
 		sent
+	}
+
+	pub fn video_as(&self, user_id: u64, audio_ssrc: u32, video_ssrc: u32) {
+		let frame = json!({
+			"op": 12,
+			"d": {
+				"user_id": user_id.to_string(),
+				"audio_ssrc": audio_ssrc,
+				"video_ssrc": video_ssrc,
+				"streams": [{
+					"ssrc": video_ssrc,
+					"rtx_ssrc": video_ssrc.wrapping_add(1),
+					"rid": "100",
+					"quality": 100,
+					"max_resolution": { "type": "fixed", "width": CAMERA_WIDTH, "height": CAMERA_HEIGHT },
+					"max_framerate": CAMERA_FPS,
+					"active": true,
+				}],
+			},
+		});
+		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+	}
+
+	pub fn video_off_as(&self, user_id: u64, audio_ssrc: u32) {
+		let frame = json!({
+			"op": 12,
+			"d": {
+				"user_id": user_id.to_string(),
+				"audio_ssrc": audio_ssrc,
+				"video_ssrc": 0,
+				"streams": [],
+			},
+		});
+		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+	}
+
+	pub fn connect_as(&self, user_id: u64) {
+		let frame = json!({ "op": 11, "d": { "user_ids": [user_id.to_string()] } });
+		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+	}
+
+	pub fn disconnect_as(&self, user_id: u64) {
+		let frame = json!({ "op": 13, "d": { "user_id": user_id.to_string() } });
+		let _ = self.0.broadcasts.send((SCRIPTED, frame));
 	}
 
 	pub fn speak_as(&self, user_id: u64, ssrc: u32, speaking: bool) {
@@ -300,7 +369,7 @@ pub struct VoiceEndpoint {
 	pub tasks: Vec<JoinHandle<()>>,
 }
 
-pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint> {
+pub async fn spawn(shutdown: watch::Receiver<bool>, cameras: Option<Cameras>) -> io::Result<VoiceEndpoint> {
 	let socket = Arc::new(UdpSocket::bind(("127.0.0.1", 0)).await?);
 	let bound = listener::bind().await?;
 	let voice = Arc::new(Voice {
@@ -329,6 +398,7 @@ pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint>
 		media_counter: AtomicU32::new(0),
 		rooms: Mutex::new(Rooms::default()),
 		mail: broadcast::channel(MAIL_CAPACITY).0,
+		cameras,
 	});
 	let url = bound.url.clone();
 	let (listener, accepting) = VoiceListener::start(bound, voice.clone());
@@ -454,7 +524,7 @@ async fn signal(voice: Arc<Voice>, connection: u64, mut socket: WebSocket) {
 	}
 }
 
-async fn on_text(voice: &Voice, socket: &mut WebSocket, peer: &mut Peer, text: &str) -> Flow {
+async fn on_text(voice: &Arc<Voice>, socket: &mut WebSocket, peer: &mut Peer, text: &str) -> Flow {
 	let Ok(frame) = serde_json::from_str::<Value>(text) else {
 		return Flow::Continue;
 	};
@@ -494,6 +564,9 @@ async fn on_text(voice: &Voice, socket: &mut WebSocket, peer: &mut Peer, text: &
 	}
 	if dave_starts {
 		voice.join_dave(peer);
+	}
+	if op == Some(1) {
+		voice.start_cameras(peer);
 	}
 	Flow::Continue
 }

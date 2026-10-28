@@ -70,6 +70,13 @@ impl Rooms {
 		}
 	}
 
+	pub fn seal_video(&self, channel_id: u64, user_id: u64, frame: &[u8]) -> Option<Vec<u8>> {
+		match self.rooms.get(&channel_id).and_then(|room| room.member(user_id)) {
+			Some(member) => member.encrypt_as(dave::Codec::H264, frame),
+			None => Some(frame.to_vec()),
+		}
+	}
+
 	fn room(&mut self, channel_id: u64) -> Option<&mut Harness> {
 		match self.rooms.entry(channel_id) {
 			Entry::Occupied(room) => Some(room.into_mut()),
