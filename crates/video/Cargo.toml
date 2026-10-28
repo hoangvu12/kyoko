@@ -1,0 +1,20 @@
+[package]
+name = "kyoko-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "video"
+
+[dependencies]
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+	"Win32_Media_MediaFoundation",
+	"Win32_System_Com",
+] }

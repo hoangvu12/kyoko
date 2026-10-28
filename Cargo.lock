@@ -4017,6 +4017,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kyoko-video"
+version = "0.2.0-beta.1"
+dependencies = [
+ "thiserror 2.0.21",
+ "windows",
+]
+
+[[package]]
 name = "kyoko-voice"
 version = "0.2.0-beta.1"
 dependencies = [
@@ -4028,6 +4036,7 @@ dependencies = [
  "kyoko-dave",
  "kyoko-net",
  "kyoko-protocol",
+ "kyoko-video",
  "mockcord",
  "nnnoiseless",
  "openh264",
