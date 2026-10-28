@@ -124,6 +124,10 @@ Kyoko plays voice messages and audio attachments with crates.io packages linked 
 
 The audio fixtures in `tools/mockcord/fixtures/audio/` (`voice-message.ogg`, `voice-reply.ogg`, `rainy-loop.mp3`) are tones generated for kyoko with FFmpeg's `sine` source; they are test data and not shipped in the application.
 
+## Voice end-to-end encryption (DAVE)
+
+`crates/dave` ports the DAVE protocol code of oxidcord's `crates/voice/src/dave` (MIT OR Apache-2.0, kyoko's fork origin). It runs MLS with `openmls` 0.9, `openmls_traits` 0.6, `openmls_memory_storage` 0.6 and `openmls_serialization_helpers` 0.1 (the OpenMLS authors, MIT) and `tls_codec` 0.5 with `tls_codec_derive` (the RustCrypto developers, MIT OR Apache-2.0, used under MIT), linked unmodified. Their cryptography is kyoko's own provider on BoringSSL (below); no RustCrypto curve, HPKE or AEAD crate is linked for it. `davey` (MIT) is a test-only dependency and is not shipped.
+
 ## TLS and HTTP/2: BoringSSL and wreq
 
 Kyoko's REST, gateway, media and theme-link connections run on [wreq](https://github.com/0x676e67/wreq) and link a patched [BoringSSL](https://boringssl.googlesource.com/boringssl) built from source by `btls-sys`. They are used unmodified, from git pins in the workspace `Cargo.toml` (`docs/fingerprint.md`, "Pins"):

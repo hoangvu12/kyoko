@@ -33,16 +33,14 @@ nnnoiseless.workspace = true
 aes-gcm.workspace = true
 chacha20poly1305.workspace = true
 cpal.workspace = true
+dave.workspace = true
 openh264 = { workspace = true, optional = true }
 
 [dev-dependencies]
 mockcord = { workspace = true, features = ["tls"] }
+dave = { workspace = true, features = ["testing"] }
 openmls.workspace = true
-openmls_rust_crypto.workspace = true
-openmls_basic_credential.workspace = true
 tls_codec.workspace = true
-hmac.workspace = true
-sha2.workspace = true
 
 [target.'cfg(windows)'.dev-dependencies]
 windows = { workspace = true, features = [

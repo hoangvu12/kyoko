@@ -23,6 +23,7 @@ rustls = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 rcgen = { workspace = true, optional = true }
 protocol.workspace = true
+dave = { workspace = true, features = ["testing"] }
 axum = { workspace = true, features = ["multipart"] }
 tokio.workspace = true
 serde.workspace = true

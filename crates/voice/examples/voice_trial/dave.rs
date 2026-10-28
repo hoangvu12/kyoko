@@ -1,12 +1,9 @@
-use hmac::{Hmac, Mac};
+use dave::{Provider, SigningKey};
 use openmls::prelude::{
 	BasicCredential, Ciphersuite, CredentialWithKey, GroupId, KeyPackage, MlsGroup, MlsGroupCreateConfig,
 	MlsGroupJoinConfig, MlsMessageBodyIn, MlsMessageIn, OpenMlsProvider, PURE_PLAINTEXT_WIRE_FORMAT_POLICY,
-	StagedWelcome,
+	SignaturePublicKey, StagedWelcome,
 };
-use openmls_basic_credential::SignatureKeyPair;
-use openmls_rust_crypto::OpenMlsRustCrypto;
-use sha2::Sha256;
 use tls_codec::{DeserializeBytes, Serialize};
 
 use crate::text;
@@ -18,21 +15,21 @@ const CHANNEL: u64 = 1_234;
 
 struct Member {
 	user_id: u64,
-	provider: OpenMlsRustCrypto,
-	signer: SignatureKeyPair,
+	provider: Provider,
+	signer: SigningKey,
 	credential: CredentialWithKey,
 }
 
 impl Member {
 	fn new(user_id: u64) -> Result<Member, String> {
-		let signer = SignatureKeyPair::new(SUITE.signature_algorithm()).map_err(text)?;
+		let signer = SigningKey::generate().map_err(text)?;
 		let credential = CredentialWithKey {
 			credential: BasicCredential::new(user_id.to_be_bytes().to_vec()).into(),
-			signature_key: signer.public().into(),
+			signature_key: SignaturePublicKey::from(signer.public()),
 		};
 		Ok(Member {
 			user_id,
-			provider: OpenMlsRustCrypto::default(),
+			provider: Provider::default(),
 			signer,
 			credential,
 		})
@@ -97,15 +94,11 @@ pub fn two_members() -> Result<String, String> {
 	if sent != received {
 		return Err("the two members derived different media keys".to_owned());
 	}
-	let mut mac = Hmac::<Sha256>::new_from_slice(&sent).map_err(text)?;
-	mac.update(b"key");
-	let ratchet = mac.finalize().into_bytes();
 	Ok(format!(
-		"epoch {}, {} members, {}-byte media key agreed, {}-byte ratchet step, welcome {} bytes",
+		"epoch {}, {} members, {}-byte media key agreed on BoringSSL, welcome {} bytes",
 		joined.epoch().as_u64(),
 		joined.members().count(),
 		sent.len(),
-		ratchet.len(),
 		bytes.len()
 	))
 }
