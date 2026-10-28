@@ -65,6 +65,8 @@ Never sleep for a fixed time. Wait on an observable event:
 
 Wait on the effect you are about to assert. For example, wait for a RESUME frame on a new connection, not for "connected", which was already true before the drop.
 
+The session takes commands in order, but a gateway event can be handled before a command sent earlier: on a busy machine both are ready when the session wakes. A command that publishes no state change, such as `SetViewing`, needs a barrier before the test provokes an event that depends on it: send `SetDraft` after it and wait for the draft (`reads::hidden_window_defers_the_ack_until_visible`, `one_ping_per_dm`'s `look_away`). A plugin test that needs a hook's answer wraps the `PluginHost` in its own `SessionHooks` that records the answers and waits for them (`one_ping_per_dm`'s `Heard`), instead of sleeping and checking for silence.
+
 ## The wire
 
 `running.mock()` returns mockcord's `Control` handle. Recording is off unless `MockConfig::record` is set or `Control::set_recording(true)` is called. The harness turns it on.

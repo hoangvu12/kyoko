@@ -1,17 +1,51 @@
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Result;
 use parking_lot::Mutex;
-use plugins::{EnableError, Limits, Permission, Status};
-use protocol::{ChannelType, NotificationLevel, Snowflake};
+use plugins::{EnableError, Limits, Permission, PluginHost, Status};
+use protocol::{ChannelType, DispatchEvent, Message, NotificationLevel, Snowflake};
 use serde_json::json;
-use session::{AlertPacing, Command};
+use session::{AlertPacing, Command, SessionHooks};
 use state::State;
 
-use crate::harness::Options;
-use crate::support::{Lab, approve, scratch, start_with, write_plugin};
+use crate::harness::{Options, Running};
+use crate::support::{Lab, approve, config, scratch, write_plugin};
 
 const ID: &str = "one-ping-per-dm";
-const SETTLE: Duration = Duration::from_millis(400);
+
+struct Heard {
+	host: PluginHost,
+	answers: Mutex<Vec<(Snowflake, bool)>>,
+}
+
+impl Heard {
+	fn answers_for(&self, message_id: Snowflake) -> Vec<bool> {
+		self.answers
+			.lock()
+			.iter()
+			.filter(|(id, _)| *id == message_id)
+			.map(|(_, allowed)| *allowed)
+			.collect()
+	}
+}
+
+impl SessionHooks for Heard {
+	fn name(&self) -> &str {
+		self.host.name()
+	}
+
+	fn allow_notification(&self, message: &Message) -> Result<bool> {
+		let allowed = self.host.allow_notification(message)?;
+		self.answers.lock().push((message.id, allowed));
+		Ok(allowed)
+	}
+
+	fn on_dispatch(&self, event: &DispatchEvent) -> Result<()> {
+		self.host.on_dispatch(event)
+	}
+}
 
 struct Chat {
 	channel_id: Snowflake,
@@ -28,6 +62,7 @@ struct Scene {
 
 struct Pings<'a> {
 	lab: &'a Lab,
+	heard: Arc<Heard>,
 	seen: Mutex<Vec<String>>,
 }
 
@@ -38,8 +73,19 @@ fn roomy(name: &'static str) -> Options {
 	})
 }
 
-async fn lab(name: &'static str) -> Lab {
-	start_with(roomy(name), scratch(name), Limits::default(), true).await
+async fn listening(name: &'static str, root: PathBuf, bundled: bool) -> (Lab, Arc<Heard>) {
+	let host = PluginHost::new(config(&root, Limits::default(), bundled));
+	let heard = Arc::new(Heard {
+		host: host.clone(),
+		answers: Mutex::new(Vec::new()),
+	});
+	let running = Running::start_with(roomy(name).hooks(heard.clone())).await;
+	host.attach(running.session().state().clone(), running.session().commander());
+	(Lab { root, host, running }, heard)
+}
+
+async fn lab(name: &'static str) -> (Lab, Arc<Heard>) {
+	listening(name, scratch(name), true).await
 }
 
 fn blocked(state: &State, user_id: u64) -> bool {
@@ -167,9 +213,10 @@ impl Scene {
 }
 
 impl<'a> Pings<'a> {
-	fn new(lab: &'a Lab) -> Self {
+	fn new(lab: &'a Lab, heard: &Arc<Heard>) -> Self {
 		Self {
 			lab,
+			heard: heard.clone(),
 			seen: Mutex::new(Vec::new()),
 		}
 	}
@@ -201,8 +248,21 @@ impl<'a> Pings<'a> {
 		id
 	}
 
+	async fn answered(&self, id: Snowflake, content: &str) -> bool {
+		self.lab
+			.running
+			.eventually(&format!("the notify hook to answer for {content:?}"), || {
+				!self.heard.answers_for(id).is_empty()
+			})
+			.await;
+		let answers = self.heard.answers_for(id);
+		assert_eq!(answers.len(), 1, "one question for {content:?}");
+		answers[0]
+	}
+
 	async fn rings(&self, chat: &Chat, content: &str) -> Snowflake {
 		let id = self.post(chat, content).await;
+		assert!(self.answered(id, content).await, "{content:?} is allowed");
 		self.lab
 			.running
 			.eventually(&format!("a notification for {content:?}"), || {
@@ -210,8 +270,6 @@ impl<'a> Pings<'a> {
 				self.seen.lock().iter().any(|seen| seen == content)
 			})
 			.await;
-		tokio::time::sleep(SETTLE).await;
-		self.collect();
 		assert_eq!(
 			std::mem::take(&mut *self.seen.lock()),
 			vec![content.to_owned()],
@@ -222,7 +280,7 @@ impl<'a> Pings<'a> {
 
 	async fn quiet(&self, chat: &Chat, content: &str) -> Snowflake {
 		let id = self.post(chat, content).await;
-		tokio::time::sleep(SETTLE).await;
+		assert!(!self.answered(id, content).await, "{content:?} is held back");
 		self.collect();
 		assert_eq!(
 			std::mem::take(&mut *self.seen.lock()),
@@ -230,6 +288,22 @@ impl<'a> Pings<'a> {
 			"{content:?} stays silent"
 		);
 		id
+	}
+
+	async fn look_away(&self, chat: &Chat) {
+		let channel_id = chat.channel_id;
+		let session = self.lab.running.session();
+		session.send(Command::SetViewing(false));
+		session.send(Command::SetDraft {
+			channel_id,
+			content: "looked away".to_owned(),
+		});
+		self.lab
+			.running
+			.until("the window to lose focus", move |state| {
+				state.draft(channel_id) == Some("looked away")
+			})
+			.await;
 	}
 
 	async fn read(&self, chat: &Chat, message_id: Snowflake) {
@@ -255,9 +329,9 @@ impl<'a> Pings<'a> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn repeated_direct_messages_ping_once_until_read() {
-	let lab = lab("one-ping").await;
+	let (lab, heard) = lab("one-ping").await;
 	let scene = scene(&lab).await;
-	let pings = Pings::new(&lab);
+	let pings = Pings::new(&lab, &heard);
 	enable(&lab);
 
 	pings.rings(&scene.direct, "first hello").await;
@@ -281,7 +355,7 @@ async fn repeated_direct_messages_ping_once_until_read() {
 		channel_id: scene.direct.channel_id,
 	});
 	pings.read_up_to(scene.direct.channel_id, last).await;
-	lab.running.session().send(Command::SetViewing(false));
+	pings.look_away(&scene.direct).await;
 	pings.rings(&scene.direct, "after viewing").await;
 	pings.quiet(&scene.direct, "while away").await;
 
@@ -296,9 +370,9 @@ async fn repeated_direct_messages_ping_once_until_read() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_settings_choose_which_conversations_ping_once() {
-	let lab = lab("one-ping-settings").await;
+	let (lab, heard) = lab("one-ping-settings").await;
 	let scene = scene(&lab).await;
-	let pings = Pings::new(&lab);
+	let pings = Pings::new(&lab, &heard);
 	enable(&lab);
 
 	lab.host
@@ -345,9 +419,9 @@ async fn a_failing_notification_filter_lets_the_notification_through() {
 		"",
 		"return { allow_notification = function(message) while true do end end }",
 	);
-	let lab = start_with(roomy(name), root, Limits::default(), false).await;
+	let (lab, heard) = listening(name, root, false).await;
 	let scene = scene(&lab).await;
-	let pings = Pings::new(&lab);
+	let pings = Pings::new(&lab, &heard);
 	approve(&lab.host, "broken-filter");
 	approve(&lab.host, "slow-filter");
 	pings.rings(&scene.direct, "despite a broken filter").await;
