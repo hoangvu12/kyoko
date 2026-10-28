@@ -6,7 +6,7 @@ Plan ticket V5 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 98
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test: op 5 from a scripted member shows that user speaking and stops after silence; op 11 and 13 add and remove tiles
 - [ ] User volume scales that user's mixed output (manual sink); local mute silences it
