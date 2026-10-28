@@ -1,3 +1,4 @@
+mod dave;
 mod harness;
 mod media;
 mod recovery;

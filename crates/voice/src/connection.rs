@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use dave::{DaveSession, DaveStats};
 use net::Trust;
 use parking_lot::Mutex;
 use protocol::{Snowflake, Token};
@@ -13,7 +14,7 @@ use crate::media::SharedTransform;
 use crate::shared::{InputMode, MixedFrame, Shared, VoiceStats};
 use crate::signal::{Browser, Credentials, establish};
 use crate::supervisor::{Signals, Supervisor};
-use crate::transform::{FrameTransform, Passthrough};
+use crate::transform::DaveTransform;
 
 const MAX_VOLUME: f32 = 2.0;
 const DEFAULT_LOCALE: &str = "en-US";
@@ -48,7 +49,6 @@ pub struct VoiceOptions {
 	pub trust: Trust,
 	pub user_agent: String,
 	pub locale: String,
-	pub transform: Box<dyn FrameTransform>,
 }
 
 impl Default for VoiceOptions {
@@ -61,13 +61,13 @@ impl Default for VoiceOptions {
 			trust: Trust::default(),
 			user_agent: protocol::fingerprint::user_agent(),
 			locale: DEFAULT_LOCALE.to_owned(),
-			transform: Box::new(Passthrough),
 		}
 	}
 }
 
 pub struct VoiceConnection {
 	shared: Arc<Shared>,
+	dave: Arc<DaveStats>,
 	shutdown: watch::Sender<bool>,
 }
 
@@ -86,6 +86,8 @@ impl VoiceConnection {
 			&browser,
 		)?;
 		let established = establish(&credentials).await?;
+		let dave = DaveSession::new(params.user_id.get(), params.channel_id.get())?;
+		let dave_stats = dave.stats();
 		let rings = Arc::new(Rings::new());
 		let shared = Arc::new(Shared::new(rings.clone()));
 		let audio_io = match options.audio {
@@ -98,7 +100,10 @@ impl VoiceConnection {
 			}
 			AudioIo::Manual => false,
 		};
-		let transform: SharedTransform = Arc::new(Mutex::new(options.transform));
+		let transform: SharedTransform = Arc::new(Mutex::new(Box::new(DaveTransform::new(
+			dave.crypto(),
+			shared.clone(),
+		))));
 		let (shutdown, shutdown_receiver) = watch::channel(false);
 		let (control, commands) = mpsc::unbounded_channel();
 		let supervisor = Supervisor::start(
@@ -106,6 +111,7 @@ impl VoiceConnection {
 			established,
 			shared.clone(),
 			transform,
+			dave,
 			audio_io,
 			Signals {
 				shutdown: shutdown_receiver,
@@ -114,7 +120,11 @@ impl VoiceConnection {
 			},
 		)?;
 		tokio::spawn(supervisor.run());
-		Ok(Self { shared, shutdown })
+		Ok(Self {
+			shared,
+			dave: dave_stats,
+			shutdown,
+		})
 	}
 
 	pub fn events(&self) -> mpsc::Receiver<VoiceEvent> {
@@ -186,6 +196,10 @@ impl VoiceConnection {
 
 	pub fn stats(&self) -> VoiceStats {
 		self.shared.counters.snapshot()
+	}
+
+	pub fn dave(&self) -> Arc<DaveStats> {
+		self.dave.clone()
 	}
 
 	pub fn feed_input(&self, pcm: &[i16]) {

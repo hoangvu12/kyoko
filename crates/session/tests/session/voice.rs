@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
-use mockcord::{GatewayFrame, VOICE_TOKEN, VoiceFrame, VoiceRecording};
+use mockcord::{GatewayFrame, VOICE_TOKEN, VoiceFrame, VoicePacket, VoiceRecording};
 use protocol::{ChannelType, Opcode, Snowflake};
 use serde_json::{Value, json};
 use session::{Command, Trust, VoiceSetup};
@@ -30,6 +30,10 @@ const OP_4_KEYS: [&str; 8] = [
 	"flags",
 ];
 const ALLOW_VOICE_RECORDING: u64 = 2;
+const DAVE_MARKER: [u8; 2] = [0xfa, 0xfa];
+const SEALED_PACKETS: usize = 15;
+const LOUNGE_MEMBER: u64 = 222_801_430_442_967_040;
+const GAMING_MEMBER: u64 = 333_014_820_093_313_024;
 
 struct Voice {
 	running: Running,
@@ -508,5 +512,89 @@ async fn a_fresh_gateway_session_sends_op_4_again_and_reconnects_voice() {
 		})
 		.await;
 	voice.connected_to(voice.lounge).await;
+	voice.stop().await;
+}
+
+fn sealed_packets(recording: &VoiceRecording, ssrc: u32) -> Vec<&VoicePacket> {
+	recording
+		.packets_from(ssrc)
+		.filter(|packet| packet.payload.ends_with(&DAVE_MARKER))
+		.collect()
+}
+
+async fn speaks_end_to_end_encrypted(voice: &Voice, ssrc: u32) {
+	voice.feed_tone();
+	let recording = voice
+		.voice_until("DAVE frames from kyoko", |recording| {
+			sealed_packets(recording, ssrc).len() >= SEALED_PACKETS
+		})
+		.await;
+	let speech: Vec<&VoicePacket> = recording
+		.packets_from(ssrc)
+		.filter(|packet| packet.payload != SILENCE_FRAME)
+		.collect();
+	assert!(speech.iter().all(|packet| packet.payload.ends_with(&DAVE_MARKER)));
+	for packet in sealed_packets(&recording, ssrc) {
+		let opened = packet
+			.opened
+			.as_ref()
+			.expect("the channel's member decrypts kyoko's frame");
+		assert_ne!(opened, &packet.payload);
+	}
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_joined_call_is_end_to_end_encrypted_in_each_channels_dave_group() {
+	let voice = start("voice-dave").await;
+	let control = voice.running.voice();
+	control.set_dave_version(1);
+	control.add_member(voice.lounge.get(), LOUNGE_MEMBER);
+	control.add_member(voice.gaming.get(), GAMING_MEMBER);
+	voice.join(voice.lounge);
+	voice.connected_to(voice.lounge).await;
+	voice
+		.voice_until("kyoko in the Lounge's DAVE group", |_| {
+			control.dave_group(voice.lounge.get()).len() == 2
+		})
+		.await;
+	let lounge_ssrc = voice.ssrc();
+	voice
+		.running
+		.eventually("DAVE to start sending", || {
+			voice
+				.running
+				.session()
+				.voice_connection()
+				.is_some_and(|connection| connection.dave().enabled())
+		})
+		.await;
+	speaks_end_to_end_encrypted(&voice, lounge_ssrc).await;
+	let moved = voice.join(voice.gaming);
+	voice
+		.voice_until("a voice identify for Gaming", |recording| {
+			identifies(recording)
+				.iter()
+				.any(|frame| frame.at > moved && frame.data["channel_id"] == json!(voice.gaming.to_string()))
+		})
+		.await;
+	voice.connected_to(voice.gaming).await;
+	voice
+		.voice_until("kyoko in Gaming's DAVE group", |_| {
+			control.dave_group(voice.gaming.get()).len() == 2
+		})
+		.await;
+	voice
+		.running
+		.eventually("DAVE to send in Gaming", || {
+			voice
+				.running
+				.session()
+				.voice_connection()
+				.is_some_and(|connection| {
+					connection.dave().enabled() && connection.ssrc() != Some(lounge_ssrc)
+				})
+		})
+		.await;
+	speaks_end_to_end_encrypted(&voice, voice.ssrc()).await;
 	voice.stop().await;
 }

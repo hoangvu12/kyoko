@@ -1,6 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use dave::{DaveEvent, DaveSession, Outgoing};
+use protocol::Snowflake;
+use serde_json::Value;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
@@ -10,7 +13,7 @@ use crate::error::{Result, VoiceError};
 use crate::event::{StopReason, VoiceEvent};
 use crate::media::{Media, SharedTransform};
 use crate::shared::{Control, Shared};
-use crate::signal::{Credentials, Established, Exit, Frame, Link, establish, resume, speaking};
+use crate::signal::{Body, Credentials, Established, Exit, Frame, Link, establish, resume, speaking};
 use crate::transport::Transport;
 use crate::wire::{ClientDisconnect, ClientsConnect, Speaking, close, opcode};
 
@@ -72,6 +75,8 @@ pub(crate) struct Supervisor {
 	media: MediaHandle,
 	ssrc: u32,
 	speaking: bool,
+	dave: DaveSession,
+	outbox: Vec<Outgoing>,
 }
 
 impl Supervisor {
@@ -80,10 +85,12 @@ impl Supervisor {
 		established: Established,
 		shared: Arc<Shared>,
 		transform: SharedTransform,
+		dave: DaveSession,
 		audio_io: bool,
 		signals: Signals,
 	) -> Result<Self> {
 		let ssrc = established.transport.ssrc();
+		let dave_version = established.dave_version;
 		let media = spawn_media(
 			established.transport,
 			&shared,
@@ -105,7 +112,10 @@ impl Supervisor {
 			media,
 			ssrc,
 			speaking: false,
+			dave,
+			outbox: Vec::new(),
 		};
+		supervisor.outbox = supervisor.dave.on_protocol_version(dave_version);
 		supervisor.replay_backlog();
 		Ok(supervisor)
 	}
@@ -140,6 +150,9 @@ impl Supervisor {
 
 	async fn drive(&mut self) -> Drive {
 		loop {
+			if let Err(exit) = self.flush_dave().await {
+				return Drive::Exit(exit);
+			}
 			tokio::select! {
 				frame = self.link.next() => match frame {
 					Ok(frame) => self.on_frame(frame),
@@ -166,10 +179,17 @@ impl Supervisor {
 	}
 
 	fn on_frame(&mut self, frame: Frame) {
-		let Some(data) = frame.data else {
-			return;
-		};
-		match frame.op {
+		match frame.body {
+			Body::Json(data) => self.on_json(frame.op, data),
+			Body::Binary(payload) => {
+				let outgoing = self.dave.on_binary(frame.op, &payload);
+				self.outbox.extend(outgoing);
+			}
+		}
+	}
+
+	fn on_json(&mut self, op: u8, data: Value) {
+		match op {
 			opcode::SPEAKING => {
 				if let Ok(event) = serde_json::from_value::<Speaking>(data) {
 					self.on_speaking(&event);
@@ -178,12 +198,14 @@ impl Supervisor {
 			opcode::CLIENTS_CONNECT => {
 				if let Ok(event) = serde_json::from_value::<ClientsConnect>(data) {
 					for user_id in event.user_ids {
+						self.dave.user_joined(user_id.get());
 						self.shared.hub.emit(VoiceEvent::UserJoined { user_id });
 					}
 				}
 			}
 			opcode::CLIENT_DISCONNECT => {
 				if let Ok(event) = serde_json::from_value::<ClientDisconnect>(data) {
+					self.dave.user_left(event.user_id.get());
 					self.shared
 						.ssrc_users
 						.lock()
@@ -193,9 +215,36 @@ impl Supervisor {
 					});
 				}
 			}
+			opcode::DAVE_PREPARE_TRANSITION
+			| opcode::DAVE_EXECUTE_TRANSITION
+			| opcode::DAVE_PREPARE_EPOCH => {
+				let outgoing = self.dave.on_json(op, &data);
+				self.outbox.extend(outgoing);
+			}
 			opcode::HEARTBEAT_ACK => self.on_ack(),
 			_ => {}
 		}
+	}
+
+	async fn flush_dave(&mut self) -> std::result::Result<(), Exit> {
+		for event in self.dave.take_events() {
+			self.shared.hub.emit(match event {
+				DaveEvent::Epoch {
+					epoch,
+					version,
+					members,
+				} => VoiceEvent::Dave {
+					epoch,
+					version,
+					members: members.into_iter().map(Snowflake).collect(),
+				},
+				DaveEvent::Failure(reason) => VoiceEvent::DaveFailure(reason),
+			});
+		}
+		for outgoing in std::mem::take(&mut self.outbox) {
+			self.link.send_wire(outgoing.encode()).await?;
+		}
+		Ok(())
 	}
 
 	fn on_speaking(&mut self, event: &Speaking) {
@@ -205,6 +254,7 @@ impl Supervisor {
 		if let Some(ssrc) = event.ssrc {
 			self.shared.ssrc_users.lock().insert(ssrc, user_id);
 		}
+		self.dave.user_joined(user_id.get());
 		self.shared.hub.emit(VoiceEvent::Speaking {
 			user_id,
 			speaking: event.speaking.unwrap_or_default() != 0,
@@ -304,6 +354,7 @@ impl Supervisor {
 			}
 		}
 		self.link = established.link;
+		self.outbox = self.dave.on_protocol_version(established.dave_version);
 		self.replay_backlog();
 		self.shared.hub.emit(VoiceEvent::Connected {
 			ssrc: self.ssrc,

@@ -11,7 +11,10 @@ use tokio::net::UdpSocket;
 use super::recording::VoicePacket;
 use super::{AES_GCM_MODE, Voice, XCHACHA_MODE};
 
+pub(super) const OPUS_FRAME_SAMPLES: u32 = 960;
+
 const ECHO_SSRC_OFFSET: u32 = 1;
+const DISCOVERY_SSRC: std::ops::Range<usize> = 4..8;
 const TAG_LEN: usize = 16;
 const COUNTER_LEN: usize = 4;
 const RTP_HEADER_LEN: usize = 12;
@@ -68,13 +71,29 @@ impl Cipher {
 	}
 }
 
+pub(super) fn seal_packet(
+	mode: &str,
+	key: &[u8],
+	counter: &[u8],
+	header: &[u8],
+	payload: &[u8],
+) -> Option<Vec<u8>> {
+	let cipher = Cipher::new(mode, key)?;
+	let mut body = payload.to_vec();
+	cipher.seal(counter, header, &mut body)?;
+	let mut packet = header.to_vec();
+	packet.extend_from_slice(&body);
+	packet.extend_from_slice(counter);
+	Some(packet)
+}
+
 fn padded<A: AeadCore>(counter: &[u8]) -> Nonce<A> {
 	let mut nonce = Nonce::<A>::default();
 	nonce[..COUNTER_LEN].copy_from_slice(counter);
 	nonce
 }
 
-pub(super) async fn run(socket: UdpSocket, voice: Arc<Voice>) {
+pub(super) async fn run(socket: Arc<UdpSocket>, voice: Arc<Voice>) {
 	let mut shutdown = voice.shutdown.clone();
 	let mut buffer = [0u8; UDP_BUFFER_BYTES];
 	loop {
@@ -85,6 +104,8 @@ pub(super) async fn run(socket: UdpSocket, voice: Arc<Voice>) {
 				};
 				let packet = &buffer[..length];
 				if is_discovery(packet) {
+					let ssrc = u32::from_be_bytes(packet[DISCOVERY_SSRC].try_into().unwrap_or_default());
+					voice.clients.lock().insert(ssrc, from);
 					let _ = socket.send_to(&discovery_reply(packet, from), from).await;
 				} else if let Some(reply) = echoed(&voice, packet) {
 					if voice.echo_held.load(Ordering::Relaxed) {
@@ -144,11 +165,13 @@ fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
 	let (header, body) = sealed.split_at(header_len);
 	let mut payload = body.to_vec();
 	cipher.open(counter, header, &mut payload)?;
+	let opened = voice.open_dave(ssrc, &payload);
 	voice.record(|log| {
 		log.packets.push(VoicePacket {
 			ssrc,
 			mode: mode.clone(),
 			payload: payload.clone(),
+			opened,
 			at: Instant::now(),
 		});
 	});

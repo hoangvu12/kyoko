@@ -28,6 +28,8 @@ pub enum VoiceError {
 	Resample(String),
 	#[error("audio error: {0}")]
 	Audio(String),
+	#[error("dave error: {0}")]
+	Dave(#[from] dave::DaveError),
 }
 
 pub type Result<T> = std::result::Result<T, VoiceError>;

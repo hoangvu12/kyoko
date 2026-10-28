@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use dave::Wire;
 use futures_util::StreamExt;
 use net::header::{ACCEPT_LANGUAGE, HeaderMap, HeaderName, HeaderValue, ORIGIN, USER_AGENT};
 use net::ws::{self, Limits, Message, WebSocket};
@@ -164,9 +165,14 @@ fn exit_error(exit: Exit) -> VoiceError {
 	}
 }
 
+pub(crate) enum Body {
+	Json(Value),
+	Binary(Vec<u8>),
+}
+
 pub(crate) struct Frame {
 	pub op: u8,
-	pub data: Option<Value>,
+	pub body: Body,
 }
 
 struct Heartbeat {
@@ -225,6 +231,17 @@ impl Link {
 			.map_err(|_| Exit::Lost)
 	}
 
+	pub async fn send_wire(&mut self, wire: Wire) -> std::result::Result<(), Exit> {
+		match wire {
+			Wire::Text(text) => self.send_text(text).await,
+			Wire::Binary(bytes) => self
+				.socket
+				.send(Message::binary(bytes))
+				.await
+				.map_err(|_| Exit::Lost),
+		}
+	}
+
 	pub async fn close(&mut self) {
 		let _ = timeout(CLOSE_TIMEOUT, ws::close(&mut self.socket, NORMAL_CLOSE, "")).await;
 	}
@@ -263,7 +280,7 @@ impl Link {
 				self.defer(frame);
 				continue;
 			}
-			let Some(data) = frame.data else {
+			let Body::Json(data) = frame.body else {
 				continue;
 			};
 			return serde_json::from_value(data)
@@ -274,7 +291,8 @@ impl Link {
 	fn defer(&mut self, frame: Frame) {
 		let replayable = matches!(
 			frame.op,
-			opcode::SPEAKING | opcode::CLIENTS_CONNECT | opcode::CLIENT_DISCONNECT
+			opcode::SPEAKING | opcode::CLIENTS_CONNECT | opcode::CLIENT_DISCONNECT | opcode::DAVE_FIRST
+				..=opcode::DAVE_LAST
 		);
 		if replayable && self.backlog.len() < MAX_BACKLOG_FRAMES {
 			self.backlog.push_back(frame);
@@ -282,11 +300,13 @@ impl Link {
 	}
 
 	fn on_binary(&mut self, bytes: &[u8]) -> Option<Frame> {
-		let [high, low, op, ..] = *bytes else {
-			return None;
-		};
-		self.last_seq = i64::from(u16::from_be_bytes([high, low]));
-		Some(Frame { op, data: None })
+		let (sequence, rest) = bytes.split_first_chunk::<2>()?;
+		let (&op, payload) = rest.split_first()?;
+		self.last_seq = i64::from(u16::from_be_bytes(*sequence));
+		Some(Frame {
+			op,
+			body: Body::Binary(payload.to_vec()),
+		})
 	}
 
 	async fn on_message(&mut self, message: Message) -> std::result::Result<Option<Frame>, Exit> {
@@ -322,7 +342,7 @@ impl Link {
 				}
 				Ok(Some(Frame {
 					op,
-					data: Some(raw.d),
+					body: Body::Json(raw.d),
 				}))
 			}
 		}
@@ -393,6 +413,7 @@ pub(crate) struct Established {
 	pub link: Link,
 	pub transport: Arc<dyn Transport>,
 	pub mode: EncryptionMode,
+	pub dave_version: u8,
 }
 
 pub(crate) async fn establish(credentials: &Credentials) -> Result<Established> {
@@ -437,6 +458,7 @@ async fn handshake(credentials: &Credentials) -> Result<Established> {
 		link,
 		transport: Arc::new(transport),
 		mode,
+		dave_version: description.dave_protocol_version.unwrap_or_default(),
 	})
 }
 

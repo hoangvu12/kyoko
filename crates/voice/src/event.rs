@@ -58,6 +58,12 @@ pub enum VoiceEvent {
 		resume: bool,
 	},
 	Stopped(StopReason),
+	Dave {
+		epoch: u64,
+		version: u8,
+		members: Vec<Snowflake>,
+	},
+	DaveFailure(String),
 	Stats {
 		ping_ms: u32,
 		packets_lost: u64,

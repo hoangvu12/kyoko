@@ -227,6 +227,14 @@ impl Core {
 				let notify = reason != StopReason::Disconnected;
 				self.end_voice(stop_reason(reason), notify);
 			}
+			VoiceEvent::Dave {
+				epoch,
+				version,
+				members,
+			} => {
+				tracing::debug!(epoch, version, members = members.len(), "voice e2ee epoch");
+			}
+			VoiceEvent::DaveFailure(reason) => tracing::warn!(%reason, "voice e2ee failure"),
 			VoiceEvent::UserJoined { .. } | VoiceEvent::Stats { .. } => {}
 		}
 	}
@@ -381,7 +389,6 @@ impl Core {
 			trust: setup.trust,
 			user_agent: self.rest.identity().fingerprint().user_agent().to_owned(),
 			locale: self.locale.clone(),
-			..VoiceOptions::default()
 		}
 	}
 

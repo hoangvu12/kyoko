@@ -16,7 +16,7 @@ const ECHO_SSRC_OFFSET: u32 = 1;
 const FREQUENCY_TOLERANCE_HZ: f32 = 40.0;
 const AUDIBLE_PEAK: i16 = 2_000;
 
-fn tone_frame(index: usize) -> Vec<i16> {
+pub(crate) fn tone_frame(index: usize) -> Vec<i16> {
 	(0..FRAME_SAMPLES)
 		.map(|sample| {
 			let at = (index * FRAME_SAMPLES + sample) as f32 / SAMPLE_RATE as f32;

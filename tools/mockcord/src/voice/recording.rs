@@ -40,6 +40,7 @@ pub struct VoiceFrame {
 	pub data: Value,
 	pub seq: Option<i64>,
 	pub raw: String,
+	pub payload: Vec<u8>,
 	pub at: Instant,
 }
 
@@ -51,8 +52,25 @@ impl VoiceFrame {
 			data: frame["d"].clone(),
 			seq: frame["seq"].as_i64(),
 			raw,
+			payload: Vec::new(),
 			at: Instant::now(),
 		}
+	}
+
+	pub(crate) fn binary(connection: u64, op: u8, seq: Option<i64>, payload: &[u8]) -> Self {
+		Self {
+			connection,
+			op: i64::from(op),
+			data: Value::Null,
+			seq,
+			raw: String::new(),
+			payload: payload.to_vec(),
+			at: Instant::now(),
+		}
+	}
+
+	pub fn is_binary(&self) -> bool {
+		self.raw.is_empty()
 	}
 
 	pub fn keys(&self, path: &[&str]) -> Vec<String> {
@@ -65,6 +83,7 @@ pub struct VoicePacket {
 	pub ssrc: u32,
 	pub mode: String,
 	pub payload: Vec<u8>,
+	pub opened: Option<Vec<u8>>,
 	pub at: Instant,
 }
 

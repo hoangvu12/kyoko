@@ -7,7 +7,7 @@ pub const OPUS_PAYLOAD_TYPE: u8 = 120;
 pub const H264_PAYLOAD_TYPE: u8 = 101;
 pub const H264_RTX_PAYLOAD_TYPE: u8 = 102;
 pub const CODEC_PRIORITY: u32 = 1000;
-pub const DAVE_PROTOCOL_VERSION: u8 = 1;
+pub const DAVE_PROTOCOL_VERSION: u8 = dave::PROTOCOL_VERSION;
 
 pub mod opcode {
 	pub const IDENTIFY: u8 = 0;
@@ -23,6 +23,10 @@ pub mod opcode {
 	pub const CLIENTS_CONNECT: u8 = 11;
 	pub const CLIENT_DISCONNECT: u8 = 13;
 	pub const MEDIA_SINK_WANTS: u8 = 15;
+	pub use dave::opcode::{
+		EXECUTE_TRANSITION as DAVE_EXECUTE_TRANSITION, FIRST as DAVE_FIRST, LAST as DAVE_LAST,
+		PREPARE_EPOCH as DAVE_PREPARE_EPOCH, PREPARE_TRANSITION as DAVE_PREPARE_TRANSITION,
+	};
 }
 
 pub mod close {
@@ -185,6 +189,8 @@ pub struct Ready {
 pub struct SessionDescription {
 	pub mode: String,
 	pub secret_key: Vec<u8>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub dave_protocol_version: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]

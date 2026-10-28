@@ -248,7 +248,7 @@ BoringSSL itself does DTLS: the pinned `btls` (kyoko's TLS library since ticket 
 
 ### Build trial
 
-`crates/voice` (`cargo run -p kyoko-voice --example voice_trial --features openh264`, `crates/voice/examples/voice_trial/`) builds oxidcord's voice dependencies and runs each once: libopus 1.6.1 encode and decode (`opus` 0.4 on `opusic-sys` 0.7.6, bundled), `rubato` 5.0.1 resampling, `nnnoiseless` 0.5.2, cpal's WASAPI devices, both AEAD transport modes, a two-member DAVE MLS group on `openmls` 0.9.2 with `openmls_rust_crypto` 0.6 (P-256 suite, welcome, agreed media key, HMAC ratchet step), Media Foundation H.264 transforms (3 hardware and 1 software encoder, 1 decoder here), `GraphicsCaptureSession::IsSupported`, and with `--features openh264` an `openh264` 0.9.9 encode and decode. All pass on this machine.
+`crates/voice` (`cargo run -p kyoko-voice --example voice_trial --features openh264`, `crates/voice/examples/voice_trial/`) builds oxidcord's voice dependencies and runs each once: libopus 1.6.1 encode and decode (`opus` 0.4 on `opusic-sys` 0.7.6, bundled), `rubato` 5.0.1 resampling, `nnnoiseless` 0.5.2, cpal's WASAPI devices, both AEAD transport modes, a two-member DAVE MLS group on `openmls` 0.9.2 (P-256 suite, welcome, agreed media key; `openmls_rust_crypto` 0.6 at the time, kyoko's BoringSSL provider since ticket 99), Media Foundation H.264 transforms (3 hardware and 1 software encoder, 1 decoder here), `GraphicsCaptureSession::IsSupported`, and with `--features openh264` an `openh264` 0.9.9 encode and decode. All pass on this machine.
 
 - **libopus under kyoko's toolchain file.** It builds with `HOST_CMAKE_TOOLCHAIN_FILE=.cargo/boringssl-no-asm.cmake` unchanged. `CMakeCache.txt` shows the toolchain file, `-MD`, and `OPUS_X86_MAY_HAVE_SSE`, `SSE2`, `SSE4_1` and `AVX2` all `ON` (runtime dispatch; `PRESUME_SSE`/`SSE2` `ON`). `opus.lib` (3.4 MB) holds `silk_NSQ_del_dec_sse4_1`, `celt_pitch_xcorr_avx2` and `opus_select_arch`, and references `MSVCRT` only, no `LIBCMT`. No fix needed. `OPENSSL_NO_ASM` is irrelevant to libopus.
 - **openh264.** Its build script finds no NASM and falls back to plain C ("Failed to compile NASM files, not using any assembly"), so a software encode would be slower than Cisco's binary.
@@ -290,6 +290,27 @@ The user chose on 2026-10-28: **A, UDP.** In their words: "if others use udp the
 - The code keeps a thin `Transport` seam between the media pipeline and the UDP socket, because it costs little. No WebRTC work is planned.
 - `cargo xtask webrtc-capture` and its fixtures in `tools/mockcord/fixtures/webrtc/` stay as the record of what Chrome 156 does, in case this is ever revisited.
 - **openh264 stays out.** H.264 encode and decode use Media Foundation; the trial's `openh264` feature stays off and is never shipped.
+
+### DAVE crypto provider
+
+Decided by the user on 2026-10-28 (ticket 99): do it the way Discord does. Discord's libdave runs MLS on mlspp over OpenSSL or BoringSSL. `openmls_rust_crypto`, which oxidcord, davey, songbird and discord.js use, pulls `p256`/`p384` 0.13 and so `crypto-bigint` 0.5 (RUSTSEC-2026-0387, non-constant-time arithmetic, no fixed 0.5 release). So `crates/dave` keeps oxidcord's DAVE protocol code but gives openmls its own provider, `dave::Provider` (`BoringCrypto` for crypto and randomness, `openmls_memory_storage` for state), on the BoringSSL that `btls` already links for TLS. No `openmls_rust_crypto`, `openmls_basic_credential` or `hpke-rs` is linked; the MLS signer is `dave::SigningKey`.
+
+It supports one ciphersuite, `MLS_128_DHKEMP256_AES128GCM_SHA256_P256` (DAVE v1); any other returns `UnsupportedCiphersuite`, and other hash, AEAD, KDF, KEM or signature choices return the matching `Unsupported*` error.
+
+| Need | BoringSSL through |
+|---|---|
+| P-256 ECDSA keys, sign and verify (SHA-256, DER signatures, uncompressed SEC1 public keys, 32-byte scalars) | `btls::ec`, `btls::ecdsa`, `btls::bn` |
+| HPKE base mode, DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, AES-128-GCM: seal, open, sender and receiver export, DeriveKeyPair | `btls-sys`: `EVP_HPKE_CTX_*`, `EVP_HPKE_KEY_*`, `EVP_hpke_p256_hkdf_sha256` |
+| HKDF-SHA256 extract and expand | `btls-sys`: `HKDF_extract`, `HKDF_expand` |
+| HMAC-SHA256, SHA-256 | `btls::hmac::Hmac`, `btls::hash` |
+| AES-128-GCM for MLS (16-byte tag) and DAVE frames (8-byte truncated tag) | `btls::aead::AeadCtx` |
+| Randomness | `btls::rand::rand_bytes` |
+
+What btls covers at the pinned rev `1298875`: AEAD contexts with any tag length, HMAC, digests, EC keys and points, ECDSA with DER, and `RAND_bytes`. What it lacks: a usable HPKE (its `hpke::HpkeKey::dhkem_p256_sha256` actually initialises the X25519 KEM, and there is no seal, open or export) and HKDF. BoringSSL itself has both, including the P-256 HPKE KEM, and btls-sys's generated bindings export them, so `crates/dave/src/hpke.rs` and the provider call them directly. Nothing had to be built from primitives. The HPKE code is checked against RFC 9180's test vectors for this suite (A.3.1, base mode: DeriveKeyPair, `enc` from the fixed ephemeral seed, two sealed messages, open, three exports), copied from BoringSSL's `hpke_test_vectors.txt`.
+
+Interop: `crates/dave/tests/interop.rs` puts a kyoko member and a `davey` 0.1.5 member (openmls 0.8 on RustCrypto, a dev-dependency only) in one group, each way round. davey verifies kyoko's BoringSSL signatures and opens its HPKE, kyoko opens davey's welcome, and each decrypts the other's Opus frames.
+
+`cargo tree -p kyoko -e normal -i crypto-bigint` finds nothing; neither do `p256`, `hpke-rs` or `openmls_rust_crypto`. The only `crypto-bigint` left in the workspace is davey's, in the interop test; xtask's str0m (wincrypto backend) no longer brings it. davey 0.1.5's own tree (openmls 0.8 with `openmls_rust_crypto` 0.5, `hpke-rs` 0.6 and libcrux 0.0.x) carries RUSTSEC-2026-0387, -0207, -0208 and -0212, so `deny.toml` excludes `davey` from cargo-deny's graph (`[graph] exclude`): it is a dev-dependency of one test and never ships. The RUSTSEC-2026-0387 ignore is gone.
 
 ## IDENTIFY
 

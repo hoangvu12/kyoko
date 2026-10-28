@@ -1,6 +1,7 @@
 mod echo;
 mod listener;
 mod recording;
+mod room;
 
 use std::collections::HashMap;
 use std::io;
@@ -13,6 +14,8 @@ use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
 use axum::response::Response;
 use axum::routing::get;
+use dave::Wire;
+use dave::testing::Harness;
 use parking_lot::Mutex;
 use rand::Rng;
 use serde_json::{Value, json};
@@ -25,6 +28,7 @@ use crate::json::parse_id;
 pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceSocket};
 
 use listener::{ConnectionId, VoiceListener};
+use room::{Mail, Rooms};
 
 pub const VOICE_TOKEN: &str = "mock-voice-token";
 pub const AES_GCM_MODE: &str = "aead_aes256_gcm_rtpsize";
@@ -36,6 +40,11 @@ const SSRC_STRIDE: u32 = 2;
 const SCRIPTED: u64 = 0;
 const KEY_LEN: usize = 32;
 const BROADCAST_CAPACITY: usize = 64;
+const MAIL_CAPACITY: usize = 512;
+const OPUS_PAYLOAD_TYPE: u8 = 120;
+const RTP_VERSION: u8 = 0x80;
+const DAVE_TRANSITION_READY: u64 = 23;
+const DAVE_INVALID_COMMIT_WELCOME: u64 = 31;
 const AUTHENTICATION_FAILED: u16 = 4004;
 const SESSION_INVALID: u16 = 4006;
 const UNKNOWN_ENCRYPTION_MODE: u16 = 4016;
@@ -49,10 +58,12 @@ enum Command {
 struct Settings {
 	modes: Vec<String>,
 	heartbeat_interval_ms: u64,
+	dave_version: u8,
 }
 
 struct Session {
 	user_id: Option<u64>,
+	channel_id: Option<u64>,
 	ssrc: u32,
 	seq: i64,
 }
@@ -74,6 +85,11 @@ struct Voice {
 	echo_held: AtomicBool,
 	held_echo: Mutex<Vec<(Vec<u8>, SocketAddr)>>,
 	echo_released: Notify,
+	udp: Arc<UdpSocket>,
+	clients: Mutex<HashMap<u32, SocketAddr>>,
+	media_counter: AtomicU32,
+	rooms: Mutex<Rooms>,
+	mail: broadcast::Sender<(u64, Wire)>,
 }
 
 impl Voice {
@@ -82,17 +98,61 @@ impl Voice {
 		self.revision.send_modify(|revision| *revision += 1);
 	}
 
+	fn next_seq(&self, session_id: Option<&str>) -> Option<i64> {
+		let mut sessions = self.sessions.lock();
+		let session = sessions.get_mut(session_id?)?;
+		session.seq += 1;
+		Some(session.seq)
+	}
+
 	fn sequenced(&self, session_id: Option<&str>, mut frame: Value) -> Value {
-		let seq = session_id.and_then(|session_id| {
-			let mut sessions = self.sessions.lock();
-			let session = sessions.get_mut(session_id)?;
-			session.seq += 1;
-			Some(session.seq)
-		});
+		let seq = self.next_seq(session_id);
 		if let (Some(seq), Some(object)) = (seq, frame.as_object_mut()) {
 			object.insert("seq".to_owned(), json!(seq));
 		}
 		frame
+	}
+
+	fn member_of(&self, session_id: Option<&str>) -> Option<(u64, u64)> {
+		let sessions = self.sessions.lock();
+		let session = sessions.get(session_id?)?;
+		Some((session.user_id?, session.channel_id?))
+	}
+
+	fn speaker(&self, ssrc: u32) -> Option<(u64, u64)> {
+		let sessions = self.sessions.lock();
+		let session = sessions.values().find(|session| session.ssrc == ssrc)?;
+		Some((session.user_id?, session.channel_id?))
+	}
+
+	fn post(&self, mail: Mail) {
+		for letter in mail {
+			let _ = self.mail.send(letter);
+		}
+	}
+
+	fn in_room(&self, channel_id: u64, act: impl FnOnce(&mut Harness) -> dave::Result<()>) {
+		let mail = self.rooms.lock().run(channel_id, act);
+		self.post(mail);
+	}
+
+	fn join_dave(&self, peer: &Peer) {
+		if let Some((user_id, channel_id)) = self.member_of(peer.session_id.as_deref()) {
+			let mail = self.rooms.lock().join_external(channel_id, user_id);
+			self.post(mail);
+		}
+	}
+
+	fn deliver_dave(&self, peer: &Peer, message: Wire) {
+		if let Some((user_id, _)) = self.member_of(peer.session_id.as_deref()) {
+			let mail = self.rooms.lock().deliver(user_id, message);
+			self.post(mail);
+		}
+	}
+
+	fn open_dave(&self, ssrc: u32, payload: &[u8]) -> Option<Vec<u8>> {
+		let (user_id, channel_id) = self.speaker(ssrc)?;
+		self.rooms.lock().open(channel_id, user_id, payload)
 	}
 }
 
@@ -137,6 +197,90 @@ impl VoiceControl {
 		self.0.echo_released.notify_one();
 	}
 
+	pub fn set_dave_version(&self, version: u8) {
+		self.0.settings.lock().dave_version = version;
+	}
+
+	pub fn add_member(&self, channel_id: u64, user_id: u64) {
+		self.0.in_room(channel_id, |room| room.join(user_id));
+	}
+
+	pub fn remove_member(&self, channel_id: u64, user_id: u64) {
+		self.0.in_room(channel_id, |room| room.leave(user_id));
+	}
+
+	pub fn downgrade_dave(&self, channel_id: u64) {
+		self.0.in_room(channel_id, Harness::downgrade);
+	}
+
+	pub fn upgrade_dave(&self, channel_id: u64) {
+		self.0.in_room(channel_id, Harness::upgrade);
+	}
+
+	pub fn send_bogus_commit(&self, channel_id: u64, user_id: u64) {
+		self.0.in_room(channel_id, |room| room.bogus_commit(user_id));
+	}
+
+	pub fn dave_epoch(&self, channel_id: u64) -> Option<u64> {
+		self.0
+			.rooms
+			.lock()
+			.get(channel_id)
+			.map(|room| room.gateway.epoch())
+	}
+
+	pub fn dave_group(&self, channel_id: u64) -> Vec<u64> {
+		self.0
+			.rooms
+			.lock()
+			.get(channel_id)
+			.map(|room| room.gateway.established().to_vec())
+			.unwrap_or_default()
+	}
+
+	pub fn member_epoch(&self, channel_id: u64, user_id: u64) -> Option<u64> {
+		self.0
+			.rooms
+			.lock()
+			.get(channel_id)?
+			.member(user_id)?
+			.session
+			.epoch()
+	}
+
+	pub fn send_as(&self, channel_id: u64, user_id: u64, ssrc: u32, sequence: u16, frame: &[u8]) -> usize {
+		let voice = &self.0;
+		let Some(payload) = voice.rooms.lock().seal(channel_id, user_id, frame) else {
+			return 0;
+		};
+		let targets: Vec<(SocketAddr, String)> = {
+			let sessions = voice.sessions.lock();
+			let clients = voice.clients.lock();
+			let modes = voice.modes.lock();
+			sessions
+				.values()
+				.filter(|session| session.channel_id == Some(channel_id))
+				.filter_map(|session| Some((*clients.get(&session.ssrc)?, modes.get(&session.ssrc)?.clone())))
+				.collect()
+		};
+		let timestamp = u32::from(sequence).wrapping_mul(echo::OPUS_FRAME_SAMPLES);
+		let mut header = vec![RTP_VERSION, OPUS_PAYLOAD_TYPE];
+		header.extend_from_slice(&sequence.to_be_bytes());
+		header.extend_from_slice(&timestamp.to_be_bytes());
+		header.extend_from_slice(&ssrc.to_be_bytes());
+		let mut sent = 0;
+		for (address, mode) in targets {
+			let counter = voice.media_counter.fetch_add(1, Ordering::Relaxed).to_be_bytes();
+			let Some(packet) = echo::seal_packet(&mode, &voice.key, &counter, &header, &payload) else {
+				continue;
+			};
+			if voice.udp.try_send_to(&packet, address).is_ok() {
+				sent += 1;
+			}
+		}
+		sent
+	}
+
 	pub fn speak_as(&self, user_id: u64, ssrc: u32, speaking: bool) {
 		let frame = json!({
 			"op": 5,
@@ -157,7 +301,7 @@ pub struct VoiceEndpoint {
 }
 
 pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint> {
-	let socket = UdpSocket::bind(("127.0.0.1", 0)).await?;
+	let socket = Arc::new(UdpSocket::bind(("127.0.0.1", 0)).await?);
 	let bound = listener::bind().await?;
 	let voice = Arc::new(Voice {
 		key: rand::rng().random(),
@@ -170,6 +314,7 @@ pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint>
 		settings: Mutex::new(Settings {
 			modes: vec![AES_GCM_MODE.to_owned(), XCHACHA_MODE.to_owned()],
 			heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
+			dave_version: 0,
 		}),
 		sessions: Mutex::new(HashMap::new()),
 		modes: Mutex::new(HashMap::new()),
@@ -179,6 +324,11 @@ pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint>
 		echo_held: AtomicBool::new(false),
 		held_echo: Mutex::new(Vec::new()),
 		echo_released: Notify::new(),
+		udp: socket.clone(),
+		clients: Mutex::new(HashMap::new()),
+		media_counter: AtomicU32::new(0),
+		rooms: Mutex::new(Rooms::default()),
+		mail: broadcast::channel(MAIL_CAPACITY).0,
 	});
 	let url = bound.url.clone();
 	let (listener, accepting) = VoiceListener::start(bound, voice.clone());
@@ -252,11 +402,16 @@ async fn signal(voice: Arc<Voice>, connection: u64, mut socket: WebSocket) {
 	}
 	let mut broadcasts = voice.broadcasts.subscribe();
 	let mut commands = voice.commands.subscribe();
+	let mut mail = voice.mail.subscribe();
 	let mut shutdown = voice.shutdown.clone();
 	loop {
 		let flow = tokio::select! {
 			incoming = socket.recv() => match incoming {
 				Some(Ok(Message::Text(text))) => on_text(&voice, &mut socket, &mut peer, text.as_str()).await,
+				Some(Ok(Message::Binary(bytes))) => {
+					on_binary(&voice, &peer, &bytes);
+					Flow::Continue
+				}
 				Some(Ok(Message::Close(frame))) => {
 					let code = frame.map(|frame| frame.code);
 					voice.record(|log| log.closes.push((connection, code)));
@@ -269,6 +424,13 @@ async fn signal(voice: Arc<Voice>, connection: u64, mut socket: WebSocket) {
 				Ok((origin, frame)) if origin != peer.connection && peer.session_id.is_some() => {
 					let frame = voice.sequenced(peer.session_id.as_deref(), frame);
 					if send(&voice, &mut socket, &peer, frame).await { Flow::Continue } else { Flow::Stop }
+				}
+				Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => Flow::Continue,
+				Err(broadcast::error::RecvError::Closed) => Flow::Stop,
+			},
+			letter = mail.recv() => match letter {
+				Ok((user_id, message)) if addressed(&voice, &peer, user_id) => {
+					if send_wire(&voice, &mut socket, &peer, message).await { Flow::Continue } else { Flow::Stop }
 				}
 				Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => Flow::Continue,
 				Err(broadcast::error::RecvError::Closed) => Flow::Stop,
@@ -301,7 +463,8 @@ async fn on_text(voice: &Voice, socket: &mut WebSocket, peer: &mut Peer, text: &
 			.push(VoiceFrame::new(peer.connection, &frame, text.to_owned()))
 	});
 	let data = &frame["d"];
-	let reply = match frame["op"].as_u64() {
+	let op = frame["op"].as_u64();
+	let reply = match op {
 		Some(0) => match identify(voice, peer, data) {
 			Ok(ready) => ready,
 			Err(code) => return Flow::Close(code),
@@ -319,12 +482,64 @@ async fn on_text(voice: &Voice, socket: &mut WebSocket, peer: &mut Peer, text: &
 			Ok(resumed) => resumed,
 			Err(code) => return Flow::Close(code),
 		},
+		Some(DAVE_TRANSITION_READY | DAVE_INVALID_COMMIT_WELCOME) => {
+			voice.deliver_dave(peer, Wire::Text(text.to_owned()));
+			return Flow::Continue;
+		}
 		_ => return Flow::Continue,
 	};
-	if send(voice, socket, peer, reply).await {
-		Flow::Continue
-	} else {
-		Flow::Stop
+	let dave_starts = op == Some(1) && reply["d"]["dave_protocol_version"].as_u64().unwrap_or_default() > 0;
+	if !send(voice, socket, peer, reply).await {
+		return Flow::Stop;
+	}
+	if dave_starts {
+		voice.join_dave(peer);
+	}
+	Flow::Continue
+}
+
+fn addressed(voice: &Voice, peer: &Peer, user_id: u64) -> bool {
+	voice
+		.member_of(peer.session_id.as_deref())
+		.is_some_and(|(user, _)| user == user_id)
+}
+
+fn on_binary(voice: &Voice, peer: &Peer, bytes: &[u8]) {
+	let Some((&op, payload)) = bytes.split_first() else {
+		return;
+	};
+	voice.record(|log| {
+		log.frames
+			.push(VoiceFrame::binary(peer.connection, op, None, payload))
+	});
+	voice.deliver_dave(peer, Wire::Binary(bytes.to_vec()));
+}
+
+async fn send_wire(voice: &Voice, socket: &mut WebSocket, peer: &Peer, message: Wire) -> bool {
+	match message {
+		Wire::Text(text) => match serde_json::from_str::<Value>(&text) {
+			Ok(frame) => {
+				let frame = voice.sequenced(peer.session_id.as_deref(), frame);
+				send(voice, socket, peer, frame).await
+			}
+			Err(_) => true,
+		},
+		Wire::Binary(bytes) => {
+			let Some((&op, payload)) = bytes.split_first() else {
+				return true;
+			};
+			let seq = voice.next_seq(peer.session_id.as_deref()).unwrap_or_default();
+			let mut framed = (seq as u16).to_be_bytes().to_vec();
+			framed.extend_from_slice(&bytes);
+			let sent = socket.send(Message::Binary(framed.into())).await.is_ok();
+			if sent {
+				voice.record(|log| {
+					log.sent
+						.push(VoiceFrame::binary(peer.connection, op, Some(seq), payload))
+				});
+			}
+			sent
+		}
 	}
 }
 
@@ -346,6 +561,7 @@ fn identify(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> 
 		session_id.clone(),
 		Session {
 			user_id: parse_id(&data["user_id"]),
+			channel_id: parse_id(&data["channel_id"]),
 			ssrc,
 			seq: -1,
 		},
@@ -376,6 +592,7 @@ fn select_protocol(voice: &Voice, peer: &Peer, data: &Value) -> Result<Value, u1
 		.and_then(|session_id| voice.sessions.lock().get(session_id).map(|session| session.ssrc))
 		.ok_or(SESSION_INVALID)?;
 	voice.modes.lock().insert(ssrc, mode.to_owned());
+	let dave_version = voice.settings.lock().dave_version;
 	Ok(json!({
 		"op": 4,
 		"d": {
@@ -384,7 +601,7 @@ fn select_protocol(voice: &Voice, peer: &Peer, data: &Value) -> Result<Value, u1
 			"media_session_id": format!("mock-media-{ssrc}"),
 			"mode": mode,
 			"secret_key": voice.key.to_vec(),
-			"dave_protocol_version": 0,
+			"dave_protocol_version": dave_version,
 		},
 	}))
 }
