@@ -8,6 +8,7 @@ local server_rail = require("./server_rail")
 local channel_sidebar = require("./channel_sidebar")
 local user_panel = require("./user_panel")
 local voice_panel = require("./voice_panel")
+local call_view = require("./call_view")
 local timeline = require("./timeline")
 local composer = require("./composer")
 local member_list = require("./member_list")
@@ -88,10 +89,8 @@ local function dm_side(members_room: () -> boolean): boolean
 end
 
 local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
-	return ui.column {
-		relative = true,
-		grow = 1,
-		min_w = 0,
+	local channel_page = ui.column {
+		w_full = true,
 		h_full = true,
 		gap = theme.size.gap,
 		panel { w_full = true, h = theme.size.channel_header_height, top_bar() },
@@ -121,6 +120,15 @@ local function page(sidebar_shown: () -> boolean, members_room: () -> boolean)
 				return dm_side(members_room) and #state.dms.members:get() > 0 and state.shell.members_visible:get()
 			end, panel { h_full = true, dm_members() }),
 		},
+	}
+	return ui.column {
+		relative = true,
+		grow = 1,
+		min_w = 0,
+		h_full = true,
+		ui.show(function()
+			return state.voice.call:get().open
+		end, panel { w_full = true, h_full = true, call_view() }, channel_page),
 		home_cover(),
 	}
 end

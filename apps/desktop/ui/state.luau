@@ -756,6 +756,26 @@ export type VoicePanel = {
 	connected: boolean,
 	place: string,
 }
+export type CallTile = {
+	key: string,
+	id: string,
+	name: string,
+	avatar: string,
+	me: boolean,
+	muted: boolean,
+	deafened: boolean,
+	video: string,
+	live: boolean,
+	volume: number,
+	local_muted: boolean,
+}
+export type VoiceCall = {
+	open: boolean,
+	channel_id: string,
+	name: string,
+	connected: boolean,
+	tiles: { CallTile },
+}
 export type VoiceControls = {
 	muted: boolean,
 	deafened: boolean,
@@ -777,6 +797,14 @@ M.voice = {
 		server_muted = false,
 		server_deafened = false,
 	} :: VoiceControls),
+	call = ui.shared("voice.call", {
+		open = false,
+		channel_id = "",
+		name = "",
+		connected = false,
+		tiles = {},
+	} :: VoiceCall),
+	speaking = ui.shared("voice.speaking", {} :: { [string]: boolean }),
 }
 
 return M

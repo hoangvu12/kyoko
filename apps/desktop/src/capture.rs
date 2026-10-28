@@ -123,6 +123,7 @@ pub enum Screen {
 	ServerProfile,
 	ProfileMenu,
 	VoicePanel,
+	VoiceCall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -322,6 +323,7 @@ impl Screen {
 			"server-profile" => Some(Screen::ServerProfile),
 			"profile-menu" => Some(Screen::ProfileMenu),
 			"voice-panel" => Some(Screen::VoicePanel),
+			"voice-call" => Some(Screen::VoiceCall),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -396,7 +398,8 @@ impl Screen {
 			| Screen::GameActivity
 			| Screen::ServerProfile
 			| Screen::ProfileMenu
-			| Screen::VoicePanel => Some(Opening::First),
+			| Screen::VoicePanel
+			| Screen::VoiceCall => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

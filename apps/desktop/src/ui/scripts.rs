@@ -261,6 +261,13 @@ fn the_interface_loads_and_builds_every_screen() {
 		"Lounge / Kyoko",
 		&[("voice.panel", voice::connected_panel())],
 	);
+	shows(&mut app, "the call view", "grace", &voice::call_values());
+	shows(
+		&mut app,
+		"the channel view after the call",
+		"general",
+		&[("voice.call", voice::closed_call())],
+	);
 	shows(
 		&mut app,
 		"the search results",
@@ -982,7 +989,7 @@ fn the_server_menu_reaches_the_community_actions() {
 	);
 }
 
-fn open_channel_menu(app: &mut TestApp, id: &str) {
+pub(super) fn open_channel_menu(app: &mut TestApp, id: &str) {
 	use zgx::input::{InputEvent, PointerButton};
 	let bounds = app.bounds(id);
 	let (x, y) = (bounds.x + bounds.width / 2., bounds.y + bounds.height / 2.);

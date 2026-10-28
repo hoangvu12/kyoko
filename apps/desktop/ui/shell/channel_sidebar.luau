@@ -440,6 +440,7 @@ local function voice_member(member: state.VoiceMember)
 		items = "center",
 		hover = { bg = theme.color.hover },
 		ui.div {
+			relative = true,
 			w = theme.size.voice_row_avatar,
 			h = theme.size.voice_row_avatar,
 			shrink = 0,
@@ -455,6 +456,20 @@ local function voice_member(member: state.VoiceMember)
 					fit = "cover",
 				}
 			),
+			ui.show(function()
+				return state.voice.speaking:get()[member.id] == true
+			end, ui.div {
+				id = "voice_ring_" .. member.id,
+				absolute = true,
+				left = 0,
+				top = 0,
+				w = theme.size.voice_row_avatar,
+				h = theme.size.voice_row_avatar,
+				rounded = theme.size.voice_row_avatar,
+				border = theme.size.call_ring_width,
+				border_color = theme.color.speaking_ring,
+				pointer_events = "none",
+			}),
 		},
 		ui.text {
 			member.name,

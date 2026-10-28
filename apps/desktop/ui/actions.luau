@@ -533,4 +533,16 @@ function M.open_call()
 	return ui.action("voice.open_call")
 end
 
+function M.open_call_chat()
+	return ui.action("voice.open_chat")
+end
+
+function M.set_user_volume(id: string, volume: number)
+	ui.invoke("voice.user_volume", { id = id, volume = volume })
+end
+
+function M.set_local_mute(id: string, muted: boolean)
+	ui.invoke("voice.local_mute", { id = id, muted = muted })
+end
+
 return M

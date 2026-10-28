@@ -37,6 +37,7 @@ mod settings;
 mod sign_in;
 mod themes;
 mod threads;
+mod voice_call;
 mod voice_panel;
 mod voice_shots;
 
@@ -219,6 +220,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_server_settings());
 			cx.tasks.spawn(link.clone().follow_channel_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
+			cx.tasks.spawn(link.clone().follow_speaking());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -246,6 +248,7 @@ pub fn run(
 			let transcript = link.timeline_view.view();
 			let forum_shown = link.threads.forum_shown();
 			let hidden_shown = link.hidden.shown();
+			let call_shown = link.call.shown();
 			let thread_view = threads::thread_slot(slot.clone(), link.threads.slot(), link.threads.view());
 			let thread_layer = link.threads.layer_view();
 			let profiles = link.profile.view();
@@ -279,7 +282,7 @@ pub fn run(
 				layered(
 					host.view(),
 					[
-						timeline_slot(slot, transcript, [forum_shown, hidden_shown], float),
+						timeline_slot(slot, transcript, [forum_shown, hidden_shown, call_shown], float),
 						thread_view,
 						scrim,
 						profiles,
@@ -371,7 +374,7 @@ fn layered(luau: View, layers: impl IntoIterator<Item = View>) -> View {
 fn timeline_slot(
 	slot: Signal<Slot>,
 	transcript: View,
-	covers: [Signal<bool>; 2],
+	covers: [Signal<bool>; 3],
 	float: Signal<Slot>,
 ) -> View {
 	let shown = move || {
@@ -514,6 +517,7 @@ pub(crate) struct Link {
 	ui: RefCell<Option<zgx::widgets::WeakUi>>,
 	inbox_popout: Rc<crate::inbox::InboxLayer>,
 	voice: voice_panel::VoicePanelView,
+	call: voice_call::CallView,
 }
 
 impl Link {
@@ -587,6 +591,7 @@ impl Link {
 		let server = server_settings::ServerSettingsView::new(host, &window.runtime);
 		let channel_settings = channel_settings::ChannelSettingsView::new(host, &window.runtime);
 		let inbox_popout = crate::inbox::InboxLayer::new(&window.runtime, timeline_view.pictures());
+		let call = voice_call::CallView::new(host, &window.runtime);
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -666,6 +671,7 @@ impl Link {
 			ui: RefCell::new(None),
 			inbox_popout,
 			voice: voice_panel::VoicePanelView::new(host),
+			call,
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -693,6 +699,7 @@ impl Link {
 		link.install_toasts();
 		Link::install_inbox(host, &link);
 		Link::install_voice(host, &link);
+		Link::install_call(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -938,6 +945,7 @@ impl Link {
 			capture::Screen::HiddenChannel => self.drive_hidden_channel().await,
 			capture::Screen::GameActivity => self.drive_game_activity().await,
 			capture::Screen::VoicePanel => self.drive_voice_panel().await,
+			capture::Screen::VoiceCall => self.drive_voice_call().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
 			| capture::Screen::MemberNotes => self.until_members(&capture).await,
@@ -1411,6 +1419,7 @@ impl Link {
 		self.sync_threads(timeline.open());
 		let open = self.top_channel(timeline.open());
 		self.sync_hidden(state, open.is_some() || self.forum_open().is_some());
+		self.sync_call(open.map(|open| open.channel_id));
 		self.publish_channel_icon(state, open);
 		self.remember_open(open);
 		let id = open.map(|open| open.channel_id.to_string()).unwrap_or_default();
@@ -1469,6 +1478,7 @@ impl Link {
 		names.extend(self.composer_layer.images().iter().map(|name| name.to_string()));
 		names.extend(self.login_images());
 		names.extend(self.inbox_images());
+		names.extend(self.call_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()
@@ -1483,6 +1493,7 @@ impl Link {
 		self.close_web();
 		self.inbox.close();
 		self.connection_wakes.close();
+		self.call.close();
 		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();

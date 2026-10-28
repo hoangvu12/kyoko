@@ -101,23 +101,22 @@ impl Link {
 		});
 		let actions = Rc::downgrade(link);
 		host.action("voice.open_call", move |_| {
-			if let Some(link) = actions.upgrade()
-				&& let Some(channel_id) = link.voice_channel()
-			{
-				link.select_channel(channel_id);
+			if let Some(link) = actions.upgrade() {
+				link.open_call();
 			}
 		});
 	}
 
 	pub(super) fn voice_apply(&self, state: &State) {
 		self.voice.publish(state);
+		self.publish_call(state);
 	}
 
 	fn voice_controls(&self) -> Option<VoiceControls> {
 		self.state().map(|shared| bridge::voice_controls(&shared.read()))
 	}
 
-	fn voice_channel(&self) -> Option<Snowflake> {
+	pub(super) fn voice_channel(&self) -> Option<Snowflake> {
 		self.state()
 			.and_then(|shared| shared.read().voice().map(|voice| voice.channel_id))
 	}
@@ -151,7 +150,7 @@ impl Link {
 
 	fn join_voice(&self, channel_id: Snowflake) {
 		if self.voice_channel() == Some(channel_id) {
-			self.select_channel(channel_id);
+			self.open_call();
 			return;
 		}
 		let guild_id = self.sidebar.sidebar().selected();

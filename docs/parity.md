@@ -690,6 +690,7 @@ Kyoko only (`--apps kyoko`); compare by eye with Discord. The app's mock voice r
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `voice-panel` | 98 | Default selection, then join the open server's first voice channel (Lounge) through `voice.join` and wait for Voice Connected: the voice panel between the channel sidebar and the user panel, Lounge / server name, Disconnect. | yes |
+| `voice-call` | 101 | As `voice-panel`, then open the call view (`voice.open_call`) and feed a tone to the manual input until your own tile speaks: the call view in place of the channel header and chat, a tile per member with the green ring on yours, the sidebar row's ring, the bottom bar with camera and screen (disabled), mute, deafen and Disconnect. | yes |
 
 ### 83 Server rail hover card
 

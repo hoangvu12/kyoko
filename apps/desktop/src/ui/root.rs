@@ -161,7 +161,11 @@ pub(super) fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: 
 		"timeline slot" => timeline_slot(
 			runtime.signal(Slot::default()),
 			timeline().view(),
-			[runtime.signal(false), runtime.signal(false)],
+			[
+				runtime.signal(false),
+				runtime.signal(false),
+				runtime.signal(false),
+			],
 			runtime.signal(Slot::default()),
 		),
 		"thread slot" => threads::thread_slot(
@@ -368,7 +372,7 @@ const TOAST_ROWS: usize = 12;
 type ToastParts = (
 	Rc<ToastLayer>,
 	zgx::reactive::Signal<Slot>,
-	[zgx::reactive::Signal<bool>; 2],
+	[zgx::reactive::Signal<bool>; 3],
 	zgx::reactive::Signal<Slot>,
 );
 
@@ -395,7 +399,11 @@ fn a_toast_floats_over_the_timeline_and_never_moves_its_rows() {
 			*made.borrow_mut() = Some((
 				layer,
 				runtime.signal(TOAST_SLOT),
-				[runtime.signal(false), runtime.signal(false)],
+				[
+					runtime.signal(false),
+					runtime.signal(false),
+					runtime.signal(false),
+				],
 				runtime.signal(Slot::default()),
 			));
 			host
