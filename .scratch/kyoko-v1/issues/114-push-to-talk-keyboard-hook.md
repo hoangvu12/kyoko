@@ -15,3 +15,16 @@
 - [ ] The hook exists only in Push to Talk mode with a binding; switching to Voice Activity or clearing the binding removes it
 - [ ] Hook callback does no work beyond matching and posting the event (Windows drops slow low-level hooks); matching logic tested without a real hook (fed key events, checks the pressed/released stream); in-process UI test for recording Mouse 4; settings capture checked by eye
 - [ ] `docs/voice.md` and `docs/desktop.md` updated; 100's deviation note no longer applies
+
+- [ ] Recovery: Windows silently removes a low-level hook that takes too long (`LowLevelHooksTimeout`, capped at 1000 ms since Windows 10 1709) and doesn't say so. Reinstall the hooks periodically or when PTT is held with no events, and rebuild modifier state with `GetKeyState` after a reinstall
+- [ ] Stuck keys: PTT goes off on session lock (`WTSRegisterSessionNotification`), on hook loss and on reinstall; injected input (`LLKHF_INJECTED`, `LLMHF_INJECTED`) is ignored
+- [ ] The Push to Talk section notes, as Discord's support page does, that a game run as administrator needs kyoko run as administrator too (low-level hooks don't see input while an elevated window has focus)
+
+## Research (2026-10-29, orchestrator's research agent; facts and ideas only, no code copied)
+
+- Hooks vs Raw Input: Mumble moved from LL hooks to Raw Input with `RIDEV_INPUTSINK` in PR #4941 (2021) because hooks lowered mouse polling, slowed NVDA, and stalled input under a debugger; Raw Input can't suppress keys. Kyoko keeps hooks (hand-written on windows-rs, no new crate); Raw Input stays a fallback if hooks prove fragile (antivirus heuristics, polling complaints). https://github.com/mumble-voip/mumble/pull/4941, https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc
+- Callback: copy only the virtual-key code and up/down into a channel and return `CallNextHookEx` at once; the release delay timer runs off the hook thread. Auto-repeat is not flagged by Windows: track held keys and drop a key-down for a key already down.
+- libuiohook reinstalls its hooks on an `EVENT_OBJECT_NAMECHANGE` WinEvent and rebuilds modifiers with `GetKeyState`; it does not synthesise missed key-ups (its own FIXME). https://github.com/kwhat/libuiohook/blob/1.3/src/windows/input_hook.c
+- Discord: the RPC docs give the PTT release delay range as 0–2000 ms and list keyboard keys, mouse buttons, modifiers and gamepad buttons as PTT bindings (https://docs.discord.com/developers/topics/rpc). The 20 ms default is from third-party guides only: confirm it in the public web bundle. Discord's support page advises running Discord as administrator for elevated games (https://support.discord.com/hc/en-us/articles/205082178).
+- Dorion (Tauri Discord client) does global PTT with a livesplit-hotkey fork: a `WH_KEYBOARD_LL` hook that calls `CallNextHookEx`. Vesktop's attempt was closed because Electron's globalShortcut can't see key-up and swallows the key.
+- Crates: `global-hotkey` uses RegisterHotKey (same problem as today); `rdev`, `inputbot`, `willhook` use LL hooks but none handles timeout recovery or stuck keys better than a small hand-written module. Nothing documented about anti-cheats flagging LL hooks.
