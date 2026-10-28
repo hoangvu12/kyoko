@@ -314,6 +314,15 @@ async fn the_channel_in_view_stays_silent_until_the_window_loses_focus() {
 	scene.post(&running, &scene.mention("while you watch")).await;
 	assert_eq!(scene.only(&running, &seen).await, Vec::new());
 	running.session().send(Command::SetViewing(false));
+	running.session().send(Command::SetDraft {
+		channel_id,
+		content: "looked away".to_owned(),
+	});
+	running
+		.until("the window to lose focus", move |state| {
+			state.draft(channel_id) == Some("looked away")
+		})
+		.await;
 	scene.post(&running, &scene.mention("while you are away")).await;
 	assert_eq!(
 		scene.only(&running, &seen).await,

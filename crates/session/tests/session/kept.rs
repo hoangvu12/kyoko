@@ -191,6 +191,15 @@ async fn a_deleted_message_stays_in_place_flagged_and_survives_a_restart() {
 	let mut running = Running::start("kept-delete").await;
 	let channel_id = running.open_text_channel().await;
 	running.session().send(Command::SetViewing(false));
+	running.session().send(Command::SetDraft {
+		channel_id,
+		content: "looked away".to_owned(),
+	});
+	running
+		.until("the window to lose focus", |state| {
+			state.draft(channel_id) == Some("looked away")
+		})
+		.await;
 	let author = someone_else(&running);
 	let before = post(&running, channel_id, author, "before").await;
 	let doomed = post(&running, channel_id, author, "doomed").await;
