@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
 use futures_util::future::{BoxFuture, Shared};
+use futures_util::stream::BoxStream;
 use futures_util::{FutureExt, StreamExt};
 use net::{Destination, Trust};
 use parking_lot::Mutex;
@@ -12,7 +13,7 @@ use wreq::header::{HeaderMap, HeaderName, HeaderValue};
 use wreq::redirect::Policy;
 
 use crate::error::{MediaError, Result, redact_url};
-use crate::queue::{Gate, PerHost, Protocol, Ticket};
+use crate::queue::{Gate, PerHost, Protocol, Slot, Ticket};
 
 pub const DEFAULT_ALLOWED_HOSTS: [&str; 8] = [
 	"cdn.discordapp.com",
@@ -32,6 +33,9 @@ const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
 const POOL_IDLE: Duration = Duration::from_secs(90);
 const HTTPS_PORT: u16 = 443;
 const LOOPBACK_HOST: &str = "127.0.0.1";
+const RANGE: &str = "range";
+const CONTENT_RANGE: &str = "content-range";
+const PARTIAL_CONTENT: u16 = 206;
 
 type SharedFetch = Shared<BoxFuture<'static, Result<Bytes>>>;
 
@@ -39,6 +43,7 @@ type SharedFetch = Shared<BoxFuture<'static, Result<Bytes>>>;
 pub enum Purpose {
 	Image,
 	Audio,
+	Video,
 }
 
 pub struct MediaFetcherBuilder {
@@ -48,6 +53,7 @@ pub struct MediaFetcherBuilder {
 	user_agent: String,
 	headers: Vec<(String, String)>,
 	audio_headers: Vec<(String, String)>,
+	video_headers: Vec<(String, String)>,
 	per_host: PerHost,
 	loopback_http2: bool,
 	trust: Trust,
@@ -94,6 +100,15 @@ impl MediaFetcherBuilder {
 		V: Into<String>,
 	{
 		self.audio_headers = owned(headers);
+		self
+	}
+
+	pub fn video_headers<N, V>(mut self, headers: impl IntoIterator<Item = (N, V)>) -> Self
+	where
+		N: Into<String>,
+		V: Into<String>,
+	{
+		self.video_headers = owned(headers);
 		self
 	}
 
@@ -153,6 +168,7 @@ impl MediaFetcherBuilder {
 				client,
 				image_headers: header_map(&self.headers),
 				audio_headers: header_map(&self.audio_headers),
+				video_headers: header_map(&self.video_headers),
 				hosts,
 				max_bytes: self.max_bytes,
 				inflight: Mutex::new(HashMap::new()),
@@ -171,6 +187,7 @@ struct FetcherInner {
 	client: wreq::Client,
 	image_headers: HeaderMap,
 	audio_headers: HeaderMap,
+	video_headers: HeaderMap,
 	hosts: Arc<Allowed>,
 	max_bytes: usize,
 	inflight: Mutex<HashMap<(Purpose, String), SharedFetch>>,
@@ -189,6 +206,7 @@ impl MediaFetcher {
 			user_agent: DEFAULT_USER_AGENT.to_owned(),
 			headers: Vec::new(),
 			audio_headers: Vec::new(),
+			video_headers: Vec::new(),
 			per_host: PerHost::default(),
 			loopback_http2: false,
 			trust: Trust::Bundled,
@@ -232,6 +250,11 @@ impl MediaFetcher {
 		shared.await
 	}
 
+	pub async fn open_range(&self, url: &str, start: u64, ticket: Arc<Ticket>) -> Result<RangeBody> {
+		let parsed = self.inner.validate(url)?;
+		self.inner.ranged(parsed, start, ticket).await
+	}
+
 	pub fn reschedule(&self) {
 		self.inner.gate.reschedule();
 	}
@@ -265,10 +288,7 @@ impl FetcherInner {
 		let response = self
 			.client
 			.get(url.as_str())
-			.headers(match purpose {
-				Purpose::Image => self.image_headers.clone(),
-				Purpose::Audio => self.audio_headers.clone(),
-			})
+			.headers(self.headers_for(purpose))
 			.send()
 			.await
 			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_uri())))?;
@@ -297,6 +317,114 @@ impl FetcherInner {
 		}
 		Ok(body.freeze())
 	}
+
+	fn headers_for(&self, purpose: Purpose) -> HeaderMap {
+		match purpose {
+			Purpose::Image => self.image_headers.clone(),
+			Purpose::Audio => self.audio_headers.clone(),
+			Purpose::Video => self.video_headers.clone(),
+		}
+	}
+
+	async fn ranged(&self, url: Url, start: u64, ticket: Arc<Ticket>) -> Result<RangeBody> {
+		let host = host_key(&url);
+		let slot = self.gate.acquire(&host, ticket).await?;
+		let shown = redact_url(url.as_str()).to_owned();
+		let mut headers = self.headers_for(Purpose::Video);
+		if let Ok(value) = HeaderValue::from_str(&format!("bytes={start}-")) {
+			headers.insert(RANGE, value);
+		}
+		let response = self
+			.client
+			.get(url.as_str())
+			.headers(headers)
+			.send()
+			.await
+			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_uri())))?;
+		if Url::parse(&response.uri().to_string()).is_ok_and(|landed| host_key(&landed) == host) {
+			self.gate.learn(&host, response.version());
+		}
+		let status = response.status().as_u16();
+		if !response.status().is_success() {
+			return Err(MediaError::Status(status));
+		}
+		let (begins, length) = if status == PARTIAL_CONTENT {
+			response
+				.headers()
+				.get(CONTENT_RANGE)
+				.and_then(|value| value.to_str().ok())
+				.and_then(content_range)
+				.ok_or_else(|| MediaError::Fetch(format!("{shown}: a partial answer without its range")))?
+		} else {
+			(0, response.content_length())
+		};
+		if begins > start {
+			return Err(MediaError::Fetch(format!(
+				"{shown}: the range starts after {start}"
+			)));
+		}
+		Ok(RangeBody {
+			chunks: response.bytes_stream().boxed(),
+			skip: start - begins,
+			start,
+			length,
+			shown,
+			_slot: slot,
+		})
+	}
+}
+
+pub struct RangeBody {
+	chunks: BoxStream<'static, wreq::Result<Bytes>>,
+	skip: u64,
+	start: u64,
+	length: Option<u64>,
+	shown: String,
+	_slot: Slot,
+}
+
+impl RangeBody {
+	pub fn start(&self) -> u64 {
+		self.start
+	}
+
+	pub fn length(&self) -> Option<u64> {
+		self.length
+	}
+
+	pub async fn chunk(&mut self) -> Result<Option<Bytes>> {
+		loop {
+			let Some(chunk) = self.chunks.next().await else {
+				return Ok(None);
+			};
+			let mut chunk = chunk
+				.map_err(|error| MediaError::Fetch(format!("{}: {}", self.shown, error.without_uri())))?;
+			if self.skip == 0 {
+				return Ok(Some(chunk));
+			}
+			let skipped = self.skip.min(chunk.len() as u64);
+			self.skip -= skipped;
+			let rest = chunk.split_off(skipped as usize);
+			if !rest.is_empty() {
+				return Ok(Some(rest));
+			}
+		}
+	}
+}
+
+fn content_range(value: &str) -> Option<(u64, Option<u64>)> {
+	let (unit, rest) = value.trim().split_once(' ')?;
+	if !unit.eq_ignore_ascii_case("bytes") {
+		return None;
+	}
+	let (span, total) = rest.split_once('/')?;
+	let (first, _) = span.split_once('-')?;
+	let first = first.trim().parse().ok()?;
+	let total = match total.trim() {
+		"*" => None,
+		total => Some(total.parse().ok()?),
+	};
+	Some((first, total))
 }
 
 fn host_key(url: &Url) -> String {

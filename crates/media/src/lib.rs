@@ -13,11 +13,12 @@ mod service;
 pub mod shape;
 pub mod signed;
 mod types;
+mod video_file;
 
 pub use cache::{DiskCache, SizeHint};
 pub use decode::{Limits, Plan, Prepare, decode, decode_planned};
 pub use error::{MediaError, Result, redact_url};
-pub use fetch::{MediaFetcher, MediaFetcherBuilder, Purpose};
+pub use fetch::{MediaFetcher, MediaFetcherBuilder, Purpose, RangeBody};
 pub use gallery::{
 	ANIMATION_SHARE, Animations, DEFAULT_BUDGET_BYTES, Gallery, GalleryStats, ImageName, ImageRequest,
 	Origin, Pixels, Playback, Status, Update,
@@ -28,3 +29,4 @@ pub use resize::{resize_decoded, resize_to_fit, shrink_image};
 pub use service::{DEFAULT_DECODE_WORKERS, MediaService, Source, Variant};
 pub use shape::Shape;
 pub use types::{Animation, Decoded, DecodedImage, Frame, Replay, Streamed};
+pub use video_file::{READ_AHEAD, VIDEO_MAX_BYTES, VideoFile, VideoLimits};

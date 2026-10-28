@@ -1,19 +1,16 @@
 use std::time::Duration;
 
 use windows::Win32::Media::MediaFoundation::{
-	IMFMediaType, IMFSample, IMFTransform, MF_E_NOTACCEPTING, MF_LOW_LATENCY, MF_MT_DEFAULT_STRIDE,
-	MF_MT_FRAME_SIZE, MF_MT_MAJOR_TYPE, MF_MT_MINIMUM_DISPLAY_APERTURE, MF_MT_SUBTYPE, MFMediaType_Video,
-	MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT,
-	MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, MFT_MESSAGE_NOTIFY_START_OF_STREAM,
-	MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES, MFT_OUTPUT_STREAM_PROVIDES_SAMPLES, MFT_REGISTER_TYPE_INFO,
-	MFVideoFormat_H264, MFVideoFormat_NV12,
+	IMFSample, IMFTransform, MF_E_NOTACCEPTING, MF_LOW_LATENCY, MF_MT_DEFAULT_STRIDE, MF_MT_MAJOR_TYPE,
+	MF_MT_SUBTYPE, MFMediaType_Video, MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SORTANDFILTER,
+	MFT_ENUM_FLAG_SYNCMFT, MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
+	MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES,
+	MFT_OUTPUT_STREAM_PROVIDES_SAMPLES, MFT_REGISTER_TYPE_INFO, MFVideoFormat_H264, MFVideoFormat_NV12,
 };
 
 use super::mf;
 use super::{VideoError, VideoFrame};
 
-const APERTURE_BYTES: usize = 16;
-const APERTURE_AREA_OFFSET: usize = 8;
 const FALLBACK_OUTPUT_BYTES: u32 = 8 * 1024 * 1024;
 const MAX_OUTPUT_TYPES: u32 = 64;
 
@@ -116,7 +113,7 @@ impl MediaFoundationDecoder {
 			})
 			.ok_or(VideoError::Decode("the decoder offers no NV12 output".to_owned()))?;
 		unsafe { self.transform.SetOutputType(0, &chosen, 0) }.map_err(failure)?;
-		let (width, height) = display_size(&chosen);
+		let (width, height) = mf::display_size(&chosen);
 		let stride =
 			unsafe { chosen.GetUINT32(&MF_MT_DEFAULT_STRIDE) }.map_or(width, |stride| stride as i32 as usize);
 		self.layout = OutputLayout {
@@ -170,20 +167,8 @@ impl MediaFoundationDecoder {
 			height,
 			stride,
 		} = self.layout;
-		let aligned_height = (data.len() * 2 / (3 * stride.max(1))).max(height);
-		if width == 0 || height == 0 || data.len() < stride * aligned_height * 3 / 2 {
-			return Err(VideoError::Decode(
-				"the decoder returned a short frame".to_owned(),
-			));
-		}
-		let (luma, chroma) = data.split_at(stride * aligned_height);
-		let mut packed = Vec::with_capacity(width * height * 3 / 2);
-		for row in 0..height {
-			packed.extend_from_slice(&luma[row * stride..][..width]);
-		}
-		for row in 0..height / 2 {
-			packed.extend_from_slice(&chroma[row * stride..][..width]);
-		}
+		let packed = mf::packed_nv12(&data, width, height, stride)
+			.ok_or_else(|| VideoError::Decode("the decoder returned a short frame".to_owned()))?;
 		Ok(VideoFrame {
 			width: width as u32,
 			height: height as u32,
@@ -199,25 +184,4 @@ impl Drop for MediaFoundationDecoder {
 			let _ = self.transform.ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0);
 		}
 	}
-}
-
-fn display_size(media_type: &IMFMediaType) -> (usize, usize) {
-	let mut aperture = [0u8; APERTURE_BYTES];
-	if unsafe { media_type.GetBlob(&MF_MT_MINIMUM_DISPLAY_APERTURE, &mut aperture, None) }.is_ok() {
-		let width = i32::from_le_bytes(
-			aperture[APERTURE_AREA_OFFSET..APERTURE_AREA_OFFSET + 4]
-				.try_into()
-				.unwrap_or_default(),
-		);
-		let height = i32::from_le_bytes(
-			aperture[APERTURE_AREA_OFFSET + 4..]
-				.try_into()
-				.unwrap_or_default(),
-		);
-		if width > 0 && height > 0 {
-			return (width as usize & !1, height as usize & !1);
-		}
-	}
-	let (width, height) = mf::size_of(media_type, &MF_MT_FRAME_SIZE).unwrap_or_default();
-	(width as usize & !1, height as usize & !1)
 }

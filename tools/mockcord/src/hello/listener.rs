@@ -35,6 +35,8 @@ pub const IMAGE_PATH: &str = "/image.gif";
 pub const WEBSOCKET_PATH: &str = "/ws";
 pub const GATEWAY_PATH: &str = "/?v=9&encoding=json";
 pub const IMAGE_HOST: &str = "kyoko-cdn.test";
+pub const VIDEO_PATH: &str = "/video.mp4";
+pub const VIDEO_HOST: &str = "kyoko-video.test";
 pub const GATEWAY_HOST: &str = "kyoko-gateway.test";
 pub const DUMMY_API_HEADERS: [(&str, &str); 6] = [
 	("Authorization", "kyoko-tls-capture-dummy-token"),
@@ -102,7 +104,7 @@ impl ApiCall {
 fn page() -> String {
 	let calls = API_CALLS.iter().map(ApiCall::script).collect::<String>();
 	format!(
-		"<!doctype html><meta charset=utf-8><title>kyoko tls-capture</title><p>kyoko tls-capture</p><script>		const port = location.port; 		const socket = (url) => new Promise((done) => {{ 			const socket = new WebSocket(url); socket.onerror = socket.onclose = done; }}); 		const image = (url) => new Promise((done) => {{ 			const element = document.createElement('img'); element.onload = element.onerror = done; 			element.src = url; document.body.append(element); }}); 		(async () => {{ 			await fetch('{FETCH_PATH}').catch(() => {{}}); 			{calls}			await image('https://{IMAGE_HOST}:' + port + '{IMAGE_PATH}'); 			await socket('wss://' + location.host + '{WEBSOCKET_PATH}'); 			await socket('wss://{GATEWAY_HOST}:' + port + '{GATEWAY_PATH}'); 			document.title = 'kyoko tls-capture done'; 		}})();</script>"
+		"<!doctype html><meta charset=utf-8><title>kyoko tls-capture</title><p>kyoko tls-capture</p><script>		const port = location.port; 		const socket = (url) => new Promise((done) => {{ 			const socket = new WebSocket(url); socket.onerror = socket.onclose = done; }}); 		const image = (url) => new Promise((done) => {{ 			const element = document.createElement('img'); element.onload = element.onerror = done; 			element.src = url; document.body.append(element); }}); 		const video = (url) => new Promise((done) => {{ 			const element = document.createElement('video'); element.muted = true; element.preload = 'auto'; 			element.onloadeddata = element.onerror = done; setTimeout(done, 3000); 			element.src = url; document.body.append(element); }}); 		(async () => {{ 			await fetch('{FETCH_PATH}').catch(() => {{}}); 			{calls}			await image('https://{IMAGE_HOST}:' + port + '{IMAGE_PATH}'); 			await video('https://{VIDEO_HOST}:' + port + '{VIDEO_PATH}'); 			await socket('wss://' + location.host + '{WEBSOCKET_PATH}'); 			await socket('wss://{GATEWAY_HOST}:' + port + '{GATEWAY_PATH}'); 			document.title = 'kyoko tls-capture done'; 		}})();</script>"
 	)
 }
 

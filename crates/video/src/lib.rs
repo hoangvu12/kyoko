@@ -1,16 +1,22 @@
+#[cfg(windows)]
+mod byte_stream;
 mod convert;
 mod decode;
 mod error;
+mod file;
 #[cfg(windows)]
 mod media_foundation;
 #[cfg(windows)]
 mod mf;
+#[cfg(windows)]
+mod source_reader;
 
 use std::time::Duration;
 
 pub use convert::{Picture, fit};
 pub use decode::{H264Decoder, available};
 pub use error::VideoError;
+pub use file::{ByteSource, FileReader, Packet, SoundTrack, Tracks, VideoTrack};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoFrame {

@@ -44,6 +44,13 @@ pub fn mosaic_images(attachments: &[Attachment]) -> Vec<&Attachment> {
 		.collect()
 }
 
+pub fn mosaic_media(attachments: &[Attachment]) -> Vec<&Attachment> {
+	attachments
+		.iter()
+		.filter(|attachment| is_image(attachment) || crate::is_video(attachment))
+		.collect()
+}
+
 pub fn image_mosaic(images: &[&Attachment]) -> Mosaic {
 	let shapes: Vec<Shape> = images
 		.iter()

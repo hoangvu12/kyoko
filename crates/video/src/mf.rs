@@ -3,14 +3,17 @@ use std::time::Duration;
 
 use windows::Win32::Media::MediaFoundation::{
 	IMFActivate, IMFAttributes, IMFMediaBuffer, IMFMediaType, IMFSample, IMFTransform,
-	MF_E_TRANSFORM_NEED_MORE_INPUT, MF_E_TRANSFORM_STREAM_CHANGE, MF_VERSION, MFCreateMediaType,
-	MFCreateMemoryBuffer, MFCreateSample, MFSTARTUP_FULL, MFStartup, MFT_ENUM_FLAG, MFT_OUTPUT_DATA_BUFFER,
-	MFT_REGISTER_TYPE_INFO, MFTEnumEx,
+	MF_E_TRANSFORM_NEED_MORE_INPUT, MF_E_TRANSFORM_STREAM_CHANGE, MF_MT_FRAME_SIZE,
+	MF_MT_MINIMUM_DISPLAY_APERTURE, MF_VERSION, MFCreateMediaType, MFCreateMemoryBuffer, MFCreateSample,
+	MFSTARTUP_FULL, MFStartup, MFT_ENUM_FLAG, MFT_OUTPUT_DATA_BUFFER, MFT_REGISTER_TYPE_INFO, MFTEnumEx,
 };
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoTaskMemFree, CoUninitialize};
 use windows::core::GUID;
 
 use super::VideoError;
+
+const APERTURE_BYTES: usize = 16;
+const APERTURE_AREA_OFFSET: usize = 8;
 
 pub fn device_error(error: windows::core::Error) -> VideoError {
 	VideoError::Device(error.message())
@@ -115,6 +118,43 @@ unsafe fn copy_out(buffer: &IMFMediaBuffer) -> windows::core::Result<Vec<u8>> {
 		buffer.Unlock()?;
 		Ok(data)
 	}
+}
+
+pub fn display_size(media_type: &IMFMediaType) -> (usize, usize) {
+	let mut aperture = [0u8; APERTURE_BYTES];
+	if unsafe { media_type.GetBlob(&MF_MT_MINIMUM_DISPLAY_APERTURE, &mut aperture, None) }.is_ok() {
+		let width = i32::from_le_bytes(
+			aperture[APERTURE_AREA_OFFSET..APERTURE_AREA_OFFSET + 4]
+				.try_into()
+				.unwrap_or_default(),
+		);
+		let height = i32::from_le_bytes(
+			aperture[APERTURE_AREA_OFFSET + 4..]
+				.try_into()
+				.unwrap_or_default(),
+		);
+		if width > 0 && height > 0 {
+			return (width as usize & !1, height as usize & !1);
+		}
+	}
+	let (width, height) = size_of(media_type, &MF_MT_FRAME_SIZE).unwrap_or_default();
+	(width as usize & !1, height as usize & !1)
+}
+
+pub fn packed_nv12(data: &[u8], width: usize, height: usize, stride: usize) -> Option<Vec<u8>> {
+	let aligned_height = (data.len() * 2 / (3 * stride.max(1))).max(height);
+	if width == 0 || height == 0 || data.len() < stride * aligned_height * 3 / 2 {
+		return None;
+	}
+	let (luma, chroma) = data.split_at(stride * aligned_height);
+	let mut packed = Vec::with_capacity(width * height * 3 / 2);
+	for row in 0..height {
+		packed.extend_from_slice(&luma[row * stride..][..width]);
+	}
+	for row in 0..height / 2 {
+		packed.extend_from_slice(&chroma[row * stride..][..width]);
+	}
+	Some(packed)
 }
 
 pub fn media_type() -> windows::core::Result<IMFMediaType> {

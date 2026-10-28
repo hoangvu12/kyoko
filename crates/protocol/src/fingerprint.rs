@@ -23,6 +23,8 @@ pub const IMAGE_REFERER: &str = "https://discord.com/";
 pub const AUDIO_ACCEPT: &str = "*/*";
 pub const AUDIO_ACCEPT_ENCODING: &str = "identity;q=1, *;q=0";
 pub const AUDIO_RANGE: &str = "bytes=0-";
+pub const VIDEO_ACCEPT: &str = "*/*";
+pub const VIDEO_ACCEPT_ENCODING: &str = "identity";
 pub const HEARTBEAT_SESSION_LIFETIME: Duration = Duration::from_secs(30 * 60);
 pub const LAUNCH_SIGNATURE_MOD_BITS: u128 = (1 << 119)
 	| (1 << 108)
@@ -231,6 +233,23 @@ impl Fingerprint {
 			("sec-fetch-dest", "audio".to_owned()),
 			("sec-fetch-mode", "no-cors".to_owned()),
 			("sec-fetch-site", "cross-site".to_owned()),
+		]
+	}
+
+	pub fn video_headers(&self) -> Vec<(&'static str, String)> {
+		vec![
+			("accept", VIDEO_ACCEPT.to_owned()),
+			("accept-encoding", VIDEO_ACCEPT_ENCODING.to_owned()),
+			("accept-language", self.accept_language()),
+			("priority", "i".to_owned()),
+			("referer", IMAGE_REFERER.to_owned()),
+			("sec-ch-ua", sec_ch_ua()),
+			("sec-ch-ua-mobile", "?0".to_owned()),
+			("sec-ch-ua-platform", sec_ch_ua_platform().to_owned()),
+			("sec-fetch-dest", "video".to_owned()),
+			("sec-fetch-mode", "no-cors".to_owned()),
+			("sec-fetch-site", "cross-site".to_owned()),
+			("sec-fetch-storage-access", "active".to_owned()),
 		]
 	}
 }

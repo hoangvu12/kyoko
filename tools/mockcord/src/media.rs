@@ -1,8 +1,8 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use axum::extract::{Path, Query};
-use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use image::codecs::png::PngEncoder;
 use image::{DynamicImage, ExtendedColorType, ImageEncoder, Rgb, RgbImage, RgbaImage};
@@ -146,9 +146,16 @@ fn respond(content_type: &'static str, encoded: Result<Vec<u8>, String>) -> Resp
 	}
 }
 
-pub async fn media(Path(name): Path<String>, Query(query): Query<MediaQuery>) -> Response {
+pub async fn media(
+	Path(name): Path<String>,
+	Query(query): Query<MediaQuery>,
+	headers: HeaderMap,
+) -> Response {
 	if let Some(audio) = crate::audio::respond(&name) {
 		return audio;
+	}
+	if crate::clip::is_video(&name) {
+		return crate::clip::respond(&headers);
 	}
 	let (stem, extension) = name.rsplit_once('.').unwrap_or((name.as_str(), "png"));
 	let seed = seed_of(&format!("{stem}.png"));

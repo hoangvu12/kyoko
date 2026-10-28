@@ -42,6 +42,7 @@ pub mod themes;
 mod threads;
 mod timeline;
 mod toasts;
+mod video;
 mod voice_call;
 mod voice_panel;
 mod web_login;
@@ -117,8 +118,8 @@ pub use hidden::{
 pub use images::{
 	Avatar, app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url,
 	device_pixels, embed_icon_request, embed_request, emoji_request, gif_still_request, gifv_request,
-	guild_icon_request, is_image, is_video, local_audio, local_media, media_fetcher, media_fetcher_builder,
-	refresh_command, sticker_request, tenor_gif_url,
+	guild_icon_request, is_image, is_video, local_audio, local_media, local_video, media_fetcher,
+	media_fetcher_builder, refresh_command, sticker_request, tenor_gif_url, video_poster_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use inbox_popout::{
@@ -143,7 +144,7 @@ pub use message::{
 };
 pub use mosaic::{
 	MOSAIC_GAP, MOSAIC_WIDTH, Mosaic, Shape as MosaicShape, Tile, WIDE_PAIR_RATIO, cover_box, image_mosaic,
-	mosaic, mosaic_images, row_counts,
+	mosaic, mosaic_images, mosaic_media, row_counts,
 };
 pub use password_login::{
 	Handover as PasswordHandover, MfaView, PasswordProblem, PasswordReply, PasswordSignIn, PasswordStage,
@@ -205,6 +206,10 @@ pub use timeline::{
 	replacement_channel,
 };
 pub use toasts::{TOAST_EXIT, TOAST_LIFETIME, TOAST_LIMIT, Toast, ToastKind, Toasts};
+pub use video::{
+	DEFAULT_VIDEO_VIEW, VIDEO_MAX_FPS, VideoClip, VideoFailure, VideoPhase, VideoPicture, VideoPlayer,
+	VideoState, is_playable_embed,
+};
 pub use voice_call::{
 	CallStream, CallTile, Pace, SPEAKING_PACE, SpeakingPace, VoiceCall, voice_call, voice_speaking,
 };

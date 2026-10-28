@@ -27,7 +27,7 @@ pub const API_ORDER: [&str; 24] = [
 	"priority",
 ];
 
-pub const IMAGE_ORDER: [&str; 13] = [
+pub const IMAGE_ORDER: [&str; 14] = [
 	"sec-ch-ua-platform",
 	"user-agent",
 	"sec-ch-ua",
@@ -40,6 +40,7 @@ pub const IMAGE_ORDER: [&str; 13] = [
 	"referer",
 	"accept-encoding",
 	"accept-language",
+	"range",
 	"priority",
 ];
 

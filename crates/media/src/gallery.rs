@@ -811,6 +811,15 @@ impl Gallery {
 		self.changed();
 	}
 
+	pub fn gif_playback(&self) -> Playback {
+		let inner = self.shared.inner.lock();
+		if inner.reduced_motion {
+			Playback::Never
+		} else {
+			inner.playback.gifs
+		}
+	}
+
 	pub fn set_reduced_motion(&self, reduced: bool) {
 		self.shared.inner.lock().reduced_motion = reduced;
 		self.changed();

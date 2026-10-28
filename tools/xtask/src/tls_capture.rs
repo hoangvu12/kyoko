@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use mockcord::hello::{
 	API_CALLS, Capture, Connection, FETCH_PATH, GATEWAY_HOST, GATEWAY_PATH, HelloListener, Http2Request,
-	IMAGE_HOST, IMAGE_PATH, Mode, TlsSummary, WEBSOCKET_PATH, differences,
+	IMAGE_HOST, IMAGE_PATH, Mode, TlsSummary, VIDEO_HOST, VIDEO_PATH, WEBSOCKET_PATH, differences,
 };
 
 use crate::parity::browser;
@@ -18,7 +18,8 @@ const HTTPS: &str = "https";
 const WSS: &str = "wss";
 const IMAGE: &str = "image";
 const CROSS_SITE_WSS: &str = "wss-cross-site";
-const KINDS: [&str; 4] = [HTTPS, WSS, IMAGE, CROSS_SITE_WSS];
+const VIDEO: &str = "video";
+const KINDS: [&str; 5] = [HTTPS, WSS, IMAGE, CROSS_SITE_WSS, VIDEO];
 const PAGE_HOST: &str = "localhost";
 
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -185,6 +186,7 @@ fn capture(connections: &[Connection], mode: Mode, kind: &str, label: &str) -> O
 			.as_ref()
 			.is_some_and(|summary| summary.requests.iter().any(on_page_host)),
 		(Mode::Complete, IMAGE) => requested(connection, IMAGE_PATH),
+		(Mode::Complete, VIDEO) => requested(connection, VIDEO_PATH),
 		(Mode::Complete, WSS) => upgrade_path(connection) == Some(WEBSOCKET_PATH),
 		(Mode::Complete, _) => upgrade_path(connection) == Some(GATEWAY_PATH),
 	})?;
@@ -328,7 +330,9 @@ impl Running {
 				"--disable-background-networking",
 				"--disable-component-update",
 				"--ignore-certificate-errors",
-				&format!("--host-resolver-rules=MAP {IMAGE_HOST} 127.0.0.1, MAP {GATEWAY_HOST} 127.0.0.1"),
+				&format!(
+					"--host-resolver-rules=MAP {IMAGE_HOST} 127.0.0.1, MAP {VIDEO_HOST} 127.0.0.1, MAP {GATEWAY_HOST} 127.0.0.1"
+				),
 				"--new-window",
 				&format!("https://localhost:{port}/"),
 			])

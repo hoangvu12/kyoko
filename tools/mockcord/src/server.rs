@@ -245,6 +245,26 @@ impl Server {
 		parse_id(&message["id"]).map(Snowflake)
 	}
 
+	pub fn post_video(&self, channel_id: Snowflake, signature: Signature) -> Option<Snowflake> {
+		let author = self.shared.fixtures.someone_in(channel_id.0)?.clone();
+		let draft = Draft {
+			files: vec![UploadedFile {
+				filename: crate::clip::CLIP_FILENAME.to_owned(),
+				content_type: Some(crate::clip::MP4.to_owned()),
+				size: crate::clip::CLIP.len(),
+			}],
+			descriptors: vec![AttachmentDescriptor {
+				id: Snowflake(0),
+				duration_secs: Some(crate::clip::CLIP_SECS),
+				..AttachmentDescriptor::default()
+			}],
+			hosted: Some(signature),
+			..Draft::default()
+		};
+		let message = self.shared.post_message(channel_id.0, &author, draft).ok()?;
+		parse_id(&message["id"]).map(Snowflake)
+	}
+
 	pub async fn shutdown(mut self) {
 		let _ = self.stop.send(true);
 		for mut task in self.tasks.drain(..) {

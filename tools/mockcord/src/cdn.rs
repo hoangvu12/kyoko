@@ -371,8 +371,20 @@ fn valid(path: &str, query: &AttachmentQuery) -> bool {
 pub async fn attachment(
 	Path((channel_id, attachment_id, file)): Path<(u64, u64, String)>,
 	Query(query): Query<AttachmentQuery>,
+	headers: axum::http::HeaderMap,
 ) -> Response {
 	let path = attachment_path(channel_id, attachment_id, &file);
+	if crate::clip::is_video(&file) {
+		if !valid(&path, &query) {
+			return (StatusCode::NOT_FOUND, "This content is no longer available.").into_response();
+		}
+		if query.format.is_none() {
+			return crate::clip::respond(&headers);
+		}
+		let width = query.width.unwrap_or(ATTACHMENT_WIDTH).clamp(1, MAX_SIDE);
+		let height = query.height.unwrap_or(ATTACHMENT_HEIGHT).clamp(1, MAX_SIDE);
+		return respond(Kind::Webp, frames(seed_of(&path), width, height, 1));
+	}
 	if crate::audio::is_audio(&file) {
 		if !valid(&path, &query) {
 			return (StatusCode::NOT_FOUND, "This content is no longer available.").into_response();

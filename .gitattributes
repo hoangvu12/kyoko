@@ -9,3 +9,4 @@
 *.pack binary
 *.ttf binary
 *.h264 binary
+*.mp4 binary

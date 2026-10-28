@@ -11,6 +11,7 @@ use protocol::{
 use serde_json::Value;
 
 use crate::audio;
+use crate::clip;
 use crate::components;
 use crate::ids::snowflake_at;
 use crate::json::to_json;
@@ -61,6 +62,10 @@ const TEN: [(i64, i64); 10] = [
 	(800, 800),
 ];
 
+pub const VIDEO_SECTIONS: [(&str, &str); 1] = [("timeline-video", "showcase: video")];
+pub const VIDEO_CAPTION: &str = "a clip from today";
+pub const VIDEO_EMBED_URL: &str = "https://clips.example.com/v/kyoko-showcase";
+
 pub const COMPONENTS_SECTION: &str = "showcase: components";
 pub const RELEASE_QUESTION: &str = "did the release post go out";
 pub const REACTIONS_SECTION: &str = "showcase: reactions";
@@ -86,6 +91,7 @@ pub fn screen_section(screen: &str) -> Option<&'static str> {
 	SECTIONS
 		.iter()
 		.chain(IMAGE_GRID_SECTIONS.iter())
+		.chain(VIDEO_SECTIONS.iter())
 		.find(|(name, _)| *name == screen)
 		.map(|(_, section)| *section)
 }
@@ -607,6 +613,47 @@ pub fn build(spec: &Showcase) -> Built {
 				"https://media.tenor.com/sHoWcAsEgIfAAAPo/showcase.mp4",
 				240,
 				135,
+			)),
+			..Embed::default()
+		}]);
+	});
+
+	writer.section(VIDEO_SECTIONS[0].1);
+	let clips = writer.time().timestamp_millis() as u64;
+	writer.post(1, |message| {
+		message.content = VIDEO_CAPTION.to_owned();
+		message.attachments = LenientVec::from(vec![Attachment {
+			duration_secs: Some(clip::CLIP_SECS),
+			..attachment(
+				clips + 1,
+				channel,
+				clip::CLIP_FILENAME,
+				clip::MP4,
+				clip::CLIP.len() as i64,
+				Some((clip::CLIP_WIDTH, clip::CLIP_HEIGHT)),
+			)
+		}]);
+	});
+	writer.post(2, |message| {
+		message.content = VIDEO_EMBED_URL.to_owned();
+		message.embeds = LenientVec::from(vec![Embed {
+			kind: Some(EmbedKind::Video),
+			url: Some(VIDEO_EMBED_URL.to_owned()),
+			description: Some("a short test clip, played inline".to_owned()),
+			author: Some(EmbedAuthor {
+				name: "kyoko clips (@kyoko.clips)".to_owned(),
+				url: Some("https://clips.example.com/@kyoko.clips".to_owned()),
+				..EmbedAuthor::default()
+			}),
+			thumbnail: Some(media(
+				"https://clips.example.com/v/kyoko-showcase/cover.jpg",
+				clip::CLIP_WIDTH,
+				clip::CLIP_HEIGHT,
+			)),
+			video: Some(media(
+				"https://clips.example.com/v/kyoko-showcase/video.mp4",
+				clip::CLIP_WIDTH,
+				clip::CLIP_HEIGHT,
 			)),
 			..Embed::default()
 		}]);

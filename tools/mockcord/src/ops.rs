@@ -529,7 +529,10 @@ fn host_attachment(attachment: &mut Attachment, origin: &str, channel_id: u64, s
 	let (width, height) = cdn::attachment_size();
 	attachment.url = Some(url.clone());
 	attachment.proxy_url = Some(url);
-	if !crate::audio::is_audio(&attachment.filename) {
+	if crate::clip::is_video(&attachment.filename) {
+		attachment.width = Some(crate::clip::CLIP_WIDTH);
+		attachment.height = Some(crate::clip::CLIP_HEIGHT);
+	} else if !crate::audio::is_audio(&attachment.filename) {
 		attachment.width = Some(i64::from(width));
 		attachment.height = Some(i64::from(height));
 	}

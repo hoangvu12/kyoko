@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use media::{MediaError, MediaFetcher};
+use media::{MediaError, MediaFetcher, Ticket};
 use mockcord::hello::{
-	Capture, Connection, HelloListener, Mode, NameCase, TlsSummary, chrome_fixture, differences,
+	Capture, Connection, HelloListener, Mode, NameCase, TlsSummary, VIDEO_PATH, chrome_fixture, differences,
 	missing_names, order_difference,
 };
 use parking_lot::Mutex;
@@ -258,6 +258,80 @@ async fn media_fetches_present_chromes_client_hello_and_image_request() {
 		assert_eq!(
 			header(&request.headers, name),
 			header(&chrome_image.headers, name),
+			"{name}"
+		);
+	}
+	assert_eq!(header(&request.headers, "authorization"), None);
+	assert_eq!(request.cookie_fields, 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn video_fetches_send_chromes_video_request() {
+	let listener = HelloListener::start(Mode::Complete)
+		.await
+		.expect("the hello listener starts");
+	let fetcher = bridge::media_fetcher_builder(&fingerprint())
+		.allow_host(format!("localhost:{}", listener.port()))
+		.trust(Trust::only(listener.root_pem()))
+		.build()
+		.expect("the fetcher builds");
+	let answer = fetcher
+		.open_range(
+			&format!("https://localhost:{}{VIDEO_PATH}", listener.port()),
+			0,
+			Ticket::urgent(),
+		)
+		.await;
+	assert!(
+		matches!(answer, Err(MediaError::Status(404))),
+		"the listener has no video to give"
+	);
+	let connection = listener
+		.connections()
+		.into_iter()
+		.find(|connection| connection.http2.is_some())
+		.expect("an http2 connection");
+	assert_hello_is_chromes(&connection);
+	let actual = connection.http2.expect("an http2 summary");
+	let request = actual
+		.requests
+		.iter()
+		.find(|request| request.path() == Some(VIDEO_PATH))
+		.expect("the video request");
+	let chrome_video = chrome_fixture(CHROME_MAJOR, "video")
+		.expect("a recorded video fixture for CHROME_MAJOR")
+		.http2
+		.and_then(|summary| summary.requests.into_iter().next())
+		.expect("the fixture recorded chrome's <video> request");
+	assert_eq!(request.pseudo_order, chrome_video.pseudo_order);
+	assert_eq!(request.priority, chrome_video.priority);
+	assert_eq!(request.flags, chrome_video.flags);
+	let difference = order_difference(&chrome_video.headers, &request.headers, NameCase::Exact);
+	assert!(
+		difference.is_empty(),
+		"the video request differs from chrome's: {difference:?}"
+	);
+	assert_eq!(
+		missing_names(&chrome_video.headers, &request.headers, NameCase::Exact),
+		Vec::<String>::new()
+	);
+	for name in [
+		"accept",
+		"accept-encoding",
+		"range",
+		"sec-fetch-dest",
+		"sec-fetch-mode",
+		"sec-fetch-site",
+		"sec-fetch-storage-access",
+		"priority",
+		"user-agent",
+		"sec-ch-ua",
+		"sec-ch-ua-mobile",
+		"sec-ch-ua-platform",
+	] {
+		assert_eq!(
+			header(&request.headers, name),
+			header(&chrome_video.headers, name),
 			"{name}"
 		);
 	}

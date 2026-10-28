@@ -4,6 +4,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 
 use crate::clip::{Clip, frames_to_duration};
+use crate::feed::Feed;
 use crate::playhead::Playhead;
 
 type Notify = Arc<dyn Fn() + Send + Sync>;
@@ -23,6 +24,7 @@ pub struct DeckStatus {
 pub struct Deck {
 	inner: Arc<Mutex<Inner>>,
 	notify: Arc<Mutex<Option<Notify>>>,
+	feed: Arc<Mutex<Option<Feed>>>,
 }
 
 #[derive(Default)]
@@ -140,17 +142,32 @@ impl Deck {
 		self.inner.lock().rendered
 	}
 
+	pub fn set_feed(&self, feed: Option<Feed>) {
+		*self.feed.lock() = feed;
+	}
+
 	pub fn render(&self, out: &mut [f32], channels: u16, rate: u32) {
 		out.fill(0.);
+		let ended = self.render_voice(out, channels, rate);
+		let feed = self.feed.try_lock().and_then(|feed| feed.clone());
+		if let Some(feed) = feed {
+			feed.mix(out, channels, rate);
+		}
+		if ended {
+			self.notify();
+		}
+	}
+
+	fn render_voice(&self, out: &mut [f32], channels: u16, rate: u32) -> bool {
 		let channels = usize::from(channels.max(1));
-		let ended = {
+		{
 			let Some(mut inner) = self.inner.try_lock() else {
-				return;
+				return false;
 			};
 			let frames = out.len() / channels;
 			inner.rendered += frames as u64;
 			let Some(voice) = inner.voice.as_mut().filter(|voice| voice.playing) else {
-				return;
+				return false;
 			};
 			let gain = if voice.muted { 0. } else { 1. };
 			let mut ended = false;
@@ -175,9 +192,6 @@ impl Deck {
 				voice.head.seek(end);
 			}
 			ended
-		};
-		if ended {
-			self.notify();
 		}
 	}
 

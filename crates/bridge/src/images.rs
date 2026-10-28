@@ -24,6 +24,7 @@ pub fn media_fetcher_builder(fingerprint: &Fingerprint) -> MediaFetcherBuilder {
 		.user_agent(fingerprint.user_agent())
 		.headers(fingerprint.image_headers())
 		.audio_headers(fingerprint.audio_headers())
+		.video_headers(fingerprint.video_headers())
 }
 
 pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> media::Result<MediaFetcher> {
@@ -246,6 +247,42 @@ pub fn attachment_request(
 	)
 }
 
+pub fn video_poster_request(
+	attachment: &Attachment,
+	channel_id: Snowflake,
+	message_id: Snowflake,
+	max_points: (f64, f64),
+	scale: f64,
+) -> Option<ImageRequest> {
+	if !is_video(attachment) {
+		return None;
+	}
+	let (width, height) = cdn::fit(
+		dimension(attachment.width),
+		dimension(attachment.height),
+		cdn::device_pixels(max_points.0, scale),
+		cdn::device_pixels(max_points.1, scale),
+	);
+	let base = attachment.proxy_url.as_ref().or(attachment.url.as_ref())?;
+	let url = cdn::proxy_sized(
+		base,
+		ProxySize {
+			width,
+			height,
+			format: Some(ProxyFormat::Webp),
+			animated: false,
+		},
+	);
+	let origin = Origin {
+		channel_id: channel_id.0,
+		message_id: message_id.0,
+	};
+	Some(
+		ImageRequest::new(url, Variant::new(SizeHint::new(width, height), Shape::Square))
+			.from_message(origin),
+	)
+}
+
 pub fn refresh_command(origin: Origin) -> Command {
 	Command::RefreshMedia {
 		channel_id: Snowflake(origin.channel_id),
@@ -293,6 +330,10 @@ pub fn local_audio(url: &str, mock_origin: Option<&str>) -> String {
 			})
 			.unwrap_or_else(|| "ogg".to_owned())
 	})
+}
+
+pub fn local_video(url: &str, mock_origin: Option<&str>) -> String {
+	local(url, mock_origin, |_| "mp4".to_owned())
 }
 
 fn local(url: &str, mock_origin: Option<&str>, extension: impl FnOnce(&Url) -> String) -> String {
