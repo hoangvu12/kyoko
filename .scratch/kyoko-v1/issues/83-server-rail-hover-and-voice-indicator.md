@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Hover tooltip card on the rail: server name, and the voice row (speaker icon plus up to a few avatars) when anyone is in voice
 - [ ] Speaker badge on a server icon with active voice, from voice states
