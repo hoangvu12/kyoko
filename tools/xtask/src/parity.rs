@@ -526,7 +526,7 @@ fn mockcord_flags(screen: &str) -> &'static [&'static str] {
 		"app-modal-error" => &["--failing-modals"],
 		"apps-launcher" => &["--more-apps"],
 		"voice-video" => &["--cameras", "1:15"],
-		"voice-stream" | "voice-stream-watching" => &["--streams", "1"],
+		"voice-stream" | "voice-stream-watching" | "voice-stream-viewer" => &["--streams", "1"],
 		_ => &[],
 	}
 }

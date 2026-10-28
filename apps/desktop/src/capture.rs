@@ -128,6 +128,7 @@ pub enum Screen {
 	VoiceVideo,
 	VoiceStream,
 	VoiceStreamWatching,
+	VoiceStreamViewer,
 	VoiceRowHover,
 }
 
@@ -332,6 +333,7 @@ impl Screen {
 			"voice-video" => Some(Screen::VoiceVideo),
 			"voice-stream" => Some(Screen::VoiceStream),
 			"voice-stream-watching" => Some(Screen::VoiceStreamWatching),
+			"voice-stream-viewer" => Some(Screen::VoiceStreamViewer),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			other => settings_page(other)
 				.map(Screen::Settings)
@@ -412,6 +414,7 @@ impl Screen {
 			| Screen::VoiceVideo
 			| Screen::VoiceStream
 			| Screen::VoiceStreamWatching
+			| Screen::VoiceStreamViewer
 			| Screen::VoiceRowHover => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken

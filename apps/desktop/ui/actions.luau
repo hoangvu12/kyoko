@@ -565,4 +565,8 @@ function M.stop_watching(key: string)
 	ui.invoke("voice.stop_watching", { key = key })
 end
 
+function M.set_stream_volume(id: string, volume: number)
+	ui.invoke("voice.stream_volume", { id = id, volume = volume })
+end
+
 return M

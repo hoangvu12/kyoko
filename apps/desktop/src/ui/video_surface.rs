@@ -254,6 +254,16 @@ impl Link {
 	pub(super) fn stream_frames_shown(&self) -> u64 {
 		self.video.streams.frames.get()
 	}
+
+	pub(super) fn stream_view_width(&self) -> f64 {
+		self.video
+			.streams
+			.reported
+			.borrow()
+			.iter()
+			.map(|view| view.width)
+			.fold(0., f64::max)
+	}
 }
 
 fn device_pixels(points: f64, scale: f64) -> u32 {

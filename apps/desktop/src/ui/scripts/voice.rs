@@ -486,3 +486,97 @@ fn a_stream_tile_watches_focuses_reports_its_view_and_stops_watching() {
 		Some(json!({ "key": "guild:20:21:31" }))
 	);
 }
+
+fn stream_view(calls: &Calls) -> serde_json::Value {
+	let views = last_call(calls, "voice.stream_views").expect("the stream view is reported");
+	let views = views.as_array().expect("a list of views").clone();
+	assert_eq!(views.len(), 1, "one watched stream: {views:?}");
+	views[0].clone()
+}
+
+fn open_full_window(app: &mut super::TestApp) {
+	point_at(app, "call_stream_31");
+	app.click("call_stream_full_31");
+	app.frames(3);
+	assert!(
+		app.find("stream_viewer").is_some(),
+		"the full-window view opens from the focused stream tile"
+	);
+}
+
+#[test]
+fn the_full_window_stream_view_shows_the_stream_sets_its_volume_and_closes() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(
+		&mut app,
+		"watching the stream",
+		"Stop Watching",
+		&stream_call_values(true),
+	);
+	assert!(app.find("stream_viewer").is_none(), "closed until asked for");
+	let tile_width = stream_view(&calls)["w"].as_f64().expect("a width");
+
+	open_full_window(&mut app);
+	let viewer = app.bounds("stream_viewer");
+	assert_eq!(
+		(viewer.width, viewer.height),
+		WIDE,
+		"the stream view fills the window"
+	);
+	assert!(
+		app.find("stream_viewer_video_31").is_some(),
+		"it shows the stream"
+	);
+	assert!(app.texts().iter().any(|text| text == "Stream Volume"));
+	let full = stream_view(&calls);
+	assert_eq!(full["focused"], json!(true));
+	assert_eq!(full["w"].as_f64(), Some(f64::from(WIDE.0)));
+	assert!(
+		f64::from(WIDE.0) > tile_width,
+		"the window asks for a larger view"
+	);
+
+	app.click("stream_viewer_volume");
+	app.frames(2);
+	let volume = last_call(&calls, "voice.stream_volume").expect("the slider sets the stream volume");
+	assert_eq!(volume["id"], json!("31"));
+	let percent = volume["volume"].as_f64().expect("a volume");
+	assert!(
+		(90. ..=110.).contains(&percent),
+		"the middle of the slider is about 100%: {percent}"
+	);
+	assert_eq!(
+		last_call(&calls, "voice.user_volume"),
+		None,
+		"the stream volume is not the voice volume"
+	);
+
+	app.key(zgx::input::Key::Escape);
+	app.frames(3);
+	assert!(app.find("stream_viewer").is_none(), "Escape returns to the call");
+	assert!(app.find("call_stream_video_31").is_some());
+	assert_eq!(stream_view(&calls)["w"].as_f64(), Some(tile_width));
+
+	open_full_window(&mut app);
+	app.click("stream_viewer_exit");
+	app.frames(3);
+	assert!(
+		app.find("stream_viewer").is_none(),
+		"the exit button returns to the call"
+	);
+
+	open_full_window(&mut app);
+	app.click("stream_viewer_stop");
+	app.frames(3);
+	assert_eq!(
+		last_call(&calls, "voice.stop_watching"),
+		Some(json!({ "key": "guild:20:21:31" }))
+	);
+	assert!(
+		app.find("stream_viewer").is_none(),
+		"Stop Watching closes the view"
+	);
+}

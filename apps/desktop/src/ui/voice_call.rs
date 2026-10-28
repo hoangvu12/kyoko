@@ -8,10 +8,13 @@ use media::ImageName;
 use protocol::Snowflake;
 use session::Command;
 use state::{State, USER_VOLUME_MAX};
+use zgx::input::{InputEvent, PointerButton};
 use zgx::reactive::{Runtime, Signal};
+use zgx::widgets::WeakUi;
 use zgx_script::{ScriptHost, Shared, Value};
 
 use super::{Link, field, record, snowflake};
+use crate::capture;
 use crate::rail::Icons;
 
 const TILE_AVATAR_POINTS: f64 = 80.;
@@ -21,6 +24,8 @@ const CAPTURE_TONE_HZ: f32 = 440.;
 const CAPTURE_TONE_LEVEL: f32 = 0.2;
 const CAPTURE_RATE: f32 = 48_000.;
 const CAPTURE_FRAME_SAMPLES: usize = 960;
+const STOP_WATCHING: &str = "Stop Watching";
+const FULL_WINDOW_FROM_STOP: f32 = 43.;
 
 pub(super) struct CallView {
 	shown: Signal<bool>,
@@ -113,6 +118,12 @@ impl Link {
 		host.action("voice.user_volume", move |argument| {
 			if let (Some(link), Some((user_id, volume))) = (actions.upgrade(), user_volume(&argument)) {
 				link.send(Command::SetUserVolume { user_id, volume });
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.stream_volume", move |argument| {
+			if let (Some(link), Some((user_id, volume))) = (actions.upgrade(), user_volume(&argument)) {
+				link.send(Command::SetStreamVolume { user_id, volume });
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -296,6 +307,33 @@ impl Link {
 		);
 	}
 
+	pub(super) async fn drive_voice_stream_viewer(&self) {
+		self.drive_voice_stream_watching().await;
+		let tile = self.stream_view_width();
+		let Some(stop) = self.rightmost_text(STOP_WATCHING) else {
+			tracing::warn!("the watched stream shows no Stop Watching");
+			return;
+		};
+		let Some(mut ui) = self.ui.borrow().as_ref().and_then(WeakUi::upgrade) else {
+			return;
+		};
+		let (x, y) = (stop.x - FULL_WINDOW_FROM_STOP, stop.y + stop.height / 2.);
+		let button = PointerButton::Primary;
+		ui.dispatch(InputEvent::PointerMove { x, y });
+		zgx::timer::sleep(capture::POLL).await;
+		ui.dispatch(InputEvent::PointerDown { x, y, button });
+		ui.dispatch(InputEvent::PointerUp { x, y, button });
+		drop(ui);
+		self.until_capture(|link| link.stream_view_width() > tile).await;
+		let shown = self.stream_frames_shown();
+		self.until_capture(|link| link.stream_frames_shown() >= shown + STREAM_CAPTURE_FRAMES)
+			.await;
+		tracing::info!(
+			width = self.stream_view_width(),
+			"the full-window stream view shows for the capture"
+		);
+	}
+
 	pub(super) fn call_images(&self) -> Vec<String> {
 		self.call.images()
 	}
@@ -411,7 +449,7 @@ fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
 		("deafened", false.into()),
 		("video", "stream".into()),
 		("live", true.into()),
-		("volume", f64::from(state::USER_VOLUME_DEFAULT).into()),
+		("volume", f64::from(stream.volume).into()),
 		("local_muted", false.into()),
 		("stream", true.into()),
 		("stream_key", stream.stream_key.as_str().into()),

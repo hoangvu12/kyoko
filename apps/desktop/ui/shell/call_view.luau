@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
+local dialog = require("../settings/dialog")
 
 local TILE_RATIO = 9 / 16
 local AVATAR_SHARE = 0.5
@@ -118,10 +119,15 @@ local function state_icons(tile: state.CallTile): { any }
 	return icons
 end
 
-local volume_slider = ui.component(function(props: { tile: state.CallTile })
+local volume_slider = ui.component(function(props: {
+	slider: string,
+	label: string,
+	volume: number,
+	commit: (number) -> (),
+})
 	local track = ui.ref()
 	local dragging = ui.use_state(false)
-	local volume = ui.use_state(props.tile.volume)
+	local volume = ui.use_state(props.volume)
 	local function fraction(): number
 		return math.clamp(volume:get() / VOLUME_MAX, 0, 1)
 	end
@@ -134,7 +140,7 @@ local volume_slider = ui.component(function(props: { tile: state.CallTile })
 		volume:set(math.floor(raw / VOLUME_STEP + 0.5) * VOLUME_STEP)
 	end
 	local function commit()
-		actions.set_user_volume(props.tile.id, volume:get())
+		props.commit(volume:get())
 	end
 	return ui.column {
 		w_full = true,
@@ -145,7 +151,7 @@ local volume_slider = ui.component(function(props: { tile: state.CallTile })
 			w_full = true,
 			justify = "between",
 			ui.text {
-				"User Volume",
+				props.label,
 				text_size = theme.size.font_size_sm,
 				line_height = theme.size.line_height_sm,
 				weight = theme.weight.medium,
@@ -161,13 +167,13 @@ local volume_slider = ui.component(function(props: { tile: state.CallTile })
 			},
 		},
 		ui.div {
-			id = "call_menu_volume",
+			id = props.slider,
 			ref = track,
 			relative = true,
 			w_full = true,
 			h = theme.size.slider_grabber_size,
 			cursor = "pointer",
-			label = "User Volume",
+			label = props.label,
 			on_press = function(event: any)
 				dragging:set(true)
 				pick(event.local_x)
@@ -230,7 +236,14 @@ end)
 
 local function participant_menu(tile: state.CallTile): { any }
 	return {
-		volume_slider { tile = tile },
+		volume_slider {
+			slider = "call_menu_volume",
+			label = "User Volume",
+			volume = tile.volume,
+			commit = function(volume: number)
+				actions.set_user_volume(tile.id, volume)
+			end,
+		},
 		ui.div { h = theme.size.border_thickness, my = theme.size.space_4, mx = theme.size.space_4, bg = theme.color.border },
 		ui.menu_item {
 			"Mute",
@@ -379,7 +392,35 @@ local function stream_button(props: { id: string, label: string, on_click: () ->
 	}
 end
 
-local stream_tile = ui.component(function(props: { tile: state.CallTile, size: () -> number, focused: any })
+local function full_window_button(tile: state.CallTile, viewing: any)
+	return ui.button {
+		id = "call_stream_full_" .. tile.id,
+		w = theme.size.button_height_md,
+		h = theme.size.button_height_md,
+		shrink = 0,
+		p = 0,
+		rounded = theme.size.radius_sm,
+		border = 0,
+		focus = { border = 0 },
+		justify = "center",
+		items = "center",
+		cursor = "pointer",
+		bg = theme.color.overlay_button_background,
+		hover = { bg = theme.color.bg_1 },
+		tooltip = "Full Window",
+		on_click = function()
+			viewing:set(tile.key)
+		end,
+		icon { name = "expand", size = theme.number(theme.size.icon_size_md)(), color = theme.color.text_1 },
+	}
+end
+
+local stream_tile = ui.component(function(props: {
+	tile: state.CallTile,
+	size: () -> number,
+	focused: any,
+	viewing: any,
+})
 	local tile = props.tile
 	local size = props.size
 	local focused = props.focused
@@ -480,10 +521,12 @@ local stream_tile = ui.component(function(props: { tile: state.CallTile, size: (
 			function()
 				return tile.watching and controls_shown()
 			end,
-			ui.div {
+			ui.row {
 				absolute = true,
 				top = gap(),
 				right = gap(),
+				gap = theme.size.space_8,
+				full_window_button(tile, props.viewing),
 				stream_button {
 					id = "call_stop_watching_" .. tile.id,
 					label = "Stop Watching",
@@ -526,9 +569,203 @@ local stream_tile = ui.component(function(props: { tile: state.CallTile, size: (
 	}
 end)
 
+local function window_size(): (number, number)
+	local window = dialog.window
+	if not window then
+		return 0, 0
+	end
+	return window.width or 0, window.height or 0
+end
+
+local function watched_tile(key: string): state.CallTile?
+	if key == "" then
+		return nil
+	end
+	for _, tile in call().tiles do
+		if tile.key == key and tile.stream and tile.watching then
+			return tile
+		end
+	end
+	return nil
+end
+
+local function viewer_body(tile: state.CallTile, viewing: any)
+	local function width(): number
+		return (window_size())
+	end
+	local function height(): number
+		local _, tall = window_size()
+		return tall
+	end
+	return ui.div {
+		id = "stream_viewer",
+		relative = true,
+		w = width,
+		h = height,
+		bg = theme.color.background_scrim_lightbox,
+		ui.image {
+			id = "stream_viewer_video_" .. tile.id,
+			src = "host:stream/" .. tile.id,
+			absolute = true,
+			left = 0,
+			top = 0,
+			w = width,
+			h = height,
+			fit = "contain",
+		},
+		ui.show(
+			function()
+				return not state.voice.video_available:get()
+			end,
+			ui.text {
+				"Video unavailable",
+				absolute = true,
+				top = stage_padding(),
+				right = stage_padding(),
+				px = theme.size.space_8,
+				py = theme.size.space_2,
+				rounded = theme.size.radius_sm,
+				bg = theme.color.overlay_button_background,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				color = theme.color.text_2,
+			}
+		),
+		ui.row {
+			id = "stream_viewer_name",
+			absolute = true,
+			left = stage_padding(),
+			top = stage_padding(),
+			max_w = function()
+				return width() - stage_padding() * 2
+			end,
+			items = "center",
+			gap = theme.size.space_4,
+			px = theme.size.space_8,
+			py = theme.size.space_2,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.overlay_button_background,
+			icon { name = "screen_share", size = badge_icon(), color = theme.color.text_2 },
+			ui.text {
+				tile.name,
+				literal = true,
+				min_w = 0,
+				truncate = true,
+				text_size = theme.size.font_size_sm,
+				line_height = theme.size.line_height_sm,
+				weight = theme.weight.medium,
+				color = theme.color.text_1,
+			},
+			live_badge(),
+		},
+		ui.row {
+			absolute = true,
+			left = 0,
+			right = 0,
+			bottom = theme.number(theme.size.space_24)(),
+			justify = "center",
+			ui.row {
+				id = "stream_viewer_controls",
+				items = "center",
+				gap = theme.size.space_12,
+				px = theme.size.space_12,
+				py = theme.size.space_8,
+				rounded = theme.size.radius_md,
+				bg = theme.color.bg_3,
+				border = theme.size.border_thickness,
+				border_color = theme.color.border,
+				icon { name = "volume", size = theme.number(theme.size.icon_size_md)(), color = theme.color.text_3 },
+				ui.div {
+					w = theme.size.call_menu_width,
+					volume_slider {
+						slider = "stream_viewer_volume",
+						label = "Stream Volume",
+						volume = tile.volume,
+						commit = function(volume: number)
+							actions.set_stream_volume(tile.id, volume)
+						end,
+					},
+				},
+				stream_button {
+					id = "stream_viewer_stop",
+					label = "Stop Watching",
+					primary = false,
+					on_click = function()
+						viewing:set("")
+						actions.stop_watching(tile.stream_key)
+					end,
+				},
+				icon_button {
+					id = "stream_viewer_exit",
+					name = "shrink",
+					tooltip = "Exit Full Window",
+					hit_size = theme.number(theme.size.button_size)(),
+					filled_hover = true,
+					on_click = function()
+						viewing:set("")
+					end,
+				},
+			},
+		},
+	}
+end
+
+local stream_viewer = ui.component(function(props: { viewing: any })
+	local viewing = props.viewing
+	local open = ui.use_state(false)
+	local shown = ui.computed(function(): { state.CallTile }
+		local tile = watched_tile(viewing:get())
+		return if tile then { tile } else {}
+	end)
+	ui.effect(function()
+		local wanted = #shown:get() > 0
+		if open:peek() ~= wanted then
+			open:set(wanted)
+		end
+	end)
+	local was_open = false
+	ui.effect(function()
+		local now = open:get()
+		if was_open and not now and viewing:get() ~= "" then
+			viewing:set("")
+		end
+		was_open = now
+	end)
+	return ui.modal {
+		open = open,
+		label = "Stream",
+		p = 0,
+		border = 0,
+		rounded = 0,
+		bg = "#00000000",
+		w = function()
+			return (window_size())
+		end,
+		h = function()
+			local _, height = window_size()
+			return height
+		end,
+		max_w = function()
+			return (window_size())
+		end,
+		max_h = function()
+			local _, height = window_size()
+			return height
+		end,
+		ui.each(shown, function(tile: state.CallTile)
+			return viewer_body(tile, viewing)
+		end, {
+			key = function(tile: state.CallTile)
+				return tile.key
+			end,
+		}),
+	}
+end)
+
 local stage = ui.component(function()
 	local area = ui.ref()
 	local focused = ui.use_state("")
+	local viewing = ui.use_state("")
 	local function shown(): { state.CallTile }
 		local tiles = call().tiles
 		local focus = focused:get()
@@ -565,6 +802,7 @@ local stage = ui.component(function()
 	ui.effect(function()
 		local width = size()
 		local focus = focused:get()
+		local full = viewing:get()
 		local views = {}
 		local keys = {}
 		local streams = {}
@@ -576,7 +814,13 @@ local stage = ui.component(function()
 				h = width * TILE_RATIO,
 				focused = focus == tile.key,
 			}
-			local key = string.format("%s:%d:%s", tile.id, width, tostring(view.focused))
+			if tile.key == full then
+				local wide, tall = window_size()
+				view.w = wide
+				view.h = tall
+				view.focused = true
+			end
+			local key = string.format("%s:%d:%d:%s", tile.id, view.w, view.h, tostring(view.focused))
 			if tile.stream and tile.watching then
 				table.insert(streams, view)
 				table.insert(stream_keys, key)
@@ -608,7 +852,7 @@ local stage = ui.component(function()
 		overflow = "hidden",
 		ui.each(tiles, function(tile: state.CallTile)
 			if tile.stream then
-				return stream_tile { tile = tile, size = size, focused = focused }
+				return stream_tile { tile = tile, size = size, focused = focused, viewing = viewing }
 			end
 			return tile_view(tile, size, focused)
 		end, {
@@ -622,6 +866,7 @@ local stage = ui.component(function()
 			gap = theme.size.space_8,
 			w_full = true,
 		}),
+		stream_viewer { viewing = viewing },
 	}
 end)
 
