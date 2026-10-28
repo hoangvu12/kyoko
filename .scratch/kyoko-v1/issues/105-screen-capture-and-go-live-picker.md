@@ -6,7 +6,7 @@ Plan ticket V9 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â€
 
 **Blocked by:** 104
 
-**Status:** open
+**Status:** claimed
 
 - [ ] The picker lists screens and windows; picking one previews it; closing the window ends capture
 - [ ] UI test for the picker; captures checked by eye
