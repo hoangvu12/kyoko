@@ -117,6 +117,7 @@ pub enum Screen {
 	Reactions(ReactionShot),
 	FriendConfirm(FriendShot),
 	VoiceMessage,
+	VideoPlayer,
 	Components(ComponentShot),
 	Polls(PollShot),
 	AppsLauncher,
@@ -314,6 +315,7 @@ impl Screen {
 			"friend-remove-dialog" => Some(Screen::FriendConfirm(FriendShot::Remove)),
 			"friend-block-dialog" => Some(Screen::FriendConfirm(FriendShot::Block)),
 			"voice-message" => Some(Screen::VoiceMessage),
+			"video-player" => Some(Screen::VideoPlayer),
 			"message-components" => Some(Screen::Components(ComponentShot::Buttons)),
 			"message-components-multi-select" => Some(Screen::Components(ComponentShot::MultiSelect)),
 			"message-components-v2" => Some(Screen::Components(ComponentShot::V2)),
@@ -403,6 +405,7 @@ impl Screen {
 			| Screen::Reactions(_)
 			| Screen::FriendConfirm(_)
 			| Screen::VoiceMessage
+			| Screen::VideoPlayer
 			| Screen::Components(_)
 			| Screen::Polls(_)
 			| Screen::AppsLauncher

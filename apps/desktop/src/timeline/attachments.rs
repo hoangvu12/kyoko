@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use bridge::{EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, STICKER_SIDE};
+use bridge::{EMBED_MEDIA_BOX, EMBED_THUMBNAIL, MessageEntry, STICKER_SIDE, VideoClip};
 use media::ImageName;
 use protocol::{Attachment, Embed, EmbedKind, EmbedMedia, FavoriteGif};
 use session::Command;
@@ -61,7 +61,7 @@ pub fn attachments(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 		.attachments
 		.iter()
 		.filter_map(|attachment| {
-			if inline && bridge::is_image(attachment) {
+			if inline && (bridge::is_image(attachment) || bridge::is_video(attachment)) {
 				grid.take()
 			} else if bridge::is_voice_message(message, attachment) {
 				Some(
@@ -80,7 +80,7 @@ pub fn attachments(entry: &MessageEntry, env: &Rc<RowEnv>) -> Vec<View> {
 }
 
 fn image_grid(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
-	let images = bridge::mosaic_images(&entry.message.attachments);
+	let images = bridge::mosaic_media(&entry.message.attachments);
 	let mosaic = bridge::image_mosaic(&images);
 	if mosaic.is_empty() {
 		return None;
@@ -107,6 +107,9 @@ fn image_grid(entry: &MessageEntry, env: &Rc<RowEnv>) -> Option<View> {
 }
 
 fn image_tile(entry: &MessageEntry, attachment: &Attachment, size: (f32, f32), env: &Rc<RowEnv>) -> View {
+	if let Some(tile) = video_tile(entry, attachment, size, env) {
+		return tile;
+	}
 	let name = env
 		.pictures
 		.attachment(attachment, entry.message.channel_id, entry.message.id, size);
@@ -128,6 +131,35 @@ fn image_tile(entry: &MessageEntry, attachment: &Attachment, size: (f32, f32), e
 		Some(favorite) => gif(frame, name, favorite, target, env),
 		None => frame.when_some(target, |frame, target| opens(frame, target, env)),
 	}
+}
+
+fn video_tile(
+	entry: &MessageEntry,
+	attachment: &Attachment,
+	size: (f32, f32),
+	env: &Rc<RowEnv>,
+) -> Option<View> {
+	let watching = env.pictures.watching();
+	let clip = watching.clip_of(VideoClip::attachment(&entry.message, attachment)?);
+	let poster = env
+		.pictures
+		.video_poster(attachment, entry.message.channel_id, entry.message.id, size);
+	Some(
+		div()
+			.id(format!("image-tile-{}", attachment.id))
+			.w_full()
+			.h_full()
+			.rounded(tok("radius_md"))
+			.overflow_hidden()
+			.child(watching.player_view(
+				clip,
+				poster,
+				attachment.placeholder.clone(),
+				size,
+				&env.pictures,
+				&env.code_font,
+			)),
+	)
 }
 
 fn gif(
@@ -369,10 +401,15 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 		.collect()
 }
 
-fn bare(entry: &MessageEntry, embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
+fn bare(entry: &MessageEntry, index: usize, embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, bare_box(embed));
 	let name = env.pictures.bare_embed(embed, media, (width, height));
 	let target = bridge::LightboxImage::embed(media).map(|image| bridge::Viewing::of(entry, image));
+	let watching = env.pictures.watching();
+	let moving = (embed.kind == Some(EmbedKind::Gifv))
+		.then(|| VideoClip::embed(&entry.message, index, embed))
+		.flatten()
+		.map(|clip| watching.clip_of(clip));
 	let frame = div()
 		.mt(4.)
 		.size(width, height)
@@ -383,7 +420,10 @@ fn bare(entry: &MessageEntry, embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv
 			name.clone(),
 			media.placeholder.as_deref(),
 			ObjectFit::Cover,
-		));
+		))
+		.when_some(moving, |frame, clip| {
+			frame.relative().child(watching.gif_view(clip, (width, height)))
+		});
 	match bridge::favorite_gif(embed) {
 		Some(favorite) => gif(frame, name, favorite, target, env),
 		None => frame.when_some(target, |frame, target| opens(frame, target, env)),
@@ -415,7 +455,7 @@ fn embed_card(
 	bump: &Signal<u32>,
 ) -> Option<View> {
 	if matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv)) {
-		return bare_media(embed).map(|media| bare(entry, embed, media, env));
+		return bare_media(embed).map(|media| bare(entry, index, embed, media, env));
 	}
 	let accent = embed
 		.color
@@ -480,7 +520,7 @@ fn embed_card(
 	if let Some(media) = large_media(embed)
 		&& (media.proxy_url.is_some() || media.url.is_some())
 	{
-		column = column.child(large(entry, media, embed, env));
+		column = column.child(large(entry, index, media, embed, env));
 	}
 	if embed.footer.is_some() || embed.timestamp.is_some() {
 		let footer = embed.footer.as_ref().map(|footer| footer.text.clone());
@@ -587,9 +627,25 @@ fn fields(
 		}))
 }
 
-fn large(entry: &MessageEntry, media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
+fn large(entry: &MessageEntry, index: usize, media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, EMBED_MEDIA_BOX);
 	let name = env.pictures.embed_media(media, (width, height));
+	if let Some(clip) = VideoClip::embed(&entry.message, index, embed) {
+		let watching = env.pictures.watching();
+		return div()
+			.mt(EMBED_IMAGE_GAP)
+			.size(width, height)
+			.rounded(tok("radius_sm"))
+			.overflow_hidden()
+			.child(watching.player_view(
+				watching.clip_of(clip),
+				name,
+				media.placeholder.clone(),
+				(width, height),
+				&env.pictures,
+				&env.code_font,
+			));
+	}
 	let playable = embed.video.is_some();
 	let target = embed
 		.url

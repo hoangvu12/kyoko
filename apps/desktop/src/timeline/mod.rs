@@ -31,6 +31,9 @@ mod rows;
 mod scroll;
 mod unread;
 mod uploads;
+mod video;
+#[cfg(test)]
+mod video_tests;
 #[cfg(test)]
 mod viewer_tests;
 mod voice;
@@ -288,6 +291,18 @@ impl TimelineView {
 		self.lightbox.close()
 	}
 
+	pub fn video_view(&self) -> View {
+		self.pictures.watching().view(&self.pictures, &self.env.code_font)
+	}
+
+	pub fn leave_video_fullscreen(&self) -> bool {
+		self.pictures.watching().leave_fullscreen()
+	}
+
+	pub fn on_fullscreen(&self, hook: impl Fn(bool) + 'static) {
+		self.pictures.watching().on_fullscreen(hook);
+	}
+
 	pub fn lightbox_settled(&self) -> bool {
 		self.lightbox.settled()
 	}
@@ -372,6 +387,7 @@ impl TimelineView {
 	pub fn set_window(&self, width: f32, height: f32) {
 		self.actions.set_window(width, height);
 		self.lightbox.set_window(width, height);
+		self.pictures.watching().set_window(width, height);
 	}
 
 	pub fn set_access(&self, access: Access) {
@@ -622,6 +638,7 @@ impl TimelineView {
 		component(move |cx| {
 			let tasks = cx.tasks();
 			this.pictures.listening().run(&tasks);
+			this.pictures.watching().run(&tasks);
 			*this.tasks.borrow_mut() = Some(tasks);
 			this.env.links.attach(cx.try_service::<PlatformService>());
 			this.watch();
@@ -800,6 +817,7 @@ impl TimelineView {
 		let switched = channel != previous;
 		if let Some(left) = previous.filter(|_| switched) {
 			self.pictures.listening().left(left);
+			self.pictures.watching().left(left);
 		}
 		if switched {
 			self.pending_jump.set(None);
@@ -904,7 +922,7 @@ impl TimelineView {
 		let Some((first, last)) = scroll::visible(&measured, offset, viewport) else {
 			return;
 		};
-		let (page, report, images) = {
+		let (page, report, images, shown) = {
 			let keys = self.keys.borrow();
 			if keys.is_empty() {
 				return;
@@ -937,8 +955,9 @@ impl TimelineView {
 				_ => None,
 			};
 			let around = first.saturating_sub(AVATAR_MARGIN)..(last + AVATAR_MARGIN + 1).min(keys.len());
-			(page, report, self.images_in(&keys[around]))
+			(page, report, self.images_in(&keys[around]), ids)
 		};
+		self.pictures.watching().set_visible(shown);
 		if let Some(page) = page {
 			self.send(match page {
 				Page::Older => Command::LoadOlder { channel_id },

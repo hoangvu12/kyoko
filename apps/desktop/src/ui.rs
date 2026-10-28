@@ -37,6 +37,7 @@ mod settings;
 mod sign_in;
 mod themes;
 mod threads;
+mod video_shots;
 mod video_surface;
 mod voice_call;
 mod voice_panel;
@@ -268,6 +269,7 @@ pub fn run(
 			let scrim = link.scrim.view();
 			let composer_layer = link.composer_layer.view();
 			let apps = link.apps.view();
+			let video = link.timeline_view.video_view();
 			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
 			let hovered = Rc::downgrade(&link);
@@ -301,6 +303,7 @@ pub fn run(
 						friend_dialog,
 						apps,
 						inbox_layer,
+						video,
 					],
 				)
 				.on_event(move |event| {
@@ -730,6 +733,9 @@ impl Link {
 				link.send(command);
 			}
 		});
+		let window = link.window.handle.clone();
+		link.timeline_view
+			.on_fullscreen(move |on| window.set_fullscreen(on));
 		let actions = Rc::downgrade(&link);
 		link.timeline_view.on_visible_changed(move |()| {
 			if let Some(link) = actions.upgrade() {
@@ -1001,6 +1007,7 @@ impl Link {
 			capture::Screen::Expressions(shot) => self.drive_expression_shot(*shot).await,
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::VoiceMessage => self.drive_voice_message().await,
+			capture::Screen::VideoPlayer => self.drive_video_player().await,
 			capture::Screen::Components(shot) => self.drive_component_shot(*shot).await,
 			capture::Screen::Polls(shot) => self.drive_polls(*shot).await,
 			capture::Screen::AppsLauncher => self.drive_apps().await,

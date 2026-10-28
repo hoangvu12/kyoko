@@ -15,6 +15,7 @@ use protocol::{
 use zgx::image::ImageData;
 use zgx::reactive::{Runtime, Signal};
 
+use super::video::Watching;
 use super::voice::Listening;
 
 pub const AVATAR: f64 = 40.;
@@ -32,6 +33,7 @@ pub struct Pictures {
 	runtime: Runtime,
 	gallery: Gallery,
 	listening: Rc<Listening>,
+	watching: Rc<Watching>,
 	cdn: String,
 	mock_origin: Option<String>,
 	scale: Cell<f64>,
@@ -47,6 +49,7 @@ impl Pictures {
 	pub fn new(runtime: Runtime, gallery: Gallery, cdn: String, mock_origin: Option<String>) -> Self {
 		Self {
 			listening: Rc::new(Listening::new(&runtime, &gallery, mock_origin.clone())),
+			watching: Rc::new(Watching::new(&runtime, &gallery, mock_origin.clone())),
 			runtime,
 			gallery,
 			cdn,
@@ -69,11 +72,16 @@ impl Pictures {
 		self.listening.clone()
 	}
 
+	pub fn watching(&self) -> Rc<Watching> {
+		self.watching.clone()
+	}
+
 	pub fn set_quality(&self, quality: Quality) {
 		self.quality.set(quality);
 	}
 
 	pub fn set_scale(&self, scale: f64) {
+		self.watching.set_scale(scale);
 		if self.scale.replace(scale) != scale {
 			self.avatars.borrow_mut().clear();
 		}
@@ -198,9 +206,45 @@ impl Pictures {
 		Some(self.request(request))
 	}
 
+	pub fn video_poster(
+		&self,
+		attachment: &Attachment,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		tile: (f32, f32),
+	) -> Option<ImageName> {
+		let (width, height) = bridge::cover_box(attachment.width, attachment.height, tile);
+		let request = bridge::video_poster_request(
+			attachment,
+			channel_id,
+			message_id,
+			(f64::from(width), f64::from(height)),
+			self.scale.get(),
+		)?;
+		Some(self.request(request))
+	}
+
+	pub fn tile(
+		&self,
+		attachment: &Attachment,
+		channel_id: Snowflake,
+		message_id: Snowflake,
+		tile: (f32, f32),
+	) -> Option<ImageName> {
+		if bridge::is_video(attachment) {
+			self.video_poster(attachment, channel_id, message_id, tile)
+		} else {
+			self.attachment(attachment, channel_id, message_id, tile)
+		}
+	}
+
 	pub fn bare_embed(&self, embed: &Embed, media: &EmbedMedia, size: (f32, f32)) -> Option<ImageName> {
 		if embed.kind != Some(EmbedKind::Gifv) {
 			return self.embed_media(media, size);
+		}
+		if bridge::is_playable_embed(embed) {
+			let still = embed.image.as_ref().or(embed.thumbnail.as_ref()).unwrap_or(media);
+			return self.embed_media(still, size);
 		}
 		let request = bridge::gifv_request(embed, (f64::from(size.0), f64::from(size.1)), self.scale.get())?;
 		Some(self.request(request))
@@ -318,10 +362,10 @@ impl Pictures {
 			self.collect_emoji(&document.nodes, size, &mut names);
 		}
 		if inline_media {
-			let images = bridge::mosaic_images(&message.attachments);
+			let images = bridge::mosaic_media(&message.attachments);
 			let mosaic = bridge::image_mosaic(&images);
 			names.extend(images.iter().zip(&mosaic.tiles).filter_map(|(attachment, tile)| {
-				self.attachment(attachment, message.channel_id, message.id, tile.size())
+				self.tile(attachment, message.channel_id, message.id, tile.size())
 			}));
 		}
 		if !message.flags.contains(MessageFlags::SUPPRESS_EMBEDS) {

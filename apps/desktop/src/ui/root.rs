@@ -21,7 +21,7 @@ use crate::timeline::pictures::Pictures;
 use crate::timeline::{Prefs, Setup, TimelineView};
 use crate::toasts::ToastLayer;
 
-pub(super) const LAYERS: [&str; 15] = [
+pub(super) const LAYERS: [&str; 16] = [
 	"timeline slot",
 	"thread slot",
 	"scrim",
@@ -37,6 +37,7 @@ pub(super) const LAYERS: [&str; 15] = [
 	"friend confirmations",
 	"apps launcher",
 	"inbox popout",
+	"video fullscreen",
 ];
 
 const LUAU_BUTTONS: [(&str, &str); 3] = [
@@ -188,6 +189,7 @@ pub(super) fn layer(name: &str, runtime: &Runtime, gallery: &Gallery, pictures: 
 		"friend confirmations" => crate::friend_dialog::FriendDialog::new(runtime).view(),
 		"apps launcher" => super::apps::Apps::new(runtime, pictures).view(),
 		"inbox popout" => crate::inbox::InboxLayer::new(runtime, pictures).view(),
+		"video fullscreen" => timeline().video_view(),
 		_ => unreachable!("no layer named {name}"),
 	}
 }

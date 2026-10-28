@@ -224,7 +224,8 @@ impl Link {
 	}
 
 	pub(super) fn escape_overlay(&self) -> bool {
-		self.friend_dialog.escape()
+		self.timeline_view.leave_video_fullscreen()
+			|| self.friend_dialog.escape()
 			|| self.inbox_escape()
 			|| self.timeline_view.close_lightbox()
 			|| self.community.escape()

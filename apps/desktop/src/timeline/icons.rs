@@ -124,6 +124,8 @@ icon_files!(
 	"apps",
 	"zoom_in",
 	"zoom_out",
+	"fullscreen",
+	"fullscreen_exit",
 );
 
 const PLUGIN_ICONS: usize = 64;

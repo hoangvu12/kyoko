@@ -245,14 +245,14 @@ pub fn estimate(row: &Row, width: f32) -> f32 {
 
 fn rich_height(entry: &MessageEntry) -> f32 {
 	let message = &entry.message;
-	let mosaic = bridge::image_mosaic(&bridge::mosaic_images(&message.attachments));
+	let mosaic = bridge::image_mosaic(&bridge::mosaic_media(&message.attachments));
 	let grid = if mosaic.is_empty() { 0. } else { mosaic.height + 4. };
 	let attachments: f32 = grid
 		+ message
 			.attachments
 			.iter()
 			.map(|attachment| {
-				if bridge::is_image(attachment) {
+				if bridge::is_image(attachment) || bridge::is_video(attachment) {
 					0.
 				} else if bridge::is_voice_message(message, attachment) {
 					VOICE_MESSAGE

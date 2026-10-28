@@ -704,3 +704,12 @@ Kyoko only (`--apps kyoko`): no Midnight mockup has the rail's hover card; compa
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
 | `server-rail-hover` | 83 | Default selection, then point at the first server in the open mock folder at (45, 155) and wait for its hover card: the name, the speaker and the voice avatars. | yes |
+
+### 91 Inline video
+
+Kyoko only (`--apps kyoko`): no Midnight mockup has a video player; compare by eye with Discord's (`b_Image_6.png` in the real-run screens) and "Inline video" in `docs/ui.md`. Mockcord serves its 3-second 320x180 clip (`tools/mockcord/fixtures/video/clip.mp4`) for every `.mp4` with Range support.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `timeline-video` | 91 | As `timeline-markdown`, jump to `-# showcase: video`: a video attachment and a video embed at rest, each its poster with the round play button. | yes |
+| `video-player` | 91 | Open `#showcase` with the video section at the bottom, click the attachment's play button through `Ui::dispatch`, wait for frames, pause, click its seek bar at half: the clip paused at 0:01 / 0:03 with Discord's control bar (play, time, seek bar half filled, volume, fullscreen). | yes |
