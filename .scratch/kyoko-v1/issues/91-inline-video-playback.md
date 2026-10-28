@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Research and pick a video path for a native Windows app (Media Foundation via the `windows` crate is the first candidate: no extra DLLs; compare with alternatives on size, codecs (H.264, VP9, AV1 where the OS has them), licence); write the choice in `docs/media.md`
 - [ ] Inline player for embed videos and video attachments: click to play, controls as in Discord (play/pause, time, seek, volume/mute, fullscreen), muted autoplay only where Discord does it (GIFV), pause when scrolled out of view

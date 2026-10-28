@@ -4,8 +4,15 @@
 
 **Blocked by:** none
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] Both tests (and any others found) wait for a barrier after the viewing or focus change
-- [ ] Each passes 20 runs alone and 10 during a full workspace build; breaking the behaviour still fails them
-- [ ] The orchestrator takes them off rules.md's flake list
+- [x] Both tests (and any others found) wait for a barrier after the viewing or focus change
+- [x] Each passes 20 runs alone and 10 during a full workspace build; breaking the behaviour still fails them
+- [x] The orchestrator takes them off rules.md's flake list
+
+## Answer
+
+Merged to main as `58b59b3` (worker `53e72389`, lane C; full verify re-run by the orchestrator: all green). Test code only; both tests leave rules.md's flake list.
+
+- Root cause: the session loop picks at random between pending commands and gateway messages, so under load the mockcord post could be handled before `SetViewing(false)`; alerts then stayed silent and kept marked the messages read. Both tests now send `SetDraft` after `SetViewing(false)` and wait for it in state before posting (111's barrier). No other test has the pattern (`reads.rs` and `one_ping_per_dm.rs` already have it; `reads.rs:213` waits for an ack).
+- 20/20 alone, 10/10 during a from-scratch workspace clippy build, 5/5 after rebasing onto 103. With viewing forced on, alerts always fails; kept failed 8/8 measured but passed once earlier, because its first wait can catch the unread marker before kyoko marks the message read. A follow-up could assert the marker is still there after that wait.
