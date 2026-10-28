@@ -12,6 +12,8 @@ mod dialogs;
 #[cfg(test)]
 mod emoji_tests;
 mod extras;
+#[cfg(test)]
+mod fetch_tests;
 pub(crate) mod icons;
 mod inline;
 mod kept;
