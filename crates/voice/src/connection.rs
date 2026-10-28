@@ -35,6 +35,20 @@ impl VoiceParams {
 	pub fn server_id(&self) -> Snowflake {
 		self.guild_id.unwrap_or(self.channel_id)
 	}
+
+	pub fn dave_group(&self, kind: ConnectionKind) -> u64 {
+		match kind {
+			ConnectionKind::Voice => self.channel_id.get(),
+			ConnectionKind::Stream => self.server_id().get().saturating_sub(1),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConnectionKind {
+	#[default]
+	Voice,
+	Stream,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +65,7 @@ pub struct VoiceOptions {
 	pub trust: Trust,
 	pub user_agent: String,
 	pub locale: String,
+	pub kind: ConnectionKind,
 }
 
 impl Default for VoiceOptions {
@@ -63,6 +78,7 @@ impl Default for VoiceOptions {
 			trust: Trust::default(),
 			user_agent: protocol::fingerprint::user_agent(),
 			locale: DEFAULT_LOCALE.to_owned(),
+			kind: ConnectionKind::Voice,
 		}
 	}
 }
@@ -80,7 +96,9 @@ impl VoiceConnection {
 			user_agent: &options.user_agent,
 			locale: &options.locale,
 			trust: &options.trust,
+			kind: options.kind,
 		};
+		let group = params.dave_group(options.kind);
 		let credentials = Credentials::new(
 			[params.server_id(), params.channel_id, params.user_id],
 			params.session_id,
@@ -89,7 +107,7 @@ impl VoiceConnection {
 			&browser,
 		)?;
 		let established = establish(&credentials).await?;
-		let dave = DaveSession::new(params.user_id.get(), params.channel_id.get())?;
+		let dave = DaveSession::new(params.user_id.get(), group)?;
 		let dave_stats = dave.stats();
 		let rings = Arc::new(Rings::new());
 		let shared = Arc::new(Shared::new(rings.clone()));

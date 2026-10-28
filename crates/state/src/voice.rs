@@ -390,7 +390,7 @@ impl State {
 				guild_id,
 				channel_id,
 				paused: stream.paused,
-				viewers: stream.viewer_ids.clone(),
+				viewers: stream.viewer_ids.to_vec(),
 			},
 		);
 		let mut voice_changed = false;
@@ -399,7 +399,7 @@ impl State {
 		{
 			let info = StreamInfo {
 				stream_key: stream.stream_key.clone(),
-				viewers: stream.viewer_ids.clone(),
+				viewers: stream.viewer_ids.to_vec(),
 			};
 			voice_changed = session.screen_share.as_ref() != Some(&info);
 			session.screen_share = Some(info);

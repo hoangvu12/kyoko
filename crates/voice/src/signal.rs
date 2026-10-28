@@ -17,12 +17,14 @@ use tokio::time::{Interval, MissedTickBehavior, interval_at, timeout};
 use tracing::debug;
 use url::{Host, Url};
 
+use crate::connection::ConnectionKind;
 use crate::crypto::EncryptionMode;
 use crate::error::{Result, VoiceError};
 use crate::transport::{Discovered, Transport};
 use crate::wire::{
 	self, CAMERA_LAYERS, CODECS, DAVE_PROTOCOL_VERSION, HeartbeatAck, Hello, Identify, Outbound,
-	ProtocolData, RawFrame, Ready, SelectProtocol, SessionDescription, SinkWants, SpeakingUpdate, opcode,
+	ProtocolData, RawFrame, Ready, SCREEN_LAYERS, SelectProtocol, SessionDescription, SinkWants,
+	SpeakingUpdate, opcode,
 };
 
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -45,12 +47,14 @@ pub(crate) struct Credentials {
 	url: Url,
 	client: Client,
 	headers: HeaderMap,
+	kind: ConnectionKind,
 }
 
 pub(crate) struct Browser<'a> {
 	pub user_agent: &'a str,
 	pub locale: &'a str,
 	pub trust: &'a Trust,
+	pub kind: ConnectionKind,
 }
 
 impl Credentials {
@@ -78,6 +82,7 @@ impl Credentials {
 			url: endpoint_url(endpoint)?,
 			client,
 			headers: upgrade_headers(browser),
+			kind: browser.kind,
 		})
 	}
 
@@ -91,7 +96,10 @@ impl Credentials {
 				session_id: &self.session_id,
 				token: self.token.as_str(),
 				video: true,
-				streams: CAMERA_LAYERS,
+				streams: match self.kind {
+					ConnectionKind::Voice => &CAMERA_LAYERS,
+					ConnectionKind::Stream => &SCREEN_LAYERS,
+				},
 				max_dave_protocol_version: DAVE_PROTOCOL_VERSION,
 			},
 		}

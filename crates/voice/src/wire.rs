@@ -56,7 +56,7 @@ pub struct Identify<'a> {
 	pub session_id: &'a str,
 	pub token: &'a str,
 	pub video: bool,
-	pub streams: [StreamOffer; 2],
+	pub streams: &'static [StreamOffer],
 	pub max_dave_protocol_version: u8,
 }
 
@@ -67,6 +67,12 @@ pub struct StreamOffer {
 	pub rid: &'static str,
 	pub quality: u8,
 }
+
+pub const SCREEN_LAYERS: [StreamOffer; 1] = [StreamOffer {
+	kind: "screen",
+	rid: "100",
+	quality: 100,
+}];
 
 pub const CAMERA_LAYERS: [StreamOffer; 2] = [
 	StreamOffer {

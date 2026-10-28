@@ -100,6 +100,7 @@ pub fn options(server: &Server) -> VoiceOptions {
 		),
 		user_agent: protocol::fingerprint::user_agent(),
 		locale: LOCALE.to_owned(),
+		kind: voice::ConnectionKind::Voice,
 	}
 }
 

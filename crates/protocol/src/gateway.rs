@@ -462,14 +462,14 @@ pub struct VoiceServerUpdate {
 	pub endpoint: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StreamState {
 	pub stream_key: String,
 	pub rtc_server_id: Option<Snowflake>,
 	pub rtc_channel_id: Option<Snowflake>,
 	pub region: Option<String>,
-	pub viewer_ids: Vec<Snowflake>,
+	pub viewer_ids: LenientVec<Snowflake>,
 	pub paused: bool,
 }
 

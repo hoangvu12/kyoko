@@ -26,7 +26,7 @@ mod wire;
 
 pub use audio::{AudioDevices, DeviceInfo, devices};
 pub use codec::{FRAME_SAMPLES, SAMPLE_RATE, SILENCE_FRAME};
-pub use connection::{AudioIo, VoiceConnection, VoiceOptions, VoiceParams};
+pub use connection::{AudioIo, ConnectionKind, VoiceConnection, VoiceOptions, VoiceParams};
 pub use crypto::EncryptionMode;
 pub use dave::DaveStats;
 pub use diagnostics::{MicCheck, MicCheckOptions};
