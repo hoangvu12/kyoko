@@ -15,7 +15,9 @@ use crate::media::{Media, SharedTransform};
 use crate::shared::{Control, Shared};
 use crate::signal::{Body, Credentials, Established, Exit, Frame, Link, establish, resume, speaking};
 use crate::transport::Transport;
-use crate::wire::{ClientDisconnect, ClientsConnect, Speaking, close, opcode};
+use crate::video::hub::RemoteVideo;
+use crate::video::wants::sink_wants;
+use crate::wire::{ClientDisconnect, ClientsConnect, Speaking, VideoAnnouncement, close, opcode};
 
 const RESUME_ATTEMPTS: u32 = 5;
 const FRESH_ATTEMPTS: u32 = 3;
@@ -77,6 +79,7 @@ pub(crate) struct Supervisor {
 	speaking: bool,
 	dave: DaveSession,
 	outbox: Vec<Outgoing>,
+	sent_wants: Option<Value>,
 }
 
 impl Supervisor {
@@ -114,6 +117,7 @@ impl Supervisor {
 			speaking: false,
 			dave,
 			outbox: Vec::new(),
+			sent_wants: Some(handshake_wants()),
 		};
 		supervisor.outbox = supervisor.dave.on_protocol_version(dave_version);
 		supervisor.replay_backlog();
@@ -153,6 +157,9 @@ impl Supervisor {
 			if let Err(exit) = self.flush_dave().await {
 				return Drive::Exit(exit);
 			}
+			if let Err(exit) = self.flush_wants().await {
+				return Drive::Exit(exit);
+			}
 			tokio::select! {
 				frame = self.link.next() => match frame {
 					Ok(frame) => self.on_frame(frame),
@@ -166,6 +173,7 @@ impl Supervisor {
 							return Drive::Exit(exit);
 						}
 					}
+					Some(Control::VideoWants) => {}
 					None => return Drive::Shutdown,
 				},
 				_ = self.signals.shutdown.changed() => return Drive::Shutdown,
@@ -204,8 +212,14 @@ impl Supervisor {
 					}
 				}
 			}
+			opcode::VIDEO => {
+				if let Ok(event) = serde_json::from_value::<VideoAnnouncement>(data) {
+					self.on_video(&event);
+				}
+			}
 			opcode::CLIENT_DISCONNECT => {
 				if let Ok(event) = serde_json::from_value::<ClientDisconnect>(data) {
+					self.end_video(event.user_id);
 					self.dave.user_left(event.user_id.get());
 					self.shared
 						.ssrc_users
@@ -245,6 +259,76 @@ impl Supervisor {
 		for outgoing in std::mem::take(&mut self.outbox) {
 			self.link.send_wire(outgoing.encode()).await?;
 		}
+		Ok(())
+	}
+
+	fn on_video(&mut self, event: &VideoAnnouncement) {
+		let Some(user_id) = event.user_id else {
+			return;
+		};
+		if user_id == self.credentials.user_id() {
+			return;
+		}
+		let primary = event.video_ssrc.filter(|ssrc| *ssrc != 0);
+		let mut ssrcs: Vec<u32> = event
+			.streams
+			.iter()
+			.filter(|stream| stream.active != Some(false))
+			.filter_map(|stream| stream.ssrc)
+			.chain(primary)
+			.filter(|ssrc| *ssrc != 0)
+			.collect();
+		ssrcs.sort_unstable();
+		ssrcs.dedup();
+		{
+			let mut users = self.shared.ssrc_users.lock();
+			for ssrc in event.audio_ssrc.into_iter().chain(ssrcs.iter().copied()) {
+				if ssrc != 0 {
+					users.insert(ssrc, user_id);
+				}
+			}
+		}
+		self.dave.user_joined(user_id.get());
+		let Some(primary) = primary.or_else(|| ssrcs.first().copied()) else {
+			self.end_video(user_id);
+			return;
+		};
+		let started = self
+			.shared
+			.video
+			.remote
+			.lock()
+			.insert(user_id, RemoteVideo { primary, ssrcs })
+			.is_none();
+		if started {
+			self.shared.hub.emit(VoiceEvent::VideoStarted { user_id });
+		}
+	}
+
+	fn end_video(&mut self, user_id: Snowflake) {
+		if self.shared.video.remote.lock().remove(&user_id).is_none() {
+			return;
+		}
+		if let Some(sink) = self.shared.video.sink() {
+			sink.ended(user_id);
+		}
+		self.shared.hub.emit(VoiceEvent::VideoStopped { user_id });
+	}
+
+	fn end_all_video(&mut self) {
+		let users: Vec<Snowflake> = self.shared.video.remote.lock().keys().copied().collect();
+		for user_id in users {
+			self.end_video(user_id);
+		}
+	}
+
+	async fn flush_wants(&mut self) -> std::result::Result<(), Exit> {
+		let wants = sink_wants(&self.shared.video.remote.lock(), &self.shared.video.wants.lock());
+		if self.sent_wants.as_ref() == Some(&wants) {
+			return Ok(());
+		}
+		self.link.send(opcode::MEDIA_SINK_WANTS, &wants).await?;
+		self.sent_wants = Some(wants);
 		Ok(())
 	}
 
@@ -333,12 +417,15 @@ impl Supervisor {
 		{
 			return Recovery::Stopped(StopReason::Unreachable);
 		}
+		self.sent_wants = None;
 		self.replay_backlog();
 		self.shared.hub.emit(VoiceEvent::Resumed);
 		Recovery::Recovered
 	}
 
 	fn adopt(&mut self, established: Established) -> Recovery {
+		self.end_all_video();
+		self.sent_wants = Some(handshake_wants());
 		self.shared.ssrc_users.lock().clear();
 		self.shared.hush_everyone();
 		self.ssrc = established.transport.ssrc();
@@ -374,6 +461,10 @@ impl Supervisor {
 			_ = self.signals.shutdown.changed() => false,
 		}
 	}
+}
+
+fn handshake_wants() -> Value {
+	sink_wants(&std::collections::HashMap::new(), &[])
 }
 
 fn spawn_media(

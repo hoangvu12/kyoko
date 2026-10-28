@@ -12,10 +12,11 @@ use crate::codec::{MAX_BITRATE_BPS, MIN_BITRATE_BPS};
 use crate::error::{Result, VoiceError};
 use crate::event::VoiceEvent;
 use crate::media::SharedTransform;
-use crate::shared::{AudioDevicesInUse, InputMode, MixedFrame, Shared, VoiceStats};
+use crate::shared::{AudioDevicesInUse, Control, InputMode, MixedFrame, Shared, VoiceStats};
 use crate::signal::{Browser, Credentials, establish};
 use crate::supervisor::{Signals, Supervisor};
 use crate::transform::DaveTransform;
+use crate::video::{VideoSink, VideoStats, VideoWant};
 
 const MAX_VOLUME: f32 = 2.0;
 const DEFAULT_LOCALE: &str = "en-US";
@@ -69,6 +70,7 @@ impl Default for VoiceOptions {
 pub struct VoiceConnection {
 	shared: Arc<Shared>,
 	dave: Arc<DaveStats>,
+	control: mpsc::UnboundedSender<Control>,
 	shutdown: watch::Sender<bool>,
 }
 
@@ -120,7 +122,7 @@ impl VoiceConnection {
 			audio_io,
 			Signals {
 				shutdown: shutdown_receiver,
-				control,
+				control: control.clone(),
 				commands,
 			},
 		)?;
@@ -128,6 +130,7 @@ impl VoiceConnection {
 		Ok(Self {
 			shared,
 			dave: dave_stats,
+			control,
 			shutdown,
 		})
 	}
@@ -241,6 +244,25 @@ impl VoiceConnection {
 
 	pub fn dave(&self) -> Arc<DaveStats> {
 		self.dave.clone()
+	}
+
+	pub fn set_video_sink(&self, sink: Option<Arc<dyn VideoSink>>) {
+		*self.shared.video.sink.lock() = sink;
+	}
+
+	pub fn set_video_wants(&self, wants: Vec<VideoWant>) {
+		*self.shared.video.wants.lock() = wants;
+		let _ = self.control.send(Control::VideoWants);
+	}
+
+	pub fn video_users(&self) -> Vec<Snowflake> {
+		let mut users: Vec<Snowflake> = self.shared.video.remote.lock().keys().copied().collect();
+		users.sort_unstable();
+		users
+	}
+
+	pub fn video_stats(&self) -> VideoStats {
+		self.shared.video.stats()
 	}
 
 	pub fn feed_input(&self, pcm: &[i16]) {

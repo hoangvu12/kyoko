@@ -7,12 +7,14 @@ use crate::shared::Shared;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Codec {
 	Opus,
+	H264,
 }
 
 impl From<Codec> for dave::Codec {
 	fn from(codec: Codec) -> Self {
 		match codec {
 			Codec::Opus => dave::Codec::Opus,
+			Codec::H264 => dave::Codec::H264,
 		}
 	}
 }

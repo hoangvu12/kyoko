@@ -7,6 +7,7 @@ const PADDING_FLAG: u8 = 0x20;
 const EXTENSION_FLAG: u8 = 0x10;
 const CSRC_COUNT_MASK: u8 = 0x0f;
 const PAYLOAD_TYPE_MASK: u8 = 0x7f;
+const MARKER_FLAG: u8 = 0x80;
 const CSRC_LEN: usize = 4;
 const RTCP_HEADER_LEN: usize = 8;
 const EXTENSION_PREAMBLE_LEN: usize = 4;
@@ -31,6 +32,7 @@ pub fn is_rtcp(packet: &[u8]) -> bool {
 #[derive(Debug, Clone, Copy)]
 pub struct Header {
 	pub payload_type: u8,
+	pub marker: bool,
 	pub sequence: u16,
 	pub timestamp: u32,
 	pub ssrc: u32,
@@ -55,6 +57,7 @@ pub fn parse(packet: &[u8]) -> Option<Header> {
 	}
 	Some(Header {
 		payload_type: packet[1] & PAYLOAD_TYPE_MASK,
+		marker: packet[1] & MARKER_FLAG != 0,
 		sequence: u16::from_be_bytes([packet[2], packet[3]]),
 		timestamp: u32::from_be_bytes([packet[4], packet[5], packet[6], packet[7]]),
 		ssrc: u32::from_be_bytes([packet[8], packet[9], packet[10], packet[11]]),

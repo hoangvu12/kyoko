@@ -21,6 +21,7 @@ mod supervisor;
 mod talk;
 mod transform;
 mod transport;
+pub mod video;
 mod wire;
 
 pub use audio::{AudioDevices, DeviceInfo, devices};

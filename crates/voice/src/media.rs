@@ -20,7 +20,8 @@ use crate::rtp;
 use crate::shared::{Control, InputMode, MixedFrame, Shared};
 use crate::transform::{Codec, FrameTransform};
 use crate::transport::{Inbound, Transport};
-use crate::wire::OPUS_PAYLOAD_TYPE;
+use crate::video::receive::VideoReceive;
+use crate::wire::{H264_PAYLOAD_TYPE, OPUS_PAYLOAD_TYPE};
 
 const TICK: Duration = Duration::from_millis(10);
 const FRAME_DURATION: Duration = Duration::from_millis(20);
@@ -49,6 +50,7 @@ pub(crate) struct Media {
 	gate: VoiceGate,
 	mixer: Mixer,
 	streams: HashMap<u32, RemoteStream>,
+	video: VideoReceive,
 	frame: Vec<f32>,
 	sequence: u16,
 	timestamp: u32,
@@ -71,6 +73,7 @@ impl Media {
 			.applied_bitrate
 			.store(DEFAULT_BITRATE_BPS, Ordering::Relaxed);
 		Ok(Self {
+			video: VideoReceive::new(transport.clone(), shared.clone(), transform.clone()),
 			transport,
 			playback: PlaybackChain::new(shared.rings.clone()),
 			shared,
@@ -248,6 +251,10 @@ impl Media {
 
 	fn on_packet(&mut self, inbound: Inbound, now: Instant) {
 		let Inbound { header, payload } = inbound;
+		if header.payload_type == H264_PAYLOAD_TYPE && header.ssrc != self.transport.ssrc() {
+			self.video.on_packet(&header, &payload, now);
+			return;
+		}
 		if header.payload_type != OPUS_PAYLOAD_TYPE || header.ssrc == self.transport.ssrc() {
 			return;
 		}
@@ -356,6 +363,7 @@ impl Media {
 	}
 
 	fn housekeeping(&mut self, now: Instant) {
+		self.video.housekeeping(now);
 		self.streams.retain(|ssrc, stream| {
 			let keep = stream.idle_since(now) < STREAM_TTL;
 			if !keep {

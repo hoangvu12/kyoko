@@ -21,6 +21,7 @@ pub mod opcode {
 	pub const HELLO: u8 = 8;
 	pub const RESUMED: u8 = 9;
 	pub const CLIENTS_CONNECT: u8 = 11;
+	pub const VIDEO: u8 = 12;
 	pub const CLIENT_DISCONNECT: u8 = 13;
 	pub const MEDIA_SINK_WANTS: u8 = 15;
 	pub use dave::opcode::{
@@ -210,6 +211,26 @@ pub struct ClientsConnect {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct VideoAnnouncement {
+	#[serde(default, deserialize_with = "lenient")]
+	pub user_id: Option<Snowflake>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub audio_ssrc: Option<u32>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub video_ssrc: Option<u32>,
+	#[serde(default, deserialize_with = "lenient_streams")]
+	pub streams: Vec<VideoStreamState>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VideoStreamState {
+	#[serde(default, deserialize_with = "lenient")]
+	pub ssrc: Option<u32>,
+	#[serde(default, deserialize_with = "lenient")]
+	pub active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ClientDisconnect {
 	pub user_id: Snowflake,
 }
@@ -228,6 +249,10 @@ fn lenient<'de, D: Deserializer<'de>, T: serde::de::DeserializeOwned>(
 }
 
 fn lenient_strings<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+	lenient_list(deserializer)
+}
+
+fn lenient_streams<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<VideoStreamState>, D::Error> {
 	lenient_list(deserializer)
 }
 

@@ -12,6 +12,7 @@ use crate::codec::DEFAULT_BITRATE_BPS;
 use crate::event::{EventHub, VoiceEvent};
 use crate::gate::LEVEL_FLOOR_DB;
 use crate::talk::Talkers;
+use crate::video::hub::VideoHub;
 
 const NO_PING: u32 = u32::MAX;
 const DEFAULT_VAD_THRESHOLD_DB: f32 = -50.0;
@@ -49,6 +50,7 @@ pub struct MixedFrame {
 
 pub(crate) enum Control {
 	Speaking(bool),
+	VideoWants,
 }
 
 pub(crate) struct Counters {
@@ -114,6 +116,7 @@ pub(crate) struct Shared {
 	pub rings: Arc<Rings>,
 	pub engine: Mutex<Option<AudioEngine>>,
 	pub hub: EventHub,
+	pub video: VideoHub,
 	pub counters: Counters,
 	pub manual_input: Mutex<VecDeque<Vec<f32>>>,
 	manual_output: Mutex<Vec<MixedFrame>>,
@@ -144,6 +147,7 @@ impl Shared {
 			rings,
 			engine: Mutex::new(None),
 			hub: EventHub::default(),
+			video: VideoHub::default(),
 			counters: Counters::new(),
 			manual_input: Mutex::new(VecDeque::new()),
 			manual_output: Mutex::new(Vec::new()),

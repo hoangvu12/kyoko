@@ -36,6 +36,12 @@ cpal.workspace = true
 dave.workspace = true
 openh264 = { workspace = true, optional = true }
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+	"Win32_Media_MediaFoundation",
+	"Win32_System_Com",
+] }
+
 [dev-dependencies]
 mockcord = { workspace = true, features = ["tls"] }
 dave = { workspace = true, features = ["testing"] }

@@ -53,6 +53,12 @@ pub enum VoiceEvent {
 	UserLeft {
 		user_id: Snowflake,
 	},
+	VideoStarted {
+		user_id: Snowflake,
+	},
+	VideoStopped {
+		user_id: Snowflake,
+	},
 	Reconnecting {
 		code: Option<u16>,
 		resume: bool,
