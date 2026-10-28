@@ -37,6 +37,7 @@ These Windows toasts are separate from the in-window toasts of ticket 38 (`docs/
 - The icon shows a red badge when any channel or DM has mentions, a white dot when something unmuted is unread, and the plain icon otherwise. The tooltip says "Kyoko: N mentions" or "Kyoko: unread messages". It is recomputed from `State::attention()` at most every 750 ms after read state, guild, DM or settings changes.
 - Closing the window hides it to the tray when `window.minimize_to_tray` is on (the default, as in oxidcord) and a tray exists; otherwise it quits. Quit from the tray always quits.
 - `keybinds.toggle_window` (default unset; for example `ctrl+alt+shift+KeyK`, global-hotkey syntax) toggles the window from anywhere. It is registered at startup and again whenever the Keybinds page changes it; a binding Windows refuses shows as a note under the field.
+- `keybinds.push_to_talk` (default unset) is held to talk while Voice & Video's input mode is Push to Talk; it is registered only in that mode, and its press and release become `Command::SetPushToTalk` (`docs/voice.md`, "Settings").
 - Every 500 ms the desktop checks whether the foreground window belongs to kyoko and sends `Command::SetViewing` when that changes, and `SetViewing(false)` when the window is hidden. This also pauses automatic read acks while kyoko is in the background.
 - Windows may refuse to bring the window forward (focus-stealing rules) when it is shown while another app is active. Showing from a hidden state, a second launch or a toast normally succeeds.
 

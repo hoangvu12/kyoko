@@ -783,6 +783,12 @@ export type VoiceControls = {
 	server_deafened: boolean,
 }
 
+export type AudioDevice = { id: string, name: string }
+
+export type AudioDevices = { inputs: { AudioDevice }, outputs: { AudioDevice } }
+
+export type MicTest = { running: boolean, level: number }
+
 M.voice = {
 	panel = ui.shared("voice.panel", {
 		open = false,
@@ -805,6 +811,8 @@ M.voice = {
 		tiles = {},
 	} :: VoiceCall),
 	speaking = ui.shared("voice.speaking", {} :: { [string]: boolean }),
+	devices = ui.shared("voice.devices", { inputs = {}, outputs = {} } :: AudioDevices),
+	mic_test = ui.shared("voice.mic_test", { running = false, level = 0 } :: MicTest),
 }
 
 return M

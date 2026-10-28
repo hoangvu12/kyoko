@@ -39,6 +39,7 @@ mod themes;
 mod threads;
 mod voice_call;
 mod voice_panel;
+mod voice_settings;
 mod voice_shots;
 
 use std::cell::{Cell, RefCell};
@@ -221,6 +222,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_channel_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
 			cx.tasks.spawn(link.clone().follow_speaking());
+			cx.tasks.spawn(link.clone().follow_audio_devices());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -518,6 +520,7 @@ pub(crate) struct Link {
 	inbox_popout: Rc<crate::inbox::InboxLayer>,
 	voice: voice_panel::VoicePanelView,
 	call: voice_call::CallView,
+	voice_settings: voice_settings::VoiceSettingsView,
 }
 
 impl Link {
@@ -672,6 +675,7 @@ impl Link {
 			inbox_popout,
 			voice: voice_panel::VoicePanelView::new(host),
 			call,
+			voice_settings: voice_settings::VoiceSettingsView::new(host),
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -700,6 +704,7 @@ impl Link {
 		Link::install_inbox(host, &link);
 		Link::install_voice(host, &link);
 		Link::install_call(host, &link);
+		Link::install_voice_settings(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -1274,6 +1279,7 @@ impl Link {
 			self.toasts_apply(&state, changes);
 			self.inbox_apply(&state, changes);
 			self.voice_apply(&state);
+			self.voice_settings_apply(&state);
 			self.plugins_apply(&state);
 		});
 		let opening = self.opening.get()?;

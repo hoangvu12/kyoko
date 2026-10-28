@@ -17,6 +17,7 @@ mod login;
 mod plugin_page;
 mod plugins;
 mod voice;
+mod voice_settings;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
 pub(super) const TALL: f32 = 1400.;
@@ -537,7 +538,7 @@ const SETTINGS_PAGES: [(&str, &str); 20] = [
 	("storage", "Data Folder"),
 	(
 		"voice",
-		"Kyoko has no voice calls, so there is nothing to set up here.",
+		"Start a test and say something. Kyoko plays your voice back to you.",
 	),
 	("appearance", "Same as Device Theme"),
 	("accessibility", "Animate on interaction"),

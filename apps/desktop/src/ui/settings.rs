@@ -216,6 +216,7 @@ impl Link {
 			self.settings.last_page.borrow().clone()
 		};
 		self.settings.page.set(page.as_str().into());
+		self.voice_page_shown(&page);
 		*self.settings.last_page.borrow_mut() = page;
 		if !self.settings.open.replace(true) {
 			self.settings.publish_values();
@@ -230,6 +231,7 @@ impl Link {
 			return;
 		}
 		self.settings.page.set("".into());
+		self.stop_mic_test();
 		self.settings.dimmed.set(false);
 		self.settings.avatar.borrow_mut().take();
 		self.refresh_visible();
@@ -290,6 +292,7 @@ impl Link {
 			SettingKey::DeveloperMode => self
 				.timeline_view
 				.set_developer_mode(settings.developer.developer_mode),
+			key if key.is_voice() => self.send(Command::ApplyVoiceSettings),
 			_ => {}
 		}
 		let notes: Vec<Option<String>> = self

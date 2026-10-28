@@ -92,7 +92,7 @@ M.sections = {
 		key = "experience",
 		title = "Experience",
 		pages = {
-			page("voice", "Voice & Video", "headphones", require("./voice"), { greyed = true }),
+			page("voice", "Voice & Video", "headphones", require("./voice")),
 			page("appearance", "Appearance", "appearance", require("./appearance")),
 			page("accessibility", "Accessibility", "accessibility", require("./accessibility")),
 			page("chat", "Chat", "chat", require("./chat")),

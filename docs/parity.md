@@ -387,7 +387,7 @@ Oxidcord has no rules (membership screening) or onboarding screens, so they have
 
 ### 37 Account and settings pages
 
-The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page and 57 the Themes page. Midnight 19 turns settings into Discord's dialog: the Clips note page is gone, Voice & Video is a greyed page saying Kyoko has no voice calls, the safety locks, links and GIF usage moved to the Kyoko group's Safety & Privacy page, the data folder to Storage, the startup switches to System, and Advanced is titled Developer (the `advanced` key is kept). Kyoko's screens show the dialog over the dimmed main screen; oxidcord's are its full-screen settings.
+The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page and 57 the Themes page. Midnight 19 turns settings into Discord's dialog: the Clips note page is gone, Voice & Video was a greyed page until v1 100 made it real, the safety locks, links and GIF usage moved to the Kyoko group's Safety & Privacy page, the data folder to Storage, the startup switches to System, and Advanced is titled Developer (the `advanced` key is kept). Kyoko's screens show the dialog over the dimmed main screen; oxidcord's are its full-screen settings.
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
@@ -407,7 +407,7 @@ The updates page is left out, as ticket 37 says; ticket 45 adds the Plugins page
 | `settings-advanced` | 37 | As above, on Developer (key `advanced`). | yes |
 | `settings-safety` | M19 | As above, on Safety & Privacy. | yes |
 | `settings-storage` | M19 | As above, on Storage. | yes |
-| `settings-voice` | M19 | As above, on the greyed Voice & Video page. | yes |
+| `settings-voice` | 100 | As above, on Voice & Video: the mock input and output devices, both volumes, the mic test meter, Voice Activity with automatic sensitivity, Noise Suppression off and Echo Cancellation unavailable. Nothing is recorded or played: `--mock` uses the manual audio path. | yes |
 | `settings-system` | M19 | As above, on System. | yes |
 | `settings-themes` | 57 | As above, on Themes. Oxidcord shows Built In, an empty From Plugins and its catalog URL; kyoko shows its Local Themes tab (the notice on how themes are read, the folder card, Built In with each card's version, author and description, and an empty Local Themes); the links box is on the Online Themes tab. | yes |
 

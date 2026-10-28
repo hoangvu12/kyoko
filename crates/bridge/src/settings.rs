@@ -15,6 +15,9 @@ const PHONE_SHOWN: usize = 4;
 const NAME_LIMIT: usize = 64;
 const HOST_LIMIT: usize = 256;
 const HOSTS_LIMIT: usize = 256;
+const DEVICE_LIMIT: usize = 512;
+const VOLUME_MAX: i64 = 200;
+const SENSITIVITY_MIN_DB: i64 = -100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Applies {
@@ -59,10 +62,19 @@ pub enum SettingKey {
 	DiscordLinks,
 	DeveloperMode,
 	ShareGifUsage,
+	VoiceInputDevice,
+	VoiceOutputDevice,
+	VoiceInputVolume,
+	VoiceOutputVolume,
+	VoicePushToTalk,
+	VoiceAutoSensitivity,
+	VoiceSensitivity,
+	VoiceNoiseSuppression,
+	PushToTalkKey,
 }
 
 impl SettingKey {
-	pub const ALL: [SettingKey; 34] = [
+	pub const ALL: [SettingKey; 43] = [
 		Self::Theme,
 		Self::Locale,
 		Self::CompactMessages,
@@ -97,6 +109,15 @@ impl SettingKey {
 		Self::DiscordLinks,
 		Self::DeveloperMode,
 		Self::ShareGifUsage,
+		Self::VoiceInputDevice,
+		Self::VoiceOutputDevice,
+		Self::VoiceInputVolume,
+		Self::VoiceOutputVolume,
+		Self::VoicePushToTalk,
+		Self::VoiceAutoSensitivity,
+		Self::VoiceSensitivity,
+		Self::VoiceNoiseSuppression,
+		Self::PushToTalkKey,
 	];
 
 	pub fn name(self) -> &'static str {
@@ -135,6 +156,15 @@ impl SettingKey {
 			Self::DiscordLinks => "integration.discord_links",
 			Self::DeveloperMode => "developer.developer_mode",
 			Self::ShareGifUsage => "advanced.share_gif_usage",
+			Self::VoiceInputDevice => "voice.input_device",
+			Self::VoiceOutputDevice => "voice.output_device",
+			Self::VoiceInputVolume => "voice.input_volume",
+			Self::VoiceOutputVolume => "voice.output_volume",
+			Self::VoicePushToTalk => "voice.push_to_talk",
+			Self::VoiceAutoSensitivity => "voice.auto_sensitivity",
+			Self::VoiceSensitivity => "voice.sensitivity_db",
+			Self::VoiceNoiseSuppression => "voice.noise_suppression",
+			Self::PushToTalkKey => "keybinds.push_to_talk",
 		}
 	}
 
@@ -193,6 +223,15 @@ impl SettingKey {
 			Self::DiscordLinks => Value::from(settings.integration.discord_links),
 			Self::DeveloperMode => Value::from(settings.developer.developer_mode),
 			Self::ShareGifUsage => Value::from(settings.advanced.share_gif_usage),
+			Self::VoiceInputDevice => Value::from(settings.voice.input_device.clone().unwrap_or_default()),
+			Self::VoiceOutputDevice => Value::from(settings.voice.output_device.clone().unwrap_or_default()),
+			Self::VoiceInputVolume => Value::from(settings.voice.input_volume),
+			Self::VoiceOutputVolume => Value::from(settings.voice.output_volume),
+			Self::VoicePushToTalk => Value::from(settings.voice.push_to_talk),
+			Self::VoiceAutoSensitivity => Value::from(settings.voice.auto_sensitivity),
+			Self::VoiceSensitivity => Value::from(settings.voice.sensitivity_db),
+			Self::VoiceNoiseSuppression => Value::from(settings.voice.noise_suppression),
+			Self::PushToTalkKey => Value::from(settings.keybinds.push_to_talk.clone().unwrap_or_default()),
 		}
 	}
 
@@ -241,7 +280,35 @@ impl SettingKey {
 			Self::DiscordLinks => set_flag(&mut settings.integration.discord_links, value),
 			Self::DeveloperMode => set_flag(&mut settings.developer.developer_mode, value),
 			Self::ShareGifUsage => set_flag(&mut settings.advanced.share_gif_usage, value),
+			Self::VoiceInputDevice => set_device(&mut settings.voice.input_device, value),
+			Self::VoiceOutputDevice => set_device(&mut settings.voice.output_device, value),
+			Self::VoiceInputVolume => set_whole(&mut settings.voice.input_volume, value, 0, VOLUME_MAX),
+			Self::VoiceOutputVolume => set_whole(&mut settings.voice.output_volume, value, 0, VOLUME_MAX),
+			Self::VoicePushToTalk => set_flag(&mut settings.voice.push_to_talk, value),
+			Self::VoiceAutoSensitivity => set_flag(&mut settings.voice.auto_sensitivity, value),
+			Self::VoiceSensitivity => {
+				set_whole(&mut settings.voice.sensitivity_db, value, SENSITIVITY_MIN_DB, 0)
+			}
+			Self::VoiceNoiseSuppression => set_flag(&mut settings.voice.noise_suppression, value),
+			Self::PushToTalkKey => match binding(value) {
+				Some(binding) => replace(&mut settings.keybinds.push_to_talk, binding),
+				None => false,
+			},
 		}
+	}
+
+	pub fn is_voice(self) -> bool {
+		matches!(
+			self,
+			Self::VoiceInputDevice
+				| Self::VoiceOutputDevice
+				| Self::VoiceInputVolume
+				| Self::VoiceOutputVolume
+				| Self::VoicePushToTalk
+				| Self::VoiceAutoSensitivity
+				| Self::VoiceSensitivity
+				| Self::VoiceNoiseSuppression
+		)
 	}
 }
 
@@ -441,6 +508,17 @@ fn binding(value: &Value) -> Option<Option<String>> {
 		}
 		_ => None,
 	}
+}
+
+fn set_device(slot: &mut Option<String>, value: &Value) -> bool {
+	let device = match value {
+		Value::Null => None,
+		Value::String(text) if text.len() <= DEVICE_LIMIT => {
+			Some(text.trim()).filter(|text| !text.is_empty())
+		}
+		_ => return false,
+	};
+	replace(slot, device.map(str::to_owned))
 }
 
 fn hosts(value: &Value) -> Option<Vec<String>> {

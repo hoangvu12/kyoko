@@ -545,4 +545,8 @@ function M.set_local_mute(id: string, muted: boolean)
 	ui.invoke("voice.local_mute", { id = id, muted = muted })
 end
 
+function M.set_mic_test(running: boolean)
+	ui.invoke("voice.mic_test", running)
+end
+
 return M
