@@ -3,10 +3,12 @@ use std::time::Duration;
 
 use protocol::{Snowflake, StreamDelete, StreamServerUpdate, StreamState, Token};
 use state::LocalEvent;
+use store::VoiceSettings;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use voice::{AudioIo, ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
+use voice::{ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
 
+use super::voice_link::volume;
 use super::{Core, Internal};
 use crate::video_feed::VideoView;
 
@@ -69,6 +71,11 @@ impl StreamLink {
 
 	fn watching_key(&mut self, key: &str) -> Option<&mut Watch> {
 		self.watch.as_mut().filter(|watch| watch.key == key)
+	}
+
+	fn connection(&self) -> Option<(Snowflake, &VoiceConnection)> {
+		let watch = self.watch.as_ref()?;
+		Some((watch.owner, watch.connection.as_deref()?))
 	}
 }
 
@@ -205,8 +212,11 @@ impl Core {
 				return;
 			}
 		};
+		let owner = watch.owner;
 		connection.set_mute(true);
-		connection.set_deaf(true);
+		connection.set_deaf(self.voice.output_off());
+		connection.set_user_volume(owner, self.state.read().user_audio(owner).stream_gain());
+		connection.set_output_volume(volume(self.store.settings.read().voice.output_volume));
 		connection.set_video_sink(Some(self.voice_shared.stream_feed.sink()));
 		let internal = self.internal.clone();
 		let mut events = connection.events();
@@ -247,6 +257,28 @@ impl Core {
 		}
 	}
 
+	pub(super) fn apply_stream_deafen(&self) {
+		if let Some((_, connection)) = self.streams.connection() {
+			connection.set_deaf(self.voice.output_off());
+		}
+	}
+
+	pub(super) fn apply_stream_volume(&self) {
+		if let Some((owner, connection)) = self.streams.connection() {
+			connection.set_user_volume(owner, self.state.read().user_audio(owner).stream_gain());
+		}
+	}
+
+	pub(super) fn apply_stream_settings(&self, settings: &VoiceSettings) {
+		let Some((_, connection)) = self.streams.connection() else {
+			return;
+		};
+		if connection.audio_devices().output != settings.output_device {
+			connection.set_output_device(settings.output_device.clone());
+		}
+		connection.set_output_volume(volume(settings.output_volume));
+	}
+
 	fn apply_stream_wants(&self, connection: &VoiceConnection) {
 		let wants = self
 			.voice_shared
@@ -262,7 +294,7 @@ impl Core {
 		let user_id = self.state.read().current_user_id();
 		let session_id = self.voice_session_id();
 		let mut options = self.voice_options();
-		options.audio = AudioIo::Manual;
+		options.audio = self.playback_io();
 		options.kind = ConnectionKind::Stream;
 		let Some(watch) = self.streams.watching(generation) else {
 			return;

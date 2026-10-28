@@ -1073,6 +1073,7 @@ impl Core {
 			Command::WatchStream { stream_key } => self.watch_stream(stream_key),
 			Command::StopWatchingStream { stream_key } => self.stop_watching(&stream_key),
 			Command::SetStreamViews(views) => self.set_stream_views(views),
+			Command::SetStreamVolume { user_id, volume } => self.set_stream_volume(user_id, volume),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

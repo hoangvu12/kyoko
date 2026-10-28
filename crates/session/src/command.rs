@@ -704,6 +704,10 @@ pub enum Command {
 		stream_key: String,
 	},
 	SetStreamViews(Vec<VideoView>),
+	SetStreamVolume {
+		user_id: Snowflake,
+		volume: u8,
+	},
 }
 
 impl Command {

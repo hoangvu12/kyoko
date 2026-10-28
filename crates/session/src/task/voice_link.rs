@@ -57,7 +57,7 @@ impl VoiceLink {
 		self.sends_muted() || self.server_mute
 	}
 
-	fn output_off(&self) -> bool {
+	pub(super) fn output_off(&self) -> bool {
 		self.self_deaf || self.server_deaf
 	}
 }
@@ -285,6 +285,14 @@ impl Core {
 		self.change_user_audio(user_id, audio);
 	}
 
+	pub(super) fn set_stream_volume(&mut self, user_id: Snowflake, volume: u8) {
+		let audio = UserAudio {
+			stream_volume: volume,
+			..self.state.read().user_audio(user_id)
+		};
+		self.change_user_audio(user_id, audio);
+	}
+
 	pub(super) fn set_user_muted(&mut self, user_id: Snowflake, muted: bool) {
 		let audio = UserAudio {
 			muted,
@@ -315,6 +323,7 @@ impl Core {
 			}
 			self.apply_voice_settings_to(connection, &settings);
 		}
+		self.apply_stream_settings(&settings);
 		self.mic_test_follow(&settings);
 	}
 
@@ -342,6 +351,15 @@ impl Core {
 					output: settings.voice.output_device.clone(),
 				}
 			}
+			AudioIo::Playback { .. } | AudioIo::Manual => AudioIo::Manual,
+		}
+	}
+
+	pub(super) fn playback_io(&self) -> AudioIo {
+		match self.voice_shared.setup.lock().audio {
+			AudioIo::Devices { .. } | AudioIo::Playback { .. } => AudioIo::Playback {
+				output: self.store.settings.read().voice.output_device.clone(),
+			},
 			AudioIo::Manual => AudioIo::Manual,
 		}
 	}
@@ -373,6 +391,7 @@ impl Core {
 		if let Some(connection) = &self.voice.connection {
 			connection.set_user_volume(user_id, self.state.read().user_audio(user_id).gain());
 		}
+		self.apply_stream_volume();
 		self.store_user_audio();
 	}
 
@@ -468,6 +487,7 @@ impl Core {
 		if let Some(connection) = &self.voice.connection {
 			self.apply_to_connection_of(connection);
 		}
+		self.apply_stream_deafen();
 	}
 
 	fn send_voice_state(&self, guild_id: Snowflake, channel_id: Option<Snowflake>) -> Result<(), SendError> {

@@ -1,17 +1,29 @@
+use std::cell::RefCell;
 use std::sync::Arc;
+use std::time::Duration;
 
-use mockcord::{CAMERA_HEIGHT, CAMERA_WIDTH, MockStream, VoiceFrame, VoiceRecording};
+use mockcord::{CAMERA_HEIGHT, CAMERA_WIDTH, MockStream, VoiceControl, VoiceFrame, VoiceRecording};
+use opus::{Application, Channels, Encoder};
 use protocol::{Opcode, Snowflake};
 use serde_json::json;
 use session::{Command, VideoView};
-use state::State;
+use state::{State, UserAudio};
+use tokio::task::JoinHandle;
+use voice::{MixedFrame, VoiceConnection};
 
-use crate::voice::{Voice, identifies, start};
+use crate::voice::{SETTLE, Voice, identifies, start, tone_frame};
 
 const STREAM_FRAMES: u64 = 10;
 const VIEW_WIDTH: u32 = 1_280;
 const VIEW_HEIGHT: u32 = 720;
 const DAVE_MEMBER: u64 = 222_801_430_442_967_040;
+const OPUS_PACKET_BYTES: usize = 1_275;
+const FRAME: Duration = Duration::from_millis(20);
+const STREAM_AUDIO_FRAMES: usize = 60;
+const WARMUP_FRAMES: usize = 5;
+const MEASURED_FRAMES: usize = 25;
+const HALF: u8 = 50;
+const LOUD: u8 = 150;
 
 fn seated(voice: &Voice) -> Vec<u64> {
 	let me = voice.running.session().state().read().current_user_id();
@@ -279,5 +291,222 @@ async fn deletes_end_the_view_with_their_reason_and_leaving_voice_ends_every_vie
 		.await;
 	assert!(session.stream_connection().is_none());
 	assert!(session.voice_connection().is_none());
+	voice.stop().await;
+}
+
+fn play_stream_audio(control: VoiceControl, stream: &MockStream, from: u16) -> JoinHandle<()> {
+	let (channel_id, owner, ssrc) = (stream.rtc_channel_id, stream.owner, stream.audio_ssrc());
+	tokio::spawn(async move {
+		let mut encoder = Encoder::new(48_000, Channels::Mono, Application::Audio).expect("an opus encoder");
+		let mut packet = vec![0; OPUS_PACKET_BYTES];
+		for index in 0..STREAM_AUDIO_FRAMES {
+			let length = encoder
+				.encode(&tone_frame(index), &mut packet)
+				.expect("the tone encodes");
+			let sequence = from.wrapping_add(index as u16);
+			control.send_as(channel_id, owner, ssrc, sequence, &packet[..length]);
+			tokio::time::sleep(FRAME).await;
+		}
+	})
+}
+
+fn level(frames: &[MixedFrame]) -> (f32, i16) {
+	let samples: Vec<i16> = frames
+		.iter()
+		.skip(WARMUP_FRAMES)
+		.take(MEASURED_FRAMES)
+		.flat_map(|frame| frame.pcm.iter().copied())
+		.collect();
+	let energy: f64 = samples.iter().map(|sample| f64::from(*sample).powi(2)).sum();
+	let rms = (energy / samples.len().max(1) as f64).sqrt() as f32;
+	let peak = samples
+		.iter()
+		.map(|sample| sample.saturating_abs())
+		.max()
+		.unwrap_or(0);
+	(rms, peak)
+}
+
+struct StreamAudio<'a> {
+	voice: &'a Voice,
+	stream: &'a MockStream,
+	connection: Arc<VoiceConnection>,
+	sequence: u16,
+}
+
+impl StreamAudio<'_> {
+	fn play(&mut self) -> JoinHandle<()> {
+		let sender = play_stream_audio(self.voice.running.voice(), self.stream, self.sequence);
+		self.sequence = self.sequence.wrapping_add(STREAM_AUDIO_FRAMES as u16);
+		sender
+	}
+
+	fn heard(&self) -> Vec<MixedFrame> {
+		let ssrc = self.stream.audio_ssrc();
+		self.connection
+			.take_output()
+			.into_iter()
+			.filter(|frame| frame.sources.contains(&ssrc))
+			.collect()
+	}
+
+	async fn level(&mut self) -> (f32, i16) {
+		tokio::time::sleep(SETTLE).await;
+		let _ = self.connection.take_output();
+		let sender = self.play();
+		let heard = RefCell::new(Vec::new());
+		self.voice
+			.running
+			.eventually("the stream's audio to be mixed", || {
+				let mut heard = heard.borrow_mut();
+				heard.extend(self.heard());
+				heard.len() >= WARMUP_FRAMES + MEASURED_FRAMES
+			})
+			.await;
+		sender.await.expect("the stream audio was sent");
+		level(&heard.into_inner())
+	}
+
+	async fn unheard(&mut self) -> usize {
+		tokio::time::sleep(SETTLE).await;
+		let _ = self.connection.take_output();
+		self.play().await.expect("the stream audio was sent");
+		tokio::time::sleep(SETTLE).await;
+		self.heard().len()
+	}
+}
+
+fn sent_by(control: &VoiceControl, ssrc: u32) -> usize {
+	control
+		.recording()
+		.packets
+		.iter()
+		.filter(|packet| packet.ssrc == ssrc)
+		.count()
+}
+
+fn both_volumes(state: &State, owner: Snowflake) -> bool {
+	state.user_audio(owner)
+		== UserAudio {
+			volume: LOUD,
+			muted: false,
+			stream_volume: HALF,
+		}
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_watched_streams_audio_plays_at_its_own_volume_sends_nothing_and_follows_deafen() {
+	let mut voice = start("streams-audio").await;
+	voice.join(voice.lounge);
+	voice.connected_to(voice.lounge).await;
+	let session = voice.running.session();
+	let control = voice.running.voice();
+	let owner = seated(&voice)[0];
+	let owner_id = Snowflake(owner);
+	let stream = voice.go_live(owner).await;
+	voice.watch(&stream).await;
+	voice.stream_connects().await;
+	let connection = session.stream_connection().expect("the stream connection");
+	voice
+		.running
+		.eventually("op 12 to name the streamer on the stream connection", || {
+			connection.video_users().contains(&owner_id)
+		})
+		.await;
+	let own_ssrc = connection.ssrc().expect("the stream connection's ssrc");
+	let mut audio = StreamAudio {
+		voice: &voice,
+		stream: &stream,
+		connection: connection.clone(),
+		sequence: 1,
+	};
+
+	let (full, _) = audio.level().await;
+	assert!(full > 0., "the stream's audio reaches the mixed output");
+
+	voice.command(Command::SetStreamVolume {
+		user_id: owner_id,
+		volume: HALF,
+	});
+	voice
+		.running
+		.eventually("the stream volume to reach the stream's mixer", || {
+			(connection.user_volume(owner_id) - 0.5).abs() < f32::EPSILON
+		})
+		.await;
+	let (half, _) = audio.level().await;
+	let ratio = half / full;
+	assert!(
+		(0.35..=0.65).contains(&ratio),
+		"half stream volume halves the stream: {half} vs {full}"
+	);
+
+	voice.command(Command::SetUserVolume {
+		user_id: owner_id,
+		volume: LOUD,
+	});
+	let call = session.voice_connection().expect("the call's connection");
+	voice
+		.running
+		.eventually("the voice volume to reach the call's mixer", || {
+			(call.user_volume(owner_id) - 1.5).abs() < f32::EPSILON
+		})
+		.await;
+	assert!(
+		(connection.user_volume(owner_id) - 0.5).abs() < f32::EPSILON,
+		"the voice volume leaves the stream alone"
+	);
+
+	voice.command(Command::SetSelfDeaf(true));
+	voice
+		.running
+		.until("deafen to show", |state| {
+			state.voice().is_some_and(|voice| voice.self_deaf)
+		})
+		.await;
+	let (_, peak) = audio.level().await;
+	assert_eq!(peak, 0, "deafen silences the stream");
+	voice.command(Command::SetSelfDeaf(false));
+	voice
+		.running
+		.until("undeafen to show", |state| {
+			state.voice().is_some_and(|voice| !voice.self_deaf)
+		})
+		.await;
+	let (back, _) = audio.level().await;
+	assert!(back > 0., "undeafening plays the stream again");
+	assert_eq!(
+		sent_by(&control, own_ssrc),
+		0,
+		"the stream connection sends no media"
+	);
+
+	voice.command(Command::StopWatchingStream {
+		stream_key: stream.key.clone(),
+	});
+	voice.stop_watching_sent(&stream).await;
+	voice
+		.running
+		.eventually("the stream connection to close", || {
+			session.stream_connection().is_none()
+		})
+		.await;
+	assert_eq!(audio.unheard().await, 0, "stopping ends the stream's audio");
+	assert_eq!(sent_by(&control, own_ssrc), 0);
+	drop((audio, connection, call));
+
+	voice
+		.running
+		.until("the stream volume beside the voice volume", |state| {
+			both_volumes(state, owner_id)
+		})
+		.await;
+	voice.running.restart().await;
+	voice
+		.running
+		.until("both volumes after a restart", |state| {
+			both_volumes(state, owner_id)
+		})
+		.await;
 	voice.stop().await;
 }

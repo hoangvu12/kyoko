@@ -910,6 +910,7 @@ async fn user_volume_scales_a_member_local_mute_silences_them_and_both_persist()
 				== UserAudio {
 					volume: 50,
 					muted: true,
+					..UserAudio::default()
 				}
 		})
 		.await;
@@ -922,6 +923,7 @@ async fn user_volume_scales_a_member_local_mute_silences_them_and_both_persist()
 				== UserAudio {
 					volume: 50,
 					muted: true,
+					..UserAudio::default()
 				}
 		})
 		.await;

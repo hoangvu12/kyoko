@@ -126,6 +126,14 @@ pub(crate) struct AudioEngine {
 
 impl AudioEngine {
 	pub fn start(rings: Arc<Rings>, input: Option<String>, output: Option<String>) -> Result<Self> {
+		Self::spawn(rings, Some(input), output)
+	}
+
+	pub fn playback(rings: Arc<Rings>, output: Option<String>) -> Result<Self> {
+		Self::spawn(rings, None, output)
+	}
+
+	fn spawn(rings: Arc<Rings>, input: Option<Option<String>>, output: Option<String>) -> Result<Self> {
 		let (commands, receiver) = mpsc::channel();
 		let (ready_sender, ready) = mpsc::channel();
 		let thread = thread::Builder::new()
@@ -159,17 +167,19 @@ impl Drop for AudioEngine {
 
 fn run(
 	rings: &Arc<Rings>,
-	input: Option<String>,
+	input: Option<Option<String>>,
 	output: Option<String>,
 	commands: &mpsc::Receiver<Command>,
 	ready: &mpsc::Sender<()>,
 ) {
 	let host = cpal::default_host();
-	let mut input_stream = open_input(&host, input.as_deref(), rings);
+	let captures = input.is_some();
+	let mut input_stream = input.and_then(|id| open_input(&host, id.as_deref(), rings));
 	let mut output_stream = open_output(&host, output.as_deref(), rings);
 	let _ = ready.send(());
 	while let Ok(command) = commands.recv() {
 		match command {
+			Command::Input(_) if !captures => {}
 			Command::Input(id) => {
 				drop(input_stream.take());
 				input_stream = open_input(&host, id.as_deref(), rings);

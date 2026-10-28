@@ -26,6 +26,7 @@ pub struct CallStream {
 	pub name: String,
 	pub stream_key: String,
 	pub watching: bool,
+	pub volume: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,6 +110,7 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 				user_id: tile.user_id,
 				name: tile.name.clone(),
 				watching: session.watching.as_deref() == Some(stream_key.as_str()),
+				volume: state.user_audio(tile.user_id).stream_volume,
 				stream_key,
 			}
 		})

@@ -52,6 +52,7 @@ fn peers_from_op_11_and_13_come_and_go_as_tiles_with_their_volume_and_speaking()
 			audio: UserAudio {
 				volume: 150,
 				muted: true,
+				stream_volume: 60,
 			},
 		},
 	);

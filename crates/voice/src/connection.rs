@@ -57,6 +57,9 @@ pub enum AudioIo {
 		input: Option<String>,
 		output: Option<String>,
 	},
+	Playback {
+		output: Option<String>,
+	},
 	Manual,
 }
 
@@ -118,6 +121,14 @@ impl VoiceConnection {
 					output: output.clone(),
 				};
 				let engine = tokio::task::spawn_blocking(move || AudioEngine::start(rings, input, output))
+					.await
+					.map_err(|error| VoiceError::Audio(error.to_string()))??;
+				*shared.engine.lock() = Some(engine);
+				true
+			}
+			AudioIo::Playback { output } => {
+				shared.devices.lock().output.clone_from(&output);
+				let engine = tokio::task::spawn_blocking(move || AudioEngine::playback(rings, output))
 					.await
 					.map_err(|error| VoiceError::Audio(error.to_string()))??;
 				*shared.engine.lock() = Some(engine);

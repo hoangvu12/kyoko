@@ -39,6 +39,7 @@ pub const USER_VOLUME_DEFAULT: u8 = 100;
 pub struct UserAudio {
 	pub volume: u8,
 	pub muted: bool,
+	pub stream_volume: u8,
 }
 
 impl Default for UserAudio {
@@ -46,22 +47,27 @@ impl Default for UserAudio {
 		Self {
 			volume: USER_VOLUME_DEFAULT,
 			muted: false,
+			stream_volume: USER_VOLUME_DEFAULT,
 		}
 	}
 }
 
 impl UserAudio {
 	pub fn gain(self) -> f32 {
-		if self.muted {
-			0.0
-		} else {
-			f32::from(self.volume.min(USER_VOLUME_MAX)) / f32::from(USER_VOLUME_DEFAULT)
-		}
+		if self.muted { 0.0 } else { volume_gain(self.volume) }
+	}
+
+	pub fn stream_gain(self) -> f32 {
+		volume_gain(self.stream_volume)
 	}
 
 	pub fn is_default(self) -> bool {
 		self == Self::default()
 	}
+}
+
+fn volume_gain(volume: u8) -> f32 {
+	f32::from(volume.min(USER_VOLUME_MAX)) / f32::from(USER_VOLUME_DEFAULT)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -261,6 +267,7 @@ impl State {
 	pub(crate) fn user_audio_changed(&mut self, user_id: Snowflake, audio: UserAudio) -> Changes {
 		let audio = UserAudio {
 			volume: audio.volume.min(USER_VOLUME_MAX),
+			stream_volume: audio.stream_volume.min(USER_VOLUME_MAX),
 			..audio
 		};
 		let changed = if audio.is_default() {

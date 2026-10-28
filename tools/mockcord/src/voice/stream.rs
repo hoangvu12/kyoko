@@ -27,6 +27,10 @@ impl MockStream {
 	pub fn dave_group(&self) -> u64 {
 		self.rtc_server_id - 1
 	}
+
+	pub fn audio_ssrc(&self) -> u32 {
+		self.video_ssrc - 1
+	}
 }
 
 struct Playing {
@@ -97,7 +101,7 @@ impl Voice {
 			"op": 12,
 			"d": {
 				"user_id": owner,
-				"audio_ssrc": stream.video_ssrc - 1,
+				"audio_ssrc": stream.audio_ssrc(),
 				"video_ssrc": stream.video_ssrc,
 				"streams": [{
 					"type": "video",
