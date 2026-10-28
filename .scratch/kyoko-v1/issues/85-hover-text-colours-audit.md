@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Inventory of hover and selected states (sidebar rows, menus, buttons, tabs, picker items, settings rows) with their current text colour
 - [ ] One documented rule in `docs/ui.md` (hover and selected text colours), using Midnight tokens only
