@@ -4,8 +4,17 @@
 
 **Blocked by:** none
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] Root cause found and written down (record which connections the listener saw: their requests, SNI, ALPN)
-- [ ] The test passes 30 runs in a row alone and 10 during a full workspace build, and still fails with the per-host gate disabled
-- [ ] If kyoko itself opened the second connection, `tls-capture --client wreq --h2 --compare chrome-156` stays 0 and 0 after the fix
+- [x] Root cause found and written down (record which connections the listener saw: their requests, SNI, ALPN)
+- [x] The test passes 30 runs in a row alone and 10 during a full workspace build, and still fails with the per-host gate disabled
+- [x] If kyoko itself opened the second connection, `tls-capture --client wreq --h2 --compare chrome-156` stays 0 and 0 after the fix
+
+## Answer
+
+Merged to main as `6ea0754` (worker `2d49562b`, lane C; full verify re-run by the orchestrator: green apart from the known `favourites::...frecency...` flake in `xtask test`, which passed in the same run's `test --workspace`). Test code and `docs/testing.md` only; `crates/media/src/queue.rs` unchanged.
+
+- Root cause: not kyoko. Reproduced 8 of 30; every failure's extra connection was a plaintext `HEAD / HTTP/1.1` (`Host: localhost:<port>`, `Connection: close`, no TLS hello, no SNI or ALPN) 35-440 ms after the port opened, from `roboco.exe` (the Roboco desktop app, `AppData\Local\Programs\Roboco`), the same prober 109 found (then with `GET`). Kyoko's own connection was always exactly one (SNI `localhost`, ALPN `h2`, all 10 image requests).
+- Fix: the test counts only connections that opened with a TLS ClientHello. 30/30 alone, 10/10 during a workspace clippy build; with the per-host gate off it fails 5/5 (10 connections).
+- Deviation: counting only connections that carried an image request would hide the regression (with the gate off, wreq's extra cold handshakes stay idle once one negotiates h2), so the filter is "sent a TLS hello" instead.
+- For later: tests counting connections on `HelloListener` should count only `hello.is_some()` or their own paths. A TLS-capable prober would get through this filter.
