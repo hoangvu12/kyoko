@@ -7,12 +7,12 @@ use futures_util::future::{BoxFuture, Shared};
 use futures_util::{FutureExt, StreamExt};
 use net::{Destination, Trust};
 use parking_lot::Mutex;
-use tokio::sync::Semaphore;
 use url::Url;
 use wreq::header::{HeaderMap, HeaderName, HeaderValue};
 use wreq::redirect::Policy;
 
 use crate::error::{MediaError, Result, redact_url};
+use crate::queue::{Gate, PerHost, Protocol, Ticket};
 
 pub const DEFAULT_ALLOWED_HOSTS: [&str; 8] = [
 	"cdn.discordapp.com",
@@ -29,7 +29,7 @@ const DEFAULT_USER_AGENT: &str = "Mozilla/5.0";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_REDIRECTS: usize = 5;
 const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
-pub const DEFAULT_CONCURRENCY: usize = 6;
+const POOL_IDLE: Duration = Duration::from_secs(90);
 const HTTPS_PORT: u16 = 443;
 const LOOPBACK_HOST: &str = "127.0.0.1";
 
@@ -48,7 +48,8 @@ pub struct MediaFetcherBuilder {
 	user_agent: String,
 	headers: Vec<(String, String)>,
 	audio_headers: Vec<(String, String)>,
-	concurrency: usize,
+	per_host: PerHost,
+	loopback_http2: bool,
 	trust: Trust,
 }
 
@@ -96,8 +97,16 @@ impl MediaFetcherBuilder {
 		self
 	}
 
-	pub fn concurrency(mut self, requests: usize) -> Self {
-		self.concurrency = requests.max(1);
+	pub fn per_host(mut self, http1: usize, http2: usize) -> Self {
+		self.per_host = PerHost {
+			http1: http1.max(1),
+			http2: http2.max(1),
+		};
+		self
+	}
+
+	pub fn loopback_http2(mut self) -> Self {
+		self.loopback_http2 = true;
 		self
 	}
 
@@ -107,6 +116,7 @@ impl MediaFetcherBuilder {
 	}
 
 	pub fn build(self) -> Result<MediaFetcher> {
+		let only_loopback = self.hosts.is_empty();
 		let hosts = Arc::new(Allowed {
 			hosts: self.hosts,
 			loopback_port: self.loopback_port,
@@ -124,13 +134,18 @@ impl MediaFetcherBuilder {
 				attempt.error("redirect to a disallowed host")
 			}
 		});
-		let client = net::client_builder(Destination::Image, &self.trust)
+		let mut client = net::client_builder(Destination::Image, &self.trust)
 			.map_err(|error| MediaError::Fetch(error.without_uri().to_string()))?
 			.https_only(self.loopback_port.is_none())
 			.timeout(REQUEST_TIMEOUT)
+			.pool_idle_timeout(POOL_IDLE)
 			.redirect(policy)
 			.referer(false)
-			.user_agent(self.user_agent)
+			.user_agent(self.user_agent);
+		if self.loopback_http2 && only_loopback {
+			client = client.http2_only();
+		}
+		let client = client
 			.build()
 			.map_err(|error| MediaError::Fetch(error.without_uri().to_string()))?;
 		Ok(MediaFetcher {
@@ -141,7 +156,7 @@ impl MediaFetcherBuilder {
 				hosts,
 				max_bytes: self.max_bytes,
 				inflight: Mutex::new(HashMap::new()),
-				permits: Semaphore::new(self.concurrency),
+				gate: Gate::new(self.per_host, POOL_IDLE),
 			}),
 		})
 	}
@@ -159,7 +174,7 @@ struct FetcherInner {
 	hosts: Arc<Allowed>,
 	max_bytes: usize,
 	inflight: Mutex<HashMap<(Purpose, String), SharedFetch>>,
-	permits: Semaphore,
+	gate: Arc<Gate>,
 }
 
 impl MediaFetcher {
@@ -174,7 +189,8 @@ impl MediaFetcher {
 			user_agent: DEFAULT_USER_AGENT.to_owned(),
 			headers: Vec::new(),
 			audio_headers: Vec::new(),
-			concurrency: DEFAULT_CONCURRENCY,
+			per_host: PerHost::default(),
+			loopback_http2: false,
 			trust: Trust::Bundled,
 		}
 	}
@@ -188,6 +204,10 @@ impl MediaFetcher {
 	}
 
 	pub async fn fetch_for(&self, url: &str, purpose: Purpose) -> Result<Bytes> {
+		self.fetch_queued(url, purpose, Ticket::urgent()).await
+	}
+
+	pub async fn fetch_queued(&self, url: &str, purpose: Purpose, ticket: Arc<Ticket>) -> Result<Bytes> {
 		let parsed = self.inner.validate(url)?;
 		let key = (purpose, url.to_owned());
 		let shared = {
@@ -198,7 +218,7 @@ impl MediaFetcher {
 					let inner = self.inner.clone();
 					let owned = key.clone();
 					let shared = async move {
-						let result = inner.download(parsed, purpose).await;
+						let result = inner.download(parsed, purpose, ticket).await;
 						inner.inflight.lock().remove(&owned);
 						result
 					}
@@ -210,6 +230,20 @@ impl MediaFetcher {
 			}
 		};
 		shared.await
+	}
+
+	pub fn reschedule(&self) {
+		self.inner.gate.reschedule();
+	}
+
+	pub fn waiting(&self) -> usize {
+		self.inner.gate.waiting()
+	}
+
+	pub fn protocol(&self, url: &str) -> Protocol {
+		Url::parse(url).map_or(Protocol::Unknown, |parsed| {
+			self.inner.gate.protocol(&host_key(&parsed))
+		})
 	}
 }
 
@@ -224,12 +258,9 @@ impl FetcherInner {
 		}
 	}
 
-	async fn download(&self, url: Url, purpose: Purpose) -> Result<Bytes> {
-		let _permit = self
-			.permits
-			.acquire()
-			.await
-			.map_err(|_| MediaError::Fetch("the fetcher closed".to_owned()))?;
+	async fn download(&self, url: Url, purpose: Purpose, ticket: Arc<Ticket>) -> Result<Bytes> {
+		let host = host_key(&url);
+		let _slot = self.gate.acquire(&host, ticket).await?;
 		let shown = redact_url(url.as_str()).to_owned();
 		let response = self
 			.client
@@ -241,6 +272,9 @@ impl FetcherInner {
 			.send()
 			.await
 			.map_err(|error| MediaError::Fetch(format!("{shown}: {}", error.without_uri())))?;
+		if Url::parse(&response.uri().to_string()).is_ok_and(|landed| host_key(&landed) == host) {
+			self.gate.learn(&host, response.version());
+		}
 		if !response.status().is_success() {
 			return Err(MediaError::Status(response.status().as_u16()));
 		}
@@ -263,6 +297,15 @@ impl FetcherInner {
 		}
 		Ok(body.freeze())
 	}
+}
+
+fn host_key(url: &Url) -> String {
+	format!(
+		"{}://{}:{}",
+		url.scheme(),
+		url.host_str().unwrap_or_default(),
+		url.port_or_known_default().unwrap_or_default()
+	)
 }
 
 fn owned<N, V>(headers: impl IntoIterator<Item = (N, V)>) -> Vec<(String, String)>

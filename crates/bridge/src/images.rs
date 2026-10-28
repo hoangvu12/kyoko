@@ -29,7 +29,7 @@ pub fn media_fetcher_builder(fingerprint: &Fingerprint) -> MediaFetcherBuilder {
 pub fn media_fetcher(fingerprint: &Fingerprint, loopback_port: Option<u16>) -> media::Result<MediaFetcher> {
 	let mut builder = media_fetcher_builder(fingerprint);
 	if let Some(port) = loopback_port {
-		builder = builder.only_loopback(port);
+		builder = builder.only_loopback(port).loopback_http2();
 	}
 	builder.build()
 }

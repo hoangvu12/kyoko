@@ -24,7 +24,7 @@ tokio-rustls = { workspace = true, optional = true }
 rcgen = { workspace = true, optional = true }
 protocol.workspace = true
 dave = { workspace = true, features = ["testing"] }
-axum = { workspace = true, features = ["multipart"] }
+axum = { workspace = true, features = ["multipart", "http2"] }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

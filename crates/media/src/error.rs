@@ -16,6 +16,8 @@ pub enum MediaError {
 	Io(Arc<std::io::Error>),
 	#[error("host not allowed: {0}")]
 	DisallowedHost(String),
+	#[error("dropped from the queue before it started")]
+	Dropped,
 }
 
 pub type Result<T> = std::result::Result<T, MediaError>;

@@ -114,7 +114,10 @@ fn fingerprint() -> Fingerprint {
 }
 
 fn loopback_fetcher(origin: &Origin) -> MediaFetcher {
-	bridge::media_fetcher(&fingerprint(), Some(origin.port)).expect("the fetcher builds")
+	bridge::media_fetcher_builder(&fingerprint())
+		.only_loopback(origin.port)
+		.build()
+		.expect("the fetcher builds")
 }
 
 fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {

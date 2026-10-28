@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
@@ -12,7 +12,8 @@ use parking_lot::{Mutex, RwLock};
 use tokio::runtime::Handle;
 use tokio::sync::Notify;
 
-use crate::error::redact_url;
+use crate::error::{MediaError, redact_url};
+use crate::queue::{Rank, Ticket};
 use crate::service::{MediaService, Source, Variant};
 use crate::signed;
 use crate::types::{Decoded, DecodedImage, Replay};
@@ -173,6 +174,7 @@ pub enum Status {
 	Ready { frames: usize },
 	Refreshing,
 	Failed,
+	Dropped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -363,6 +365,7 @@ enum Phase {
 	Ready(Picture),
 	Refreshing { stale: String },
 	Failed { at: Instant },
+	Dropped { request: ImageRequest },
 }
 
 struct Entry {
@@ -401,6 +404,7 @@ impl Entry {
 			Phase::Loading { .. } | Phase::Ready(_) => false,
 			Phase::Refreshing { stale } => stale != url,
 			Phase::Failed { at } => at.elapsed() >= RETRY_AFTER,
+			Phase::Dropped { .. } => true,
 		}
 	}
 }
@@ -410,6 +414,7 @@ struct Inner {
 	bytes: usize,
 	budget: usize,
 	visible: HashSet<u64>,
+	queued: HashMap<u64, Arc<Ticket>>,
 	hovered: Option<u64>,
 	playback: Animations,
 	reduced_motion: bool,
@@ -425,6 +430,7 @@ impl Inner {
 			bytes: 0,
 			budget,
 			visible: HashSet::new(),
+			queued: HashMap::new(),
 			hovered: None,
 			playback: Animations::default(),
 			reduced_motion: false,
@@ -432,6 +438,62 @@ impl Inner {
 			dirty: Vec::new(),
 			clears: Vec::new(),
 		}
+	}
+
+	fn queue(&mut self, key: u64) -> Arc<Ticket> {
+		let rank = if self.visible.contains(&key) {
+			Rank::Visible
+		} else {
+			Rank::Asked
+		};
+		let ticket = Ticket::new(rank);
+		self.queued.insert(key, ticket.clone());
+		ticket
+	}
+
+	fn settle(&mut self, key: u64, ticket: &Arc<Ticket>) {
+		if self
+			.queued
+			.get(&key)
+			.is_some_and(|queued| Arc::ptr_eq(queued, ticket))
+		{
+			self.queued.remove(&key);
+		}
+	}
+
+	fn requeue(&mut self) -> Vec<(u64, ImageRequest, Arc<Ticket>)> {
+		for (key, ticket) in &self.queued {
+			if self.visible.contains(key) {
+				ticket.show();
+			} else if ticket.rank() == Rank::Visible {
+				ticket.drop_unless_started();
+			}
+		}
+		let returned: Vec<u64> = self
+			.visible
+			.iter()
+			.copied()
+			.filter(|key| {
+				self.entries
+					.peek(key)
+					.is_some_and(|entry| matches!(entry.phase, Phase::Dropped { .. }))
+			})
+			.collect();
+		let mut restarts = Vec::new();
+		for key in returned {
+			let Some(entry) = self.entries.peek_mut(&key) else {
+				continue;
+			};
+			let Phase::Dropped { request } = &entry.phase else {
+				continue;
+			};
+			let request = request.clone();
+			entry.phase = Phase::Loading {
+				url: request.url.clone(),
+			};
+			restarts.push((key, request, self.queue(key)));
+		}
+		restarts
 	}
 
 	fn moving(&self, key: u64) -> bool {
@@ -472,7 +534,12 @@ impl Inner {
 				.entries
 				.iter()
 				.rev()
-				.filter(|(_, entry)| matches!(entry.phase, Phase::Failed { .. } | Phase::Refreshing { .. }))
+				.filter(|(_, entry)| {
+					matches!(
+						entry.phase,
+						Phase::Failed { .. } | Phase::Refreshing { .. } | Phase::Dropped { .. }
+					)
+				})
 				.map(|(key, _)| *key)
 				.take(extra)
 				.collect();
@@ -490,6 +557,7 @@ impl Inner {
 			self.bytes -= picture.bytes;
 		}
 		self.animating.remove(&key);
+		self.queued.remove(&key);
 		if entry.shown.is_some() {
 			self.clears.push(entry.name);
 		}
@@ -652,7 +720,7 @@ impl Gallery {
 		let key = key_of(&request.url, request.variant);
 		let load = {
 			let mut inner = self.shared.inner.lock();
-			match inner.entries.get_mut(&key) {
+			let load = match inner.entries.get_mut(&key) {
 				Some(entry) if entry.wants_load(&request.url) => {
 					entry.phase = Phase::Loading {
 						url: request.url.clone(),
@@ -668,13 +736,11 @@ impl Gallery {
 					inner.evict();
 					true
 				}
-			}
+			};
+			load.then(|| inner.queue(key))
 		};
-		if load {
-			let shared = self.shared.clone();
-			self.shared
-				.runtime
-				.spawn(async move { load_entry(shared, key, request).await });
+		if let Some(ticket) = load {
+			self.start(key, request, ticket);
 		}
 		ImageName::of(key)
 	}
@@ -689,6 +755,7 @@ impl Gallery {
 			},
 			Phase::Refreshing { .. } => Status::Refreshing,
 			Phase::Failed { .. } => Status::Failed,
+			Phase::Dropped { .. } => Status::Dropped,
 		})
 	}
 
@@ -710,7 +777,7 @@ impl Gallery {
 		I: IntoIterator<Item = S>,
 		S: AsRef<str>,
 	{
-		{
+		let restarts = {
 			let mut inner = self.shared.inner.lock();
 			let visible: HashSet<u64> = names
 				.into_iter()
@@ -721,7 +788,12 @@ impl Gallery {
 			}
 			inner.visible = visible;
 			inner.evict();
+			inner.requeue()
+		};
+		for (key, request, ticket) in restarts {
+			self.start(key, request, ticket);
 		}
+		self.shared.loader.fetcher().reschedule();
 		self.changed();
 	}
 
@@ -781,6 +853,13 @@ impl Gallery {
 	fn changed(&self) {
 		self.shared.ticker.notify_one();
 		self.shared.wake();
+	}
+
+	fn start(&self, key: u64, request: ImageRequest, ticket: Arc<Ticket>) {
+		let shared = self.shared.clone();
+		self.shared
+			.runtime
+			.spawn(async move { load_entry(shared, key, request, ticket).await });
 	}
 }
 
@@ -854,6 +933,17 @@ impl Shared {
 		self.wake();
 	}
 
+	fn drop_load(&self, key: u64, request: &ImageRequest) {
+		let mut inner = self.inner.lock();
+		if let Some(entry) = inner.entries.peek_mut(&key)
+			&& entry.loading(&request.url)
+		{
+			entry.phase = Phase::Dropped {
+				request: request.clone(),
+			};
+		}
+	}
+
 	fn fail(&self, key: u64, url: &str) {
 		{
 			let mut inner = self.inner.lock();
@@ -867,7 +957,12 @@ impl Shared {
 	}
 }
 
-async fn load_entry(shared: Arc<Shared>, key: u64, request: ImageRequest) {
+async fn load_entry(shared: Arc<Shared>, key: u64, request: ImageRequest, ticket: Arc<Ticket>) {
+	load_queued(&shared, key, &request, ticket.clone()).await;
+	shared.inner.lock().settle(key, &ticket);
+}
+
+async fn load_queued(shared: &Shared, key: u64, request: &ImageRequest, ticket: Arc<Ticket>) {
 	let url = request.url.as_str();
 	let source = if signed::is_expired(url, SystemTime::now()) {
 		Source::DiskOnly
@@ -875,9 +970,14 @@ async fn load_entry(shared: Arc<Shared>, key: u64, request: ImageRequest) {
 		Source::Anywhere
 	};
 	let cap = shared.inner.lock().budget / ANIMATION_SHARE;
-	match shared.loader.load_within(url, request.variant, source, cap).await {
+	match shared
+		.loader
+		.load_within(url, request.variant, source, cap, ticket.clone())
+		.await
+	{
 		Ok(Some(decoded)) => shared.finish(key, url, decoded),
 		Ok(None) => shared.refresh_or_fail(key, url),
+		Err(MediaError::Dropped) => shared.drop_load(key, request),
 		Err(error) if error.is_gone() && signed::is_signed(url) => shared.refresh_or_fail(key, url),
 		Err(error) => {
 			tracing::debug!(url = redact_url(url), %error, "image did not load");
@@ -887,11 +987,12 @@ async fn load_entry(shared: Arc<Shared>, key: u64, request: ImageRequest) {
 			};
 			match shared
 				.loader
-				.load_within(fallback, request.variant, Source::Anywhere, cap)
+				.load_within(fallback, request.variant, Source::Anywhere, cap, ticket)
 				.await
 			{
 				Ok(Some(decoded)) => shared.finish(key, url, decoded),
 				Ok(None) => shared.fail(key, url),
+				Err(MediaError::Dropped) => shared.drop_load(key, request),
 				Err(error) => {
 					tracing::debug!(url = redact_url(fallback), %error, "fallback image did not load");
 					shared.fail(key, url);

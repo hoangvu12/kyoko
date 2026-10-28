@@ -45,6 +45,7 @@ impl RestRequest {
 #[derive(Debug, Clone)]
 pub struct MediaRequest {
 	pub path: String,
+	pub http2: bool,
 	pub query: Option<String>,
 	pub headers: Headers,
 	pub status: u16,

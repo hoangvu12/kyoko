@@ -9,6 +9,7 @@ use crate::cache::{DiskCache, SizeHint};
 use crate::decode::{Limits, Plan, decode_planned};
 use crate::error::{MediaError, Result, redact_url};
 use crate::fetch::{MediaFetcher, Purpose};
+use crate::queue::Ticket;
 use crate::resize::shrink_image;
 use crate::shape::{Shape, mask_circle};
 use crate::types::{Decoded, DecodedImage};
@@ -71,6 +72,10 @@ impl MediaService {
 		&self.inner.disk
 	}
 
+	pub fn fetcher(&self) -> &MediaFetcher {
+		&self.inner.fetcher
+	}
+
 	pub async fn load(&self, url: &str, hint: SizeHint) -> Result<Decoded> {
 		self.load_variant(url, Variant::new(hint, Shape::Square), Source::Anywhere)
 			.await?
@@ -95,7 +100,8 @@ impl MediaService {
 	}
 
 	pub async fn load_variant(&self, url: &str, variant: Variant, source: Source) -> Result<Option<Decoded>> {
-		self.load_within(url, variant, source, usize::MAX).await
+		self.load_within(url, variant, source, usize::MAX, Ticket::urgent())
+			.await
 	}
 
 	pub async fn load_within(
@@ -104,11 +110,18 @@ impl MediaService {
 		variant: Variant,
 		source: Source,
 		kept_bytes: usize,
+		ticket: Arc<Ticket>,
 	) -> Result<Option<Decoded>> {
 		let (bytes, from_disk) = match (self.cached_bytes(url).await, source) {
 			(Some(bytes), _) => (bytes, true),
 			(None, Source::DiskOnly) => return Ok(None),
-			(None, Source::Anywhere) => (self.inner.fetcher.fetch(url).await?, false),
+			(None, Source::Anywhere) => (
+				self.inner
+					.fetcher
+					.fetch_queued(url, Purpose::Image, ticket)
+					.await?,
+				false,
+			),
 		};
 		let decoded = self.decode(bytes.clone(), variant, kept_bytes).await?;
 		if !from_disk {

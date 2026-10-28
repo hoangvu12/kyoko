@@ -325,9 +325,11 @@ async fn observe_media(shared: &Shared, request: Request, next: Next, at: Instan
 	}
 	let query = request.uri().query().map(str::to_owned);
 	let headers = header_pairs(request.headers());
+	let http2 = request.version() == axum::http::Version::HTTP_2;
 	let response = next.run(request).await;
 	shared.recorder.media(MediaRequest {
 		path,
+		http2,
 		query,
 		headers,
 		status: response.status().as_u16(),

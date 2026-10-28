@@ -7,6 +7,7 @@ pub mod fetch;
 mod gallery;
 mod lottie;
 pub mod placeholder;
+mod queue;
 mod resize;
 mod service;
 pub mod shape;
@@ -22,6 +23,7 @@ pub use gallery::{
 	Origin, Pixels, Playback, Status, Update,
 };
 pub use placeholder::placeholder_from_discord;
+pub use queue::{HTTP1_PER_HOST, HTTP2_PER_HOST, Protocol, Rank, Ticket};
 pub use resize::{resize_decoded, resize_to_fit, shrink_image};
 pub use service::{DEFAULT_DECODE_WORKERS, MediaService, Source, Variant};
 pub use shape::Shape;

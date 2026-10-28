@@ -22,6 +22,7 @@ mod landing;
 mod login_column;
 mod media;
 mod media_fetch;
+mod media_queue;
 mod members;
 mod message;
 mod message_logger;
