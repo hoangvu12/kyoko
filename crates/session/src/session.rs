@@ -18,6 +18,7 @@ use crate::notifier::Notifier;
 use crate::search::SearchResults;
 use crate::task::{Core, CoreParts, SharedSearch, Startup, Stats};
 use crate::theme_links::{ThemeLinkCopy, ThemeLinks};
+use crate::voice_setup::{VoiceSetup, VoiceShared};
 
 const COMMAND_CAPACITY: usize = 256;
 const RUNTIME_WORKERS: usize = 4;
@@ -47,6 +48,7 @@ pub struct Session {
 	themes: Arc<ThemeLinks>,
 	releases: Releases,
 	hooks: Hooks,
+	voice: Arc<VoiceShared>,
 	finished: std::sync::mpsc::Receiver<()>,
 	runtime: Option<Runtime>,
 }
@@ -97,6 +99,7 @@ impl Session {
 		let alerts = AlertQueue::default();
 		let stats = Arc::new(Stats::default());
 		let themes = Arc::new(ThemeLinks::default());
+		let voice = Arc::new(VoiceShared::default());
 		let (commands, command_receiver) = mpsc::channel(COMMAND_CAPACITY);
 		let (internal, internal_receiver) = mpsc::unbounded_channel();
 		let core = Core::new(CoreParts {
@@ -124,6 +127,7 @@ impl Session {
 				gateway_config,
 				build_source: config.build_source,
 			},
+			voice: voice.clone(),
 		});
 		let (done, finished) = std::sync::mpsc::channel();
 		handle.spawn(async move {
@@ -141,6 +145,7 @@ impl Session {
 			themes,
 			releases,
 			hooks: config.hooks,
+			voice,
 			finished,
 			runtime,
 		})
@@ -185,6 +190,14 @@ impl Session {
 
 	pub fn releases(&self) -> Vec<Release> {
 		self.releases.snapshot()
+	}
+
+	pub fn set_voice_setup(&self, setup: VoiceSetup) {
+		*self.voice.setup.lock() = setup;
+	}
+
+	pub fn voice_connection(&self) -> Option<Arc<voice::VoiceConnection>> {
+		self.voice.connection.lock().clone()
 	}
 
 	pub fn shutdown(mut self) {

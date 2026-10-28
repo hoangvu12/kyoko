@@ -137,6 +137,10 @@ impl Control {
 			.rate_limit_member_requests(retry_after, count);
 	}
 
+	pub fn fill_voice_channel(&self, channel_id: u64) {
+		self.shared.scenario.fill_voice_channel(channel_id);
+	}
+
 	pub fn dispatch(&self, event: &str, data: &Value) {
 		self.shared.hub.broadcast(event, data);
 	}

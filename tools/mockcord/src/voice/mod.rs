@@ -4,8 +4,9 @@ mod recording;
 
 use std::collections::HashMap;
 use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use axum::Router;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
@@ -16,7 +17,7 @@ use parking_lot::Mutex;
 use rand::Rng;
 use serde_json::{Value, json};
 use tokio::net::UdpSocket;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{Notify, broadcast, watch};
 use tokio::task::JoinHandle;
 
 use crate::json::parse_id;
@@ -70,6 +71,9 @@ struct Voice {
 	log: Mutex<VoiceRecording>,
 	revision: watch::Sender<u64>,
 	shutdown: watch::Receiver<bool>,
+	echo_held: AtomicBool,
+	held_echo: Mutex<Vec<(Vec<u8>, SocketAddr)>>,
+	echo_released: Notify,
 }
 
 impl Voice {
@@ -124,6 +128,15 @@ impl VoiceControl {
 		let _ = self.0.commands.send(Command::Drop);
 	}
 
+	pub fn hold_echo(&self) {
+		self.0.echo_held.store(true, Ordering::Relaxed);
+	}
+
+	pub fn release_echo(&self) {
+		self.0.echo_held.store(false, Ordering::Relaxed);
+		self.0.echo_released.notify_one();
+	}
+
 	pub fn speak_as(&self, user_id: u64, ssrc: u32, speaking: bool) {
 		let frame = json!({
 			"op": 5,
@@ -163,6 +176,9 @@ pub async fn spawn(shutdown: watch::Receiver<bool>) -> io::Result<VoiceEndpoint>
 		log: Mutex::new(VoiceRecording::default()),
 		revision: watch::Sender::new(0),
 		shutdown: shutdown.clone(),
+		echo_held: AtomicBool::new(false),
+		held_echo: Mutex::new(Vec::new()),
+		echo_released: Notify::new(),
 	});
 	let url = bound.url.clone();
 	let (listener, accepting) = VoiceListener::start(bound, voice.clone());
@@ -312,8 +328,16 @@ async fn on_text(voice: &Voice, socket: &mut WebSocket, peer: &mut Peer, text: &
 	}
 }
 
+fn issued(token: &Value) -> bool {
+	token.as_str().is_some_and(|token| {
+		token
+			.strip_prefix(VOICE_TOKEN)
+			.is_some_and(|rest| rest.is_empty() || rest.starts_with('-'))
+	})
+}
+
 fn identify(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> {
-	if data["token"].as_str() != Some(VOICE_TOKEN) {
+	if !issued(&data["token"]) {
 		return Err(AUTHENTICATION_FAILED);
 	}
 	let session_id = data["session_id"].as_str().unwrap_or_default().to_owned();
@@ -389,7 +413,7 @@ fn speaking(voice: &Voice, peer: &Peer, data: &Value) {
 }
 
 fn resume(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> {
-	if data["token"].as_str() != Some(VOICE_TOKEN) {
+	if !issued(&data["token"]) {
 		return Err(AUTHENTICATION_FAILED);
 	}
 	let session_id = data["session_id"].as_str().unwrap_or_default();

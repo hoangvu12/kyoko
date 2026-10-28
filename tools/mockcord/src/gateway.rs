@@ -499,6 +499,9 @@ impl Connection {
 	fn broadcast_voice_state(&self, session: &str, data: &Value) {
 		let guild_id = parse_id(&data["guild_id"]);
 		let channel_id = parse_id(&data["channel_id"]);
+		if channel_id.is_some_and(|id| self.shared.scenario.voice_channel_full(id)) {
+			return;
+		}
 		let member = guild_id
 			.and_then(|id| self.shared.fixtures.guild(id))
 			.map_or(Value::Null, |guild| to_json(guild.current_member()));
@@ -517,10 +520,11 @@ impl Connection {
 			"suppress": false,
 			"request_to_speak_timestamp": data["request_to_speak_timestamp"].clone(),
 		});
+		let moved = self.shared.scenario.move_voice(session, channel_id);
 		self.shared.hub.broadcast("VOICE_STATE_UPDATE", &event);
-		if let Some(channel_id) = channel_id {
+		if let (true, Some(channel_id)) = (moved, channel_id) {
 			let mut server = json!({
-				"token": VOICE_TOKEN,
+				"token": format!("{VOICE_TOKEN}-{channel_id}"),
 				"guild_id": guild_id.map(|id| id.to_string()),
 				"endpoint": self.shared.urls.voice,
 			});

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -140,9 +141,27 @@ pub struct Scenario {
 	acks: Mutex<HeartbeatAcks>,
 	ready: Mutex<Option<ReadyTransform>>,
 	limited_member_requests: Mutex<Vec<f64>>,
+	full_voice_channels: Mutex<Vec<u64>>,
+	voice_channels: Mutex<HashMap<String, u64>>,
 }
 
 impl Scenario {
+	pub fn fill_voice_channel(&self, channel_id: u64) {
+		self.full_voice_channels.lock().push(channel_id);
+	}
+
+	pub fn voice_channel_full(&self, channel_id: u64) -> bool {
+		self.full_voice_channels.lock().contains(&channel_id)
+	}
+
+	pub fn move_voice(&self, session: &str, channel_id: Option<u64>) -> bool {
+		let mut channels = self.voice_channels.lock();
+		match channel_id {
+			Some(channel_id) => channels.insert(session.to_owned(), channel_id) != Some(channel_id),
+			None => channels.remove(session).is_some(),
+		}
+	}
+
 	pub fn respond(&self, method: &str, pattern: &str, reply: Reply, times: Option<usize>) {
 		if times == Some(0) {
 			return;

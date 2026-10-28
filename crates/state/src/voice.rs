@@ -24,6 +24,12 @@ pub struct VoiceStats {
 	pub video_bitrate_bps: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VoiceSelf {
+	pub self_mute: bool,
+	pub self_deaf: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct VoiceLevels {
 	pub input: f32,
@@ -96,6 +102,20 @@ impl State {
 		self.voice.as_ref()
 	}
 
+	pub fn voice_self(&self) -> VoiceSelf {
+		self.voice_self
+	}
+
+	pub fn own_voice_state(&self) -> Option<&VoiceState> {
+		let session = self.voice.as_ref()?;
+		let me = self.current_user_id()?;
+		let guild = self.guilds.get(&session.guild_id?)?;
+		guild
+			.voice_states
+			.get(&me)
+			.filter(|voice| voice.channel_id == Some(session.channel_id))
+	}
+
 	pub fn mic_test(&self) -> Option<MicTest> {
 		self.mic_test
 	}
@@ -143,8 +163,8 @@ impl State {
 					speaking: HashSet::new(),
 					stats: VoiceStats::default(),
 					levels: VoiceLevels::default(),
-					self_mute: false,
-					self_deaf: false,
+					self_mute: self.voice_self.self_mute,
+					self_deaf: self.voice_self.self_deaf,
 					camera_on: false,
 					screen_share: None,
 					watching: None,
@@ -156,8 +176,10 @@ impl State {
 		voice_session_changes(changed)
 	}
 
-	pub(crate) fn voice_self(&mut self, self_mute: bool, self_deaf: bool) -> Changes {
-		let changed = self
+	pub(crate) fn voice_self_changed(&mut self, self_mute: bool, self_deaf: bool) -> Changes {
+		let wanted = VoiceSelf { self_mute, self_deaf };
+		let mut changed = std::mem::replace(&mut self.voice_self, wanted) != wanted;
+		changed |= self
 			.voice
 			.as_mut()
 			.is_some_and(|session| (session.self_mute, session.self_deaf) != (self_mute, self_deaf));

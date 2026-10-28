@@ -1,6 +1,6 @@
 # Voice
 
-`crates/voice` is the voice connection core, ported from oxidcord's `crates/voice` (MIT/Apache) without video and without DAVE. It has no UI dependency and nothing in kyoko calls it yet: joining from the sidebar is ticket V2, DAVE is V3. The transport decision (UDP) is in `docs/fingerprint.md`, "Voice".
+`crates/voice` is the voice connection core, ported from oxidcord's `crates/voice` (MIT/Apache) without video and without DAVE. It has no UI dependency. The session drives it (below, "Joining"); DAVE is V3. The transport decision (UDP) is in `docs/fingerprint.md`, "Voice".
 
 ## Shape
 
@@ -32,8 +32,26 @@ Facts from docs.discord.food voice connections and close codes (userdoccers mast
 
 Joins and rejoins only ever come from the caller; the core never re-joins after a stop.
 
+## Joining
+
+`crates/session/src/task/voice_link.rs` (ported from oxidcord's `voice_link.rs`) joins, moves and leaves server voice channels. DM and group calls are V12.
+
+- `Command::JoinVoice { guild_id, channel_id }` checks that the channel is a voice or stage channel of that server (anything else is rejected, so a voice row can never start a DM call), sends op 4 and waits. VOICE_STATE_UPDATE for the current user gives the gateway `session_id`, VOICE_SERVER_UPDATE the voice `token` and `endpoint`; once both are in, `VoiceConnection::connect` runs with the identity's user agent and locale. Joining another channel drops the connection and sends op 4 again; the new VOICE_SERVER_UPDATE brings a new token, so the move connects afresh. A VOICE_SERVER_UPDATE while connected (a server change) reconnects too.
+- `Command::LeaveVoice` disconnects and sends op 4 with the server's `guild_id` and `channel_id: null`.
+- Op 4 keys, in the docs' order: `guild_id`, `channel_id`, `self_mute`, `self_deaf`, `self_video` (`false`), `preferred_region`, `preferred_regions`, `flags`. The regions are READY's `geo_ordered_rtc_regions` (the first is the preferred one), so nothing is fetched from discord.media. `flags` is 2 (`ALLOW_VOICE_RECORDING`); `CLIPS_ENABLED` is a desktop app feature and stays off.
+- No answer within 15 seconds (a full channel gets no events) ends the join: op 4 with `channel_id: null` and a toast ("Couldn't connect to voice. The channel may be full."). A failed connection ends it the same way.
+- A fresh gateway session (READY after an invalid session or a new identify) drops the voice connection and sends op 4 again for the same channel; Discord then sends a new state and server update and voice reconnects. A resumed gateway session changes nothing.
+- A voice stop (`VoiceEvent::Stopped`) ends the call with a toast naming the reason; 4014 (removed from the channel) does not send op 4 again, since Discord already moved the user out. VOICE_STATE_UPDATE with `channel_id: null` for the current user ends the call the same way.
+- Joins only ever come from a click; the session never rejoins on its own except to re-announce a channel after the gateway lost its session.
+
+Mute and deafen (`Command::SetSelfMute`, `SetSelfDeaf`) work in and out of a call; `State::voice_self` keeps them between calls. Deafen implies mute: op 4 then carries `self_mute: true, self_deaf: true`, and undeafening restores the earlier mute. Unmuting while deafened undeafens too, as in Discord. In a call each change resends op 4 and is applied at once: the connection's mute stops sending (the voice gate is reset, so only the end-of-speech silence frames follow), deafen silences the mixer and implies mute. Server mute and deafen arrive in VOICE_STATE_UPDATE (`mute`, `deaf`); they are kept in the guild's voice states (`State::own_voice_state`) and also stop sending or playback.
+
+`state.voice()` is the call: channel, server, `VoiceStatus` (Connecting, Connected, Reconnecting) and the self flags. `Session::voice_connection()` hands out the running `VoiceConnection` (tests feed and read audio through it), and `Session::set_voice_setup` picks the audio mode (devices by default, `AudioIo::Manual` in tests), the TLS trust for the voice server and the join timeout.
+
 ## Mockcord
 
 Mockcord's voice server runs on TLS when mockcord is built with `tls` (its own self-signed root, `Server::voice().root_pem()`), plain `ws://` otherwise. It records each socket's ClientHello, ALPN and raw upgrade request, every frame both ways (with `seq` on the frames it numbers), closes, and every RTP packet it decrypts. `Server::voice()` also offers `set_modes`, `set_heartbeat_interval`, `close_sockets(code)`, `drop_sockets()` (no close frame) and `speak_as(user, ssrc, speaking)` for a scripted member's op 5. The UDP side answers IP discovery and echoes each packet back from SSRC + 1 in the mode the session selected.
 
-Tests: `crates/voice/tests/voice` (`cargo test -p kyoko-voice --test voice`).
+On the gateway side, op 4 answers with VOICE_STATE_UPDATE (broadcast) and, only when the session's channel changes, VOICE_SERVER_UPDATE with the token `mock-voice-token-<channel id>` (the voice server accepts `mock-voice-token` and any token made from it this way). `Control::fill_voice_channel(id)` makes op 4 for that channel go unanswered, as a full channel. READY carries `geo_ordered_rtc_regions` `mock-east`, `mock-central`, `mock-west`. `VoiceControl::hold_echo()` keeps echoed packets back until `release_echo()`, so a test can send while hearing and let the echo arrive later (while deafened, say).
+
+Tests: `crates/voice/tests/voice` (`cargo test -p kyoko-voice --test voice`) for the connection core, `crates/session/tests/session/voice.rs` for joining, moving, leaving, mute and deafen, server mute, the full-channel timeout and the gateway re-identify.

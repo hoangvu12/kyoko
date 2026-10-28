@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use aes_gcm::Aes256Gcm;
@@ -83,13 +84,20 @@ pub(super) async fn run(socket: UdpSocket, voice: Arc<Voice>) {
 					continue;
 				};
 				let packet = &buffer[..length];
-				let reply = if is_discovery(packet) {
-					Some(discovery_reply(packet, from))
-				} else {
-					echoed(&voice, packet)
-				};
-				if let Some(reply) = reply {
-					let _ = socket.send_to(&reply, from).await;
+				if is_discovery(packet) {
+					let _ = socket.send_to(&discovery_reply(packet, from), from).await;
+				} else if let Some(reply) = echoed(&voice, packet) {
+					if voice.echo_held.load(Ordering::Relaxed) {
+						voice.held_echo.lock().push((reply, from));
+					} else {
+						let _ = socket.send_to(&reply, from).await;
+					}
+				}
+			}
+			() = voice.echo_released.notified() => {
+				let held = std::mem::take(&mut *voice.held_echo.lock());
+				for (reply, to) in held {
+					let _ = socket.send_to(&reply, to).await;
 				}
 			}
 			_ = shutdown.changed() => break,

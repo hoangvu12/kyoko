@@ -5,6 +5,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use protocol::Snowflake;
 use protocol::gateway::Opcode;
+use serde::Serialize;
 use serde_json::{Map, Value, json};
 use tokio::runtime::Handle;
 use tokio::sync::{Notify, mpsc, watch};
@@ -32,6 +33,18 @@ pub struct MemberRequest<'a> {
 pub enum MemberLookup<'a> {
 	Ids(&'a [Snowflake]),
 	Query { query: &'a str, limit: u32 },
+}
+
+#[derive(Debug, Serialize)]
+pub struct VoiceStateRequest<'a> {
+	pub guild_id: Option<Snowflake>,
+	pub channel_id: Option<Snowflake>,
+	pub self_mute: bool,
+	pub self_deaf: bool,
+	pub self_video: bool,
+	pub preferred_region: Option<&'a str>,
+	pub preferred_regions: &'a [String],
+	pub flags: u64,
 }
 
 impl Gateway {
@@ -154,6 +167,13 @@ impl GatewayHandle {
 		)
 	}
 
+	pub fn update_voice_state(&self, request: &VoiceStateRequest<'_>) -> Result<(), SendError> {
+		self.queue_frame(
+			Opcode::VoiceStateUpdate,
+			frames::encode(Opcode::VoiceStateUpdate, request).map_err(|_| SendError::Closed)?,
+		)
+	}
+
 	pub fn voice_state_request_to_speak(
 		&self,
 		guild_id: Option<Snowflake>,
@@ -224,14 +244,17 @@ impl GatewayHandle {
 	}
 
 	fn queue(&self, opcode: Opcode, data: Value) -> Result<(), SendError> {
+		self.queue_frame(opcode, frames::command(opcode, data))
+	}
+
+	fn queue_frame(&self, opcode: Opcode, frame: String) -> Result<(), SendError> {
 		let lane = match Lane::of(opcode) {
 			Lane::Bulk => &self.bulk,
 			Lane::Urgent | Lane::Control => &self.urgent,
 		};
-		lane.try_send(frames::command(opcode, data))
-			.map_err(|error| match error {
-				mpsc::error::TrySendError::Full(_) => SendError::Full,
-				mpsc::error::TrySendError::Closed(_) => SendError::Closed,
-			})
+		lane.try_send(frame).map_err(|error| match error {
+			mpsc::error::TrySendError::Full(_) => SendError::Full,
+			mpsc::error::TrySendError::Closed(_) => SendError::Closed,
+		})
 	}
 }

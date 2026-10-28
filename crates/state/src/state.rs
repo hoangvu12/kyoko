@@ -26,7 +26,7 @@ use crate::settings::GuildFolder;
 use crate::versions::CacheVersions;
 use crate::views::RenderedMessage;
 use crate::views::UserOverride;
-use crate::voice::{Call, MicTest, StreamSummary, VoiceLevels, VoiceSession, VoiceStats};
+use crate::voice::{Call, MicTest, StreamSummary, VoiceLevels, VoiceSelf, VoiceSession, VoiceStats};
 
 pub const TYPING_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -104,6 +104,7 @@ pub struct State {
 	pub(crate) drafts: HashMap<Snowflake, String>,
 	pub(crate) selected: Option<Selection>,
 	pub(crate) voice: Option<VoiceSession>,
+	pub(crate) voice_self: VoiceSelf,
 	pub(crate) mic_test: Option<MicTest>,
 	pub(crate) account_switch: Option<Snowflake>,
 	pub(crate) calls: HashMap<Snowflake, Call>,
@@ -645,7 +646,9 @@ impl State {
 				channel_id,
 				guild_id,
 			} => return self.voice_connection(status, *channel_id, *guild_id),
-			LocalEvent::VoiceSelf { self_mute, self_deaf } => return self.voice_self(*self_mute, *self_deaf),
+			LocalEvent::VoiceSelf { self_mute, self_deaf } => {
+				return self.voice_self_changed(*self_mute, *self_deaf);
+			}
 			LocalEvent::Speaking { user_id, speaking } => return self.voice_speaking(*user_id, *speaking),
 			LocalEvent::VoiceStats {
 				ping_ms,

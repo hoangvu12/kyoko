@@ -37,7 +37,7 @@ struct ResumeData<'a> {
 	seq: u64,
 }
 
-fn encode<T: Serialize>(opcode: Opcode, data: &T) -> Result<String, GatewayError> {
+pub(crate) fn encode<T: Serialize>(opcode: Opcode, data: &T) -> Result<String, GatewayError> {
 	Ok(serde_json::to_string(&Outgoing { op: opcode, d: data })?)
 }
 

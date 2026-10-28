@@ -27,6 +27,7 @@ plugins = { path = "crates/plugins", package = "kyoko-plugins" }
 twemoji = { path = "crates/twemoji", package = "kyoko-twemoji" }
 audio = { path = "crates/audio", package = "kyoko-audio" }
 net = { path = "crates/net", package = "kyoko-net" }
+voice = { path = "crates/voice", package = "kyoko-voice" }
 
 zgx = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }
 zgx-desktop = { git = "https://github.com/zeronsh/zgx", rev = "fc7d0f1e6695b2153bc0e18f0f1a3cef6f0426f6" }

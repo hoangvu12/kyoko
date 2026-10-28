@@ -14,6 +14,7 @@ protocol.workspace = true
 rest.workspace = true
 gateway.workspace = true
 net.workspace = true
+voice.workspace = true
 state.workspace = true
 store.workspace = true
 tokio.workspace = true

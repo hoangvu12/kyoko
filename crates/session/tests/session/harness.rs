@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
-use mockcord::{Control, Fixtures, MockConfig, Recording, RestRequest, Server};
+use mockcord::{Control, Fixtures, MockConfig, Recording, RestRequest, Server, VoiceControl};
 use protocol::Opcode;
 use protocol::fingerprint::Clock;
 use protocol::{ChannelType, Snowflake, Token};
@@ -273,6 +273,10 @@ impl Running {
 
 	pub fn fixtures(&self) -> &Fixtures {
 		self.server.fixtures()
+	}
+
+	pub fn voice(&self) -> VoiceControl {
+		self.server.voice()
 	}
 
 	pub fn token(&self) -> &str {

@@ -676,6 +676,13 @@ pub enum Command {
 	RetryHistory {
 		channel_id: Snowflake,
 	},
+	JoinVoice {
+		guild_id: Snowflake,
+		channel_id: Snowflake,
+	},
+	LeaveVoice,
+	SetSelfMute(bool),
+	SetSelfDeaf(bool),
 }
 
 impl Command {

@@ -198,7 +198,9 @@ Native Windows builds of `btls-sys` assemble BoringSSL's assembly unless they cr
 
 ## Voice
 
-**Decided (the user, 2026-10-28): UDP, option A.** See "Decision" below. `crates/voice` now holds the connection core (ticket 97, `docs/voice.md`), which nothing in kyoko calls yet; the build trial lives on as its `voice_trial` example. The voice upgrade presents the gateway's Chrome wss ClientHello and `UPGRADE_ORDER`, with no Cookie. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
+**Decided (the user, 2026-10-28): UDP, option A.** See "Decision" below. `crates/voice` now holds the connection core (ticket 97, `docs/voice.md`), which the session drives since ticket 98; the build trial lives on as its `voice_trial` example. The voice upgrade presents the gateway's Chrome wss ClientHello and `UPGRADE_ORDER`, with no Cookie. The plan is `nguyenvu/.research/voice-plan/plan.md` (sections 1–5 and 7); facts it rests on were rechecked here.
+
+Op 4 (ticket 98) carries the docs' fields in their order: `guild_id`, `channel_id`, `self_mute`, `self_deaf`, `self_video`, `preferred_region`, `preferred_regions`, `flags` ([gateway events](https://docs.discord.food/gateway/gateway-events#update-voice-state), read 2026-10-28). The regions are READY's `geo_ordered_rtc_regions`; the web client ranks regions by pinging `latency.discord.media`, which kyoko does not do, so its order is Discord's geographic one. `flags` is 2 (`ALLOW_VOICE_RECORDING`) without `CLIPS_ENABLED` (1), which belongs to the desktop app's clips; the web client's real value is unconfirmed until a capture.
 
 ### What the web client does
 

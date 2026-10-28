@@ -274,6 +274,7 @@ pub fn build(
 		"user_guild_settings": guild_settings(&store, capabilities, client_state),
 		"session_id": session_id,
 		"resume_gateway_url": shared.urls.gateway,
+		"geo_ordered_rtc_regions": ["mock-east", "mock-central", "mock-west"],
 		"sessions": [{
 			"session_id": session_id,
 			"status": "online",

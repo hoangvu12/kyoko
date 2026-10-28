@@ -131,6 +131,7 @@ pub struct Ready {
 	pub apex_experiments: Value,
 	#[serde(deserialize_with = "crate::lenient::optional_int")]
 	pub api_code_version: Option<i64>,
+	pub geo_ordered_rtc_regions: LenientVec<String>,
 }
 
 #[derive(Deserialize)]

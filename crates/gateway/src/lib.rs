@@ -12,5 +12,5 @@ pub use config::{
 };
 pub use error::{AUTHENTICATION_FAILED, FATAL_CLOSE_CODES, GatewayError, SendError};
 pub use event::GatewayEvent;
-pub use handle::{Gateway, GatewayHandle, MemberLookup, MemberRequest};
+pub use handle::{Gateway, GatewayHandle, MemberLookup, MemberRequest, VoiceStateRequest};
 pub use outbox::SendBudget;

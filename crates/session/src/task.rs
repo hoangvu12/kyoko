@@ -33,6 +33,7 @@ use crate::notifier::Notifier;
 use crate::persist::{self, Job, Persistor};
 use crate::search::SearchResults;
 use crate::theme_links::{ThemeLinkTuning, ThemeLinks};
+use crate::voice_setup::VoiceShared;
 
 mod accounts;
 mod actions;
@@ -67,6 +68,7 @@ mod storage;
 mod subscriptions;
 mod themes;
 mod uploads;
+mod voice_link;
 
 const PAGE_SIZE: u8 = 50;
 const TYPING_THROTTLE: Duration = Duration::from_secs(9);
@@ -180,6 +182,15 @@ pub(crate) enum Internal {
 	},
 	EmojiRanked(Option<state::EmojiRanking>),
 	FavoritesSaved(favorite_writes::FavoriteKind, bool),
+	VoiceJoinTimeout(u64),
+	VoiceConnected {
+		generation: u64,
+		result: Result<Arc<voice::VoiceConnection>, voice::VoiceError>,
+	},
+	VoiceEvent {
+		generation: u64,
+		event: voice::VoiceEvent,
+	},
 }
 
 pub(crate) struct CoreParts {
@@ -203,6 +214,7 @@ pub(crate) struct CoreParts {
 	pub(crate) tuning: RestTuning,
 	pub(crate) retention: store::Retention,
 	pub(crate) startup: Startup,
+	pub(crate) voice: Arc<VoiceShared>,
 }
 
 pub(crate) struct Startup {
@@ -261,6 +273,8 @@ pub(crate) struct Core {
 	ranker: emoji_rank::EmojiRanker,
 	favorite_writes: favorite_writes::FavoriteWrites,
 	mentions: mentions::Mentions,
+	voice: voice_link::VoiceLink,
+	voice_shared: Arc<VoiceShared>,
 }
 
 fn page_query(
@@ -355,6 +369,8 @@ impl Core {
 			ranker: emoji_rank::EmojiRanker::default(),
 			favorite_writes: favorite_writes::FavoriteWrites::new(&parts.tuning),
 			mentions: mentions::Mentions::default(),
+			voice: voice_link::VoiceLink::default(),
+			voice_shared: parts.voice,
 		}
 	}
 
@@ -433,6 +449,7 @@ impl Core {
 			}
 		}
 		self.notifier.flush();
+		self.close_voice();
 		self.gateway.shutdown();
 		if self.acks.unconfirmed() {
 			self.persist.submit(Job::ForgetVersions);
@@ -526,6 +543,7 @@ impl Core {
 					identity::save_installation_id(self.rest.identity(), &self.store, &self.runtime, id);
 				}
 				self.apply(Event::Ready(&ready));
+				self.voice_ready(ready.geo_ordered_rtc_regions.clone().into_vec());
 				let event = DispatchEvent::Ready(ready);
 				guarded(&self.hooks, "on_dispatch", |hooks| hooks.on_dispatch(&event));
 				let DispatchEvent::Ready(ready) = event else {
@@ -645,6 +663,8 @@ impl Core {
 			DispatchEvent::InteractionFailure(value) => self.interaction_settled(&value, true),
 			DispatchEvent::AutocompleteResponse(response) => self.autocomplete_answered(response),
 			DispatchEvent::InteractionModalCreate(modal) => self.modal_created(*modal),
+			DispatchEvent::VoiceStateUpdate(voice) => self.voice_state_update(&voice),
+			DispatchEvent::VoiceServerUpdate(update) => self.voice_server_update(update),
 			_ => {}
 		}
 	}
@@ -794,6 +814,9 @@ impl Core {
 				versions: kept.versions,
 			}),
 			Internal::EmojiRanked(ranking) => self.emoji_ranked(ranking),
+			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
+			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
+			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
 		}
 	}
 
@@ -993,6 +1016,10 @@ impl Core {
 			Command::RefreshThemeLinks { urls } => self.refresh_theme_links(urls),
 			Command::Reconnect => self.gateway.reconnect(),
 			Command::ShowDeletedMessages(show) => self.apply_local(LocalEvent::ShowDeletedMessages(show)),
+			Command::JoinVoice { guild_id, channel_id } => self.join_voice(guild_id, channel_id),
+			Command::LeaveVoice => self.leave_voice(),
+			Command::SetSelfMute(muted) => self.set_self_mute(muted),
+			Command::SetSelfDeaf(deafened) => self.set_self_deaf(deafened),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

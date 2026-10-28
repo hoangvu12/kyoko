@@ -12,6 +12,7 @@ mod search;
 mod session;
 mod task;
 mod theme_links;
+mod voice_setup;
 
 pub use alerts::{Alert, AlertKind, AlertPacing};
 pub use command::{ChannelChanges, Command, FriendSource, InviteSource, ModalAnswer, ModalValue};
@@ -36,3 +37,5 @@ pub use store::Retention;
 pub use theme_links::{
 	MAX_THEME_BYTES, MAX_THEME_LINKS, ThemeLinkCopy, ThemeLinkTuning, cached_copies, check_link, unique_links,
 };
+pub use voice::AudioIo;
+pub use voice_setup::VoiceSetup;
