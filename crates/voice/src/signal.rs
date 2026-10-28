@@ -54,6 +54,10 @@ pub(crate) struct Browser<'a> {
 }
 
 impl Credentials {
+	pub fn user_id(&self) -> Snowflake {
+		self.user_id
+	}
+
 	pub fn new(
 		ids: [Snowflake; 3],
 		session_id: String,

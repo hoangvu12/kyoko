@@ -25,6 +25,7 @@ pub(crate) const RECENT_EMOJI_KEY: &str = "expressions.recent.emoji";
 pub(crate) const RECENT_GIFS_KEY: &str = "expressions.recent.gifs";
 pub(crate) const RECENT_STICKERS_KEY: &str = "expressions.recent.stickers";
 pub(crate) const LAST_CHANNELS_KEY: &str = "navigation.last_channels";
+pub(crate) const USER_AUDIO_KEY: &str = "voice.user_audio";
 
 pub(crate) enum Job {
 	Ready(Box<Ready>),
@@ -419,5 +420,19 @@ pub(crate) fn load_last_channels(store: &Store) -> Vec<(Snowflake, Snowflake)> {
 	load_recent::<serde_json::Value>(store, LAST_CHANNELS_KEY)
 		.into_iter()
 		.filter_map(|pair| serde_json::from_value(pair).ok())
+		.collect()
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct SavedUserAudio {
+	pub user_id: Snowflake,
+	#[serde(flatten)]
+	pub audio: state::UserAudio,
+}
+
+pub(crate) fn load_user_audio(store: &Store) -> Vec<SavedUserAudio> {
+	load_recent::<serde_json::Value>(store, USER_AUDIO_KEY)
+		.into_iter()
+		.filter_map(|entry| serde_json::from_value(entry).ok())
 		.collect()
 }

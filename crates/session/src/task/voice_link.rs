@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use gateway::{SendError, VoiceStateRequest};
 use protocol::{ChannelType, Snowflake, Token, VoiceServerUpdate, VoiceState};
-use state::{LocalEvent, VoiceStatus};
+use state::{LocalEvent, UserAudio, VoiceStatus};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use voice::{AudioIo, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions, VoiceParams};
 
 use super::{Core, Internal};
+use crate::persist::{self, SavedUserAudio};
 
 const ALLOW_VOICE_RECORDING: u64 = 1 << 1;
 const JOIN_FAILED: &str = "Couldn't connect to voice. The channel may be full.";
@@ -217,10 +218,16 @@ impl Core {
 			VoiceEvent::Speaking { user_id, speaking } => {
 				self.apply_local(LocalEvent::Speaking { user_id, speaking });
 			}
-			VoiceEvent::UserLeft { user_id } => {
-				self.apply_local(LocalEvent::Speaking {
+			VoiceEvent::UserJoined { user_id } => {
+				self.apply_local(LocalEvent::VoicePeer {
 					user_id,
-					speaking: false,
+					present: true,
+				});
+			}
+			VoiceEvent::UserLeft { user_id } => {
+				self.apply_local(LocalEvent::VoicePeer {
+					user_id,
+					present: false,
 				});
 			}
 			VoiceEvent::Stopped(reason) => {
@@ -235,7 +242,105 @@ impl Core {
 				tracing::debug!(epoch, version, members = members.len(), "voice e2ee epoch");
 			}
 			VoiceEvent::DaveFailure(reason) => tracing::warn!(%reason, "voice e2ee failure"),
-			VoiceEvent::UserJoined { .. } | VoiceEvent::Stats { .. } => {}
+			VoiceEvent::Stats { .. } => {}
+		}
+	}
+
+	pub(super) fn set_user_volume(&mut self, user_id: Snowflake, volume: u8) {
+		let audio = UserAudio {
+			volume,
+			..self.state.read().user_audio(user_id)
+		};
+		self.change_user_audio(user_id, audio);
+	}
+
+	pub(super) fn set_user_muted(&mut self, user_id: Snowflake, muted: bool) {
+		let audio = UserAudio {
+			muted,
+			..self.state.read().user_audio(user_id)
+		};
+		self.change_user_audio(user_id, audio);
+	}
+
+	pub(super) fn restore_user_audio(&mut self, saved: Vec<SavedUserAudio>) {
+		for entry in saved {
+			self.apply_local(LocalEvent::UserAudio {
+				user_id: entry.user_id,
+				audio: entry.audio,
+			});
+		}
+		self.apply_user_audio();
+	}
+
+	pub(super) fn voice_channel_updated(&self, channel_id: Snowflake) {
+		if self
+			.voice
+			.target
+			.is_some_and(|target| target.channel_id == channel_id)
+		{
+			self.apply_bitrate();
+		}
+	}
+
+	fn change_user_audio(&mut self, user_id: Snowflake, audio: UserAudio) {
+		if self.state.read().current_user_id() == Some(user_id) {
+			return;
+		}
+		self.apply_local(LocalEvent::UserAudio { user_id, audio });
+		if let Some(connection) = &self.voice.connection {
+			connection.set_user_volume(user_id, self.state.read().user_audio(user_id).gain());
+		}
+		self.store_user_audio();
+	}
+
+	fn store_user_audio(&self) {
+		let saved: Vec<SavedUserAudio> = self
+			.state
+			.read()
+			.user_audios()
+			.map(|(user_id, audio)| SavedUserAudio { user_id, audio })
+			.collect();
+		match serde_json::to_vec(&saved) {
+			Ok(json) => self.persist.submit(persist::Job::Recent {
+				key: persist::USER_AUDIO_KEY,
+				json,
+			}),
+			Err(error) => tracing::warn!(%error, "user volumes were not saved"),
+		}
+	}
+
+	fn apply_user_audio(&self) {
+		if let Some(connection) = &self.voice.connection {
+			self.apply_user_audio_to(connection);
+		}
+	}
+
+	fn apply_user_audio_to(&self, connection: &VoiceConnection) {
+		for (user_id, audio) in self.state.read().user_audios() {
+			connection.set_user_volume(user_id, audio.gain());
+		}
+	}
+
+	fn apply_bitrate(&self) {
+		if let Some(connection) = &self.voice.connection {
+			self.apply_bitrate_to(connection);
+		}
+	}
+
+	fn apply_bitrate_to(&self, connection: &VoiceConnection) {
+		let Some(target) = self.voice.target else {
+			return;
+		};
+		let bitrate = self
+			.state
+			.read()
+			.guild(target.guild_id)
+			.and_then(|guild| guild.channels.get(&target.channel_id))
+			.and_then(|channel| channel.bitrate)
+			.and_then(|bitrate| u32::try_from(bitrate).ok())
+			.filter(|bitrate| *bitrate > 0);
+		if let Some(bitrate) = bitrate {
+			connection.set_bitrate(bitrate);
 		}
 	}
 
@@ -394,6 +499,8 @@ impl Core {
 
 	fn adopt_connection(&mut self, connection: Arc<VoiceConnection>) {
 		self.apply_to_connection_of(&connection);
+		self.apply_user_audio_to(&connection);
+		self.apply_bitrate_to(&connection);
 		*self.voice_shared.connection.lock() = Some(connection.clone());
 		self.voice.pump = Some(self.spawn_pump(&connection));
 		self.voice.connection = Some(connection);

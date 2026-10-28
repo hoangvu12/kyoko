@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use dave::{DaveEvent, DaveSession, Outgoing};
 use protocol::Snowflake;
@@ -161,6 +161,7 @@ impl Supervisor {
 				command = self.signals.commands.recv() => match command {
 					Some(Control::Speaking(now)) => {
 						self.speaking = now;
+						self.shared.speaking(self.credentials.user_id(), now);
 						if let Err(exit) = self.link.send(opcode::SPEAKING, speaking(now, self.ssrc)).await {
 							return Drive::Exit(exit);
 						}
@@ -255,10 +256,11 @@ impl Supervisor {
 			self.shared.ssrc_users.lock().insert(ssrc, user_id);
 		}
 		self.dave.user_joined(user_id.get());
-		self.shared.hub.emit(VoiceEvent::Speaking {
-			user_id,
-			speaking: event.speaking.unwrap_or_default() != 0,
-		});
+		if event.speaking.unwrap_or_default() == 0 {
+			self.shared.hushed(user_id);
+		} else {
+			self.shared.announced(user_id, Instant::now());
+		}
 	}
 
 	fn on_ack(&self) {
@@ -338,8 +340,11 @@ impl Supervisor {
 
 	fn adopt(&mut self, established: Established) -> Recovery {
 		self.shared.ssrc_users.lock().clear();
+		self.shared.hush_everyone();
 		self.ssrc = established.transport.ssrc();
-		self.speaking = false;
+		if std::mem::take(&mut self.speaking) {
+			self.shared.speaking(self.credentials.user_id(), false);
+		}
 		match spawn_media(
 			established.transport,
 			&self.shared,

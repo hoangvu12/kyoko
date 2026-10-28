@@ -8,6 +8,7 @@ use protocol::{Snowflake, Token};
 use tokio::sync::{mpsc, watch};
 
 use crate::audio::{AudioEngine, Rings};
+use crate::codec::{MAX_BITRATE_BPS, MIN_BITRATE_BPS};
 use crate::error::{Result, VoiceError};
 use crate::event::VoiceEvent;
 use crate::media::SharedTransform;
@@ -160,6 +161,25 @@ impl VoiceConnection {
 			.user_volumes
 			.lock()
 			.insert(user_id, volume.clamp(0.0, MAX_VOLUME));
+	}
+
+	pub fn set_bitrate(&self, bps: u32) {
+		self.shared
+			.bitrate
+			.store(bps.clamp(MIN_BITRATE_BPS, MAX_BITRATE_BPS), Ordering::Relaxed);
+	}
+
+	pub fn bitrate(&self) -> u32 {
+		self.shared.applied_bitrate.load(Ordering::Relaxed)
+	}
+
+	pub fn user_volume(&self, user_id: Snowflake) -> f32 {
+		self.shared
+			.user_volumes
+			.lock()
+			.get(&user_id)
+			.copied()
+			.unwrap_or(1.0)
 	}
 
 	pub fn set_input_volume(&self, volume: f32) {

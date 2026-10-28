@@ -1,11 +1,12 @@
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
-use mockcord::{GatewayFrame, VOICE_TOKEN, VoiceFrame, VoicePacket, VoiceRecording};
+use mockcord::{GatewayFrame, VOICE_TOKEN, VoiceControl, VoiceFrame, VoicePacket, VoiceRecording};
+use opus::{Application, Channels, Encoder};
 use protocol::{ChannelType, Opcode, Snowflake};
 use serde_json::{Value, json};
 use session::{Command, Trust, VoiceSetup};
-use state::{State, VoiceStatus};
+use state::{State, UserAudio, VoiceStatus};
 use voice::{AudioIo, FRAME_SAMPLES, SILENCE_FRAME};
 
 use crate::harness::{Options, Running};
@@ -34,6 +35,17 @@ const DAVE_MARKER: [u8; 2] = [0xfa, 0xfa];
 const SEALED_PACKETS: usize = 15;
 const LOUNGE_MEMBER: u64 = 222_801_430_442_967_040;
 const GAMING_MEMBER: u64 = 333_014_820_093_313_024;
+const NEWCOMER: u64 = 444_228_190_210_473_984;
+const MEMBER_SSRC: u32 = 9_000;
+const MEMBER_FRAMES: usize = 50;
+const QUIET_FRAMES: usize = 30;
+const OPUS_PACKET_BYTES: usize = 1_275;
+const FRAME: Duration = Duration::from_millis(20);
+const HANGOVER_FLOOR: Duration = Duration::from_millis(200);
+const MEASURED_FRAMES: usize = 25;
+const WARMUP_FRAMES: usize = 5;
+const CHANNEL_BITRATE: i64 = 96_000;
+const RAISED_BITRATE: i64 = 128_000;
 
 struct Voice {
 	running: Running,
@@ -596,5 +608,293 @@ async fn a_joined_call_is_end_to_end_encrypted_in_each_channels_dave_group() {
 		})
 		.await;
 	speaks_end_to_end_encrypted(&voice, voice.ssrc()).await;
+	voice.stop().await;
+}
+
+async fn send_member_speech(control: VoiceControl, channel_id: u64, frames: usize, from: u16) -> u16 {
+	let mut encoder = Encoder::new(48_000, Channels::Mono, Application::Voip).expect("an opus encoder");
+	let mut packet = vec![0; OPUS_PACKET_BYTES];
+	let mut sequence = from;
+	for index in 0..frames {
+		let length = encoder
+			.encode(&tone_frame(index), &mut packet)
+			.expect("the tone encodes");
+		sequence = sequence.wrapping_add(1);
+		control.send_as(
+			channel_id,
+			LOUNGE_MEMBER,
+			MEMBER_SSRC,
+			sequence,
+			&packet[..length],
+		);
+		tokio::time::sleep(FRAME).await;
+	}
+	sequence
+}
+
+async fn send_member_silence(control: &VoiceControl, channel_id: u64, frames: usize, from: u16) {
+	let mut sequence = from;
+	for _ in 0..frames {
+		sequence = sequence.wrapping_add(1);
+		control.send_as(channel_id, LOUNGE_MEMBER, MEMBER_SSRC, sequence, &SILENCE_FRAME);
+		tokio::time::sleep(FRAME).await;
+	}
+}
+
+fn speaking(state: &State, user_id: u64) -> bool {
+	state
+		.voice()
+		.is_some_and(|voice| voice.speaking.contains(&Snowflake(user_id)))
+}
+
+fn in_call(state: &State, user_id: u64) -> bool {
+	state
+		.voice()
+		.is_some_and(|voice| voice.peers.contains(&Snowflake(user_id)))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_scripted_member_speaks_until_silence_and_op_11_and_13_add_and_remove_peers() {
+	let voice = start("voice-speaking").await;
+	let control = voice.running.voice();
+	control.set_dave_version(1);
+	control.add_member(voice.lounge.get(), LOUNGE_MEMBER);
+	voice.join(voice.lounge);
+	voice.connected_to(voice.lounge).await;
+	voice
+		.running
+		.until("op 11 to announce the member", |state| {
+			in_call(state, LOUNGE_MEMBER)
+		})
+		.await;
+	voice
+		.running
+		.eventually("DAVE to start", || {
+			control.dave_group(voice.lounge.get()).len() == 2
+				&& voice
+					.running
+					.session()
+					.voice_connection()
+					.is_some_and(|connection| connection.dave().enabled())
+		})
+		.await;
+	assert!(
+		!speaking(&voice.running.session().state().read(), LOUNGE_MEMBER),
+		"nobody speaks before op 5"
+	);
+
+	control.speak_as(LOUNGE_MEMBER, MEMBER_SSRC, true);
+	let speech = tokio::spawn(send_member_speech(
+		control.clone(),
+		voice.lounge.get(),
+		MEMBER_FRAMES,
+		0,
+	));
+	voice
+		.running
+		.until("the member to show speaking", |state| {
+			speaking(state, LOUNGE_MEMBER)
+		})
+		.await;
+	let sequence = speech.await.expect("the speech task");
+	assert!(
+		speaking(&voice.running.session().state().read(), LOUNGE_MEMBER),
+		"the member still speaks while their audio flows"
+	);
+	let quiet_from = Instant::now();
+	send_member_silence(&control, voice.lounge.get(), QUIET_FRAMES, sequence).await;
+	voice
+		.running
+		.until("the member to stop speaking after silence", |state| {
+			!speaking(state, LOUNGE_MEMBER)
+		})
+		.await;
+	assert!(
+		quiet_from.elapsed() >= HANGOVER_FLOOR,
+		"speaking ends after a short hangover, not on the first quiet frame"
+	);
+
+	control.add_member(voice.lounge.get(), NEWCOMER);
+	voice
+		.running
+		.until("op 11 to add the newcomer", |state| in_call(state, NEWCOMER))
+		.await;
+	control.remove_member(voice.lounge.get(), NEWCOMER);
+	voice
+		.running
+		.until("op 13 to remove the newcomer", |state| !in_call(state, NEWCOMER))
+		.await;
+	assert!(in_call(&voice.running.session().state().read(), LOUNGE_MEMBER));
+	voice.stop().await;
+}
+
+async fn echo_level(voice: &Voice, echo: u32) -> (f32, i16) {
+	let connection = voice
+		.running
+		.session()
+		.voice_connection()
+		.expect("a running voice connection");
+	tokio::time::sleep(SETTLE).await;
+	let _ = connection.take_output();
+	voice.feed_tone();
+	let heard = RefCell::new(Vec::new());
+	voice
+		.running
+		.eventually("the echo to be mixed", || {
+			let mut heard = heard.borrow_mut();
+			heard.extend(
+				connection
+					.take_output()
+					.into_iter()
+					.filter(|frame| frame.sources.contains(&echo)),
+			);
+			heard.len() >= WARMUP_FRAMES + MEASURED_FRAMES
+		})
+		.await;
+	let frames = heard.into_inner();
+	let samples: Vec<i16> = frames
+		.iter()
+		.skip(WARMUP_FRAMES)
+		.take(MEASURED_FRAMES)
+		.flat_map(|frame| frame.pcm.iter().copied())
+		.collect();
+	let energy: f64 = samples.iter().map(|sample| f64::from(*sample).powi(2)).sum();
+	let rms = (energy / samples.len().max(1) as f64).sqrt() as f32;
+	let peak = samples
+		.iter()
+		.map(|sample| sample.saturating_abs())
+		.max()
+		.unwrap_or(0);
+	(rms, peak)
+}
+
+fn edit_bitrate(voice: &Voice, bitrate: i64) {
+	let channel = {
+		let state = voice.running.session().state().read();
+		state
+			.guild(voice.guild_id)
+			.and_then(|guild| guild.channels.get(&voice.lounge))
+			.cloned()
+			.expect("the Lounge")
+	};
+	let mut value = serde_json::to_value(&channel).expect("the channel serializes");
+	value["bitrate"] = json!(bitrate);
+	value["guild_id"] = json!(voice.guild_id.to_string());
+	voice.running.mock().dispatch("CHANNEL_UPDATE", &value);
+}
+
+fn opus_bitrate(voice: &Voice) -> Option<u32> {
+	voice
+		.running
+		.session()
+		.voice_connection()
+		.map(|connection| connection.bitrate())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn user_volume_scales_a_member_local_mute_silences_them_and_both_persist() {
+	let mut voice = start("voice-user-volume").await;
+	let member = Snowflake(LOUNGE_MEMBER);
+	edit_bitrate(&voice, CHANNEL_BITRATE);
+	voice
+		.running
+		.until("the channel's bitrate", |state| {
+			state
+				.channel(voice.lounge)
+				.is_some_and(|channel| channel.bitrate == Some(CHANNEL_BITRATE))
+		})
+		.await;
+	voice.join(voice.lounge);
+	voice.connected_to(voice.lounge).await;
+	voice
+		.running
+		.eventually("the opus bitrate to follow the channel", || {
+			opus_bitrate(&voice) == u32::try_from(CHANNEL_BITRATE).ok()
+		})
+		.await;
+	edit_bitrate(&voice, RAISED_BITRATE);
+	voice
+		.running
+		.eventually("the opus bitrate to follow a channel edit", || {
+			opus_bitrate(&voice) == u32::try_from(RAISED_BITRATE).ok()
+		})
+		.await;
+
+	let echo = voice.ssrc() + 1;
+	voice.running.voice().speak_as(LOUNGE_MEMBER, echo, true);
+	let (full, _) = echo_level(&voice, echo).await;
+	assert!(full > 0., "the member is heard at full volume");
+
+	voice.command(Command::SetUserVolume {
+		user_id: member,
+		volume: 50,
+	});
+	let connection = voice
+		.running
+		.session()
+		.voice_connection()
+		.expect("a running voice connection");
+	voice
+		.running
+		.eventually("the member's volume to reach the mixer", || {
+			(connection.user_volume(member) - 0.5).abs() < f32::EPSILON
+		})
+		.await;
+	let (half, _) = echo_level(&voice, echo).await;
+	let ratio = half / full;
+	assert!(
+		(0.35..=0.65).contains(&ratio),
+		"half volume halves the member's level: {half} vs {full}"
+	);
+
+	voice.command(Command::SetUserMuted {
+		user_id: member,
+		muted: true,
+	});
+	voice
+		.running
+		.eventually("the local mute to reach the mixer", || {
+			connection.user_volume(member) == 0.
+		})
+		.await;
+	let (_, peak) = echo_level(&voice, echo).await;
+	assert_eq!(peak, 0, "a locally muted member is silent");
+
+	voice.command(Command::SetUserMuted {
+		user_id: member,
+		muted: false,
+	});
+	voice
+		.running
+		.eventually("unmuting to restore the chosen volume", || {
+			(connection.user_volume(member) - 0.5).abs() < f32::EPSILON
+		})
+		.await;
+	voice.command(Command::SetUserMuted {
+		user_id: member,
+		muted: true,
+	});
+	voice
+		.running
+		.until("the mute to be kept", |state| {
+			state.user_audio(member)
+				== UserAudio {
+					volume: 50,
+					muted: true,
+				}
+		})
+		.await;
+	drop(connection);
+	voice.running.restart().await;
+	voice
+		.running
+		.until("the saved volume and mute after a restart", |state| {
+			state.user_audio(member)
+				== UserAudio {
+					volume: 50,
+					muted: true,
+				}
+		})
+		.await;
 	voice.stop().await;
 }

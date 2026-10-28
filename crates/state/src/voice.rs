@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use protocol::{LenientVec, Snowflake, StreamDelete, StreamState, VoiceState};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::changes::Changes;
@@ -30,6 +30,39 @@ pub struct VoiceSelf {
 	pub self_deaf: bool,
 }
 
+pub const USER_VOLUME_MAX: u8 = 200;
+pub const USER_VOLUME_DEFAULT: u8 = 100;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UserAudio {
+	pub volume: u8,
+	pub muted: bool,
+}
+
+impl Default for UserAudio {
+	fn default() -> Self {
+		Self {
+			volume: USER_VOLUME_DEFAULT,
+			muted: false,
+		}
+	}
+}
+
+impl UserAudio {
+	pub fn gain(self) -> f32 {
+		if self.muted {
+			0.0
+		} else {
+			f32::from(self.volume.min(USER_VOLUME_MAX)) / f32::from(USER_VOLUME_DEFAULT)
+		}
+	}
+
+	pub fn is_default(self) -> bool {
+		self == Self::default()
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct VoiceLevels {
 	pub input: f32,
@@ -48,6 +81,7 @@ pub struct VoiceSession {
 	pub guild_id: Option<Snowflake>,
 	pub status: VoiceStatus,
 	pub speaking: HashSet<Snowflake>,
+	pub peers: BTreeSet<Snowflake>,
 	pub stats: VoiceStats,
 	pub levels: VoiceLevels,
 	pub self_mute: bool,
@@ -116,6 +150,14 @@ impl State {
 			.filter(|voice| voice.channel_id == Some(session.channel_id))
 	}
 
+	pub fn user_audio(&self, user_id: Snowflake) -> UserAudio {
+		self.user_audio.get(&user_id).copied().unwrap_or_default()
+	}
+
+	pub fn user_audios(&self) -> impl Iterator<Item = (Snowflake, UserAudio)> + '_ {
+		self.user_audio.iter().map(|(user_id, audio)| (*user_id, *audio))
+	}
+
 	pub fn mic_test(&self) -> Option<MicTest> {
 		self.mic_test
 	}
@@ -148,6 +190,7 @@ impl State {
 				session.status = status.clone();
 				if matches!(status, VoiceStatus::Disconnected { .. }) {
 					session.speaking.clear();
+					session.peers.clear();
 					session.camera_on = false;
 					session.screen_share = None;
 					session.watching = None;
@@ -161,6 +204,7 @@ impl State {
 					guild_id,
 					status: status.clone(),
 					speaking: HashSet::new(),
+					peers: BTreeSet::new(),
 					stats: VoiceStats::default(),
 					levels: VoiceLevels::default(),
 					self_mute: self.voice_self.self_mute,
@@ -198,6 +242,32 @@ impl State {
 				session.speaking.remove(&user_id)
 			}
 		});
+		voice_session_changes(changed)
+	}
+
+	pub(crate) fn voice_peer(&mut self, user_id: Snowflake, present: bool) -> Changes {
+		let changed = self.voice.as_mut().is_some_and(|session| {
+			let moved = if present {
+				session.peers.insert(user_id)
+			} else {
+				session.peers.remove(&user_id)
+			};
+			let hushed = !present && session.speaking.remove(&user_id);
+			moved || hushed
+		});
+		voice_session_changes(changed)
+	}
+
+	pub(crate) fn user_audio_changed(&mut self, user_id: Snowflake, audio: UserAudio) -> Changes {
+		let audio = UserAudio {
+			volume: audio.volume.min(USER_VOLUME_MAX),
+			..audio
+		};
+		let changed = if audio.is_default() {
+			self.user_audio.remove(&user_id).is_some()
+		} else {
+			self.user_audio.insert(user_id, audio) != Some(audio)
+		};
 		voice_session_changes(changed)
 	}
 

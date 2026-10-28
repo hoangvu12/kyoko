@@ -15,7 +15,7 @@ use crate::messages::{CommandStage, PendingFile, SendFailure, Viewport};
 use crate::modal::ModalStatus;
 use crate::state::{ConnectionStatus, SecretStorage};
 use crate::views::{RenderedMessage, UserOverride};
-use crate::voice::{StreamInfo, VideoKind, VoiceStatus};
+use crate::voice::{StreamInfo, UserAudio, VideoKind, VoiceStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoadDirection {
@@ -146,6 +146,14 @@ pub enum LocalEvent {
 	Speaking {
 		user_id: Snowflake,
 		speaking: bool,
+	},
+	VoicePeer {
+		user_id: Snowflake,
+		present: bool,
+	},
+	UserAudio {
+		user_id: Snowflake,
+		audio: UserAudio,
 	},
 	VoiceStats {
 		ping_ms: Option<u32>,

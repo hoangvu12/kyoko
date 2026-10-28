@@ -383,16 +383,21 @@ impl Core {
 		self.publish_secret_health(self.store.secret_health());
 		let store = self.store.clone();
 		let cached = tokio::task::spawn_blocking(move || {
-			(persist::load_last_channels(&store), persist::load_cache(&store))
+			(
+				persist::load_last_channels(&store),
+				persist::load_user_audio(&store),
+				persist::load_cache(&store),
+			)
 		});
 		let startup = self.startup.take();
 		if let Some(source) = startup.as_ref().and_then(|startup| startup.build_source.as_ref()) {
 			identity::discover_build_number(self.rest.identity(), &self.store, source).await;
 		}
-		if let Ok((last_channels, ready)) = cached.await {
+		if let Ok((last_channels, user_audio, ready)) = cached.await {
 			if !last_channels.is_empty() {
 				self.on_loaded(Loaded::LastChannels(last_channels));
 			}
+			self.restore_user_audio(user_audio);
 			if let Some(ready) = ready {
 				self.apply(Event::Ready(&ready));
 			}
@@ -665,6 +670,7 @@ impl Core {
 			DispatchEvent::InteractionModalCreate(modal) => self.modal_created(*modal),
 			DispatchEvent::VoiceStateUpdate(voice) => self.voice_state_update(&voice),
 			DispatchEvent::VoiceServerUpdate(update) => self.voice_server_update(update),
+			DispatchEvent::ChannelUpdate(channel) => self.voice_channel_updated(channel.id),
 			_ => {}
 		}
 	}
@@ -1020,6 +1026,8 @@ impl Core {
 			Command::LeaveVoice => self.leave_voice(),
 			Command::SetSelfMute(muted) => self.set_self_mute(muted),
 			Command::SetSelfDeaf(deafened) => self.set_self_deaf(deafened),
+			Command::SetUserVolume { user_id, volume } => self.set_user_volume(user_id, volume),
+			Command::SetUserMuted { user_id, muted } => self.set_user_muted(user_id, muted),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

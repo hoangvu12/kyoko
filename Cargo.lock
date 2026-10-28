@@ -3956,6 +3956,7 @@ dependencies = [
  "kyoko-store",
  "kyoko-voice",
  "mockcord",
+ "opus",
  "parking_lot 0.12.5",
  "rand 0.9.5",
  "rcgen",

@@ -488,7 +488,7 @@ fn voice_members(state: &State, guild_id: Snowflake, channel_id: Snowflake) -> V
 	members
 }
 
-fn voice_member(state: &State, guild_id: Snowflake, voice: &VoiceState) -> VoiceMember {
+pub(crate) fn voice_member(state: &State, guild_id: Snowflake, voice: &VoiceState) -> VoiceMember {
 	let streaming = voice.self_stream == Some(true);
 	VoiceMember {
 		user_id: voice.user_id,

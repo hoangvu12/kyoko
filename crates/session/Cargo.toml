@@ -38,5 +38,6 @@ base64.workspace = true
 bytes.workspace = true
 mockcord = { workspace = true, features = ["tls"] }
 media.workspace = true
+opus.workspace = true
 tokio-rustls.workspace = true
 rcgen.workspace = true

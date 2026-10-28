@@ -683,6 +683,14 @@ pub enum Command {
 	LeaveVoice,
 	SetSelfMute(bool),
 	SetSelfDeaf(bool),
+	SetUserVolume {
+		user_id: Snowflake,
+		volume: u8,
+	},
+	SetUserMuted {
+		user_id: Snowflake,
+		muted: bool,
+	},
 }
 
 impl Command {

@@ -45,4 +45,5 @@ mod threads;
 mod timeline;
 mod toasts;
 mod viewer;
+mod voice;
 mod web_login;

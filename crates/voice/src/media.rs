@@ -10,7 +10,7 @@ use tokio::time::{MissedTickBehavior, interval};
 use tracing::{debug, warn};
 
 use crate::chain::{CaptureChain, PlaybackChain};
-use crate::codec::{FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, VoiceEncoder};
+use crate::codec::{DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, VoiceEncoder};
 use crate::denoise::Denoiser;
 use crate::gate::{VoiceGate, meter_level, rms, to_db};
 use crate::jitter::Push;
@@ -32,6 +32,7 @@ const MAX_FRAMES_PER_TICK: usize = 6;
 const MAX_PLAYOUT_LAG: Duration = Duration::from_millis(100);
 const METER_DECAY: f32 = 0.85;
 const RECEIVE_BUFFER_BYTES: usize = 2048;
+const SPEAKING_FLOOR_DB: f32 = -50.0;
 
 pub(crate) type SharedTransform = Arc<Mutex<Box<dyn FrameTransform>>>;
 
@@ -66,6 +67,9 @@ impl Media {
 		audio_io: bool,
 	) -> crate::error::Result<Self> {
 		let now = Instant::now();
+		shared
+			.applied_bitrate
+			.store(DEFAULT_BITRATE_BPS, Ordering::Relaxed);
 		Ok(Self {
 			transport,
 			playback: PlaybackChain::new(shared.rings.clone()),
@@ -107,13 +111,32 @@ impl Media {
 				},
 				_ = ticker.tick() => {
 					let now = Instant::now();
+					self.follow_bitrate();
 					self.capture_tick(now);
 					self.playout_tick(now);
+					self.shared.quiet_down(now);
 					if now.duration_since(housekeeping) >= HOUSEKEEPING_INTERVAL {
 						housekeeping = now;
 						self.housekeeping(now);
 					}
 				}
+			}
+		}
+	}
+
+	fn follow_bitrate(&mut self) {
+		let wanted = self.shared.bitrate.load(Ordering::Relaxed);
+		if wanted == self.shared.applied_bitrate.load(Ordering::Relaxed) {
+			return;
+		}
+		match self.encoder.set_bitrate(wanted) {
+			Ok(()) => self.shared.applied_bitrate.store(wanted, Ordering::Relaxed),
+			Err(error) => {
+				warn!(%error, "opus bitrate was not applied");
+				self.shared.bitrate.store(
+					self.shared.applied_bitrate.load(Ordering::Relaxed),
+					Ordering::Relaxed,
+				);
 			}
 		}
 	}
@@ -250,7 +273,7 @@ impl Media {
 				if !self.playback.wants_frame() {
 					break;
 				}
-				self.mix_frame();
+				self.mix_frame(now);
 				if let Err(error) = self.playback.push(self.mixer.output()) {
 					warn!(%error, "playback resampling failed");
 					break;
@@ -262,7 +285,7 @@ impl Media {
 			self.next_playout = now;
 		}
 		while self.next_playout <= now {
-			let sources = self.mix_frame();
+			let sources = self.mix_frame(now);
 			self.next_playout += FRAME_DURATION;
 			if !self.audio_io && !sources.is_empty() {
 				self.tap_output(sources);
@@ -280,12 +303,13 @@ impl Media {
 		self.shared.push_output(MixedFrame { sources, pcm });
 	}
 
-	fn mix_frame(&mut self) -> Vec<u32> {
+	fn mix_frame(&mut self, now: Instant) -> Vec<u32> {
 		self.mixer.clear();
 		let deafened = self.shared.deafened.load(Ordering::Relaxed);
 		let users = self.shared.ssrc_users.lock();
 		let volumes = self.shared.user_volumes.lock();
 		let mut sources = Vec::new();
+		let mut talking = Vec::new();
 		for (ssrc, stream) in &mut self.streams {
 			let frame = stream.next_frame();
 			if frame == Frame::Silence {
@@ -295,16 +319,22 @@ impl Media {
 			if frame == Frame::Concealed {
 				self.shared.counters.lost.fetch_add(1, Ordering::Relaxed);
 			}
+			let user = users.get(ssrc).copied();
+			if frame == Frame::Decoded
+				&& to_db(rms(stream.pcm())) > SPEAKING_FLOOR_DB
+				&& let Some(user) = user
+			{
+				talking.push(user);
+			}
 			if !deafened {
-				let gain = users
-					.get(ssrc)
-					.and_then(|user| volumes.get(user))
-					.copied()
-					.unwrap_or(1.0);
+				let gain = user.and_then(|user| volumes.get(&user)).copied().unwrap_or(1.0);
 				self.mixer.add(stream.pcm(), gain);
 			}
 		}
 		drop((users, volumes));
+		for user in talking {
+			self.shared.heard(user, now);
+		}
 		let master = if deafened {
 			0.0
 		} else {
