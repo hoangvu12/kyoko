@@ -1,5 +1,37 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: eleventh orchestrator hands off (roboco chat `8e102e63`, "kyoko orchestrator 11", same machine, main `c4ad329` + this note)
+
+Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-28).
+
+### Decisions the user made this session
+
+- **Voice transport: UDP** (option A). "if others use udp then i dont know why we would use webrtc". Recorded in `docs/fingerprint.md` "Voice" and 96's Answer. Thin `Transport` seam, no WebRTC work planned; openh264 out, Media Foundation for H.264.
+- **Parity reference is the design, not oxidcord.** `parity mockup` where a Midnight mockup exists (`parity list`), else `parity capture --apps kyoko`, checked by eye against the ticket's Discord screenshots. Never build or run oxidcord; `oxidcord-ref	arget` is deleted (oxidcord-ref stays as source to port voice/video from). rules.md and common.md are updated.
+- **Disk:** the user is short on storage. Clean an idle lane's `target` right after its merge (lane B's was wiped after 97: 27 GB -> 99 GB free). Ask before touching the 28 GB sccache cache (`%LOCALAPPDATA%\Mozilla\sccache`) or the user's roboco folders (in use by their Roboco workers). Finished worker chats get archived (73 archived this session).
+- 75 crash: the user thinks it was a real crash, probably picking an option with the keyboard while typing; doesn't remember the time. Noted in 75. Next real run captures stderr.
+
+### Merged this session
+
+81 server profiles, 92 profiles like Discord (popout menu, DM column, full profile, themes; `.tooltip()` must be last in a zgx chain), 87 GIFs and stickers animate (streamed animations, Lottie renderer), 96 voice build trial (UDP decided), 95 channel settings, 97 voice connection core (`crates/voice`). Answers written for each.
+
+### State now
+
+- **Lane A** `kyoko-lane-a` at `e0f05f0` (84 plugin permission dialog scrim and scroll fix, worker `542c2b19`, done, all checks green per worker except the theme_links flake). Not yet verified by the orchestrator, not merged. Rebase onto main first (main has 97 since).
+- **Lane B** `kyoko-lane-b`: **98 running** (worker `584d901b`, join from sidebar, voice panel, mute/deafen; base `c4ad329`, cold target). Its completion notice goes to `8e102e63`: poll it with `get_chat`/`read_chat`, or send it a short note so its next turn reports to you.
+- **Lane C** `kyoko-lane-c` at `54d0e3f` (82 image grid, worker `fb0181ca`, done). Orchestrator verification was running in `8e102e63`'s background shell: fmt, clippy, build green; `test --workspace`, xtask test, headless-run, deny, luau and the kyoko-only captures (`timeline-attachments,timeline-image-grid,-three,-four,-ten`) were still running, then lane A's full verify and captures (`settings-plugins,settings-plugin-permissions`, plus `parity mockup --screens settings-plugins`). Logs: `<lane>/target/orch-verify.log` (one `=== exit` per step, `=== done`, then `for parity`). If cut off, rerun the missing steps; `.orchestrator/verify-rest.sh <lane>` runs from the test step on. Then rebase onto main, merge, Answer, clean the lane's target, archive the worker chat.
+- **Known flake (new):** `theme_links_are_fetched_over_https_only_without_any_discord_credentials` fails when another process probes new localhost ports (stray `GET /` with only Host and Connection; probably the user's Roboco test runs). Rerun it. A test fix would be to ignore requests it didn't ask for; worth a small ticket.
+- sccache sometimes drops a compile ("connection forcibly closed"): rerun the step.
+- The engine restarted twice this session and cut every worker's turn: after a restart, check each worker and send a "resume" message.
+
+### What's left (24 not resolved in v1; Midnight all resolved)
+
+- Done, waiting for verify and merge: 82 image grid, 84 plugin dialog.
+- Running: 98 voice join.
+- To build: voice 99 DAVE (decide RUSTSEC-2026-0387 first: accept or a BoringSSL openmls provider; spec-level, ask the user), 100 voice/video settings, 101 call view and speaking, 103 video receive, 104 camera, 105 screen capture and Go Live picker, 106 Go Live viewing, 107 Go Live streaming; and 83 rail hover and voice indicator, 85 hover colours audit, 89 media viewer (use `bridge::mosaic_images`), 90 new logo, 91 inline video (replace the mp4 stand-in in `bridge::gifv_request`), 93 fetch concurrency (`timeline-image-grid-ten` is a load case), 94 voice row hover buttons (after 98).
+- Waiting: 74 part 2b (Chrome 157 bump, 2026-11-03), 75 crash (needs a real run with stderr), 102 the user's own real call (`ready-for-human`), 108 DM calls (`needs-triage`). Skipped by the user: 39, 58.
+- Suggested order: lane A 83, 85, 90, then 94 after 98; lane C 89, 93, 91; lane B 99 (after asking about the advisory), 101, 100, then video.
+
 ## Latest: tenth orchestrator hands off (roboco chat `223bd24d`, "kyoko orchestrator 10", same machine, main `6b6b73e` + this note)
 
 Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-28) and wants the new orchestrator to ask them the open questions.
