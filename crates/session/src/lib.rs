@@ -12,6 +12,7 @@ mod search;
 mod session;
 mod task;
 mod theme_links;
+mod video_feed;
 mod voice_setup;
 
 pub use alerts::{Alert, AlertKind, AlertPacing};
@@ -36,6 +37,9 @@ pub use state::{CacheLimits, RiskyLock, RiskyReason, RiskyTarget, Viewport};
 pub use store::Retention;
 pub use theme_links::{
 	MAX_THEME_BYTES, MAX_THEME_LINKS, ThemeLinkCopy, ThemeLinkTuning, cached_copies, check_link, unique_links,
+};
+pub use video_feed::{
+	FOCUSED_MAX_FPS, FOCUSED_QUALITY, THUMBNAIL_MAX_FPS, THUMBNAIL_QUALITY, VideoFeed, VideoUpdate, VideoView,
 };
 pub use voice::{AudioDevices, AudioIo, DeviceInfo, devices as audio_devices};
 pub use voice_setup::VoiceSetup;

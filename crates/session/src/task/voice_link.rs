@@ -256,6 +256,8 @@ impl Core {
 					present: false,
 				});
 			}
+			VoiceEvent::VideoStarted { user_id } => self.remote_video(user_id, true),
+			VoiceEvent::VideoStopped { user_id } => self.remote_video(user_id, false),
 			VoiceEvent::Stopped(reason) => {
 				let notify = reason != StopReason::Disconnected;
 				self.end_voice(stop_reason(reason), notify);
@@ -517,6 +519,7 @@ impl Core {
 			connection.disconnect();
 		}
 		*self.voice_shared.connection.lock() = None;
+		self.detach_video();
 	}
 
 	fn try_connect(&mut self) {
@@ -569,6 +572,7 @@ impl Core {
 		self.apply_to_connection_of(&connection);
 		self.apply_user_audio_to(&connection);
 		self.apply_bitrate_to(&connection);
+		self.attach_video(&connection);
 		*self.voice_shared.connection.lock() = Some(connection.clone());
 		self.voice.pump = Some(self.spawn_pump(&connection));
 		self.voice.connection = Some(connection);

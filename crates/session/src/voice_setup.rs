@@ -5,6 +5,8 @@ use net::Trust;
 use parking_lot::Mutex;
 use voice::{AudioIo, MicCheck, VoiceConnection};
 
+use crate::video_feed::{VideoFeed, VideoView};
+
 const JOIN_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone)]
@@ -32,4 +34,6 @@ pub(crate) struct VoiceShared {
 	pub(crate) setup: Mutex<VoiceSetup>,
 	pub(crate) connection: Mutex<Option<Arc<VoiceConnection>>>,
 	pub(crate) mic_check: Mutex<Option<Arc<MicCheck>>>,
+	pub(crate) feed: VideoFeed,
+	pub(crate) views: Mutex<Vec<VideoView>>,
 }

@@ -42,6 +42,7 @@ mod threads;
 mod tls_fingerprint;
 mod uploads;
 mod versions;
+mod video;
 mod voice;
 mod voice_settings;
 mod wire;

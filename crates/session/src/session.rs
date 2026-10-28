@@ -204,6 +204,10 @@ impl Session {
 		self.voice.mic_check.lock().clone()
 	}
 
+	pub fn video_feed(&self) -> crate::VideoFeed {
+		self.voice.feed.clone()
+	}
+
 	pub fn shutdown(mut self) {
 		self.gateway.shutdown();
 		let _ = self.commands.try_send(Command::Shutdown);

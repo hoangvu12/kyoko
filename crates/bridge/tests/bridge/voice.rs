@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
-use bridge::{Pace, SPEAKING_PACE, SpeakingPace, voice_call, voice_speaking};
+use bridge::{Pace, SPEAKING_PACE, SpeakingPace, VoiceVideo, voice_call, voice_speaking};
 use protocol::Snowflake;
-use state::{Event, LocalEvent, State, UserAudio, VoiceStatus};
+use state::{Event, LocalEvent, State, UserAudio, VideoKind, VoiceStatus};
 
 const CHANNEL: Snowflake = Snowflake(800_000_000_000_000_001);
 const GRACE: Snowflake = Snowflake(800_000_000_000_000_002);
@@ -110,4 +110,38 @@ fn speaking_is_published_on_change_at_most_every_100_ms() {
 	let later = start + SPEAKING_PACE;
 	assert_eq!(pace.offer(Vec::new(), later), Pace::Publish(Vec::new()));
 	assert_eq!(pace.offer(Vec::new(), later), Pace::Same);
+}
+
+fn tile_video(state: &State, user_id: Snowflake) -> Option<VoiceVideo> {
+	voice_call(state)?
+		.tiles
+		.into_iter()
+		.find(|tile| tile.user_id == user_id)?
+		.video
+}
+
+#[test]
+fn a_members_op_12_camera_makes_their_tile_a_camera_tile_until_it_stops() {
+	let mut state = in_call();
+	local(
+		&mut state,
+		LocalEvent::VoicePeer {
+			user_id: GRACE,
+			present: true,
+		},
+	);
+	assert_eq!(tile_video(&state, GRACE), None, "an audio tile");
+	let camera = |active: bool| LocalEvent::RemoteVideo {
+		user_id: GRACE,
+		kind: VideoKind::Camera,
+		active,
+	};
+	local(&mut state, camera(true));
+	assert_eq!(tile_video(&state, GRACE), Some(VoiceVideo::Camera));
+	local(&mut state, camera(false));
+	assert_eq!(
+		tile_video(&state, GRACE),
+		None,
+		"the camera tile ends with the video"
+	);
 }

@@ -70,6 +70,7 @@ mod subscriptions;
 mod themes;
 mod uploads;
 mod voice_link;
+mod voice_video;
 
 const PAGE_SIZE: u8 = 50;
 const TYPING_THROTTLE: Duration = Duration::from_secs(9);
@@ -1048,6 +1049,7 @@ impl Core {
 			Command::SetPushToTalk(held) => self.set_push_to_talk(held),
 			Command::StartMicTest => self.start_mic_test(),
 			Command::StopMicTest => self.stop_mic_test(),
+			Command::SetVideoViews(views) => self.set_video_views(views),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

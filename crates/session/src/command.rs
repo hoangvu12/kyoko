@@ -9,6 +9,7 @@ use serde_json::Value;
 use state::{EmojiCandidate, RiskyReason, RiskyTarget, Viewport};
 
 use crate::poll::PollDraft;
+use crate::video_feed::VideoView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModalAnswer {
@@ -695,6 +696,7 @@ pub enum Command {
 	SetPushToTalk(bool),
 	StartMicTest,
 	StopMicTest,
+	SetVideoViews(Vec<VideoView>),
 }
 
 impl Command {
