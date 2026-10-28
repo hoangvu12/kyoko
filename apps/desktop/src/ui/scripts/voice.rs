@@ -189,3 +189,153 @@ fn a_voice_row_joins_and_the_voice_panel_shows_the_channel_and_disconnects() {
 		"the voice panel closes once voice is left"
 	);
 }
+
+fn voice_row_values(manageable: bool, can_invite: bool) -> Vec<(&'static str, serde_json::Value)> {
+	let mut rows = super::sidebar_rows();
+	for row in rows.as_array_mut().into_iter().flatten() {
+		if row["kind"] == "channel" {
+			row["manageable"] = json!(manageable);
+		}
+	}
+	let mut values = server_values(false);
+	values.push(("sidebar.rows", rows));
+	values.push((
+		"sidebar.header",
+		json!({
+			"unread": false, "muted": false, "owner": false, "can_invite": can_invite,
+			"can_manage_channels": manageable, "can_open_settings": false,
+		}),
+	));
+	values
+}
+
+fn point_at(app: &mut super::TestApp, id: &str) {
+	let bounds = app.bounds(id);
+	app.ui.dispatch(zgx::input::InputEvent::PointerMove {
+		x: bounds.x + bounds.width / 2.,
+		y: bounds.y + bounds.height / 2.,
+	});
+	app.frames(2);
+}
+
+fn point_away(app: &mut super::TestApp) {
+	let general = app.bounds("channel_20");
+	app.ui.dispatch(zgx::input::InputEvent::PointerMove {
+		x: general.x + general.width / 2.,
+		y: general.y - general.height * 2.,
+	});
+	app.frames(2);
+}
+
+#[test]
+fn a_voice_rows_hover_buttons_open_chat_invite_and_edit_without_joining() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &voice_row_values(true, true));
+	assert_eq!(app.opacity("channel_buttons_21"), 0., "hidden at rest");
+	assert!(
+		app.find("channel_chat_20").is_none(),
+		"a text row has no Open Chat"
+	);
+	assert!(
+		app.find("channel_invite_20").is_none(),
+		"a text row has no Invite to Voice"
+	);
+	assert!(app.find("channel_gear_20").is_some(), "a text row keeps its gear");
+
+	point_at(&mut app, "channel_21");
+	assert_eq!(app.opacity("channel_buttons_21"), 1., "shown on hover");
+	for (button, tooltip) in [
+		("channel_chat_21", "Open Chat"),
+		("channel_invite_21", "Invite to Voice"),
+		("channel_gear_21", "Edit Channel"),
+	] {
+		let bounds = app.bounds(button);
+		assert!(
+			bounds.width > 0. && bounds.height > 0.,
+			"{button} has room in the row"
+		);
+		point_at(&mut app, button);
+		assert_eq!(
+			app.opacity("channel_buttons_21"),
+			1.,
+			"{button} keeps the buttons shown"
+		);
+		assert!(
+			app.wait_until(|app| app.texts().iter().any(|text| text == tooltip)),
+			"{button} shows the tooltip {tooltip}"
+		);
+	}
+
+	app.click("channel_chat_21");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.select_channel"),
+		Some(json!("21")),
+		"Open Chat opens the text chat"
+	);
+	app.click("channel_invite_21");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.invite"),
+		Some(json!("21")),
+		"Invite to Voice invites to this channel"
+	);
+	app.click("channel_gear_21");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "sidebar.edit_channel"),
+		Some(json!("21")),
+		"the gear edits the channel"
+	);
+	assert_eq!(last_call(&calls, "voice.join"), None, "no button joins voice");
+
+	point_away(&mut app);
+	assert_eq!(
+		app.opacity("channel_buttons_21"),
+		0.,
+		"hidden once the pointer leaves"
+	);
+	let row = app.find("channel_21").expect("the voice row");
+	app.ui.input.focus(&app.ui.scene, Some(row));
+	app.frames(2);
+	assert_eq!(
+		app.opacity("channel_buttons_21"),
+		1.,
+		"shown while the row has focus"
+	);
+	app.ui.input.focus(&app.ui.scene, None);
+	app.frames(2);
+	assert_eq!(app.opacity("channel_buttons_21"), 0., "hidden when focus leaves");
+
+	app.click("channel_21");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.join"),
+		Some(json!("21")),
+		"the row itself still joins"
+	);
+}
+
+#[test]
+fn edit_channel_and_invite_need_their_rights_on_a_voice_row() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &voice_row_values(false, false));
+	point_at(&mut app, "channel_21");
+	assert!(app.find("channel_chat_21").is_some(), "Open Chat needs no rights");
+	assert!(
+		app.find("channel_gear_21").is_none(),
+		"Edit Channel needs Manage Channels"
+	);
+	assert!(
+		app.find("channel_invite_21").is_none(),
+		"Invite to Voice needs Create Invite"
+	);
+	assert!(
+		app.find("channel_gear_20").is_none(),
+		"nor does a text row get a gear"
+	);
+}

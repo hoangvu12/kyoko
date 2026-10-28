@@ -518,9 +518,43 @@ local function unread_dot(hovered: any)
 	}
 end
 
+local function row_button(id: string, name: string, tooltip: string, on_click: any)
+	return icon_button {
+		id = id,
+		name = name,
+		icon_size = ROW_GEAR,
+		hit_size = ROW_GEAR_HIT,
+		tooltip = tooltip,
+		on_click = on_click,
+	}
+end
+
+local function can_invite(): boolean
+	return state.sidebar.header:get().can_invite == true
+end
+
+local function row_buttons(row: state.SidebarRow, audio: boolean): { any }
+	local edit = ui.show(
+		row.manageable == true and row.thread ~= true,
+		row_button(`channel_gear_{row.id}`, "settings", "Edit Channel", later("edit_channel", row.id))
+	)
+	if not audio then
+		return { edit }
+	end
+	return {
+		row_button(`channel_chat_{row.id}`, "chat", "Open Chat", actions.select_channel(row.id)),
+		ui.show(
+			can_invite,
+			row_button(`channel_invite_{row.id}`, "user_plus", "Invite to Voice", later("invite", row.id))
+		),
+		edit,
+	}
+end
+
 local channel = ui.component(function(props: { row: state.SidebarRow })
 	local row = props.row
 	local hovered = ui.use_state(false)
+	local focused = ui.use_state(false)
 	local function selected(): boolean
 		if row.hidden == true then
 			local hidden = state.hidden.view:get()
@@ -581,6 +615,15 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 				end,
 				on_hover = function(inside: boolean)
 					hovered:set(inside)
+					if not inside then
+						focused:set(false)
+					end
+				end,
+				on_focus = function()
+					focused:set(true)
+				end,
+				on_blur = function()
+					focused:set(false)
 				end,
 				on_click = on_click,
 				context_menu_below = true,
@@ -610,21 +653,16 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 					}
 				),
 				ui.show(
-					row.manageable == true and row.thread ~= true,
+					audio or (row.manageable == true and row.thread ~= true),
 					ui.row {
+						id = `channel_buttons_{row.id}`,
 						shrink = 0,
 						items = "center",
+						gap = theme.size.space_2,
 						opacity = function()
-							return if hovered:get() or selected() then 1 else 0
+							return if hovered:get() or focused:get() or selected() then 1 else 0
 						end,
-						icon_button {
-							id = `channel_gear_{row.id}`,
-							name = "settings",
-							icon_size = ROW_GEAR,
-							hit_size = ROW_GEAR_HIT,
-							tooltip = "Edit Channel",
-							on_click = later("edit_channel", row.id),
-						},
+						table.unpack(row_buttons(row, audio)),
 					}
 				),
 			},

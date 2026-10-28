@@ -17,6 +17,7 @@ pub const BUG_TITLE_TEXT: &str = "Reaction tooltip wraps to three lines";
 pub const LAST_MESSAGE: (f32, f32) = (640., 690.);
 pub const USER_PANEL_AVATAR: (f32, f32) = (115., 760.);
 pub const RAIL_FIRST_GUILD: (f32, f32) = (45., 155.);
+pub const SIDEBAR_FIRST_VOICE: (f32, f32) = (200., 459.);
 pub const SILENT_TYPING_BUTTON: (f32, f32) = (838., 744.);
 pub const GAME_ACTIVITY_BUTTON: (f32, f32) = (194., 760.);
 pub const TEXT_REPLACE_SETTINGS: (f32, f32) = (480., 728.);
@@ -124,6 +125,7 @@ pub enum Screen {
 	ProfileMenu,
 	VoicePanel,
 	VoiceCall,
+	VoiceRowHover,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,6 +326,7 @@ impl Screen {
 			"profile-menu" => Some(Screen::ProfileMenu),
 			"voice-panel" => Some(Screen::VoicePanel),
 			"voice-call" => Some(Screen::VoiceCall),
+			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -399,7 +402,8 @@ impl Screen {
 			| Screen::ServerProfile
 			| Screen::ProfileMenu
 			| Screen::VoicePanel
-			| Screen::VoiceCall => Some(Opening::First),
+			| Screen::VoiceCall
+			| Screen::VoiceRowHover => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

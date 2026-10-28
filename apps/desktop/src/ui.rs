@@ -946,6 +946,7 @@ impl Link {
 			capture::Screen::GameActivity => self.drive_game_activity().await,
 			capture::Screen::VoicePanel => self.drive_voice_panel().await,
 			capture::Screen::VoiceCall => self.drive_voice_call().await,
+			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
 			| capture::Screen::MemberNotes => self.until_members(&capture).await,
