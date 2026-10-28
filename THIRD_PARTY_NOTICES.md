@@ -254,3 +254,6 @@ SOFTWARE.
 
 The bundled ClearURLs plugin (`plugins/clear-urls/`) does not include the ClearURLs project's rule list ([ClearURLs/Rules](https://github.com/ClearURLs/Rules)), which is distributed under the GNU Lesser General Public License v3.0. Its rule set, `plugins/clear-urls/rules.luau`, is kyoko's own, written from the publicly documented names of tracking parameters (for example Google Analytics' `utm_*` campaign parameters and click identifiers such as `gclid` and `fbclid`), and is distributed under kyoko's licence. No rules are downloaded at run time.
 
+## Kyoko's icon
+
+Kyoko's icon is a square crop of fan art of Hyakuto Kyoko (hololive) by un1rock, chosen by the project owner: [the picture](https://cdn.donmai.us/sample/f4/ec/__hyakuto_kyoko_hololive_drawn_by_un1rock__sample-f4ec8fcadfbcc84bb2636459256be1ec.jpg). It is in `assets/icon.ico`, `assets/icon.png`, `assets/icon_32.png` and `apps/desktop/ui/images/kyoko.png` and `kyoko_small.png`. The picture belongs to its artist, and the character to hololive (COVER Corporation); it is not covered by kyoko's MIT and Apache-2.0 licences.

@@ -2,6 +2,8 @@
 	<img src="assets/icon.png" width="128" height="128" alt="Kyoko icon">
 </p>
 
+<p align="center"><sub>Icon: Hyakuto Kyoko (hololive), fan art by un1rock (<a href="THIRD_PARTY_NOTICES.md#kyokos-icon">credits</a>)</sub></p>
+
 <h1 align="center">Kyoko</h1>
 
 <p align="center">A lightweight native Discord client for Windows, written in Rust.</p>
@@ -143,4 +145,4 @@ Kyoko is dual licensed under either of
 
 at your option, like oxidcord, from which it is forked. Unless you state otherwise, any contribution you intentionally submit for inclusion in Kyoko, as defined in the Apache-2.0 license, is dual licensed as above, without any additional terms or conditions.
 
-Both licenses disclaim all warranties and limit liability, and the [Disclaimer](#disclaimer) above applies in addition to them. The licenses cover the source code of this repository. They give you no rights to Discord's name, marks, service or content. Third-party dependencies keep their own licenses, which `cargo deny check` verifies against the allow list in `deny.toml`. Bundled third-party data is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Both licenses disclaim all warranties and limit liability, and the [Disclaimer](#disclaimer) above applies in addition to them. The licenses cover the source code of this repository. They give you no rights to Discord's name, marks, service or content. Third-party dependencies keep their own licenses, which `cargo deny check` verifies against the allow list in `deny.toml`. Bundled third-party data and the icon, which these licenses do not cover, are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

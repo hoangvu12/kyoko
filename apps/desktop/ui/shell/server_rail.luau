@@ -3,6 +3,7 @@ local state = require("../state")
 local actions = require("../actions")
 local motion = require("@components/motion")
 local icon = require("@components/icon")
+local kyoko_mark = require("@components/kyoko_mark")
 local rail_tile = require("@components/rail_tile")
 local rail_gap = require("@components/rail_gap")
 local plugin_slot = require("@components/plugin_slot")
@@ -60,13 +61,13 @@ local function glyph_face(name: string, size: () -> number)
 	end
 end
 
-local function home_face(foreground: () -> string, hovered: any)
+local function home_face(_foreground: () -> string, hovered: any)
 	local spinning = motion.moving(hovered)
 	return ui.div {
 		id = "rail_home_mark",
 		rotate = ui.tween(spinning, { from = 0, to = HOME_TURN, duration = HOME_SPIN, ease = "inOutSine" }),
 		scale = ui.tween(spinning, { from = 1, to = HOME_SHRINK, duration = HOME_SPIN, ease = "inOutSine" }),
-		icon { name = "kyoko", size = mark_size(), color = foreground },
+		kyoko_mark { size = avatar_size(), rounded = theme.size.radius_md },
 	}
 end
 

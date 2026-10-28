@@ -2,6 +2,7 @@ local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
+local kyoko_mark = require("@components/kyoko_mark")
 
 local EXPIRED_CODE_OPACITY = 0.15
 
@@ -79,7 +80,7 @@ local function mark()
 			bg = theme.color.text_0,
 			items = "center",
 			justify = "center",
-			icon { name = "kyoko_mark", size = theme.size.icon_size_lg :: any, color = theme.color.text_1 },
+			kyoko_mark { size = theme.number(theme.size.space_40)(), rounded = theme.size.radius_sm },
 		},
 	}
 end

@@ -4,7 +4,7 @@ use image::imageops::{self, FilterType};
 use platform::tray::{Tray, TrayEvent, TrayImage, TrayLabels};
 use state::Attention;
 
-const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon.png");
+const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon_32.png");
 const SIZE: u32 = 32;
 const BADGE_CENTRE: f32 = 24.5;
 const DOT_RADIUS: f32 = 5.5;

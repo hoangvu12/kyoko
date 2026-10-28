@@ -2,6 +2,7 @@ local theme = require("../theme")
 local state = require("../state")
 local actions = require("../actions")
 local icon = require("@components/icon")
+local kyoko_mark = require("@components/kyoko_mark")
 
 local SLOT = "web_login"
 local HOVER_BRIGHTNESS = 0.7
@@ -30,7 +31,7 @@ local function title_bar()
 		pl = theme.size.space_12,
 		pr = theme.size.space_4,
 		color = theme.color.text_4,
-		icon { name = "kyoko_mark", size = theme.size.icon_size_sm :: any },
+		kyoko_mark { size = theme.number(theme.size.icon_size_sm)() },
 		ui.text {
 			"Sign in on discord.com",
 			grow = 1,
