@@ -4,7 +4,7 @@
 
 **Blocked by:** none (touches `crates/voice` capture chain; 104 camera send and 113 stream audio also touch `crates/voice`: rebase on whichever lands first)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] DeepFilterNet3 runs in the capture chain after resampling to 48 kHz and before input volume and the gate; standard model (2-frame lookahead), inference on its own thread or inline if it stays well under the 10 ms budget; measured ms per frame and added latency written in `docs/voice.md`
 - [ ] Integration: `deep_filter` is git-only at 0.5.x with tract 0.21 and no release since 2024: vendor or pin it (licence notices kept, `cargo deny` green, no GPL), model weights embedded or shipped beside the exe with a hash check; release exe growth measured and stated
