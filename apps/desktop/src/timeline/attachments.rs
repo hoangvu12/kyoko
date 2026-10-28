@@ -110,8 +110,10 @@ fn image_tile(entry: &MessageEntry, attachment: &Attachment, size: (f32, f32), e
 	let name = env
 		.pictures
 		.attachment(attachment, entry.message.channel_id, entry.message.id, size);
-	let target = bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.message.id);
+	let target = bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.message.id)
+		.map(|image| bridge::Viewing::of(entry, image));
 	let frame = div()
+		.id(format!("image-tile-{}", attachment.id))
 		.w_full()
 		.h_full()
 		.rounded(tok("radius_md"))
@@ -132,7 +134,7 @@ fn gif(
 	frame: View,
 	name: Option<ImageName>,
 	favorite: FavoriteGif,
-	target: Option<bridge::LightboxImage>,
+	target: Option<bridge::Viewing>,
 	env: &Rc<RowEnv>,
 ) -> View {
 	let hovered = env.pictures.runtime().signal(false);
@@ -173,7 +175,7 @@ fn gif(
 		let (lightbox, starred) = (env.lightbox.clone(), starred.clone());
 		frame = frame.on_click(move || {
 			if !starred.replace(false) {
-				lightbox.open(target.clone());
+				lightbox.show(target.clone());
 			}
 		});
 	}
@@ -264,11 +266,11 @@ fn star(favorite: &FavoriteGif, starred: &Rc<Cell<bool>>, env: &Rc<RowEnv>) -> V
 		))
 }
 
-fn opens(frame: View, target: bridge::LightboxImage, env: &Rc<RowEnv>) -> View {
+fn opens(frame: View, target: bridge::Viewing, env: &Rc<RowEnv>) -> View {
 	let lightbox = env.lightbox.clone();
 	frame
 		.cursor(Cursor::Pointer)
-		.on_click(move || lightbox.open(target.clone()))
+		.on_click(move || lightbox.show(target.clone()))
 }
 
 pub(super) fn file_card(attachment: &Attachment, env: &Rc<RowEnv>) -> View {
@@ -367,10 +369,10 @@ pub fn embeds(entry: &MessageEntry, env: &Rc<RowEnv>, bump: &Signal<u32>) -> Vec
 		.collect()
 }
 
-fn bare(embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
+fn bare(entry: &MessageEntry, embed: &Embed, media: &EmbedMedia, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, bare_box(embed));
 	let name = env.pictures.bare_embed(embed, media, (width, height));
-	let target = bridge::LightboxImage::embed(media);
+	let target = bridge::LightboxImage::embed(media).map(|image| bridge::Viewing::of(entry, image));
 	let frame = div()
 		.mt(4.)
 		.size(width, height)
@@ -413,7 +415,7 @@ fn embed_card(
 	bump: &Signal<u32>,
 ) -> Option<View> {
 	if matches!(embed.kind, Some(EmbedKind::Image | EmbedKind::Gifv)) {
-		return bare_media(embed).map(|media| bare(embed, media, env));
+		return bare_media(embed).map(|media| bare(entry, embed, media, env));
 	}
 	let accent = embed
 		.color
@@ -478,7 +480,7 @@ fn embed_card(
 	if let Some(media) = large_media(embed)
 		&& (media.proxy_url.is_some() || media.url.is_some())
 	{
-		column = column.child(large(media, embed, env));
+		column = column.child(large(entry, media, embed, env));
 	}
 	if embed.footer.is_some() || embed.timestamp.is_some() {
 		let footer = embed.footer.as_ref().map(|footer| footer.text.clone());
@@ -585,7 +587,7 @@ fn fields(
 		}))
 }
 
-fn large(media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
+fn large(entry: &MessageEntry, media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
 	let (width, height) = bridge::fit_box(media.width, media.height, EMBED_MEDIA_BOX);
 	let name = env.pictures.embed_media(media, (width, height));
 	let playable = embed.video.is_some();
@@ -595,7 +597,9 @@ fn large(media: &EmbedMedia, embed: &Embed, env: &Rc<RowEnv>) -> View {
 		.or_else(|| embed.video.as_ref().and_then(|video| video.url.clone()))
 		.filter(|_| playable);
 	let links = env.links.clone();
-	let target_image = bridge::LightboxImage::embed(media).filter(|_| !playable);
+	let target_image = bridge::LightboxImage::embed(media)
+		.filter(|_| !playable)
+		.map(|image| bridge::Viewing::of(entry, image));
 	div()
 		.relative()
 		.mt(EMBED_IMAGE_GAP)

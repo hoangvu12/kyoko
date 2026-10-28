@@ -192,6 +192,12 @@ impl MessageActions {
 		*self.reveal.borrow_mut() = Some(Box::new(hook));
 	}
 
+	pub fn forward(&self, message: (Snowflake, Snowflake)) {
+		if let Some(forward) = self.forward.borrow().as_ref() {
+			forward(message);
+		}
+	}
+
 	pub fn on_forward(&self, hook: impl Fn((Snowflake, Snowflake)) + 'static) {
 		*self.forward.borrow_mut() = Some(Box::new(hook));
 	}
@@ -410,11 +416,7 @@ impl MessageActions {
 				"Link copied",
 			),
 			MessageAction::CopyId => toasts::copy(&message_id.to_string(), "ID copied"),
-			MessageAction::Forward => {
-				if let Some(forward) = self.forward.borrow().as_ref() {
-					forward((channel_id, message_id));
-				}
-			}
+			MessageAction::Forward => self.forward((channel_id, message_id)),
 			MessageAction::CreateThread => match self.create_thread.borrow().as_ref() {
 				Some(create) => create((channel_id, message_id)),
 				None => tracing::debug!("no thread creation hook"),

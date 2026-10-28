@@ -233,6 +233,30 @@ impl Pictures {
 		Some(self.request(request))
 	}
 
+	pub fn pixels(&self, name: &ImageName) -> Option<media::Pixels> {
+		self.gallery.pixels(name)
+	}
+
+	pub fn save_original(
+		&self,
+		url: &str,
+		path: std::path::PathBuf,
+	) -> tokio::sync::oneshot::Receiver<Result<(), String>> {
+		let url = bridge::local_media(url, self.mock_origin.as_deref());
+		let loader = self.gallery.loader().clone();
+		let (sender, receiver) = tokio::sync::oneshot::channel();
+		self.gallery.runtime().spawn(async move {
+			let saved = match loader.bytes(&url).await {
+				Ok(bytes) => tokio::fs::write(&path, &bytes)
+					.await
+					.map_err(|error| error.to_string()),
+				Err(error) => Err(error.to_string()),
+			};
+			let _ = sender.send(saved);
+		});
+		receiver
+	}
+
 	pub fn hover(&self, name: Option<&ImageName>) {
 		self.gallery.set_hovered(name.map(ImageName::as_str));
 	}

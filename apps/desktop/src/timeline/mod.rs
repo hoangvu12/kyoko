@@ -29,6 +29,8 @@ mod rows;
 mod scroll;
 mod unread;
 mod uploads;
+#[cfg(test)]
+mod viewer_tests;
 mod voice;
 
 use std::cell::{Cell, RefCell};
@@ -235,6 +237,12 @@ impl TimelineView {
 				view.images_changed();
 			}
 		});
+		let forwarder = Rc::downgrade(&view.actions);
+		view.lightbox.on_forward(move |message| {
+			if let Some(actions) = forwarder.upgrade() {
+				actions.forward(message);
+			}
+		});
 		let images = Rc::downgrade(&view);
 		view.pictures.on_avatar_hover(move || {
 			if let Some(view) = images.upgrade() {
@@ -278,12 +286,16 @@ impl TimelineView {
 		self.lightbox.close()
 	}
 
-	pub fn open_lightbox(&self, image: bridge::LightboxImage) {
-		self.lightbox.open(image);
-	}
-
 	pub fn lightbox_settled(&self) -> bool {
 		self.lightbox.settled()
+	}
+
+	pub fn show_viewer(&self, viewing: bridge::Viewing) {
+		self.lightbox.show(viewing);
+	}
+
+	pub fn viewer_key(&self, key: &Key) -> bool {
+		self.lightbox.key(key)
 	}
 
 	pub fn on_compose(&self, compose: impl Fn(Compose) + 'static) {

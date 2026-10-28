@@ -122,6 +122,8 @@ icon_files!(
 	"spinner",
 	"poll",
 	"apps",
+	"zoom_in",
+	"zoom_out",
 );
 
 const PLUGIN_ICONS: usize = 64;

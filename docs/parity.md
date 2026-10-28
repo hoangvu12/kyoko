@@ -329,7 +329,7 @@ Mockup only: oxidcord has no email form. Kyoko drives the form in-process with m
 
 | Screen | Ticket | Steps | Kyoko |
 |---|---|---|---|
-| `lightbox` | 32 | Default selection, then open the newest loaded image attachment in the lightbox. | yes |
+| `lightbox` | 89 | Default selection, then open the image viewer on the first image of the newest loaded message with several images (else any image), with its author. | yes |
 | `emoji-picker` | 32 | Default selection, then open the composer's picker on the emoji tab at (954, 755). | yes |
 | `gif-picker` | 32 | As `emoji-picker`, on the GIF tab, once the trending GIFs have loaded. | yes |
 | `sticker-picker` | 32 | As `emoji-picker`, on the sticker tab, once the sticker packs have loaded. | yes |

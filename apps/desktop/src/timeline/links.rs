@@ -57,6 +57,10 @@ impl Links {
 		}
 	}
 
+	pub fn platform(&self) -> Option<Rc<PlatformService>> {
+		self.platform.borrow().clone()
+	}
+
 	pub fn open(&self, url: &str) {
 		match bridge::link_action(url, &self.trusted.borrow()).warned(self.warn.get()) {
 			LinkAction::Open => self.launch(url),

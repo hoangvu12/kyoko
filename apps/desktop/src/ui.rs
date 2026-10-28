@@ -306,6 +306,13 @@ pub fn run(
 						{
 							link.plugin_input();
 						}
+						if let zgx::input::InputEvent::KeyDown { key, .. } = &event.event
+							&& pressed
+								.upgrade()
+								.is_some_and(|link| link.timeline_view.viewer_key(key))
+						{
+							event.stop_propagation();
+						}
 						return;
 					}
 					if let zgx::input::InputEvent::KeyDown {
@@ -1093,14 +1100,21 @@ impl Link {
 	fn drive_lightbox(&self) {
 		let target = {
 			let timeline = self.timeline.borrow();
-			timeline.messages().rev().find_map(|entry| {
-				entry.message.attachments.iter().find_map(|attachment| {
-					bridge::LightboxImage::attachment(attachment, entry.message.channel_id, entry.id)
-				})
-			})
+			let images = |entry: &bridge::MessageEntry| {
+				bridge::message_images(&entry.message)
+					.into_iter()
+					.next()
+					.map(|image| bridge::Viewing::of(entry, image))
+			};
+			let several = timeline
+				.messages()
+				.rev()
+				.filter_map(images)
+				.find(|viewing| viewing.images.len() > 1);
+			several.or_else(|| timeline.messages().rev().find_map(images))
 		};
 		match target {
-			Some(image) => self.timeline_view.open_lightbox(image),
+			Some(viewing) => self.timeline_view.show_viewer(viewing),
 			None => tracing::warn!("no image to open in the lightbox"),
 		}
 	}
