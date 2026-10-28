@@ -37,6 +37,7 @@ mod settings;
 mod sign_in;
 mod themes;
 mod threads;
+mod voice_panel;
 mod voice_shots;
 
 use std::cell::{Cell, RefCell};
@@ -505,6 +506,7 @@ pub(crate) struct Link {
 	frame_effect: RefCell<Option<Effect>>,
 	ui: RefCell<Option<zgx::widgets::WeakUi>>,
 	inbox_popout: Rc<crate::inbox::InboxLayer>,
+	voice: voice_panel::VoicePanelView,
 }
 
 impl Link {
@@ -656,6 +658,7 @@ impl Link {
 			observer: RefCell::new(None),
 			ui: RefCell::new(None),
 			inbox_popout,
+			voice: voice_panel::VoicePanelView::new(host),
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -682,6 +685,7 @@ impl Link {
 		Link::install_connection(host, &link);
 		link.install_toasts();
 		Link::install_inbox(host, &link);
+		Link::install_voice(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -925,6 +929,7 @@ impl Link {
 			capture::Screen::SidebarCollapsed => self.collapse_first_category(),
 			capture::Screen::HiddenChannel => self.drive_hidden_channel().await,
 			capture::Screen::GameActivity => self.drive_game_activity().await,
+			capture::Screen::VoicePanel => self.drive_voice_panel().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
 			| capture::Screen::MemberNotes => self.until_members(&capture).await,
@@ -1244,6 +1249,7 @@ impl Link {
 			self.connection_apply(&state, changes);
 			self.toasts_apply(&state, changes);
 			self.inbox_apply(&state, changes);
+			self.voice_apply(&state);
 			self.plugins_apply(&state);
 		});
 		let opening = self.opening.get()?;

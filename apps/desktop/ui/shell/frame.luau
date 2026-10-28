@@ -7,6 +7,7 @@ local top_bar = require("./top_bar")
 local server_rail = require("./server_rail")
 local channel_sidebar = require("./channel_sidebar")
 local user_panel = require("./user_panel")
+local voice_panel = require("./voice_panel")
 local timeline = require("./timeline")
 local composer = require("./composer")
 local member_list = require("./member_list")
@@ -35,6 +36,9 @@ local function sidebar_column()
 		shrink = 0,
 		gap = theme.size.gap,
 		panel { w_full = true, grow = 1, min_h = 0, channel_sidebar() },
+		ui.show(function()
+			return state.voice.panel:get().open
+		end, panel { w_full = true, shrink = 0, voice_panel() }),
 		panel { w_full = true, h = theme.size.user_panel_box_height, user_panel() },
 	}
 end

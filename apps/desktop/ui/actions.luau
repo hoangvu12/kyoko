@@ -513,4 +513,24 @@ function M.member_avatar_hover(name: string, inside: boolean)
 	ui.call_sync("members.avatar_hover", { name = name, inside = inside })
 end
 
+function M.join_voice(id: string)
+	return ui.action("voice.join", id)
+end
+
+function M.leave_voice()
+	return ui.action("voice.leave")
+end
+
+function M.toggle_mute()
+	return ui.action("voice.toggle_mute")
+end
+
+function M.toggle_deafen()
+	return ui.action("voice.toggle_deafen")
+end
+
+function M.open_call()
+	return ui.action("voice.open_call")
+end
+
 return M

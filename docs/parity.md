@@ -682,3 +682,11 @@ Kyoko only (`--apps kyoko`): oxidcord shows each image alone. No Midnight mockup
 | `timeline-image-grid-three` | 82 | As above, jump to `-# showcase: image grid of three`: a large square and two stacked, then five images (2+3). | yes |
 | `timeline-image-grid-four` | 82 | As above, jump to `-# showcase: image grid of four`: four mixed shapes in a 2 by 2 grid. | yes |
 | `timeline-image-grid-ten` | 82 | As above, jump to `-# showcase: image grid of ten`: one full-width tile, then rows of three. | yes |
+
+### 98 Voice join, panel, mute and deafen
+
+Kyoko only (`--apps kyoko`); compare by eye with Discord. The app's mock voice runs with manual audio, so no device is opened.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `voice-panel` | 98 | Default selection, then join the open server's first voice channel (Lounge) through `voice.join` and wait for Voice Connected: the voice panel between the channel sidebar and the user panel, Lounge / server name, Disconnect. | yes |

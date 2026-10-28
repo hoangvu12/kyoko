@@ -174,6 +174,7 @@ struct Backend {
 	cdn: String,
 	mock_origin: Option<String>,
 	loopback_port: Option<u16>,
+	voice_root: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -402,6 +403,15 @@ fn session_starter(
 	let rest_base = backend.rest_base.clone();
 	let gateway_url = backend.gateway_url.clone();
 	let build_source = backend.build_source.clone();
+	let mock_voice = backend.mock_origin.is_some().then(|| session::VoiceSetup {
+		audio: session::AudioIo::Manual,
+		trust: backend
+			.voice_root
+			.as_deref()
+			.map(session::Trust::only)
+			.unwrap_or_default(),
+		..session::VoiceSetup::default()
+	});
 	Box::new(
 		move |Start {
 		          token,
@@ -427,6 +437,9 @@ fn session_starter(
 				theme_links: Default::default(),
 				trust: Default::default(),
 			})?;
+			if let Some(setup) = &mock_voice {
+				session.set_voice_setup(setup.clone());
+			}
 			plugin_host.attach(session.state().clone(), session.commander());
 			Ok(session)
 		},
@@ -462,6 +475,7 @@ fn mock_backend(server: &Server) -> Result<Backend> {
 		cdn: server.cdn_url(),
 		mock_origin: Some(format!("http://{}", server.address())),
 		loopback_port: Some(server.address().port()),
+		voice_root: server.voice().root_pem().map(str::to_owned),
 	})
 }
 
@@ -481,6 +495,7 @@ fn external_mock_backend(origin: &Url) -> Result<Backend> {
 		cdn: format!("{base}/cdn"),
 		mock_origin: Some(base.clone()),
 		loopback_port: Some(port),
+		voice_root: None,
 	})
 }
 
@@ -499,6 +514,7 @@ fn discord_backend() -> Result<Backend> {
 		cdn: media::cdn::CDN.to_owned(),
 		mock_origin: None,
 		loopback_port: None,
+		voice_root: None,
 	})
 }
 

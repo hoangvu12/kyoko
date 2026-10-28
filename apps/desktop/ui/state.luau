@@ -746,4 +746,34 @@ M.hidden = {
 	} :: HiddenView),
 }
 
+export type VoicePanel = {
+	open: boolean,
+	channel_id: string,
+	status: string,
+	connected: boolean,
+	place: string,
+}
+export type VoiceControls = {
+	muted: boolean,
+	deafened: boolean,
+	server_muted: boolean,
+	server_deafened: boolean,
+}
+
+M.voice = {
+	panel = ui.shared("voice.panel", {
+		open = false,
+		channel_id = "",
+		status = "",
+		connected = false,
+		place = "",
+	} :: VoicePanel),
+	controls = ui.shared("voice.controls", {
+		muted = false,
+		deafened = false,
+		server_muted = false,
+		server_deafened = false,
+	} :: VoiceControls),
+}
+
 return M

@@ -16,6 +16,7 @@ mod hidden;
 mod login;
 mod plugin_page;
 mod plugins;
+mod voice;
 
 pub(super) const WIDE: (f32, f32) = (1280., 800.);
 pub(super) const TALL: f32 = 1400.;
@@ -253,6 +254,12 @@ fn the_interface_loads_and_builds_every_screen() {
 				"status": "dnd", "latency": "Latency: 42 ms",
 			}),
 		)],
+	);
+	shows(
+		&mut app,
+		"the voice panel",
+		"Lounge / Kyoko",
+		&[("voice.panel", voice::connected_panel())],
 	);
 	shows(
 		&mut app,

@@ -10,8 +10,19 @@ local EMOJI = 14
 local avatar_sm = theme.number(theme.size.avatar_size_sm)
 local icon_md = theme.number(theme.size.icon_size_md)
 
-local muted = ui.state("user.muted", false)
-local deafened = ui.state("user.deafened", false)
+local function controls(): state.VoiceControls
+	return state.voice.controls:get()
+end
+
+local function muted(): boolean
+	local now = controls()
+	return now.muted or now.server_muted
+end
+
+local function deafened(): boolean
+	local now = controls()
+	return now.deafened or now.server_deafened
+end
 
 local function avatar_src(): string
 	return if state.user.avatar_ready:get() then state.user.avatar:get() else ""
@@ -103,20 +114,17 @@ local function user_area()
 	}
 end
 
-local function toggle(signal: any)
-	return function()
-		signal:set(not signal:get())
-	end
-end
-
 local panel_button = ui.component(function(props: {
 	name: () -> string,
 	tooltip: any,
 	on: () -> boolean,
+	forced: () -> boolean,
 	on_click: any,
+	id: string?,
 })
 	local hovered = ui.use_state(false)
 	return ui.button {
+		id = props.id,
 		w = theme.size.button_size,
 		h = theme.size.button_size,
 		shrink = 0,
@@ -144,6 +152,9 @@ local panel_button = ui.component(function(props: {
 			name = props.name,
 			size = icon_md(),
 			color = function()
+				if props.forced() then
+					return theme.color.red_3
+				end
 				if props.on() then
 					return theme.color.accent_new
 				end
@@ -171,28 +182,38 @@ return function()
 			items = "center",
 			gap = theme.size.space_4,
 			panel_button {
+				id = "user_panel_mute",
 				name = function()
-					return if muted:get() or deafened:get() then "mic_off" else "mic"
+					return if muted() then "mic_off" else "mic"
 				end,
 				tooltip = ui.text { function()
-					return if muted:get() then "Unmute" else "Mute"
+					if controls().server_muted then
+						return "Server Muted"
+					end
+					return if muted() then "Unmute" else "Mute"
 				end },
-				on = function()
-					return muted:get() or deafened:get()
+				on = muted,
+				forced = function()
+					return controls().server_muted
 				end,
-				on_click = toggle(muted),
+				on_click = actions.toggle_mute(),
 			},
 			panel_button {
+				id = "user_panel_deafen",
 				name = function()
-					return if deafened:get() then "headphones_off" else "headphones"
+					return if deafened() then "headphones_off" else "headphones"
 				end,
 				tooltip = ui.text { function()
-					return if deafened:get() then "Undeafen" else "Deafen"
+					if controls().server_deafened then
+						return "Server Deafened"
+					end
+					return if deafened() then "Undeafen" else "Deafen"
 				end },
-				on = function()
-					return deafened:get()
+				on = deafened,
+				forced = function()
+					return controls().server_deafened
 				end,
-				on_click = toggle(deafened),
+				on_click = actions.toggle_deafen(),
 			},
 			panel_button {
 				name = function()
@@ -200,6 +221,7 @@ return function()
 				end,
 				tooltip = "User Settings",
 				on = never,
+				forced = never,
 				on_click = function()
 					actions.open_settings()
 				end,

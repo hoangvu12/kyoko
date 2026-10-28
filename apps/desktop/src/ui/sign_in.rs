@@ -770,6 +770,7 @@ impl Link {
 		self.dm_avatars.borrow_mut().clear();
 		self.friends.reset();
 		self.dm_panel.reset();
+		self.voice.reset();
 		self.members.reset();
 		self.member_avatars.borrow_mut().clear();
 		for value in [

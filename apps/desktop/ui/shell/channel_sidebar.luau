@@ -522,8 +522,10 @@ local channel = ui.component(function(props: { row: state.SidebarRow })
 		return if hovered:get() then hover else value
 	end
 	local selectable = row.selectable == true
-	local on_click = if selectable
-		then actions.select_channel(row.id)
+	local audio = row.type == "voice" or row.type == "stage"
+	local on_click = if selectable and audio
+		then actions.join_voice(row.id)
+		elseif selectable then actions.select_channel(row.id)
 		elseif row.hidden == true then actions.open_hidden_channel(row.id)
 		else nil
 	local members = {}
