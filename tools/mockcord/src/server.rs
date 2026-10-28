@@ -50,7 +50,7 @@ impl Server {
 	pub async fn start(config: MockConfig) -> io::Result<Server> {
 		let listener = TcpListener::bind(("127.0.0.1", config.port.unwrap_or(0))).await?;
 		let address = listener.local_addr()?;
-		let fixtures = Fixtures::generate(&config, config.anchor.unwrap_or_else(fixture_anchor));
+		let mut fixtures = Fixtures::generate(&config, config.anchor.unwrap_or_else(fixture_anchor));
 		let (stop, stopped) = watch::channel(false);
 		let cameras = config
 			.cameras
@@ -63,7 +63,14 @@ impl Server {
 			gateway: format!("ws://{address}/gateway"),
 			voice: voice.url,
 		};
-		let shared = Arc::new(Shared::new(config, fixtures, urls, stopped.clone()));
+		voice::go_live(&voice.control, &mut fixtures, config.streams);
+		let shared = Arc::new(Shared::new(
+			config,
+			fixtures,
+			urls,
+			voice.control.clone(),
+			stopped.clone(),
+		));
 		let mut graceful = stopped;
 		let serve = axum::serve(listener, rest::router(shared.clone())).with_graceful_shutdown(async move {
 			let _ = graceful.wait_for(|stopped| *stopped).await;

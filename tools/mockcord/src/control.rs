@@ -4,11 +4,12 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::time::{Instant, timeout_at};
 
-use crate::json::parse_id;
+use crate::json::{parse_id, to_json};
 use crate::ops::Draft;
 use crate::record::Recording;
 use crate::scenario::{HeartbeatAcks, Reply};
 use crate::state::Shared;
+use crate::voice::MockStream;
 
 #[derive(Clone)]
 pub struct Control {
@@ -139,6 +140,54 @@ impl Control {
 
 	pub fn fill_voice_channel(&self, channel_id: u64) {
 		self.shared.scenario.fill_voice_channel(channel_id);
+	}
+
+	pub fn start_stream(&self, guild_id: u64, channel_id: u64, owner: u64) -> MockStream {
+		let stream = self.shared.voice.start_stream(Some(guild_id), channel_id, owner);
+		self.broadcast_streaming(guild_id, channel_id, owner, true);
+		stream
+	}
+
+	pub fn fill_stream(&self, key: &str) {
+		self.shared.voice.fill_stream(key);
+	}
+
+	pub fn end_stream(&self, key: &str, reason: &str) {
+		let Some(stream) = self.shared.voice.end_stream(key) else {
+			return;
+		};
+		self.shared.hub.broadcast(
+			"STREAM_DELETE",
+			&json!({ "stream_key": stream.key, "reason": reason }),
+		);
+		if let Some(guild_id) = stream.guild_id {
+			self.broadcast_streaming(guild_id, stream.channel_id, stream.owner, false);
+		}
+	}
+
+	fn broadcast_streaming(&self, guild_id: u64, channel_id: u64, user_id: u64, streaming: bool) {
+		let seated = self
+			.shared
+			.fixtures
+			.guild(guild_id)
+			.and_then(|guild| guild.voice_states.iter().find(|state| state.user_id.0 == user_id))
+			.map(to_json);
+		let mut event = seated.unwrap_or_else(|| {
+			json!({
+				"guild_id": guild_id.to_string(),
+				"user_id": user_id.to_string(),
+				"session_id": format!("mock-stream-{user_id}"),
+				"deaf": false,
+				"mute": false,
+				"self_deaf": false,
+				"self_mute": false,
+				"self_video": false,
+				"suppress": false,
+			})
+		});
+		event["channel_id"] = json!(channel_id.to_string());
+		event["self_stream"] = json!(streaming);
+		self.shared.hub.broadcast("VOICE_STATE_UPDATE", &event);
 	}
 
 	pub fn dispatch(&self, event: &str, data: &Value) {

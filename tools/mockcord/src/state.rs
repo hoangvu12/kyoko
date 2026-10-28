@@ -18,6 +18,7 @@ use crate::password::PasswordAuth;
 use crate::record::Recorder;
 use crate::remote_auth::RemoteAuth;
 use crate::scenario::Scenario;
+use crate::voice::VoiceControl;
 
 pub struct Urls {
 	pub origin: String,
@@ -238,12 +239,19 @@ pub struct Shared {
 	pub scenario: Scenario,
 	pub remote_auth: RemoteAuth,
 	pub password: PasswordAuth,
+	pub voice: VoiceControl,
 	token: Mutex<String>,
 	windows: Mutex<HashMap<String, Window>>,
 }
 
 impl Shared {
-	pub fn new(config: MockConfig, fixtures: Fixtures, urls: Urls, shutdown: watch::Receiver<bool>) -> Self {
+	pub fn new(
+		config: MockConfig,
+		fixtures: Fixtures,
+		urls: Urls,
+		voice: VoiceControl,
+		shutdown: watch::Receiver<bool>,
+	) -> Self {
 		let mut store = Store::new(&fixtures);
 		store.autocomplete = config.autocomplete;
 		store.interactions = config.interactions;
@@ -263,6 +271,7 @@ impl Shared {
 			scenario: Scenario::default(),
 			remote_auth: RemoteAuth::default(),
 			password: PasswordAuth::default(),
+			voice,
 			token,
 			windows: Mutex::new(HashMap::new()),
 		}

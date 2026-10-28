@@ -93,6 +93,7 @@ pub struct MockConfig {
 	pub bucket_limit: u32,
 	pub bucket_window: Duration,
 	pub cameras: Option<CameraPlan>,
+	pub streams: usize,
 }
 
 impl Default for MockConfig {
@@ -126,6 +127,7 @@ impl Default for MockConfig {
 			bucket_limit: 5,
 			bucket_window: Duration::from_secs(2),
 			cameras: None,
+			streams: 0,
 		}
 	}
 }

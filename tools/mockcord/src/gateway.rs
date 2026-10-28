@@ -24,7 +24,7 @@ use crate::ready;
 use crate::record::{GatewayClose, GatewayConnection, GatewayFrame, header_pairs};
 use crate::scenario::HeartbeatAcks;
 use crate::state::Shared;
-use crate::voice::VOICE_TOKEN;
+use crate::voice::{MockStream, VOICE_TOKEN};
 
 const IDENTIFY_TIMEOUT: Duration = Duration::from_secs(30);
 const CLOSE_AUTH_FAILED: u16 = 4004;
@@ -458,6 +458,10 @@ impl Connection {
 		let Some(key) = data["stream_key"].as_str() else {
 			return;
 		};
+		if let Some(stream) = self.shared.voice.stream(key) {
+			self.watch_scripted(session, &stream);
+			return;
+		}
 		let parts: Vec<u64> = key
 			.split(':')
 			.skip(1)
@@ -469,6 +473,40 @@ impl Connection {
 			_ => return,
 		};
 		self.announce_stream(session, key, guild_id, channel_id, &[CURRENT_USER_ID]);
+	}
+
+	fn watch_scripted(&self, session: &str, stream: &MockStream) {
+		let hub = &self.shared.hub;
+		if stream.full {
+			hub.dispatch_to(
+				session,
+				"STREAM_DELETE",
+				&json!({ "stream_key": stream.key, "reason": "stream_full" }),
+			);
+			return;
+		}
+		hub.dispatch_to(
+			session,
+			"STREAM_CREATE",
+			&json!({
+				"stream_key": stream.key,
+				"rtc_server_id": stream.rtc_server_id.to_string(),
+				"rtc_channel_id": stream.rtc_channel_id.to_string(),
+				"region": "mock",
+				"viewer_ids": [CURRENT_USER_ID.to_string()],
+				"paused": false,
+			}),
+		);
+		hub.dispatch_to(
+			session,
+			"STREAM_SERVER_UPDATE",
+			&json!({
+				"token": format!("{VOICE_TOKEN}-stream-{}", stream.rtc_server_id),
+				"stream_key": stream.key,
+				"guild_id": stream.guild_id.map(|id| id.to_string()),
+				"endpoint": self.shared.urls.voice,
+			}),
+		);
 	}
 
 	fn stream_delete(&self, session: &str, data: &Value) {

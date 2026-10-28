@@ -2,6 +2,7 @@ mod echo;
 mod listener;
 mod recording;
 mod room;
+mod stream;
 mod video;
 
 use std::collections::HashMap;
@@ -27,6 +28,7 @@ use tokio::task::JoinHandle;
 use crate::json::parse_id;
 
 pub use recording::{VoiceFrame, VoicePacket, VoiceRecording, VoiceRtcp, VoiceSocket};
+pub use stream::{MockStream, go_live};
 pub use video::Cameras;
 pub use video::{CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, ScriptedCamera, camera_frames, clip_frames};
 
@@ -77,7 +79,7 @@ struct Voice {
 	root_pem: Option<String>,
 	next_ssrc: AtomicU32,
 	next_connection: AtomicU64,
-	broadcasts: broadcast::Sender<(u64, Value)>,
+	broadcasts: broadcast::Sender<(u64, Option<u64>, Value)>,
 	commands: broadcast::Sender<Command>,
 	settings: Mutex<Settings>,
 	sessions: Mutex<HashMap<String, Session>>,
@@ -92,8 +94,9 @@ struct Voice {
 	clients: Mutex<HashMap<u32, SocketAddr>>,
 	media_counter: AtomicU32,
 	rooms: Mutex<Rooms>,
-	mail: broadcast::Sender<(u64, Wire)>,
+	mail: broadcast::Sender<(u64, u64, Wire)>,
 	cameras: Option<Cameras>,
+	streams: Mutex<stream::Streams>,
 }
 
 impl Voice {
@@ -148,8 +151,8 @@ impl Voice {
 	}
 
 	fn deliver_dave(&self, peer: &Peer, message: Wire) {
-		if let Some((user_id, _)) = self.member_of(peer.session_id.as_deref()) {
-			let mail = self.rooms.lock().deliver(user_id, message);
+		if let Some((user_id, channel_id)) = self.member_of(peer.session_id.as_deref()) {
+			let mail = self.rooms.lock().deliver(channel_id, user_id, message);
 			self.post(mail);
 		}
 	}
@@ -161,6 +164,13 @@ impl Voice {
 			return;
 		};
 		cameras.start(&VoiceControl(self.clone()), channel_id);
+	}
+
+	fn in_channel(&self, peer: &Peer, channel: Option<u64>) -> bool {
+		channel.is_none_or(|channel| {
+			self.member_of(peer.session_id.as_deref())
+				.is_some_and(|(_, joined)| joined == channel)
+		})
 	}
 
 	fn open_dave(&self, ssrc: u32, payload: &[u8]) -> Option<Vec<u8>> {
@@ -324,7 +334,7 @@ impl VoiceControl {
 				}],
 			},
 		});
-		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 
 	pub fn video_off_as(&self, user_id: u64, audio_ssrc: u32) {
@@ -337,17 +347,17 @@ impl VoiceControl {
 				"streams": [],
 			},
 		});
-		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 
 	pub fn connect_as(&self, user_id: u64) {
 		let frame = json!({ "op": 11, "d": { "user_ids": [user_id.to_string()] } });
-		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 
 	pub fn disconnect_as(&self, user_id: u64) {
 		let frame = json!({ "op": 13, "d": { "user_id": user_id.to_string() } });
-		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 
 	pub fn speak_as(&self, user_id: u64, ssrc: u32, speaking: bool) {
@@ -359,7 +369,7 @@ impl VoiceControl {
 				"user_id": user_id.to_string(),
 			},
 		});
-		let _ = self.0.broadcasts.send((SCRIPTED, frame));
+		let _ = self.0.broadcasts.send((SCRIPTED, None, frame));
 	}
 }
 
@@ -399,6 +409,7 @@ pub async fn spawn(shutdown: watch::Receiver<bool>, cameras: Option<Cameras>) ->
 		rooms: Mutex::new(Rooms::default()),
 		mail: broadcast::channel(MAIL_CAPACITY).0,
 		cameras,
+		streams: Mutex::new(stream::Streams::default()),
 	});
 	let url = bound.url.clone();
 	let (listener, accepting) = VoiceListener::start(bound, voice.clone());
@@ -491,7 +502,7 @@ async fn signal(voice: Arc<Voice>, connection: u64, mut socket: WebSocket) {
 				Some(Ok(_)) => Flow::Continue,
 			},
 			broadcast = broadcasts.recv() => match broadcast {
-				Ok((origin, frame)) if origin != peer.connection && peer.session_id.is_some() => {
+				Ok((origin, channel, frame)) if origin != peer.connection && peer.session_id.is_some() && voice.in_channel(&peer, channel) => {
 					let frame = voice.sequenced(peer.session_id.as_deref(), frame);
 					if send(&voice, &mut socket, &peer, frame).await { Flow::Continue } else { Flow::Stop }
 				}
@@ -499,7 +510,7 @@ async fn signal(voice: Arc<Voice>, connection: u64, mut socket: WebSocket) {
 				Err(broadcast::error::RecvError::Closed) => Flow::Stop,
 			},
 			letter = mail.recv() => match letter {
-				Ok((user_id, message)) if addressed(&voice, &peer, user_id) => {
+				Ok((channel_id, user_id, message)) if addressed(&voice, &peer, channel_id, user_id) => {
 					if send_wire(&voice, &mut socket, &peer, message).await { Flow::Continue } else { Flow::Stop }
 				}
 				Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => Flow::Continue,
@@ -567,14 +578,21 @@ async fn on_text(voice: &Arc<Voice>, socket: &mut WebSocket, peer: &mut Peer, te
 	}
 	if op == Some(1) {
 		voice.start_cameras(peer);
+		voice.announce_streams(peer);
 	}
 	Flow::Continue
 }
 
-fn addressed(voice: &Voice, peer: &Peer, user_id: u64) -> bool {
+fn addressed(voice: &Voice, peer: &Peer, channel_id: u64, user_id: u64) -> bool {
 	voice
 		.member_of(peer.session_id.as_deref())
-		.is_some_and(|(user, _)| user == user_id)
+		.is_some_and(|(user, channel)| user == user_id && channel == channel_id)
+}
+
+fn session_key(data: &Value) -> String {
+	let server = parse_id(&data["server_id"]).unwrap_or_default();
+	let session = data["session_id"].as_str().unwrap_or_default();
+	format!("{server}:{session}")
 }
 
 fn on_binary(voice: &Voice, peer: &Peer, bytes: &[u8]) {
@@ -628,7 +646,7 @@ fn identify(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> 
 	if !issued(&data["token"]) {
 		return Err(AUTHENTICATION_FAILED);
 	}
-	let session_id = data["session_id"].as_str().unwrap_or_default().to_owned();
+	let session_id = session_key(data);
 	let ssrc = voice.next_ssrc.fetch_add(SSRC_STRIDE, Ordering::Relaxed);
 	voice.sessions.lock().insert(
 		session_id.clone(),
@@ -699,17 +717,18 @@ fn speaking(voice: &Voice, peer: &Peer, data: &Value) {
 			"user_id": user_id.map(|id| id.to_string()),
 		},
 	});
-	let _ = voice.broadcasts.send((peer.connection, frame));
+	let channel = voice.member_of(Some(session_id)).map(|(_, channel)| channel);
+	let _ = voice.broadcasts.send((peer.connection, channel, frame));
 }
 
 fn resume(voice: &Voice, peer: &mut Peer, data: &Value) -> Result<Value, u16> {
 	if !issued(&data["token"]) {
 		return Err(AUTHENTICATION_FAILED);
 	}
-	let session_id = data["session_id"].as_str().unwrap_or_default();
-	if !voice.sessions.lock().contains_key(session_id) {
+	let session_id = session_key(data);
+	if !voice.sessions.lock().contains_key(&session_id) {
 		return Err(SESSION_INVALID);
 	}
-	peer.session_id = Some(session_id.to_owned());
+	peer.session_id = Some(session_id);
 	Ok(json!({ "op": 9, "d": null }))
 }

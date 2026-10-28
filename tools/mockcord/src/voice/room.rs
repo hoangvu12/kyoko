@@ -1,32 +1,50 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 
 use dave::Wire;
 use dave::testing::Harness;
 
-pub(super) type Mail = Vec<(u64, Wire)>;
+pub(super) type Mail = Vec<(u64, u64, Wire)>;
 
 #[derive(Default)]
 pub(super) struct Rooms {
 	rooms: HashMap<u64, Harness>,
-	externals: HashMap<u64, u64>,
+	groups: HashMap<u64, u64>,
+	externals: HashSet<(u64, u64)>,
 }
 
 impl Rooms {
+	pub fn set_group(&mut self, channel_id: u64, group: u64) {
+		self.groups.insert(channel_id, group);
+	}
+
 	pub fn join_external(&mut self, channel_id: u64, user_id: u64) -> Mail {
-		if self.externals.contains_key(&user_id) {
-			let previous = self.externals[&user_id];
-			self.run(previous, |room| room.leave(user_id));
-			self.externals.remove(&user_id);
+		let elsewhere: Vec<u64> = self
+			.externals
+			.iter()
+			.filter(|(channel, user)| {
+				*user == user_id && *channel != channel_id && !self.groups.contains_key(channel)
+			})
+			.map(|(channel, _)| *channel)
+			.collect();
+		let joins_voice = !self.groups.contains_key(&channel_id);
+		if joins_voice {
+			for previous in elsewhere {
+				self.run(previous, |room| room.leave(user_id));
+				self.externals.remove(&(previous, user_id));
+			}
 		}
-		self.externals.insert(user_id, channel_id);
+		if self.externals.contains(&(channel_id, user_id)) {
+			self.run(channel_id, |room| room.leave(user_id));
+		}
+		self.externals.insert((channel_id, user_id));
 		self.run(channel_id, |room| room.join_external(user_id))
 	}
 
-	pub fn deliver(&mut self, user_id: u64, message: Wire) -> Mail {
-		let Some(&channel_id) = self.externals.get(&user_id) else {
+	pub fn deliver(&mut self, channel_id: u64, user_id: u64, message: Wire) -> Mail {
+		if !self.externals.contains(&(channel_id, user_id)) {
 			return Mail::new();
-		};
+		}
 		self.run(channel_id, |room| room.deliver(user_id, message))
 	}
 
@@ -40,13 +58,17 @@ impl Rooms {
 		let externals: Vec<u64> = self
 			.externals
 			.iter()
-			.filter(|(_, channel)| **channel == channel_id)
-			.map(|(user, _)| *user)
+			.filter(|(channel, _)| *channel == channel_id)
+			.map(|(_, user)| *user)
 			.collect();
 		let mut mail = Mail::new();
 		if let Some(room) = self.rooms.get_mut(&channel_id) {
 			for user in externals {
-				mail.extend(room.take_outbox(user).into_iter().map(|wire| (user, wire)));
+				mail.extend(
+					room.take_outbox(user)
+						.into_iter()
+						.map(|wire| (channel_id, user, wire)),
+				);
 			}
 		}
 		mail
@@ -78,9 +100,10 @@ impl Rooms {
 	}
 
 	fn room(&mut self, channel_id: u64) -> Option<&mut Harness> {
+		let group = self.groups.get(&channel_id).copied().unwrap_or(channel_id);
 		match self.rooms.entry(channel_id) {
 			Entry::Occupied(room) => Some(room.into_mut()),
-			Entry::Vacant(slot) => match Harness::new(channel_id) {
+			Entry::Vacant(slot) => match Harness::new(group) {
 				Ok(room) => Some(slot.insert(room)),
 				Err(error) => {
 					tracing::warn!(%error, "mock dave room could not start");

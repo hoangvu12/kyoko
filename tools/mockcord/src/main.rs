@@ -49,6 +49,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(MockConfig, Vec
 			"--hold-ping" => config.interactions.hold_ping = true,
 			"--failing-modals" => config.failing_modals = true,
 			"--cameras" => config.cameras = Some(next_value(&mut args, &flag)?),
+			"--streams" => config.streams = next_value(&mut args, &flag)?,
 			other => return Err(format!("unknown flag {other}")),
 		}
 	}
