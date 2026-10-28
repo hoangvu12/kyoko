@@ -2,6 +2,8 @@
 
 **What to build:** Follow-up from 100. Push to talk registers a Windows hotkey (`RegisterHotKey` in `apps/desktop/src/integration.rs`), so while it is bound the key combination never reaches other apps: binding a game key steals it from the game. The user asked for it to work like Discord (2026-10-29): Discord's desktop app watches the keyboard with a low-level hook and lets every key through, so the key keeps working in the focused app while it also opens the mic. Replace the push-to-talk hotkey with a low-level keyboard and mouse hook (`WH_KEYBOARD_LL`, `WH_MOUSE_LL`) on its own thread with a message loop, which always calls `CallNextHookEx` and never swallows input. It reports press and release of the bound combination (modifiers included, key repeat ignored) as today's `Request::PushToTalk(bool)`. Like Discord, mouse side buttons (Mouse 4/5) can be bound in the keybind recorder, and a "Push to Talk Release Delay" slider (0–2000 ms, Discord's default 20 ms) holds the mic open briefly after release. The hook runs only while Push to Talk mode is on and a binding exists, and is removed otherwise. Other global hotkeys (40) stay as they are.
 
+**Source of the Discord behaviour:** Discord's observed behaviour and settings (the key still reaches other apps, Mouse 4/5 bindings, the release delay slider and its default), not its code; the desktop client is closed source and nothing of it is read or copied. Confirm the range and default against the settings page in the user's screenshots or the public support article if one exists, and say what you found.
+
 **Blocked by:** none
 
 **Status:** ready-for-agent

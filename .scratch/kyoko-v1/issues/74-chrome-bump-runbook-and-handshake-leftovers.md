@@ -32,3 +32,7 @@ Merged to main as `dd3b3d0` (worker `79b2c0fe`, lane B; checks re-run by the orc
 - Still different from Chrome: no `X-Debug-Options` (unknown whether the web client sends it), lowercase `upgrade`, no deflate offer, no H2 priority chaining or HPACK choices, the audio guesses, the scrape's order and weight, and any header combination that wasn't captured.
 - Part 2b (after 2026-11-03): runbook steps 1–10 in `docs/fingerprint.md`. At step 9, rebuild the three order lists from the 157 fixtures and re-check `IMAGE_WEIGHT`, `sec-fetch-storage-access` and the upgrade's cache headers. Rename `CHROME_156_BRANDS` and check 157's `sec-ch-ua`. The order tests read `chrome-<CHROME_MAJOR>-*.json`.
 
+
+## Note for part 2b (2026-10-29)
+
+The user agreed to leave the leftover handshake gaps (docs/fingerprint.md "Left over": HTTP/2 priority chaining on overlapping image requests, HTTP/3, ECH, session resumption) as they are for now. Look at them again during the Chrome 157 bump: check whether the pinned wreq rev or a newer one can chain priorities without a patch, and say so in the Answer.
