@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use dave::{DaveSession, DaveStats};
+use denoise::Suppression;
 use net::Trust;
 use parking_lot::Mutex;
 use protocol::{Snowflake, Token};
@@ -260,8 +261,9 @@ impl VoiceConnection {
 		self.shared.transmitting.load(Ordering::Relaxed)
 	}
 
-	pub fn set_noise_suppression(&self, enabled: bool) {
-		self.shared.noise_suppression.store(enabled, Ordering::Relaxed);
+	pub fn set_noise_suppression(&self, suppression: Suppression) {
+		denoise::prepare(suppression);
+		self.shared.set_noise_suppression(suppression);
 	}
 
 	pub fn input_level(&self) -> f32 {

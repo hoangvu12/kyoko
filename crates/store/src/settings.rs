@@ -2,7 +2,7 @@ use std::fs;
 use std::io::ErrorKind;
 
 use protocol::fingerprint::FALLBACK_BUILD_NUMBER;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::atomic::write_atomic;
 use crate::error::Result;
@@ -92,6 +92,41 @@ pub enum AnimationPlayback {
 	Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoiseSuppression {
+	#[default]
+	HighQuality,
+	LowCpu,
+	Off,
+}
+
+impl NoiseSuppression {
+	pub const ALL: [NoiseSuppression; 3] = [Self::HighQuality, Self::LowCpu, Self::Off];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			Self::HighQuality => "high_quality",
+			Self::LowCpu => "low_cpu",
+			Self::Off => "off",
+		}
+	}
+
+	pub fn named(name: &str) -> Option<Self> {
+		Self::ALL.into_iter().find(|choice| choice.name() == name)
+	}
+}
+
+fn lenient_noise_suppression<'de, D: Deserializer<'de>>(
+	deserializer: D,
+) -> std::result::Result<NoiseSuppression, D::Error> {
+	let value = serde_json::Value::deserialize(deserializer)?;
+	Ok(value
+		.as_str()
+		.and_then(NoiseSuppression::named)
+		.unwrap_or_default())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MediaSettings {
@@ -132,7 +167,8 @@ pub struct VoiceSettings {
 	pub output_volume: u8,
 	pub push_to_talk: bool,
 	pub push_to_talk_release_delay: u16,
-	pub noise_suppression: bool,
+	#[serde(deserialize_with = "lenient_noise_suppression")]
+	pub noise_suppression: NoiseSuppression,
 	pub auto_sensitivity: bool,
 	pub sensitivity_db: i8,
 	pub camera_device: Option<String>,
@@ -348,7 +384,7 @@ impl Default for VoiceSettings {
 			output_volume: 100,
 			push_to_talk: false,
 			push_to_talk_release_delay: 20,
-			noise_suppression: false,
+			noise_suppression: NoiseSuppression::HighQuality,
 			auto_sensitivity: true,
 			sensitivity_db: -50,
 			camera_device: None,

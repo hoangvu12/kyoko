@@ -1,5 +1,5 @@
 use cpal::traits::HostTrait;
-use nnnoiseless::DenoiseState;
+use denoise::{NoiseSuppressor, Suppression};
 use opus::{Application, Channels, Decoder, Encoder};
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
@@ -9,7 +9,6 @@ use crate::text;
 const RATE: u32 = 48_000;
 const FRAME: usize = 960;
 const FRAMES: usize = 10;
-const PCM_SCALE: f32 = 32_768.0;
 
 pub fn tone(frames: usize, channels: usize) -> Vec<f32> {
 	(0..frames)
@@ -53,18 +52,12 @@ pub fn resample() -> Result<String, String> {
 	Ok(format!("{read} frames at 44.1 kHz became {written} at 48 kHz"))
 }
 
-pub fn denoise() -> Result<String, String> {
-	let mut state = DenoiseState::new();
-	let input = tone(DenoiseState::FRAME_SIZE, 1)
-		.into_iter()
-		.map(|sample| sample * PCM_SCALE)
-		.collect::<Vec<_>>();
-	let mut output = [0.0f32; DenoiseState::FRAME_SIZE];
-	let voice = state.process_frame(&mut output, &input);
-	Ok(format!(
-		"one {}-sample frame, voice probability {voice:.2}",
-		DenoiseState::FRAME_SIZE
-	))
+pub fn suppress_noise() -> Result<String, String> {
+	denoise::load(Suppression::HighQuality).map_err(text)?;
+	let mut suppressor = NoiseSuppressor::new();
+	let mut frame = tone(FRAME, 1);
+	let used = suppressor.process(Suppression::HighQuality, &mut frame);
+	Ok(format!("one {FRAME}-sample frame through {used:?}"))
 }
 
 pub fn devices() -> Result<String, String> {

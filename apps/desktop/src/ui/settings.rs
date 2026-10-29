@@ -417,6 +417,7 @@ impl Link {
 				self.set_setting("keybinds.push_to_talk", &serde_json::Value::from("Mouse4"));
 				self.open_settings(VOICE_PAGE);
 			}
+			capture::Screen::VoiceProcessingSettings => self.open_settings(VOICE_PAGE),
 			_ => {}
 		}
 	}

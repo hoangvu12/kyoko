@@ -40,7 +40,7 @@ pub fn trial() -> Trial {
 	let mut checks = vec![
 		check("opus", audio::opus_round_trip),
 		check("rubato", audio::resample),
-		check("rnnoise", audio::denoise),
+		check("noise suppression", audio::suppress_noise),
 		check("cpal", audio::devices),
 		check("transport seal", seal::round_trip),
 		check("dave mls", dave::two_members),

@@ -1,0 +1,39 @@
+[package]
+name = "kyoko-denoise"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+build = "build.rs"
+
+[lib]
+name = "denoise"
+
+[features]
+testing = []
+onnx = ["dep:tract-onnx", "dep:tract-pulse"]
+
+[[example]]
+name = "bench"
+required-features = ["testing"]
+
+[[example]]
+name = "nnef_export"
+required-features = ["onnx", "testing"]
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+flate2.workspace = true
+tar.workspace = true
+realfft.workspace = true
+tract-nnef.workspace = true
+tract-pulse-opl.workspace = true
+tract-onnx = { workspace = true, optional = true }
+tract-pulse = { workspace = true, optional = true }
+
+[build-dependencies]
+cc.workspace = true

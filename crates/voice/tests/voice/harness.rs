@@ -4,7 +4,7 @@ use mockcord::{MockConfig, Server, VOICE_TOKEN, VoiceControl, VoiceRecording};
 use net::Trust;
 use protocol::{Snowflake, Token};
 use tokio::sync::mpsc;
-use voice::{AudioIo, VoiceConnection, VoiceEvent, VoiceOptions, VoiceParams};
+use voice::{AudioIo, Suppression, VoiceConnection, VoiceEvent, VoiceOptions, VoiceParams};
 
 pub const GUILD_ID: Snowflake = Snowflake(41_771_983_423_143_937);
 pub const CHANNEL_ID: Snowflake = Snowflake(127_121_515_262_115_840);
@@ -30,6 +30,7 @@ impl Call {
 		let voice = VoiceConnection::connect(params(&server), options(&server))
 			.await
 			.expect("the voice connection comes up");
+		voice.set_noise_suppression(Suppression::Off);
 		let events = voice.events();
 		Call {
 			server,

@@ -30,9 +30,9 @@ pub use retention::{Pruned, Retention};
 pub use secrets::{Keyring, MemoryKeyring, SecretHealth, SystemKeyring, TokenBackend};
 pub use settings::{
 	AccessibilitySettings, AnimationPlayback, AppearanceSettings, ChatSettings, ClientSettings,
-	DeveloperSettings, IntegrationSettings, KeybindSettings, MediaSettings, NotificationSettings,
-	PluginSettings, Settings, StartupSettings, StorageSettings, StreamerModeSettings, ThemeSettings,
-	VoiceSettings, WindowSettings,
+	DeveloperSettings, IntegrationSettings, KeybindSettings, MediaSettings, NoiseSuppression,
+	NotificationSettings, PluginSettings, Settings, StartupSettings, StorageSettings, StreamerModeSettings,
+	ThemeSettings, VoiceSettings, WindowSettings,
 };
 pub use token::TokenStore;
 

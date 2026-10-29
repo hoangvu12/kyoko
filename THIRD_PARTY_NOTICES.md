@@ -124,6 +124,126 @@ Kyoko plays voice messages and audio attachments with crates.io packages linked 
 
 The audio fixtures in `tools/mockcord/fixtures/audio/` (`voice-message.ogg`, `voice-reply.ogg`, `rainy-loop.mp3`) are tones generated for kyoko with FFmpeg's `sine` source; they are test data and not shipped in the application.
 
+## Voice: libopus
+
+Voice encodes and decodes Opus with libopus 1.6.1, built from the source bundled in `opusic-sys` 0.7.6 (BSD-3-Clause) and linked through `opus` 0.4 (MIT OR Apache-2.0). libopus is distributed under the following licence:
+
+```
+Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
+                    Jean-Marc Valin, Timothy B. Terriberry,
+                    CSIRO, Gregory Maxwell, Mark Borgerding,
+                    Erik de Castro Lopo, Mozilla, Amazon
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+- Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+- Neither the name of Internet Society, IETF or IETF Trust, nor the
+names of specific contributors, may be used to endorse or promote
+products derived from this software without specific prior written
+permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Opus is subject to the royalty-free patent licenses which are
+specified at:
+
+Xiph.Org Foundation:
+https://datatracker.ietf.org/ipr/1524/
+
+Microsoft Corporation:
+https://datatracker.ietf.org/ipr/1914/
+
+Broadcom Corporation:
+https://datatracker.ietf.org/ipr/1526/
+```
+
+## Noise suppression: DeepFilterNet, tract and RNNoise
+
+`crates/denoise` (`kyoko-denoise`) runs two noise suppressors (`docs/voice.md`, "Noise suppression").
+
+**DeepFilterNet3.** `crates/denoise/src/deep_filter/` is kyoko's own port of the inference path of DeepFilterNet's `libDF` (`src/lib.rs` and `src/tract.rs` at [Rikorose/DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) commit `d375b2d8309e0935d165700c91da9de862a99c31`, the last commit, 2024-09-25), rewritten for tract 0.23. `crates/denoise/models/DeepFilterNet3.nnef.tar.gz` is that commit's `models/DeepFilterNet3_onnx.tar.gz` (SHA-256 `c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616`) converted to NNEF with its weights unchanged: the three ONNX graphs, given their streaming input shapes, made streaming by tract's pulse transform and written with tract's NNEF writer by `cargo run --release -p kyoko-denoise --features onnx,testing --example nnef_export -- DeepFilterNet3_onnx.tar.gz DeepFilterNet3.nnef.tar.gz`, which also checks that both run sample for sample identically (SHA-256 of the converted file `592a715f37640c92af5aa086abdc7247572e0c858aac9c5319385927338a4317`, checked when the model loads). DeepFilterNet's code and models are dual-licensed under the MIT licence or the Apache License 2.0 (full text in `LICENSE-APACHE`), at your option; kyoko uses them under either. The MIT licence:
+
+```
+The MIT License (MIT)
+Copyright (c) 2021 Hendrik Schröter
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+**tract.** The model runs on [tract](https://github.com/sonos/tract) 0.23.9 (`tract-nnef`, `tract-pulse-opl`, `tract-core`, `tract-data` and `tract-linalg`, by Sonos, MIT OR Apache-2.0), linked unmodified from crates.io. `tract-onnx` and `tract-pulse` are used only by the `nnef_export` tool (the `onnx` feature) and are not shipped.
+
+**RNNoise.** `crates/denoise/csrc/rnnoise/` holds the C sources of [xiph/rnnoise](https://github.com/xiph/rnnoise) at commit `70f1d256acd4b34a572f999a05c87bf00b67730d` (2025-02-22, the RNNoise 0.2 line), unchanged except `src/rnnoise_data.c`, which keeps only the part that compiles with `USE_WEIGHTS_FILE` (`init_rnnoise`). `crates/denoise/models/rnnoise.bin` is a weights blob made from the model that commit names (`rnnoise_data-0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37.tar.gz` from media.xiph.org, whose SHA-256 is that name) by `cargo run -p kyoko-denoise --example rnnoise_weights -- src/rnnoise_data.c rnnoise.bin`, in RNNoise's own blob format, without the debug float copies (SHA-256 `a81e3e6f3e0ce3761493a37e2136a155d4801265d1bf438f80fccc9a6807d1e8`, checked when it loads). RNNoise is distributed under the following licence (`csrc/rnnoise/COPYING`):
+
+```
+Copyright (c) 2007-2017, 2024 Jean-Marc Valin
+Copyright (c) 2023 Amazon
+Copyright (c) 2017, Mozilla
+Copyright (c) 2005-2017, Xiph.Org Foundation
+Copyright (c) 2003-2004, Mark Borgerding
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+- Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+- Neither the name of the Xiph.Org Foundation nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`crates/denoise/fixtures/speech.wav` (16 kHz, 4.2 s) is test data, not shipped: an excerpt of the LibriVox recording of Lincoln's *The Gettysburg Address* read by John Greenman (2006, <https://archive.org/details/gettysburg_johng_librivox>), which is in the public domain (LibriVox's public domain dedication). `crates/denoise/fixtures/README.md` gives the exact file, excerpt and hashes. The noise the tests mix in is generated in code.
+
 ## Voice end-to-end encryption (DAVE)
 
 `crates/dave` ports the DAVE protocol code of oxidcord's `crates/voice/src/dave` (MIT OR Apache-2.0, kyoko's fork origin). It runs MLS with `openmls` 0.9, `openmls_traits` 0.6, `openmls_memory_storage` 0.6 and `openmls_serialization_helpers` 0.1 (the OpenMLS authors, MIT) and `tls_codec` 0.5 with `tls_codec_derive` (the RustCrypto developers, MIT OR Apache-2.0, used under MIT), linked unmodified. Their cryptography is kyoko's own provider on BoringSSL (below); no RustCrypto curve, HPKE or AEAD crate is linked for it. `davey` (MIT) is a test-only dependency and is not shipped.

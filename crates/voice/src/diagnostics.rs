@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::thread::{self, JoinHandle, sleep};
 use std::time::{Duration, Instant};
 
+use denoise::{NoiseSuppressor, Suppression};
 use parking_lot::Mutex;
 
 use crate::atomic::AtomicF32;
@@ -11,7 +12,6 @@ use crate::audio::{AudioEngine, Rings};
 use crate::chain::{CaptureChain, PlaybackChain};
 use crate::codec::{FRAME_SAMPLES, STEREO_FRAME_SAMPLES, VoiceDecoder, VoiceEncoder};
 use crate::connection::AudioIo;
-use crate::denoise::Denoiser;
 use crate::error::{Result, VoiceError};
 use crate::gate::{LEVEL_FLOOR_DB, decayed_db, rms, to_db};
 
@@ -25,13 +25,13 @@ const MAX_VOLUME: f32 = 2.0;
 pub struct MicCheckOptions {
 	pub audio: AudioIo,
 	pub input_volume: f32,
-	pub noise_suppression: bool,
+	pub noise_suppression: Suppression,
 }
 
 struct Checked {
 	stop: AtomicBool,
 	input_volume: AtomicF32,
-	noise_suppression: AtomicBool,
+	noise_suppression: AtomicU8,
 	level_db: AtomicF32,
 	manual_input: Mutex<VecDeque<Vec<f32>>>,
 	manual_output: Mutex<VecDeque<Vec<i16>>>,
@@ -59,7 +59,7 @@ struct Loop {
 	capture: CaptureChain,
 	encoder: VoiceEncoder,
 	decoder: VoiceDecoder,
-	denoiser: Denoiser,
+	suppressor: NoiseSuppressor,
 	microphone: Vec<f32>,
 	speaker: Vec<f32>,
 }
@@ -69,7 +69,7 @@ impl MicCheck {
 		let checked = Arc::new(Checked {
 			stop: AtomicBool::new(false),
 			input_volume: AtomicF32::new(options.input_volume.clamp(0.0, MAX_VOLUME)),
-			noise_suppression: AtomicBool::new(options.noise_suppression),
+			noise_suppression: AtomicU8::new(options.noise_suppression.code()),
 			level_db: AtomicF32::new(LEVEL_FLOOR_DB),
 			manual_input: Mutex::new(VecDeque::new()),
 			manual_output: Mutex::new(VecDeque::new()),
@@ -85,7 +85,7 @@ impl MicCheck {
 			capture: CaptureChain::default(),
 			encoder: VoiceEncoder::new()?,
 			decoder: VoiceDecoder::new()?,
-			denoiser: Denoiser::new(),
+			suppressor: NoiseSuppressor::new(),
 			microphone: vec![0.0; FRAME_SAMPLES],
 			speaker: vec![0.0; STEREO_FRAME_SAMPLES],
 		};
@@ -103,8 +103,10 @@ impl MicCheck {
 		self.checked.input_volume.store(volume.clamp(0.0, MAX_VOLUME));
 	}
 
-	pub fn set_noise_suppression(&self, enabled: bool) {
-		self.checked.noise_suppression.store(enabled, Ordering::Relaxed);
+	pub fn set_noise_suppression(&self, suppression: Suppression) {
+		self.checked
+			.noise_suppression
+			.store(suppression.code(), Ordering::Relaxed);
 	}
 
 	pub fn level_db(&self) -> f32 {
@@ -196,12 +198,11 @@ impl Loop {
 	}
 
 	fn process(&mut self) -> f32 {
+		let suppression = Suppression::from_code(self.checked.noise_suppression.load(Ordering::Relaxed));
+		self.suppressor.process(suppression, &mut self.microphone);
 		let gain = self.checked.input_volume.load();
 		for sample in &mut self.microphone {
 			*sample *= gain;
-		}
-		if self.checked.noise_suppression.load(Ordering::Relaxed) {
-			self.denoiser.process(&mut self.microphone);
 		}
 		let level = to_db(rms(&self.microphone));
 		if let Err(error) = self.play_back() {

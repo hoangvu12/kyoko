@@ -139,6 +139,7 @@ pub enum Screen {
 	GoLive,
 	GoLivePreview,
 	GoingLive,
+	VoiceProcessingSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -351,6 +352,7 @@ impl Screen {
 			"voice-going-live" => Some(Screen::GoingLive),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			"settings-voice-push-to-talk" => Some(Screen::PushToTalkSettings),
+			"settings-voice-processing" => Some(Screen::VoiceProcessingSettings),
 			other => settings_page(other)
 				.map(Screen::Settings)
 				.or_else(|| server_page(other).map(Screen::ServerSettings))
@@ -382,6 +384,7 @@ impl Screen {
 			| Screen::MemberListScrolled
 			| Screen::Settings(_)
 			| Screen::PushToTalkSettings
+			| Screen::VoiceProcessingSettings
 			| Screen::UserPanel
 			| Screen::StatusMenu
 			| Screen::AccountSwitcher

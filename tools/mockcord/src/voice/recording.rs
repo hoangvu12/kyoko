@@ -81,6 +81,7 @@ impl VoiceFrame {
 #[derive(Debug, Clone)]
 pub struct VoicePacket {
 	pub ssrc: u32,
+	pub timestamp: u32,
 	pub mode: String,
 	pub payload: Vec<u8>,
 	pub opened: Option<Vec<u8>>,

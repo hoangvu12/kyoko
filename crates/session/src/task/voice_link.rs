@@ -4,12 +4,12 @@ use std::time::Duration;
 use gateway::{SendError, VoiceStateRequest};
 use protocol::{ChannelType, Snowflake, Token, VoiceServerUpdate, VoiceState};
 use state::{LocalEvent, UserAudio, VoiceStatus};
-use store::VoiceSettings;
+use store::{NoiseSuppression, VoiceSettings};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use voice::{
-	AudioIo, ConnectionKind, InputMode, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceOptions,
-	VoiceParams,
+	AudioIo, ConnectionKind, InputMode, StopReason, Suppression, VoiceConnection, VoiceError, VoiceEvent,
+	VoiceOptions, VoiceParams,
 };
 
 use super::{Core, Internal};
@@ -90,6 +90,14 @@ fn sensitivity_db(settings: &VoiceSettings) -> f32 {
 
 pub(super) fn volume(percent: u8) -> f32 {
 	f32::from(percent) / FULL_VOLUME_PERCENT
+}
+
+pub(super) fn suppression(settings: &VoiceSettings) -> Suppression {
+	match settings.noise_suppression {
+		NoiseSuppression::HighQuality => Suppression::HighQuality,
+		NoiseSuppression::LowCpu => Suppression::LowCpu,
+		NoiseSuppression::Off => Suppression::Off,
+	}
 }
 
 fn stop_reason(reason: StopReason) -> Option<String> {
@@ -405,7 +413,7 @@ impl Core {
 		connection.set_output_volume(volume(settings.output_volume));
 		connection.set_input_mode(input_mode(settings));
 		connection.set_vad_threshold_db(sensitivity_db(settings));
-		connection.set_noise_suppression(settings.noise_suppression);
+		connection.set_noise_suppression(suppression(settings));
 		connection.set_transmitting(self.voice.transmitting);
 	}
 

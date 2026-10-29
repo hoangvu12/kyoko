@@ -25,6 +25,7 @@ const EXTENSION_PREAMBLE_LEN: usize = 4;
 const EXTENSION_FLAG: u8 = 0x10;
 const CSRC_COUNT_MASK: u8 = 0x0f;
 const RTCP_PAYLOAD_TYPES: std::ops::RangeInclusive<u8> = 192..=223;
+const TIMESTAMP_RANGE: std::ops::Range<usize> = 4..8;
 const SSRC_RANGE: std::ops::Range<usize> = 8..12;
 const RTCP_HEADER_LEN: usize = 8;
 const RTCP_SENDER_RANGE: std::ops::Range<usize> = 4..8;
@@ -194,6 +195,7 @@ fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
 		return None;
 	}
 	let ssrc = u32::from_be_bytes(packet[SSRC_RANGE].try_into().ok()?);
+	let timestamp = u32::from_be_bytes(packet[TIMESTAMP_RANGE].try_into().ok()?);
 	let mode = voice.modes.lock().get(&ssrc).cloned()?;
 	let cipher = Cipher::new(&mode, &voice.key)?;
 	let (sealed, counter) = packet.split_at(packet.len() - COUNTER_LEN);
@@ -208,6 +210,7 @@ fn echoed(voice: &Voice, packet: &[u8]) -> Option<Vec<u8>> {
 	voice.record(|log| {
 		log.packets.push(VoicePacket {
 			ssrc,
+			timestamp,
 			mode: mode.clone(),
 			payload: payload.clone(),
 			opened,

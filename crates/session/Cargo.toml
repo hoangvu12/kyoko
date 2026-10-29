@@ -36,6 +36,7 @@ indexmap.workspace = true
 [dev-dependencies]
 base64.workspace = true
 bytes.workspace = true
+denoise = { workspace = true, features = ["testing"] }
 mockcord = { workspace = true, features = ["tls"] }
 media.workspace = true
 opus.workspace = true

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
+use denoise::Suppression;
 use parking_lot::Mutex;
 use protocol::Snowflake;
 
@@ -34,6 +35,7 @@ pub struct VoiceStats {
 	pub packets_lost: u64,
 	pub jitter_ms: f32,
 	pub frames_denoised: u64,
+	pub suppressor: Option<Suppression>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -61,6 +63,7 @@ pub(crate) struct Counters {
 	pub late: AtomicU64,
 	pub lost: AtomicU64,
 	pub denoised: AtomicU64,
+	pub suppressor: AtomicU8,
 	pub jitter_ms: AtomicF32,
 	ping_ms: AtomicU32,
 }
@@ -73,6 +76,7 @@ impl Counters {
 			late: AtomicU64::new(0),
 			lost: AtomicU64::new(0),
 			denoised: AtomicU64::new(0),
+			suppressor: AtomicU8::new(Suppression::Off.code()),
 			jitter_ms: AtomicF32::new(0.0),
 			ping_ms: AtomicU32::new(NO_PING),
 		}
@@ -91,7 +95,17 @@ impl Counters {
 			packets_lost: self.lost.load(Ordering::Relaxed),
 			jitter_ms: self.jitter_ms.load(),
 			frames_denoised: self.denoised.load(Ordering::Relaxed),
+			suppressor: Some(Suppression::from_code(self.suppressor.load(Ordering::Relaxed)))
+				.filter(|suppressor| *suppressor != Suppression::Off),
 		}
+	}
+
+	pub fn denoised_by(&self, suppressor: Option<Suppression>) {
+		if suppressor.is_some() {
+			self.denoised.fetch_add(1, Ordering::Relaxed);
+		}
+		self.suppressor
+			.store(suppressor.unwrap_or(Suppression::Off).code(), Ordering::Relaxed);
 	}
 }
 
@@ -99,7 +113,7 @@ pub(crate) struct Shared {
 	pub muted: AtomicBool,
 	pub deafened: AtomicBool,
 	pub transmitting: AtomicBool,
-	pub noise_suppression: AtomicBool,
+	noise_suppression: AtomicU8,
 	input_mode: AtomicU8,
 	pub vad_threshold_db: AtomicF32,
 	pub input_volume: AtomicF32,
@@ -130,7 +144,7 @@ impl Shared {
 			muted: AtomicBool::new(false),
 			deafened: AtomicBool::new(false),
 			transmitting: AtomicBool::new(false),
-			noise_suppression: AtomicBool::new(false),
+			noise_suppression: AtomicU8::new(Suppression::default().code()),
 			input_mode: AtomicU8::new(InputMode::VoiceActivity as u8),
 			vad_threshold_db: AtomicF32::new(DEFAULT_VAD_THRESHOLD_DB),
 			input_volume: AtomicF32::new(1.0),
@@ -166,6 +180,15 @@ impl Shared {
 
 	pub fn set_input_mode(&self, mode: InputMode) {
 		self.input_mode.store(mode as u8, Ordering::Relaxed);
+	}
+
+	pub fn noise_suppression(&self) -> Suppression {
+		Suppression::from_code(self.noise_suppression.load(Ordering::Relaxed))
+	}
+
+	pub fn set_noise_suppression(&self, suppression: Suppression) {
+		self.noise_suppression
+			.store(suppression.code(), Ordering::Relaxed);
 	}
 
 	pub fn heard(&self, user_id: Snowflake, now: Instant) {

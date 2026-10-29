@@ -507,11 +507,25 @@ return {
 			title = "Voice Processing",
 			rows = {
 				{
+					kind = "radios",
 					key = "voice.noise_suppression",
 					id = "voice_noise_suppression",
 					title = "Noise Suppression",
-					note = "Filters steady background noise, like fans and keyboards, out of your microphone.",
-					keywords = "noise background rnnoise krisp filter",
+					note = "Removes background noise from your microphone before anyone hears it.",
+					keywords = "noise background krisp deepfilternet rnnoise filter fan keyboard",
+					options = {
+						{
+							label = "High Quality",
+							value = "high_quality",
+							note = "Filters out fans, typing, traffic and other noise around you. Uses more CPU.",
+						},
+						{
+							label = "Low CPU",
+							value = "low_cpu",
+							note = "Lighter filtering for steady noise, like fans, for older computers.",
+						},
+						{ label = "Off", value = "off", note = "Sends your microphone as it is." },
+					},
 				},
 				{
 					kind = "custom",

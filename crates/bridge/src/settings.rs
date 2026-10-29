@@ -3,7 +3,7 @@ use media::{Animations, Playback};
 use protocol::User;
 use serde_json::Value;
 use state::State;
-use store::{AnimationPlayback, Settings};
+use store::{AnimationPlayback, NoiseSuppression, Settings};
 
 use crate::dm_list::DmStatus;
 use crate::message::user_display;
@@ -238,7 +238,7 @@ impl SettingKey {
 			Self::VoicePushToTalkReleaseDelay => Value::from(settings.voice.push_to_talk_release_delay),
 			Self::VoiceAutoSensitivity => Value::from(settings.voice.auto_sensitivity),
 			Self::VoiceSensitivity => Value::from(settings.voice.sensitivity_db),
-			Self::VoiceNoiseSuppression => Value::from(settings.voice.noise_suppression),
+			Self::VoiceNoiseSuppression => Value::from(settings.voice.noise_suppression.name()),
 			Self::VoiceCamera => Value::from(settings.voice.camera_device.clone().unwrap_or_default()),
 			Self::PushToTalkKey => Value::from(settings.keybinds.push_to_talk.clone().unwrap_or_default()),
 		}
@@ -304,7 +304,10 @@ impl SettingKey {
 			Self::VoiceSensitivity => {
 				set_whole(&mut settings.voice.sensitivity_db, value, SENSITIVITY_MIN_DB, 0)
 			}
-			Self::VoiceNoiseSuppression => set_flag(&mut settings.voice.noise_suppression, value),
+			Self::VoiceNoiseSuppression => match value.as_str().and_then(NoiseSuppression::named) {
+				Some(choice) => replace(&mut settings.voice.noise_suppression, choice),
+				None => false,
+			},
 			Self::VoiceCamera => set_device(&mut settings.voice.camera_device, value),
 			Self::PushToTalkKey => match binding(value) {
 				Some(binding) => replace(&mut settings.keybinds.push_to_talk, binding),

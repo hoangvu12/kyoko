@@ -7,7 +7,7 @@ use super::{Calls, WIDE, last_call, recording_app, shows};
 use crate::ui::voice_settings::listen_for_side_buttons;
 
 const LEVEL: f64 = 0.6;
-const TALL: f32 = 1600.;
+const TALL: f32 = 2400.;
 
 fn voice_values(change: impl FnOnce(&mut store::Settings)) -> serde_json::Value {
 	let mut settings = store::Settings::default();
@@ -69,6 +69,9 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		"Push to Talk",
 		"Automatically determine input sensitivity",
 		"Noise Suppression",
+		"High Quality",
+		"Low CPU",
+		"Off",
 		"Echo Cancellation",
 		"Video Settings",
 		"Camera",
@@ -76,6 +79,18 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	] {
 		assert!(texts.iter().any(|text| text == shown), "{shown} is not shown");
 	}
+	let high_quality = app
+		.find("voice_noise_suppression_1")
+		.expect("the High Quality choice");
+	assert_eq!(
+		app.ui
+			.semantics
+			.borrow()
+			.get(high_quality)
+			.and_then(|semantic| semantic.checked),
+		Some(true),
+		"High Quality is chosen by default"
+	);
 	assert!(
 		app.find("voice_sensitivity").is_none(),
 		"automatic sensitivity hides the threshold"
@@ -145,7 +160,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	app.frames(2);
 	app.click("voice_input_mode_2");
 	app.click("voice_auto_sensitivity");
-	app.click("voice_noise_suppression");
+	app.click("voice_noise_suppression_2");
 	app.click("voice_echo_cancellation");
 	app.frames(2);
 	let written = setting_calls(&calls);
@@ -153,7 +168,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		json!({ "key": "voice.input_device", "value": "mic-2" }),
 		json!({ "key": "voice.push_to_talk", "value": true }),
 		json!({ "key": "voice.auto_sensitivity", "value": false }),
-		json!({ "key": "voice.noise_suppression", "value": true }),
+		json!({ "key": "voice.noise_suppression", "value": "low_cpu" }),
 		json!({ "key": "voice.camera_device", "value": "camera-1" }),
 	] {
 		assert!(written.contains(&wanted), "{wanted} was not written: {written:?}");

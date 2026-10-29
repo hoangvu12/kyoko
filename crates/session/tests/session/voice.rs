@@ -7,7 +7,7 @@ use protocol::{ChannelType, Opcode, Snowflake};
 use serde_json::{Value, json};
 use session::{CameraIo, Command, Trust, VoiceSetup};
 use state::{State, UserAudio, VoiceStatus};
-use store::VoiceSettings;
+use store::{NoiseSuppression, VoiceSettings};
 use voice::{AudioIo, FRAME_SAMPLES, SILENCE_FRAME};
 
 use crate::harness::{Options, Running};
@@ -78,6 +78,10 @@ pub(crate) async fn start(name: &'static str) -> Voice {
 		(named("Lounge"), named("Gaming"))
 	};
 	manual_audio(&running);
+	running
+		.store()
+		.update_settings(|settings| settings.voice.noise_suppression = NoiseSuppression::Off)
+		.expect("the settings save");
 	Voice {
 		running,
 		guild_id,

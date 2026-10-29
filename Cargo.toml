@@ -120,7 +120,13 @@ aes-gcm = { version = "0.11", features = ["hazmat"] }
 chacha20poly1305 = "0.11"
 opus = "0.4"
 rubato = "5.0"
-nnnoiseless = { version = "0.5", default-features = false }
+denoise = { path = "crates/denoise", package = "kyoko-denoise" }
+tract-onnx = { version = "0.23.9", default-features = false }
+tract-pulse = "0.23.9"
+tract-nnef = "0.23.9"
+tract-pulse-opl = "0.23.9"
+realfft = "3.5"
+cc = "1.2"
 openh264 = { version = "0.9", default-features = false, features = ["source"] }
 openmls = "0.9"
 openmls_traits = "0.6"

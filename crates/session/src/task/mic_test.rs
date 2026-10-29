@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
 use voice::{AudioIo, MicCheck, MicCheckOptions, VoiceError};
 
-use super::voice_link::volume;
+use super::voice_link::{suppression, volume};
 use super::{Core, Internal};
 
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
@@ -55,7 +55,7 @@ impl Core {
 		let options = MicCheckOptions {
 			audio,
 			input_volume: volume(settings.input_volume),
-			noise_suppression: settings.noise_suppression,
+			noise_suppression: suppression(&settings),
 		};
 		self.runtime.spawn_blocking(move || {
 			let levels = internal.clone();
@@ -89,7 +89,7 @@ impl Core {
 	pub(super) fn mic_test_follow(&mut self, settings: &VoiceSettings) {
 		if let Some(check) = &self.mic_test.check {
 			check.set_input_volume(volume(settings.input_volume));
-			check.set_noise_suppression(settings.noise_suppression);
+			check.set_noise_suppression(suppression(settings));
 		}
 		let moved = self
 			.mic_test

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use denoise::NoiseSuppressor;
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::{MissedTickBehavior, interval};
@@ -11,7 +12,6 @@ use tracing::{debug, warn};
 
 use crate::chain::{CaptureChain, PlaybackChain};
 use crate::codec::{DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, VoiceEncoder};
-use crate::denoise::Denoiser;
 use crate::gate::{VoiceGate, decayed_db, meter_level, rms, to_db};
 use crate::jitter::Push;
 use crate::mixer::Mixer;
@@ -47,7 +47,7 @@ pub(crate) struct Media {
 	capture: CaptureChain,
 	playback: PlaybackChain,
 	encoder: VoiceEncoder,
-	denoiser: Denoiser,
+	suppressor: NoiseSuppressor,
 	gate: VoiceGate,
 	mixer: Mixer,
 	streams: HashMap<u32, RemoteStream>,
@@ -84,7 +84,7 @@ impl Media {
 			audio_io,
 			capture: CaptureChain::default(),
 			encoder: VoiceEncoder::new()?,
-			denoiser: Denoiser::new(),
+			suppressor: NoiseSuppressor::new(),
 			gate: VoiceGate::default(),
 			mixer: Mixer::new(STEREO_FRAME_SAMPLES),
 			streams: HashMap::new(),
@@ -180,6 +180,8 @@ impl Media {
 	}
 
 	fn send_frame(&mut self, frame: &mut [f32]) {
+		let suppressor = self.suppressor.process(self.shared.noise_suppression(), frame);
+		self.shared.counters.denoised_by(suppressor);
 		let gain = self.shared.input_volume.load();
 		for sample in frame.iter_mut() {
 			*sample *= gain;
@@ -189,10 +191,6 @@ impl Media {
 		self.shared
 			.input_level
 			.store(input_level.max(previous * METER_DECAY));
-		if self.shared.noise_suppression.load(Ordering::Relaxed) {
-			self.denoiser.process(frame);
-			self.shared.counters.denoised.fetch_add(1, Ordering::Relaxed);
-		}
 		let level_db = to_db(rms(frame));
 		self.shared
 			.input_db
