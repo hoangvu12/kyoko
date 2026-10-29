@@ -136,6 +136,8 @@ pub enum Screen {
 	PushToTalkSettings,
 	VoiceCamera,
 	SettingsCamera,
+	GoLive,
+	GoLivePreview,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -343,6 +345,8 @@ impl Screen {
 			"voice-stream-viewer" => Some(Screen::VoiceStreamViewer),
 			"voice-camera" => Some(Screen::VoiceCamera),
 			"settings-voice-camera" => Some(Screen::SettingsCamera),
+			"voice-go-live" => Some(Screen::GoLive),
+			"voice-go-live-preview" => Some(Screen::GoLivePreview),
 			"channel-sidebar-voice-hover" => Some(Screen::VoiceRowHover),
 			"settings-voice-push-to-talk" => Some(Screen::PushToTalkSettings),
 			other => settings_page(other)
@@ -429,7 +433,9 @@ impl Screen {
 			| Screen::VoiceStreamViewer
 			| Screen::VoiceRowHover
 			| Screen::VoiceCamera
-			| Screen::SettingsCamera => Some(Opening::First),
+			| Screen::SettingsCamera
+			| Screen::GoLive
+			| Screen::GoLivePreview => Some(Opening::First),
 			Screen::LoginTos
 			| Screen::LoginToken
 			| Screen::LoginQrScanned

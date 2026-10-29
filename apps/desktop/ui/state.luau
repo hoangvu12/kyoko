@@ -795,6 +795,20 @@ export type AudioDevices = { inputs: { AudioDevice }, outputs: { AudioDevice } }
 
 export type MicTest = { running: boolean, level: number }
 
+export type ShareSource = { id: string, kind: string, name: string, size: string }
+
+export type ShareSources = { open: boolean, loading: boolean, items: { ShareSource } }
+
+export type ScreenPreview = {
+	id: string,
+	name: string,
+	resolution: string,
+	fps: number,
+	width: number,
+	height: number,
+	running: boolean,
+}
+
 M.voice = {
 	panel = ui.shared("voice.panel", {
 		open = false,
@@ -823,6 +837,16 @@ M.voice = {
 	video_available = ui.shared("voice.video_available", true),
 	cameras = ui.shared("voice.cameras", {} :: { Camera }),
 	camera_preview = ui.shared("voice.camera_preview", false),
+	screens = ui.shared("voice.screens", { open = false, loading = false, items = {} } :: ShareSources),
+	screen_preview = ui.shared("voice.screen_preview", {
+		id = "",
+		name = "",
+		resolution = "720",
+		fps = 30,
+		width = 0,
+		height = 0,
+		running = false,
+	} :: ScreenPreview),
 }
 
 export type SideButton = { binding: string, serial: number }

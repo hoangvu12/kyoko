@@ -46,7 +46,8 @@ fn the_call_view_shows_the_tiles_and_its_controls_and_menu_reach_the_host() {
 	assert!(app.find("call_view").is_some(), "the call view takes the page");
 	app.click("call_screen");
 	app.frames(2);
-	assert!(calls.borrow().is_empty(), "screen share waits for its ticket");
+	assert_eq!(last_call(&calls, "voice.go_live"), Some(json!(true)));
+	calls.borrow_mut().clear();
 	app.click("call_camera");
 	app.frames(2);
 	assert_eq!(last_call(&calls, "voice.toggle_camera"), Some(json!(true)));
@@ -629,4 +630,233 @@ fn your_camera_shows_on_your_own_tile_and_the_button_turns_it_off() {
 		last_call(&calls, "voice.toggle_camera").is_none(),
 		"without Media Foundation the camera button does nothing"
 	);
+}
+
+pub(super) fn share_sources() -> serde_json::Value {
+	json!({
+		"open": true,
+		"loading": false,
+		"items": [
+			{ "id": "screen-1", "kind": "screen", "name": "Screen 1", "size": "1920x1080" },
+			{ "id": "window-2", "kind": "window", "name": "Mock Browser", "size": "1280x800" },
+			{ "id": "window-3", "kind": "window", "name": "Mock Notes", "size": "960x720" },
+		],
+	})
+}
+
+fn screen_preview(id: &str, name: &str, resolution: &str, fps: u32, running: bool) -> serde_json::Value {
+	let (width, height) = if running { (1280, 720) } else { (0, 0) };
+	json!({
+		"id": id, "name": name, "resolution": resolution, "fps": fps,
+		"width": width, "height": height, "running": running,
+	})
+}
+
+fn closed_picker() -> serde_json::Value {
+	json!({ "open": false, "loading": false, "items": [] })
+}
+
+#[test]
+fn the_go_live_picker_lists_screens_and_windows_previews_one_and_closes() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(&mut app, "the call view", "grace", &call_values());
+	assert!(app.find("go_live_close").is_none(), "closed until asked for");
+
+	app.click("call_screen");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.go_live"), Some(json!(true)));
+	shows(
+		&mut app,
+		"the picker while it looks",
+		"Looking for things to share...",
+		&[(
+			"voice.screens",
+			json!({ "open": true, "loading": true, "items": [] }),
+		)],
+	);
+	shows(
+		&mut app,
+		"the picker's applications",
+		"Mock Browser",
+		&[("voice.screens", share_sources())],
+	);
+	for shown in ["Screen Share", "Applications", "Screens", "Mock Notes"] {
+		assert!(
+			app.texts().iter().any(|text| text == shown),
+			"{shown} is not shown"
+		);
+	}
+	assert!(
+		app.find("go_live_thumb_window-2").is_some(),
+		"a window shows its thumbnail"
+	);
+	assert!(
+		app.find("go_live_source_screen-1").is_none(),
+		"screens wait for their tab"
+	);
+	let tile = app.bounds("go_live_source_window-2");
+	let thumbnail = app.bounds("go_live_thumb_window-2");
+	assert!(tile.width > 0., "the tile is laid out");
+	assert!(
+		(thumbnail.height - thumbnail.width * 9. / 16.).abs() < 1.,
+		"thumbnails are 16:9"
+	);
+
+	app.click("go_live_tab_screen");
+	app.frames(2);
+	assert!(
+		app.find("go_live_source_screen-1").is_some(),
+		"the Screens tab lists the screens"
+	);
+	assert!(app.find("go_live_source_window-2").is_none());
+
+	app.click("go_live_source_screen-1");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.screen_preview"),
+		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 30 }))
+	);
+	shows(
+		&mut app,
+		"a preview starting",
+		"Starting preview...",
+		&[(
+			"voice.screen_preview",
+			screen_preview("screen-1", "Screen 1", "720", 30, false),
+		)],
+	);
+	shows(
+		&mut app,
+		"the preview",
+		"1280x720 at 30 FPS",
+		&[(
+			"voice.screen_preview",
+			screen_preview("screen-1", "Screen 1", "720", 30, true),
+		)],
+	);
+	for shown in [
+		"Stream Quality",
+		"Resolution",
+		"Frame Rate",
+		"720p",
+		"1080p",
+		"Source",
+		"60 FPS",
+		"Go Live",
+	] {
+		assert!(
+			app.texts().iter().any(|text| text == shown),
+			"{shown} is not shown"
+		);
+	}
+	assert!(
+		app.find("go_live_preview_image").is_some(),
+		"the preview shows the screen"
+	);
+	let preview = app.bounds("go_live_preview");
+	assert!(
+		(preview.height - preview.width * 9. / 16.).abs() < 1.,
+		"the preview is 16:9"
+	);
+
+	app.click("go_live_resolution_1080");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.screen_preview"),
+		Some(json!({ "id": "screen-1", "resolution": "1080", "fps": 30 }))
+	);
+	app.click("go_live_fps_60");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.screen_preview"),
+		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 60 }))
+	);
+	calls.borrow_mut().clear();
+	app.click("go_live_start");
+	app.frames(2);
+	assert!(
+		last_call(&calls, "voice.screen_preview").is_none() && last_call(&calls, "voice.go_live").is_none(),
+		"Go Live waits for going live"
+	);
+
+	app.click("go_live_change");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.screen_preview"), Some(json!(false)));
+	shows(
+		&mut app,
+		"the list after Change",
+		"Screen 1",
+		&[("voice.screen_preview", screen_preview("", "", "720", 30, false))],
+	);
+	assert!(app.find("go_live_preview").is_none());
+
+	app.click("go_live_source_screen-1");
+	app.frames(2);
+	shows(
+		&mut app,
+		"a second preview",
+		"1280x720 at 30 FPS",
+		&[(
+			"voice.screen_preview",
+			screen_preview("screen-1", "Screen 1", "720", 30, true),
+		)],
+	);
+	shows(
+		&mut app,
+		"the list after the shared screen closed",
+		"Screen 1",
+		&[("voice.screen_preview", screen_preview("", "", "720", 30, false))],
+	);
+	assert!(
+		app.find("go_live_preview").is_none(),
+		"a closed source goes back to the list"
+	);
+
+	app.key(zgx::input::Key::Escape);
+	app.frames(3);
+	assert_eq!(
+		last_call(&calls, "voice.go_live"),
+		Some(json!(false)),
+		"Escape closes the picker"
+	);
+	shows(
+		&mut app,
+		"the call view again",
+		"grace",
+		&[("voice.screens", closed_picker())],
+	);
+	assert!(app.find("go_live_close").is_none(), "the picker is closed");
+
+	calls.borrow_mut().clear();
+	app.click("call_screen");
+	app.frames(2);
+	shows(
+		&mut app,
+		"the picker again",
+		"Mock Browser",
+		&[("voice.screens", share_sources())],
+	);
+	app.click("go_live_close");
+	app.frames(3);
+	assert_eq!(last_call(&calls, "voice.go_live"), Some(json!(false)));
+	shows(
+		&mut app,
+		"the call view after Close",
+		"grace",
+		&[("voice.screens", closed_picker())],
+	);
+	app.click("call_screen");
+	app.frames(2);
+	shows(
+		&mut app,
+		"the picker once more",
+		"Mock Browser",
+		&[("voice.screens", share_sources())],
+	);
+	app.click("go_live_cancel");
+	app.frames(3);
+	assert_eq!(last_call(&calls, "voice.go_live"), Some(json!(false)));
 }

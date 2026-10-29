@@ -4,6 +4,7 @@ local actions = require("../actions")
 local icon = require("@components/icon")
 local icon_button = require("@components/icon_button")
 local dialog = require("../settings/dialog")
+local go_live_picker = require("./go_live_picker")
 
 local TILE_RATIO = 9 / 16
 local AVATAR_SHARE = 0.5
@@ -979,7 +980,17 @@ local function bottom_bar()
 				end
 			end,
 		},
-		control { id = "call_screen", name = "screen_share", tooltip = "Share Your Screen", disabled = true },
+		control {
+			id = "call_screen",
+			name = "screen_share",
+			tooltip = "Share Your Screen",
+			lit = function()
+				return state.voice.screens:get().open
+			end,
+			on_click = function()
+				actions.set_go_live(true)
+			end,
+		},
 		control {
 			id = "call_mute",
 			name = function()
@@ -1029,5 +1040,6 @@ return function()
 		header(),
 		stage {},
 		bottom_bar(),
+		go_live_picker {},
 	}
 end

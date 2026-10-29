@@ -581,4 +581,16 @@ function M.set_camera_preview(running: boolean)
 	ui.invoke("voice.camera_preview", running)
 end
 
+function M.set_go_live(open: boolean)
+	ui.invoke("voice.go_live", open)
+end
+
+function M.preview_screen(id: string, resolution: string, fps: number)
+	ui.invoke("voice.screen_preview", { id = id, resolution = resolution, fps = fps })
+end
+
+function M.stop_screen_preview()
+	ui.invoke("voice.screen_preview", false)
+end
+
 return M

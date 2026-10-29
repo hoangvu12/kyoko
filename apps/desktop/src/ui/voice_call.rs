@@ -198,6 +198,9 @@ impl Link {
 			self.call.set_open(false);
 		}
 		let open = self.call.open() && call.is_some();
+		if !open {
+			self.close_go_live();
+		}
 		let next = (open, call);
 		if self.call.published.borrow().as_ref() != Some(&next) {
 			let icons = Icons {

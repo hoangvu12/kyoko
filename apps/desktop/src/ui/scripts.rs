@@ -265,6 +265,21 @@ fn the_interface_loads_and_builds_every_screen() {
 	shows(&mut app, "the call view", "grace", &voice::call_values());
 	shows(
 		&mut app,
+		"the go live picker",
+		"Screen Share",
+		&[("voice.screens", voice::share_sources())],
+	);
+	shows(
+		&mut app,
+		"the call view after the picker",
+		"grace",
+		&[(
+			"voice.screens",
+			json!({ "open": false, "loading": false, "items": [] }),
+		)],
+	);
+	shows(
+		&mut app,
 		"the channel view after the call",
 		"general",
 		&[("voice.call", voice::closed_call())],

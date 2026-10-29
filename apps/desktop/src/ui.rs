@@ -11,6 +11,7 @@ mod display;
 mod expression_shots;
 mod expressions;
 mod friends;
+mod go_live;
 mod hidden;
 mod home;
 mod inbox;
@@ -229,6 +230,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_cameras());
 			cx.tasks.spawn(link.clone().follow_camera_preview());
 			cx.tasks.spawn(link.clone().follow_video());
+			cx.tasks.spawn(link.clone().follow_go_live());
 			if let Some(capture) = capture.clone() {
 				cx.tasks.spawn(link.clone().signal_when_settled(capture));
 			}
@@ -530,6 +532,7 @@ pub(crate) struct Link {
 	call: voice_call::CallView,
 	voice_settings: voice_settings::VoiceSettingsView,
 	video: video_surface::VideoSurface,
+	go_live: go_live::GoLiveView,
 }
 
 impl Link {
@@ -686,6 +689,7 @@ impl Link {
 			call,
 			voice_settings: voice_settings::VoiceSettingsView::new(host),
 			video: video_surface::VideoSurface::new(host),
+			go_live: go_live::GoLiveView::new(host),
 		});
 		Link::install_window_actions(host, &link);
 		rail::install_actions(host, &link);
@@ -716,6 +720,7 @@ impl Link {
 		Link::install_call(host, &link);
 		Link::install_voice_settings(host, &link);
 		Link::install_video(host, &link);
+		Link::install_go_live(host, &link);
 		let actions = Rc::downgrade(&link);
 		host.action("rail.select_guild", move |argument| {
 			if let (Some(link), Some(guild_id)) = (actions.upgrade(), snowflake(&argument)) {
@@ -971,6 +976,8 @@ impl Link {
 			capture::Screen::VoiceStreamViewer => self.drive_voice_stream_viewer().await,
 			capture::Screen::VoiceCamera => self.drive_voice_camera().await,
 			capture::Screen::SettingsCamera => self.drive_settings_camera().await,
+			capture::Screen::GoLive => self.drive_go_live().await,
+			capture::Screen::GoLivePreview => self.drive_go_live_preview().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
@@ -1528,6 +1535,7 @@ impl Link {
 		self.call.close();
 		self.video.close();
 		self.voice_settings.close();
+		self.go_live.close();
 		let session = self.flow.borrow_mut().shutdown();
 		if let Some(session) = session {
 			session.shutdown();
