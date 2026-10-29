@@ -88,6 +88,10 @@ impl Calls {
 		self.calls.lock().get(&channel_id).map(|live| live.call.clone())
 	}
 
+	pub fn creates(&self) -> Vec<Value> {
+		self.calls.lock().values().map(Live::create_event).collect()
+	}
+
 	fn channel_of(&self, user_id: u64) -> Option<u64> {
 		self.calls
 			.lock()
@@ -257,6 +261,29 @@ impl Shared {
 				shared.ring_me(channel_id, caller);
 			}
 		});
+	}
+
+	pub fn seed_first_ring(&self) {
+		if let Some((channel_id, caller)) = self.first_dm_caller() {
+			self.seed_ring(channel_id, caller);
+		}
+	}
+
+	fn seed_ring(&self, channel_id: u64, caller: u64) {
+		let message_id = self.post_call_message(channel_id, caller);
+		let state = call_voice_state(Some(channel_id), caller, &scripted_session(caller));
+		let live = Live {
+			call: MockCall {
+				channel_id,
+				message_id,
+				ringing: vec![CURRENT_USER_ID],
+				members: vec![caller],
+				participants: vec![caller],
+				started: Utc::now(),
+			},
+			states: BTreeMap::from([(caller, state)]),
+		};
+		self.calls.calls.lock().insert(channel_id, live);
 	}
 
 	pub fn call_join_as(&self, channel_id: u64, user_id: u64) {

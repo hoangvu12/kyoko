@@ -13,7 +13,7 @@
 
 ## Capabilities
 
-IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the named bits in `protocol::capability`. A bit is advertised only when kyoko fully handles what it changes. The value is 509 until the real-traffic spike (ticket 04) compares it with the web client; change it there and nowhere else.
+IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the named bits in `protocol::capability`. A bit is advertised only when kyoko fully handles what it changes. The value was 509 after the real-traffic spike (ticket 04); v1 108 added `AUTO_CALL_CONNECT` (bit 12), so DM and group calls that were going before the connection arrive as CALL_CREATE after READY (`docs/voice.md`, "DM and group calls"), which makes it 4605. Bit 12 comes from docs.discord.food's example value, not from a capture of the web client; the user accepted that on 2026-10-29, and the Chrome 157 bump (ticket 74) compares the whole value with the web client. Change it only together with handling what a bit changes.
 
 | Bit | Name | Advertised | Why |
 |---|---|---|---|
@@ -29,7 +29,7 @@ IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the 
 | 9 | USER_SETTINGS_PROTO | no | READY drops the JSON `user_settings`. Kyoko decodes only guild folders from the protobuf. |
 | 10 | CLIENT_STATE_V2 | no | Undocumented. |
 | 11 | PASSIVE_GUILD_UPDATE | no | Replaces CHANNEL_UNREAD_UPDATE for unsubscribed guilds with PASSIVE_UPDATE_V1, which kyoko doesn't parse. |
-| 12 | AUTO_CALL_CONNECT | no | Sends CALL_CREATE for existing calls without op 13. Kyoko has no calls. |
+| 12 | AUTO_CALL_CONNECT | yes | Sends CALL_CREATE for existing calls without op 13. Kept in `State::call` (v1 108). |
 | 13 | DEBOUNCE_MESSAGE_REACTIONS | no | Batches reactions into MESSAGE_REACTION_ADD_MANY, which kyoko doesn't parse. |
 | 14 | PASSIVE_GUILD_UPDATE_V2 | no | Same as bit 11, with PASSIVE_UPDATE_V2. |
 | 15 | CHANNEL_OBFUSCATION | no | Undocumented. |

@@ -9,7 +9,7 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use protocol::capability::{AUTH_TOKEN_REFRESH, has};
+use protocol::capability::{AUTH_TOKEN_REFRESH, AUTO_CALL_CONNECT, has};
 use protocol::{GatewayPayload, Opcode};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -310,6 +310,11 @@ impl Connection {
 		hub.dispatch_to(&session_id, "READY_SUPPLEMENTAL", &supplemental);
 		if self.shared.config.ring && !alt {
 			self.shared.ring_once_after_ready();
+		}
+		if has(capabilities, AUTO_CALL_CONNECT) {
+			for call in self.shared.calls.creates() {
+				hub.dispatch_to(&session_id, "CALL_CREATE", &call);
+			}
 		}
 		self.session = Some(session_id);
 		true

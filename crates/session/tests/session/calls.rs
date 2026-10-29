@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use session::{Command, VoiceSetup};
 use state::{State, VoiceStatus};
 
-use crate::harness::Running;
+use crate::harness::{Options, Running};
 use crate::voice::{self, SETTLE, Voice, manual_setup};
 
 const RING_TIMEOUT: Duration = Duration::from_millis(600);
@@ -360,4 +360,18 @@ async fn accepting_a_group_call_with_video_joins_without_ringing_and_turns_the_c
 		"accepting a call never rings anyone"
 	);
 	voice.running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_call_ringing_before_you_connect_arrives_after_ready() {
+	let running = Running::start_with(Options::new("calls-auto-connect").prepare(|mock| {
+		mock.seed_first_ring();
+	}))
+	.await;
+	running.connected().await;
+	let dm = running.fixtures().private_channel_ids[0];
+	running
+		.until("the earlier call to ring", |state| incoming(state, Snowflake(dm)))
+		.await;
+	running.stop().await;
 }

@@ -194,6 +194,10 @@ impl Control {
 		self.shared.ring_me(channel_id, caller)
 	}
 
+	pub fn seed_first_ring(&self) {
+		self.shared.seed_first_ring();
+	}
+
 	pub fn call_join_as(&self, channel_id: u64, user_id: u64) {
 		self.shared.call_join_as(channel_id, user_id);
 	}
