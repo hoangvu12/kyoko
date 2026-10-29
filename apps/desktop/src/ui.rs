@@ -8,6 +8,7 @@ mod connection;
 #[cfg(test)]
 mod cursors;
 mod display;
+mod dm_call;
 mod expression_shots;
 mod expressions;
 mod friends;
@@ -531,6 +532,7 @@ pub(crate) struct Link {
 	inbox_popout: Rc<crate::inbox::InboxLayer>,
 	voice: voice_panel::VoicePanelView,
 	call: voice_call::CallView,
+	dm_call: dm_call::DmCallView,
 	voice_settings: voice_settings::VoiceSettingsView,
 	video: video_surface::VideoSurface,
 	go_live: go_live::GoLiveView,
@@ -608,6 +610,7 @@ impl Link {
 		let channel_settings = channel_settings::ChannelSettingsView::new(host, &window.runtime);
 		let inbox_popout = crate::inbox::InboxLayer::new(&window.runtime, timeline_view.pictures());
 		let call = voice_call::CallView::new(host, &window.runtime);
+		let dm_call = dm_call::DmCallView::new(host, images.mock_origin.is_some());
 		let link = Rc::new(Link {
 			window,
 			host: host.clone(),
@@ -688,6 +691,7 @@ impl Link {
 			inbox_popout,
 			voice: voice_panel::VoicePanelView::new(host),
 			call,
+			dm_call,
 			voice_settings: voice_settings::VoiceSettingsView::new(host),
 			video: video_surface::VideoSurface::new(host),
 			go_live: go_live::GoLiveView::new(host),
@@ -719,6 +723,7 @@ impl Link {
 		Link::install_inbox(host, &link);
 		Link::install_voice(host, &link);
 		Link::install_call(host, &link);
+		Link::install_dm_call(host, &link);
 		Link::install_voice_settings(host, &link);
 		Link::install_video(host, &link);
 		Link::install_go_live(host, &link);
@@ -981,6 +986,8 @@ impl Link {
 			capture::Screen::GoLivePreview => self.drive_go_live_preview().await,
 			capture::Screen::GoingLive => self.drive_going_live().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
+			capture::Screen::IncomingCall => self.drive_incoming_call().await,
+			capture::Screen::DmCall => self.drive_dm_call().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled
 			| capture::Screen::MemberNotes => self.until_members(&capture).await,
@@ -1526,6 +1533,7 @@ impl Link {
 		names.extend(self.login_images());
 		names.extend(self.inbox_images());
 		names.extend(self.call_images());
+		names.extend(self.dm_call_images());
 		names.extend(
 			self.timeline_view
 				.visible_images()

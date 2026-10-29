@@ -100,6 +100,7 @@ export type DmRow = {
 	members: number,
 	unread: boolean,
 	mentions: number,
+	in_call: boolean?,
 }
 export type ConnectionBanner = { shown: boolean, state: string, text: string, tone: string, retry: boolean }
 export type FriendRow = {
@@ -768,6 +769,7 @@ export type CallTile = {
 	live: boolean,
 	volume: number,
 	local_muted: boolean,
+	ringing: boolean?,
 	stream: boolean,
 	stream_key: string,
 	watching: boolean,
@@ -796,6 +798,12 @@ export type Camera = { id: string, name: string }
 export type AudioDevices = { inputs: { AudioDevice }, outputs: { AudioDevice } }
 
 export type MicTest = { running: boolean, level: number }
+
+export type IncomingCall = { open: boolean, channel_id: string, name: string, avatar: string, group: boolean }
+
+export type CallPerson = { id: string, name: string, avatar: string, ringing: boolean }
+
+export type DmCall = { shown: boolean, channel_id: string, joined: boolean, name: string, people: { CallPerson } }
 
 export type ShareSource = { id: string, kind: string, name: string, size: string }
 
@@ -850,6 +858,20 @@ M.voice = {
 		height = 0,
 		running = false,
 	} :: ScreenPreview),
+	incoming = ui.shared("voice.incoming", {
+		open = false,
+		channel_id = "",
+		name = "",
+		avatar = "",
+		group = false,
+	} :: IncomingCall),
+	dm_call = ui.shared("voice.dm_call", {
+		shown = false,
+		channel_id = "",
+		joined = false,
+		name = "",
+		people = {},
+	} :: DmCall),
 }
 
 export type SideButton = { binding: string, serial: number }

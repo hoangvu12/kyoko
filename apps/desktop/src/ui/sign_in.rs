@@ -773,6 +773,7 @@ impl Link {
 		self.dm_panel.reset();
 		self.voice.reset();
 		self.call.reset();
+		self.dm_call.reset();
 		self.members.reset();
 		self.member_avatars.borrow_mut().clear();
 		for value in [

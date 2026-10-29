@@ -527,6 +527,8 @@ fn mockcord_flags(screen: &str) -> &'static [&'static str] {
 		"apps-launcher" => &["--more-apps"],
 		"voice-video" => &["--cameras", "1:15"],
 		"voice-stream" | "voice-stream-watching" | "voice-stream-viewer" => &["--streams", "1"],
+		"dm-call-incoming" => &["--ring"],
+		"dm-call" => &["--answer-calls"],
 		_ => &[],
 	}
 }

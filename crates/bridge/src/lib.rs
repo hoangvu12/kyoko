@@ -20,6 +20,7 @@ mod hidden;
 mod images;
 mod inbox;
 mod inbox_popout;
+mod incoming_call;
 mod lightbox;
 mod login_column;
 mod member_list;
@@ -127,6 +128,7 @@ pub use inbox_popout::{
 	ForYouEntry, InboxTab, MentionCard, MentionGroup, Place, UnreadGroup, UnreadRow, for_you, mention_groups,
 	unread_groups,
 };
+pub use incoming_call::{IncomingCall, incoming_call};
 pub use lightbox::{
 	LIGHTBOX_SHARE, LightboxImage, LightboxSource, VIEWER_MAX_ZOOM, VIEWER_ZOOM_STEP, ViewerAuthor, Viewing,
 	Zoom, lightbox_box, lightbox_request, message_images, viewer_file_name,
@@ -140,8 +142,9 @@ pub use member_list::{
 pub use message::{
 	ATTACHMENT_BOX, Body, EMBED_MEDIA_BOX, EMBED_THUMBNAIL, EmbedText, LinkAction, Names, Quote,
 	ReplyPreview, SNIPPET_LENGTH, STICKER_SIDE, Span, SystemIcon, SystemLine, UNKNOWN_CHANNEL, UNKNOWN_ROLE,
-	UNKNOWN_USER, file_size, fit_box, guild_nav_label, link_action, percent, person_name, reaction_key,
-	snippet, snippet_spans, system_line, timestamp_in, timestamp_text, user_display,
+	UNKNOWN_USER, call_duration, call_line, file_size, fit_box, guild_nav_label, link_action, percent,
+	person_name, reaction_key, snippet, snippet_spans, system_line, timestamp_in, timestamp_text,
+	user_display,
 };
 pub use mosaic::{
 	MOSAIC_GAP, MOSAIC_WIDTH, Mosaic, Shape as MosaicShape, Tile, WIDE_PAIR_RATIO, cover_box, image_mosaic,
@@ -212,7 +215,8 @@ pub use video::{
 	VideoState, is_playable_embed,
 };
 pub use voice_call::{
-	CallStream, CallTile, Pace, SPEAKING_PACE, SpeakingPace, VoiceCall, voice_call, voice_speaking,
+	CallStream, CallTile, Pace, SPEAKING_PACE, SpeakingPace, VoiceCall, private_name, voice_call,
+	voice_speaking,
 };
 pub use voice_panel::{VoiceControls, VoicePanel, voice_controls, voice_panel};
 pub use web_login::{

@@ -133,6 +133,8 @@ pub enum Screen {
 	VoiceStreamWatching,
 	VoiceStreamViewer,
 	VoiceRowHover,
+	IncomingCall,
+	DmCall,
 	PushToTalkSettings,
 	VoiceCamera,
 	SettingsCamera,
@@ -345,6 +347,8 @@ impl Screen {
 			"voice-stream" => Some(Screen::VoiceStream),
 			"voice-stream-watching" => Some(Screen::VoiceStreamWatching),
 			"voice-stream-viewer" => Some(Screen::VoiceStreamViewer),
+			"dm-call-incoming" => Some(Screen::IncomingCall),
+			"dm-call" => Some(Screen::DmCall),
 			"voice-camera" => Some(Screen::VoiceCamera),
 			"settings-voice-camera" => Some(Screen::SettingsCamera),
 			"voice-go-live" => Some(Screen::GoLive),
@@ -437,6 +441,8 @@ impl Screen {
 			| Screen::VoiceStreamWatching
 			| Screen::VoiceStreamViewer
 			| Screen::VoiceRowHover
+			| Screen::IncomingCall
+			| Screen::DmCall
 			| Screen::VoiceCamera
 			| Screen::SettingsCamera
 			| Screen::GoLive

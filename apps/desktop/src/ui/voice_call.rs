@@ -156,6 +156,10 @@ impl Link {
 		let Some((guild_id, channel_id)) = place else {
 			return;
 		};
+		if guild_id.is_none() {
+			self.open(None, channel_id);
+			return;
+		}
 		let selected = self.sidebar.sidebar().selected();
 		if guild_id.is_some() && selected != guild_id {
 			self.open(guild_id, channel_id);
@@ -434,6 +438,7 @@ fn tile_value(tile: &CallTile, avatar: Option<&str>) -> Value {
 		("live", tile.live.into()),
 		("volume", f64::from(tile.volume).into()),
 		("local_muted", tile.local_muted.into()),
+		("ringing", tile.ringing.into()),
 		("stream", false.into()),
 		("stream_key", "".into()),
 		("watching", false.into()),
@@ -455,6 +460,7 @@ fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
 		("live", true.into()),
 		("volume", f64::from(stream.volume).into()),
 		("local_muted", false.into()),
+		("ringing", false.into()),
 		("stream", true.into()),
 		("stream_key", stream.stream_key.as_str().into()),
 		("watching", stream.watching.into()),
@@ -462,7 +468,7 @@ fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
 	])
 }
 
-fn capture_tone(index: usize) -> Vec<i16> {
+pub(super) fn capture_tone(index: usize) -> Vec<i16> {
 	(0..CAPTURE_FRAME_SAMPLES)
 		.map(|sample| {
 			let at = (index * CAPTURE_FRAME_SAMPLES + sample) as f32 / CAPTURE_RATE;

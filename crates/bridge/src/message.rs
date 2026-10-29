@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::time::Duration;
 
 use chrono::{DateTime, Local, TimeZone, Utc};
 use markdown::{Document, GuildNavKind, Mentions, Node, TimestampStyle};
@@ -434,6 +435,7 @@ pub enum SystemIcon {
 	Boost,
 	Leave,
 	Call,
+	MissedCall,
 	Rename,
 	Picture,
 	Poll,
@@ -485,6 +487,51 @@ pub fn system_line(kind: MessageType, name: &str, target: &str, content: &str) -
 		_ => (SystemIcon::Other, format!("{name} sent a system message.")),
 	};
 	SystemLine { icon, text }
+}
+
+pub fn call_line(name: &str, participated: bool, lasted: Option<Duration>) -> SystemLine {
+	match (participated, lasted) {
+		(true, Some(lasted)) => SystemLine {
+			icon: SystemIcon::Call,
+			text: format!("{name} started a call that lasted {}.", call_duration(lasted)),
+		},
+		(false, Some(lasted)) => SystemLine {
+			icon: SystemIcon::MissedCall,
+			text: format!(
+				"You missed a call from {name} that lasted {}.",
+				call_duration(lasted)
+			),
+		},
+		(_, None) => SystemLine {
+			icon: SystemIcon::Call,
+			text: format!("{name} started a call."),
+		},
+	}
+}
+
+pub fn call_duration(lasted: Duration) -> String {
+	const MINUTE: f64 = 60.;
+	const HOUR: f64 = 60. * MINUTE;
+	const DAY: f64 = 24. * HOUR;
+	let seconds = lasted.as_secs_f64();
+	let minutes = (seconds / MINUTE).round();
+	let hours = (seconds / HOUR).round();
+	let days = (seconds / DAY).round();
+	if seconds < 45. {
+		"a few seconds".to_owned()
+	} else if seconds < 90. {
+		"a minute".to_owned()
+	} else if minutes < 45. {
+		format!("{minutes} minutes")
+	} else if minutes < 90. {
+		"an hour".to_owned()
+	} else if hours < 22. {
+		format!("{hours} hours")
+	} else if hours < 36. {
+		"a day".to_owned()
+	} else {
+		format!("{days} days")
+	}
 }
 
 pub fn percent(share: f32) -> u32 {

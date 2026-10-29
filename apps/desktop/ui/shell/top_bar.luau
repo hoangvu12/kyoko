@@ -80,6 +80,15 @@ local function single_open(): boolean
 	return row.id ~= "" and not row.group
 end
 
+local function dm_open(): boolean
+	return open_dm().id ~= ""
+end
+
+local function call_here(): boolean
+	local call = state.voice.dm_call:get()
+	return call.shown and call.channel_id == open_dm().id
+end
+
 local function dm_badge(row: state.DmRow)
 	if row.group then
 		return ui.row {
@@ -194,8 +203,30 @@ local function toolbar()
 				actions.open_threads(point.x, point.y)
 			end,
 		}),
-		ui.show(direct, tool { name = "phone", tooltip = "Start Voice Call" }),
-		ui.show(direct, tool { name = "video", tooltip = "Start Video Call" }),
+		ui.show(dm_open, tool {
+			name = "phone",
+			id = "top_bar_call",
+			tooltip = ui.text {
+				function()
+					return if call_here() then "Join Call" else "Start Voice Call"
+				end,
+			},
+			on_click = function()
+				actions.start_call(open_dm().id, false)
+			end,
+		}),
+		ui.show(dm_open, tool {
+			name = "video",
+			id = "top_bar_video_call",
+			tooltip = ui.text {
+				function()
+					return if call_here() then "Join Video Call" else "Start Video Call"
+				end,
+			},
+			on_click = function()
+				actions.start_call(open_dm().id, true)
+			end,
+		}),
 		ui.show(guild, tool { name = "bell", tooltip = "Notification Settings" }),
 		tool {
 			name = "pin",

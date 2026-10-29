@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use protocol::Snowflake;
+use protocol::{Snowflake, VoiceState};
 use state::{State, VoiceStatus};
 
 use crate::sidebar::{VoiceMember, VoiceVideo, voice_member};
@@ -18,6 +18,7 @@ pub struct CallTile {
 	pub live: bool,
 	pub volume: u8,
 	pub local_muted: bool,
+	pub ringing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,17 +57,28 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 	let channel_id = session.channel_id;
 	let guild_id = session.guild_id;
 	let me = state.current_user_id();
-	let mut members: Vec<VoiceMember> = guild_id
-		.and_then(|guild_id| state.guild(guild_id).map(|guild| (guild_id, guild)))
-		.map(|(guild_id, guild)| {
-			guild
-				.voice_states
-				.values()
-				.filter(|voice| voice.channel_id == Some(channel_id))
-				.map(|voice| voice_member(state, guild_id, voice))
-				.collect()
-		})
-		.unwrap_or_default();
+	let mut members: Vec<VoiceMember> = match guild_id {
+		Some(guild_id) => state
+			.guild(guild_id)
+			.map(|guild| {
+				guild
+					.voice_states
+					.values()
+					.filter(|voice| voice.channel_id == Some(channel_id))
+					.map(|voice| voice_member(state, guild_id, voice))
+					.collect()
+			})
+			.unwrap_or_default(),
+		None => state
+			.call(channel_id)
+			.map(|call| {
+				call.voice_states
+					.iter()
+					.map(|voice| call_member(state, voice))
+					.collect()
+			})
+			.unwrap_or_default(),
+	};
 	let peers = session.peers.iter().copied().chain(me);
 	for user_id in peers {
 		if !members.iter().any(|member| member.user_id == user_id) {
@@ -100,11 +112,21 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 				live: member.live || (mine && session.screen_share.is_some()),
 				volume: audio.volume,
 				local_muted: !mine && audio.muted,
+				ringing: false,
 				name: member.name,
 			}
 		})
 		.collect();
-	tiles.sort_by_cached_key(|tile| (tile.name.to_lowercase(), tile.user_id));
+	if guild_id.is_none()
+		&& let Some(call) = state.call(channel_id)
+	{
+		for user_id in &call.ringing {
+			if Some(*user_id) != me && !tiles.iter().any(|tile| tile.user_id == *user_id) {
+				tiles.push(ringing_tile(state, *user_id));
+			}
+		}
+	}
+	tiles.sort_by_cached_key(|tile| (tile.ringing, tile.name.to_lowercase(), tile.user_id));
 	let streams = tiles
 		.iter()
 		.filter(|tile| tile.live && (!tile.me || session.screen_share.is_some()))
@@ -121,10 +143,13 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 			}
 		})
 		.collect();
-	let name = state
-		.channel(channel_id)
-		.and_then(|channel| channel.name.clone())
-		.unwrap_or_default();
+	let name = match guild_id {
+		Some(_) => state
+			.channel(channel_id)
+			.and_then(|channel| channel.name.clone())
+			.unwrap_or_default(),
+		None => private_name(state, channel_id),
+	};
 	Some(VoiceCall {
 		channel_id,
 		guild_id,
@@ -133,6 +158,54 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 		tiles,
 		streams,
 	})
+}
+
+fn call_member(state: &State, voice: &VoiceState) -> VoiceMember {
+	VoiceMember {
+		user_id: voice.user_id,
+		name: state.display_name(None, voice.user_id),
+		muted: voice.mute || voice.self_mute,
+		deafened: voice.deaf || voice.self_deaf,
+		video: if voice.self_video {
+			Some(VoiceVideo::Camera)
+		} else if voice.self_stream == Some(true) {
+			Some(VoiceVideo::Screen)
+		} else {
+			None
+		},
+		live: voice.self_stream == Some(true),
+	}
+}
+
+fn ringing_tile(state: &State, user_id: Snowflake) -> CallTile {
+	let audio = state.user_audio(user_id);
+	CallTile {
+		user_id,
+		name: state.display_name(None, user_id),
+		me: false,
+		muted: false,
+		deafened: false,
+		video: None,
+		live: false,
+		volume: audio.volume,
+		local_muted: audio.muted,
+		ringing: true,
+	}
+}
+
+pub fn private_name(state: &State, channel_id: Snowflake) -> String {
+	let Some(channel) = state.channel(channel_id) else {
+		return String::new();
+	};
+	if let Some(name) = channel.name.as_deref().filter(|name| !name.is_empty()) {
+		return name.to_owned();
+	}
+	channel
+		.recipient_ids
+		.iter()
+		.map(|user_id| state.display_name(None, *user_id))
+		.collect::<Vec<_>>()
+		.join(", ")
 }
 
 pub fn voice_speaking(state: &State) -> Vec<Snowflake> {

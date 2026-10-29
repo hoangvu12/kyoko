@@ -12,7 +12,9 @@ use state::{
 
 use crate::display::{Display, person};
 use crate::images::Avatar;
-use crate::message::{Body, Names, ReplyPreview, SystemLine, author_avatar, person_name, system_line};
+use crate::message::{
+	Body, Names, ReplyPreview, SystemLine, author_avatar, call_line, person_name, system_line,
+};
 use crate::sidebar::ChannelKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -640,7 +642,19 @@ fn entry(
 			.first()
 			.map(|user| person_name(state, guild_id, user))
 			.unwrap_or_default();
-		system_line(message.kind, &view.author_display, &target, &message.content)
+		match (&message.call, message.kind) {
+			(Some(call), MessageType::Call) => {
+				let me = state.current_user_id();
+				let participated =
+					me.is_some_and(|me| message.author.id == me || call.participants.contains(&me));
+				let started = message.timestamp.unwrap_or_else(|| message.id.timestamp());
+				let lasted = call
+					.ended_timestamp
+					.map(|ended| (ended - started).to_std().unwrap_or_default());
+				call_line(&view.author_display, participated, lasted)
+			}
+			_ => system_line(message.kind, &view.author_display, &target, &message.content),
+		}
 	});
 	MessageEntry {
 		body,

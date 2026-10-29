@@ -280,6 +280,14 @@ local dm_row = ui.component(function(props: { row: state.DmRow })
 			table.unpack(lines),
 		},
 		ui.show(
+			row.in_call == true,
+			ui.div {
+				id = "dm_in_call_" .. row.id,
+				shrink = 0,
+				icon { name = "volume", size = icon_sm(), color = theme.color.green_2 },
+			}
+		),
+		ui.show(
 			row.mentions > 0,
 			mention_badge {
 				count = function()

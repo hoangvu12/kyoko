@@ -9,6 +9,8 @@ local channel_sidebar = require("./channel_sidebar")
 local user_panel = require("./user_panel")
 local voice_panel = require("./voice_panel")
 local call_view = require("./call_view")
+local dm_call = require("./dm_call")
+local incoming_call = require("./incoming_call")
 local timeline = require("./timeline")
 local composer = require("./composer")
 local member_list = require("./member_list")
@@ -64,6 +66,11 @@ local function chat()
 				grow = 1,
 				min_h = 0,
 				connection_banner(),
+				dm_call {
+					room = function()
+						return column.height or 0
+					end,
+				},
 				timeline(),
 				composer {
 					room = function()
@@ -163,6 +170,7 @@ return function()
 		settings(),
 		server_settings(),
 		channel_settings(),
+		incoming_call(),
 	}
 	return ui.column {
 		ref = root,

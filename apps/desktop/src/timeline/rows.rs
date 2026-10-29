@@ -753,6 +753,7 @@ fn system_icon(icon_kind: SystemIcon) -> (&'static str, &'static str) {
 		SystemIcon::Boost => ("nitro", "brand"),
 		SystemIcon::Leave => ("close", "danger"),
 		SystemIcon::Call => ("phone", "success"),
+		SystemIcon::MissedCall => ("phone", "danger"),
 		SystemIcon::Rename => ("edit", "interactive_normal"),
 		SystemIcon::Picture => ("image", "interactive_normal"),
 		SystemIcon::Poll => ("poll", "text_4"),

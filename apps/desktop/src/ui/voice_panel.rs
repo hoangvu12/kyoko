@@ -120,6 +120,7 @@ impl Link {
 	pub(super) fn voice_apply(&self, state: &State) {
 		self.voice.publish(state);
 		self.publish_call(state);
+		self.publish_dm_call(state);
 	}
 
 	pub(super) fn shows_live(&self) -> bool {

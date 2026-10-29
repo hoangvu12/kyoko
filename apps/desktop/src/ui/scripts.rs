@@ -10,6 +10,7 @@ use zgx_script::{ScriptHost, Value};
 use super::{themes_dir, ui_dir};
 use crate::theme::Catalog;
 
+mod calls;
 mod channel_settings;
 mod decorations;
 mod hidden;
@@ -283,6 +284,14 @@ fn the_interface_loads_and_builds_every_screen() {
 		"the channel view after the call",
 		"general",
 		&[("voice.call", voice::closed_call())],
+	);
+	shows(&mut app, "the incoming call", "Incoming Call…", &calls::ringing());
+	shows(&mut app, "a DM call", "Join Call", &calls::lobby_values());
+	shows(
+		&mut app,
+		"the channel view after the DM call",
+		"general",
+		&calls::quiet_values(),
 	);
 	shows(
 		&mut app,
@@ -2221,7 +2230,7 @@ fn the_friends_page_reaches_every_relationship_action() {
 	assert_eq!(last_call(&calls, "friends.add"), Some(json!("grace")));
 }
 
-fn dm_rows() -> serde_json::Value {
+pub(super) fn dm_rows() -> serde_json::Value {
 	json!([
 		{
 			"key": "d30", "id": "30", "name": "ada", "avatar": "", "status": "online",

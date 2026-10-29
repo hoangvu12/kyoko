@@ -541,6 +541,18 @@ function M.open_call_chat()
 	return ui.action("voice.open_chat")
 end
 
+function M.start_call(id: string, video: boolean)
+	ui.invoke("voice.start_call", { id = id, video = video })
+end
+
+function M.accept_call(id: string, video: boolean)
+	ui.invoke("voice.accept_call", { id = id, video = video })
+end
+
+function M.decline_call(id: string)
+	ui.invoke("voice.decline_call", { id = id })
+end
+
 function M.set_user_volume(id: string, volume: number)
 	ui.invoke("voice.user_volume", { id = id, volume = volume })
 end

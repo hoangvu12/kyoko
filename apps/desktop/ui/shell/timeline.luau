@@ -5,6 +5,7 @@ local SLOT = "timeline"
 
 return function()
 	return ui.column {
+		id = "chat_timeline",
 		grow = 1,
 		min_h = 0,
 		mt = theme.size.space_6,

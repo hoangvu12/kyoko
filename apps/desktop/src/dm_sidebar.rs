@@ -191,5 +191,6 @@ fn dm_value(entry: &DmEntry, avatar: Option<&str>) -> Value {
 		("members", (entry.members.unwrap_or(0) as f64).into()),
 		("unread", entry.unread.into()),
 		("mentions", f64::from(entry.mentions).into()),
+		("in_call", entry.in_call.into()),
 	])
 }

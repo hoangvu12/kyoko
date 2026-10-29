@@ -293,6 +293,7 @@ local function tile_view(tile: state.CallTile, size: () -> number, focused: any)
 			end,
 		ui.div {
 			id = "call_avatar_" .. tile.id,
+			opacity = if tile.ringing then 0.5 else 1,
 			w = face,
 			h = face,
 			rounded = face,
@@ -1099,13 +1100,15 @@ local function bottom_bar()
 	}
 end
 
-return function()
+return function(props: { embedded: boolean? }?)
+	local embedded = props ~= nil and props.embedded == true
 	return ui.column {
-		id = "call_view",
+		id = if embedded then "dm_call_view" else "call_view",
 		w_full = true,
 		h_full = true,
-		bg = theme.color.bg_4,
-		header(),
+		min_h = 0,
+		bg = if embedded then theme.color.bg_3 else theme.color.bg_4,
+		ui.show(not embedded, header()),
 		stage {},
 		bottom_bar(),
 		go_live_picker {},

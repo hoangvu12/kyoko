@@ -49,6 +49,7 @@ pub struct DmEntry {
 	pub unread: bool,
 	pub mentions: u32,
 	pub activity: Snowflake,
+	pub in_call: bool,
 }
 
 impl DmEntry {
@@ -85,7 +86,8 @@ impl DmList {
 			|| changes.read_state
 			|| changes.relationships
 			|| changes.user_settings
-			|| changes.current_user;
+			|| changes.current_user
+			|| changes.calls;
 		let presence = self
 			.entries
 			.iter()
@@ -146,6 +148,9 @@ fn dm_entry(state: &State, kind: ChannelType, row: DmRow) -> DmEntry {
 		members: group.then_some(row.recipients.len() + 1),
 		unread: row.unread,
 		mentions: row.mentions,
+		in_call: state
+			.call(row.channel_id)
+			.is_some_and(|call| !call.voice_states.is_empty() && !call.unavailable),
 		activity: row.last_message_id.unwrap_or(row.channel_id),
 	}
 }
