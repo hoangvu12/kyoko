@@ -49,6 +49,61 @@ pub fn open_camera(_id: Option<&str>, _quality: VideoQuality) -> Result<Box<dyn 
 	Err(VideoError::Unsupported)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScreenKind {
+	Screen,
+	Window,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScreenTarget {
+	pub kind: ScreenKind,
+	pub id: u64,
+	pub name: String,
+	pub width: u32,
+	pub height: u32,
+}
+
+#[cfg(windows)]
+pub fn screens() -> Result<Vec<ScreenTarget>, VideoError> {
+	Ok(super::screen::ScreenSource::list())
+}
+
+#[cfg(not(windows))]
+pub fn screens() -> Result<Vec<ScreenTarget>, VideoError> {
+	Err(VideoError::Unsupported)
+}
+
+#[cfg(windows)]
+pub fn open_screen(target: &ScreenTarget, quality: VideoQuality) -> Result<Box<dyn VideoSource>, VideoError> {
+	Ok(Box::new(super::screen::ScreenSource::open(
+		target, quality, true,
+	)?))
+}
+
+#[cfg(not(windows))]
+pub fn open_screen(
+	_target: &ScreenTarget,
+	_quality: VideoQuality,
+) -> Result<Box<dyn VideoSource>, VideoError> {
+	Err(VideoError::Unsupported)
+}
+
+#[cfg(windows)]
+pub fn screen_thumbnail(target: &ScreenTarget, width: u32, height: u32) -> Result<VideoFrame, VideoError> {
+	let quality = VideoQuality {
+		width,
+		height,
+		..VideoQuality::default()
+	};
+	super::screen::ScreenSource::open(target, quality, false)?.next_frame()
+}
+
+#[cfg(not(windows))]
+pub fn screen_thumbnail(_target: &ScreenTarget, _width: u32, _height: u32) -> Result<VideoFrame, VideoError> {
+	Err(VideoError::Unsupported)
+}
+
 pub struct TestPattern {
 	width: u32,
 	height: u32,

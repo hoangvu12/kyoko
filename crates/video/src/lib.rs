@@ -20,11 +20,16 @@ mod mf_send;
 mod preview;
 mod scale;
 #[cfg(windows)]
+mod screen;
+#[cfg(windows)]
 mod source_reader;
 
 use std::time::Duration;
 
-pub use capture::{CameraInfo, TestPattern, VideoSource, cameras, open_camera};
+pub use capture::{
+	CameraInfo, ScreenKind, ScreenTarget, TestPattern, VideoSource, cameras, open_camera, open_screen,
+	screen_thumbnail, screens,
+};
 pub use convert::{Picture, fit};
 pub use decode::H264Decoder;
 pub use encode::{EncodedFrame, EncoderConfig, H264Encoder, VideoCodecs, available};

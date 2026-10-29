@@ -11,9 +11,9 @@ use std::sync::Arc;
 use protocol::Snowflake;
 
 pub use ::video::{
-	CameraInfo, CameraPreview, EncodedFrame, EncoderConfig, H264Decoder, H264Encoder, Picture, TestPattern,
-	VideoCodecs, VideoError, VideoFrame, VideoQuality, VideoSource, available, cameras, fit, open_camera,
-	scale_nv12,
+	CameraInfo, CameraPreview, EncodedFrame, EncoderConfig, H264Decoder, H264Encoder, Picture, ScreenKind,
+	ScreenTarget, TestPattern, VideoCodecs, VideoError, VideoFrame, VideoQuality, VideoSource, available,
+	cameras, fit, open_camera, open_screen, scale_nv12, screen_thumbnail, screens,
 };
 pub use hub::VideoStats;
 pub use outgoing::VideoLayer;

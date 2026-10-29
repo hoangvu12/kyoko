@@ -4021,6 +4021,7 @@ dependencies = [
 name = "kyoko-video"
 version = "0.2.0-beta.1"
 dependencies = [
+ "png 0.18.1",
  "thiserror 2.0.21",
  "tracing",
  "windows",

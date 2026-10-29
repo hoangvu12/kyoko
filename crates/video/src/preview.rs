@@ -17,13 +17,21 @@ pub struct CameraPreview {
 
 impl CameraPreview {
 	pub fn start(
+		source: Box<dyn VideoSource>,
+		show: impl Fn(Arc<VideoFrame>) + Send + 'static,
+	) -> Result<Self, VideoError> {
+		Self::start_until(source, show, |_| {})
+	}
+
+	pub fn start_until(
 		mut source: Box<dyn VideoSource>,
 		show: impl Fn(Arc<VideoFrame>) + Send + 'static,
+		ended: impl FnOnce(VideoError) + Send + 'static,
 	) -> Result<Self, VideoError> {
 		let stop = Arc::new(AtomicBool::new(false));
 		let stopped = stop.clone();
 		let thread = thread::Builder::new()
-			.name("camera-preview".to_owned())
+			.name("video-preview".to_owned())
 			.spawn(move || {
 				let mut failures = 0;
 				while !stopped.load(Ordering::Acquire) {
@@ -32,10 +40,15 @@ impl CameraPreview {
 							failures = 0;
 							show(Arc::new(frame));
 						}
+						Err(VideoError::Ended) => {
+							ended(VideoError::Ended);
+							return;
+						}
 						Err(error) => {
 							failures += 1;
 							if failures >= MAX_FAILURES {
-								warn!(%error, "the camera preview stopped");
+								warn!(%error, "the video preview stopped");
+								ended(error);
 								return;
 							}
 							thread::sleep(FAILURE_BACKOFF);

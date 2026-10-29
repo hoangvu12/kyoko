@@ -105,7 +105,7 @@ Watching someone's stream (v1 106), ported from oxidcord's `session/src/task/str
 - A STREAM_SERVER_UPDATE with a new endpoint reconnects the stream connection; one without an endpoint drops it until a new server is announced. A stream connection that stops (`VoiceEvent::Stopped`) ends the view ("The stream connection was lost.").
 - `Command::StopWatchingStream { stream_key }` sends op 19 and closes only the stream connection. Leaving voice, being moved out, or joining another channel ends every view with op 19; a fresh gateway session drops it without one.
 - STREAM_DELETE for the stream you watch ends the view with a toast by `reason`: `stream_full` "This stream is full.", `user_requested` and `stream_ended` "The stream has ended.", `unauthorized` "You don't have permission to watch this stream.", `safety_guild_rate_limited` "Streams in this server are rate limited. Try again later.", anything else "The stream is no longer available."
-- Going live yourself (op 18, the screen layer sent) is V11.
+- Going live yourself (op 18, the screen layer sent) is v1 107; the capture it sends is "Screen capture" below, picked in the Go Live picker (`docs/ui.md`, call view).
 
 ## Camera
 
@@ -121,6 +121,16 @@ Turning your own camera on (v1 104), ported from oxidcord's `video/{send,capture
 - Your own frames also go to the call's `VideoSink` under your user id before encoding, so your tile previews them (`docs/media.md`, "Video").
 - Without a Media Foundation H.264 encoder (Windows N without the Media Feature Pack), or with `session::VoiceSetup::codecs` set to `VideoCodecs::Missing` in tests, the camera never starts: no op 4 change and no op 12, a "Video unavailable" toast, and audio carries on. The desktop's `voice::video::available` probe now needs both an H.264 decoder and an encoder.
 - Hardware encoders are not used: the NVIDIA and Intel H.264 MFTs on this machine are asynchronous and produced no output without a D3D11 device manager, so only synchronous (software) MFTs are enumerated. The Microsoft encoder needs `CODECAPI_AVLowLatencyMode` set before the media types, or it holds 16 frames back.
+
+## Screen capture
+
+Capturing a screen or a window for Go Live (v1 105), ported from oxidcord's `video/capture/win32/screen.rs` into `crates/video/src/screen.rs`. Local only: nothing is encoded or sent yet (going live is v1 107).
+
+- `voice::video::screens()` lists the monitors (primary first, named "Screen 1", "Screen 2", ... at their physical resolution) and the windows a person would share: visible, not minimised, not cloaked, not a tool window, not owned by another window, with a title, and not the shell's desktop (`Progman`) or taskbar (`Shell_TrayWnd`). Each is a `ScreenTarget { kind: ScreenKind::Screen | Window, id, name, width, height }`; `id` is the `HMONITOR` or `HWND`.
+- `open_screen(target, VideoQuality)` starts a Windows.Graphics.Capture session (a free-threaded `Direct3D11CaptureFramePool` of two BGRA buffers on a hardware D3D11 device, WARP when there is none, the cursor captured, the yellow border turned off where Windows allows it) and is a `VideoSource` like the camera: each frame is copied to a staging texture, scaled (nearest sampling) and converted to NV12 (`video::bgra_to_nv12`, BT.601 limited range) to fit within the quality's width and height without upscaling, at the quality's fps. A screen that does not change sends no new frames, so the last frame repeats. The pool follows the window's size.
+- Closing the window ends the capture: the capture item's `Closed` event, or `IsWindow` failing for a window target, makes `next_frame` return `VideoError::Ended`; `CameraPreview::start_until` stops on it at once and calls its end callback. 20 failed frames in a row end it too.
+- `screen_thumbnail(target, width, height)` takes one frame without the cursor for the picker.
+- Under `--mock` and in tests nothing real is captured: the desktop lists four fixed sources (Screen 1, Kyoko, Mock Browser, Mock Notes) and previews them with `TestPattern`. `cargo run -p kyoko-video --example share_window -- <pid> <png>` captures one window of the given process, saves its first frame and reports when the window closes; it is the only way the real path runs, by hand, on your own window.
 
 ## Mockcord
 

@@ -22,6 +22,8 @@ pub enum VideoError {
 	Stopped,
 	#[error("the camera sent no frames")]
 	Timeout,
+	#[error("the shared screen or window closed")]
+	Ended,
 }
 
 impl VideoError {
