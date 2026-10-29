@@ -303,9 +303,14 @@ async fn dont_round_my_timestamps_rounds_down_and_redraws_the_rows_that_show_one
 			view.timeline.messages().any(|entry| entry.id == posted)
 		})
 		.await;
-	running.view.timeline.take_delta();
-	redraw(&mut running, Formatting::RelativeTimes);
-	let delta = running.view.timeline.take_delta().expect("rows to redraw");
+	let delta = {
+		let shared = running.session().state().clone();
+		let state = shared.read();
+		running.view.timeline.redraw(&state, Formatting::Messages);
+		running.view.timeline.take_delta();
+		running.view.timeline.redraw(&state, Formatting::RelativeTimes);
+		running.view.timeline.take_delta().expect("rows to redraw")
+	};
 	let timed: Vec<_> = running
 		.view
 		.timeline

@@ -37,6 +37,26 @@ enum Request {
 	Decorate(DecoratedUser, u64),
 }
 
+impl Request {
+	fn formatting(&self) -> Formatting {
+		match self {
+			Request::Name(..) => Formatting::Names,
+			Request::Time(..) => Formatting::RelativeTimes,
+			Request::Look(..) => Formatting::Messages,
+			Request::Decorate(..) => Formatting::Decorations,
+		}
+	}
+}
+
+fn slot(formatting: Formatting) -> usize {
+	match formatting {
+		Formatting::Names => 0,
+		Formatting::RelativeTimes => 1,
+		Formatting::Messages => 2,
+		Formatting::Decorations => 3,
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct LookKey {
 	channel_id: Snowflake,
@@ -117,6 +137,7 @@ struct Inner {
 	calls: AtomicU64,
 	look_calls: AtomicU64,
 	decoration_calls: AtomicU64,
+	asks: [AtomicU64; 4],
 }
 
 #[derive(Clone, Default)]
@@ -146,6 +167,7 @@ impl Display {
 			calls: AtomicU64::new(0),
 			look_calls: AtomicU64::new(0),
 			decoration_calls: AtomicU64::new(0),
+			asks: Default::default(),
 		});
 		let display = Self { inner: Some(inner) };
 		display.refresh();
@@ -205,13 +227,31 @@ impl Display {
 			.map_or(0, |inner| inner.decoration_calls.load(Ordering::Relaxed))
 	}
 
-	pub fn pending(&self) -> usize {
-		self.inner.as_ref().map_or(0, |inner| {
-			inner.names.lock().asked.len()
-				+ inner.times.lock().asked.len()
-				+ inner.looks.lock().asked.len()
-				+ inner.decorations.lock().asked.len()
+	pub fn asks(&self, formatting: Formatting) -> u64 {
+		self.inner
+			.as_ref()
+			.map_or(0, |inner| inner.asks[slot(formatting)].load(Ordering::Relaxed))
+	}
+
+	pub fn pending_for(&self, formatting: Formatting) -> usize {
+		self.inner.as_ref().map_or(0, |inner| match formatting {
+			Formatting::Names => inner.names.lock().asked.len(),
+			Formatting::RelativeTimes => inner.times.lock().asked.len(),
+			Formatting::Messages => inner.looks.lock().asked.len(),
+			Formatting::Decorations => inner.decorations.lock().asked.len(),
 		})
+	}
+
+	pub fn pending(&self) -> usize {
+		[
+			Formatting::Names,
+			Formatting::RelativeTimes,
+			Formatting::Messages,
+			Formatting::Decorations,
+		]
+		.into_iter()
+		.map(|formatting| self.pending_for(formatting))
+		.sum()
 	}
 
 	pub fn formats(&self, formatting: Formatting) -> bool {
@@ -344,6 +384,7 @@ impl Display {
 		let Some(inner) = &self.inner else {
 			return;
 		};
+		inner.asks[slot(request.formatting())].fetch_add(1, Ordering::Relaxed);
 		let mut requests = inner.requests.lock();
 		let request = match requests.as_ref() {
 			Some(sender) => match sender.send(request) {

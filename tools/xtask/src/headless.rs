@@ -389,23 +389,17 @@ impl Harness {
 		self.wait("ShowMeYourName to settle on the timeline", || {
 			let state = self.state.read();
 			let settled = members_settled(&state, server, guild_id, channel_id);
+			let answered = display.pending_for(Formatting::Names) == 0;
 			let mut timeline = timeline.borrow_mut();
 			timeline.redraw(&state, Formatting::Names);
 			let mut plain = timeline.messages().filter(|entry| entry.is_plain()).peekable();
 			settled
-				&& display.pending() == 0
-				&& plain.peek().is_some()
+				&& answered && plain.peek().is_some()
 				&& plain.all(|entry| shows_username(&state, guild_id, entry))
 		})
 		.await?;
-		let calls = display.calls();
-		for _ in 0..REDRAWS {
-			timeline
-				.borrow_mut()
-				.redraw(&self.state.read(), Formatting::Names);
-		}
 		ensure!(
-			display.calls() == calls && display.pending() == 0,
+			self.redraws_ask_nothing(&timeline, &display, Formatting::Names),
 			"redrawing the timeline asked ShowMeYourName again"
 		);
 		let now = chrono::Utc::now();
@@ -475,13 +469,8 @@ impl Harness {
 		})
 		.await?;
 		let calls = display.look_calls();
-		for _ in 0..REDRAWS {
-			timeline
-				.borrow_mut()
-				.redraw(&self.state.read(), Formatting::Messages);
-		}
 		ensure!(
-			display.look_calls() == calls && display.pending() == 0,
+			self.redraws_ask_nothing(&timeline, &display, Formatting::Messages),
 			"redrawing the timeline asked MessageLogger again"
 		);
 		Ok(calls)
@@ -532,16 +521,27 @@ impl Harness {
 		)
 		.await?;
 		let calls = display.decoration_calls();
-		for _ in 0..REDRAWS {
-			timeline
-				.borrow_mut()
-				.redraw(&self.state.read(), Formatting::Decorations);
-		}
 		ensure!(
-			display.decoration_calls() == calls && display.pending() == 0,
+			self.redraws_ask_nothing(&timeline, &display, Formatting::Decorations),
 			"redrawing the timeline asked PlatformIndicators again"
 		);
 		Ok(calls)
+	}
+
+	fn redraws_ask_nothing(
+		&self,
+		timeline: &RefCell<bridge::Timeline>,
+		display: &bridge::Display,
+		formatting: Formatting,
+	) -> bool {
+		let state = self.state.read();
+		let mut timeline = timeline.borrow_mut();
+		timeline.redraw(&state, formatting);
+		let asks = display.asks(formatting);
+		for _ in 0..REDRAWS {
+			timeline.redraw(&state, formatting);
+		}
+		display.asks(formatting) == asks
 	}
 
 	async fn favourites_first(&self, server: &Server) -> Result<()> {
