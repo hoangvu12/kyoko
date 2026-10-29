@@ -15,6 +15,10 @@ impl Snowflake {
 		self.0
 	}
 
+	pub fn is_valid(self) -> bool {
+		self.0 > 0 && i64::try_from(self.0).is_ok()
+	}
+
 	pub fn timestamp(self) -> DateTime<Utc> {
 		let millis = (self.0 >> TIMESTAMP_SHIFT) as i64 + DISCORD_EPOCH_MS;
 		DateTime::from_timestamp_millis(millis).unwrap_or(DateTime::UNIX_EPOCH)

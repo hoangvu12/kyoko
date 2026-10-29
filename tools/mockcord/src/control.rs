@@ -138,6 +138,12 @@ impl Control {
 			.rate_limit_member_requests(retry_after, count);
 	}
 
+	pub fn mark_first_guild_pending(&self) -> Option<u64> {
+		let guild_id = self.shared.fixtures.guilds.first()?.id;
+		self.shared.scenario.mark_pending(guild_id);
+		Some(guild_id)
+	}
+
 	pub fn fill_voice_channel(&self, channel_id: u64) {
 		self.shared.scenario.fill_voice_channel(channel_id);
 	}

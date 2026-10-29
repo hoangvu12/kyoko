@@ -24,11 +24,13 @@ use crate::ready;
 use crate::record::{GatewayClose, GatewayConnection, GatewayFrame, header_pairs};
 use crate::scenario::HeartbeatAcks;
 use crate::state::Shared;
+use crate::strict;
 use crate::voice::{MockStream, VOICE_TOKEN};
 
 const IDENTIFY_TIMEOUT: Duration = Duration::from_secs(30);
 const CLOSE_AUTH_FAILED: u16 = 4004;
 const CLOSE_DECODE_ERROR: u16 = 4002;
+const DECODE_ERROR_REASON: &str = "Error while decoding payload.";
 const CLOSE_NOT_AUTHENTICATED: u16 = 4003;
 const CLOSE_ALREADY_AUTHENTICATED: u16 = 4005;
 const CLOSE_TIMED_OUT: u16 = 4009;
@@ -238,6 +240,11 @@ impl Connection {
 					.unwrap_or_default(),
 				at: Instant::now(),
 			});
+		}
+		let pending = self.shared.scenario.pending_guilds();
+		if strict::check(payload.opcode(), text.len(), &data, &pending).is_err() {
+			self.close(CLOSE_DECODE_ERROR, DECODE_ERROR_REASON).await;
+			return false;
 		}
 		match payload.opcode() {
 			Opcode::Heartbeat => self.acknowledge_heartbeat().await,

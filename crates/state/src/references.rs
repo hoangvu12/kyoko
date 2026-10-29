@@ -73,6 +73,7 @@ fn mentioned_ids(message: &Message) -> Vec<Snowflake> {
 		.users
 		.into_iter()
 		.map(Snowflake)
+		.filter(|id| id.is_valid())
 		.collect()
 }
 

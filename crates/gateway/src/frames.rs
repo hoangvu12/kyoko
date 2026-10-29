@@ -1,6 +1,9 @@
-use protocol::gateway::Opcode;
+use std::collections::BTreeMap;
+
+use protocol::gateway::{GatewayPayload, Opcode};
 use protocol::{ClientState, IdentifyProperties, Token};
 use serde::Serialize;
+use serde_json::value::RawValue;
 use serde_json::{Value, json};
 
 use crate::config::GatewayConfig;
@@ -77,4 +80,39 @@ pub(crate) fn heartbeat(seq: Option<u64>) -> Result<String, GatewayError> {
 
 pub(crate) fn command(opcode: Opcode, data: Value) -> String {
 	json!({ "op": i64::from(opcode), "d": data }).to_string()
+}
+
+pub(crate) struct Shape {
+	pub opcode: Opcode,
+	pub fields: String,
+}
+
+pub(crate) fn shape(frame: &str) -> Option<Shape> {
+	let payload = serde_json::from_str::<GatewayPayload>(frame).ok()?;
+	let fields = payload
+		.d
+		.as_deref()
+		.and_then(|data| serde_json::from_str::<BTreeMap<&str, &RawValue>>(data.get()).ok())
+		.map(|fields| {
+			fields
+				.iter()
+				.map(|(name, value)| field_shape(name, value))
+				.collect::<Vec<_>>()
+				.join(",")
+		})
+		.unwrap_or_default();
+	Some(Shape {
+		opcode: payload.opcode(),
+		fields,
+	})
+}
+
+fn field_shape(name: &str, value: &RawValue) -> String {
+	if let Ok(items) = serde_json::from_str::<Vec<&RawValue>>(value.get()) {
+		return format!("{name}[{}]", items.len());
+	}
+	if let Ok(entries) = serde_json::from_str::<BTreeMap<&str, &RawValue>>(value.get()) {
+		return format!("{name}{{{}}}", entries.len());
+	}
+	name.to_owned()
 }

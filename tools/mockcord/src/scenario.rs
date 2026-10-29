@@ -144,6 +144,7 @@ pub struct Scenario {
 	full_voice_channels: Mutex<Vec<u64>>,
 	voice_channels: Mutex<HashMap<String, u64>>,
 	own_voice_states: Mutex<HashMap<String, serde_json::Value>>,
+	pending_guilds: Mutex<Vec<u64>>,
 }
 
 impl Scenario {
@@ -288,6 +289,14 @@ impl Scenario {
 		self.limited_member_requests
 			.lock()
 			.extend(std::iter::repeat_n(retry_after, count));
+	}
+
+	pub fn mark_pending(&self, guild_id: u64) {
+		self.pending_guilds.lock().push(guild_id);
+	}
+
+	pub fn pending_guilds(&self) -> Vec<u64> {
+		self.pending_guilds.lock().clone()
 	}
 
 	pub fn take_member_rate_limit(&self) -> Option<f64> {

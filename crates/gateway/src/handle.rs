@@ -21,6 +21,10 @@ const EVENT_CAPACITY: usize = 1024;
 const URGENT_CAPACITY: usize = 256;
 const BULK_CAPACITY: usize = 1024;
 pub(crate) const NO_LATENCY: u64 = u64::MAX;
+const MAX_SEND_BYTES: usize = 15 * 1024;
+const MAX_MEMBER_IDS: usize = 100;
+const MAX_MEMBER_LIMIT: u32 = 100;
+const MAX_NONCE_BYTES: usize = 32;
 
 pub struct Gateway;
 
@@ -33,6 +37,26 @@ pub struct MemberRequest<'a> {
 pub enum MemberLookup<'a> {
 	Ids(&'a [Snowflake]),
 	Query { query: &'a str, limit: u32 },
+}
+
+impl MemberRequest<'_> {
+	fn is_valid(&self) -> bool {
+		let lookup = match self.lookup {
+			MemberLookup::Ids(user_ids) => {
+				let mut unique = user_ids.to_vec();
+				unique.sort_unstable();
+				unique.dedup();
+				!user_ids.is_empty()
+					&& user_ids.len() <= MAX_MEMBER_IDS
+					&& unique.len() == user_ids.len()
+					&& user_ids.iter().all(|id| id.is_valid())
+			}
+			MemberLookup::Query { query, limit } => {
+				limit <= MAX_MEMBER_LIMIT && (!query.is_empty() || limit == 0)
+			}
+		};
+		lookup && self.guild_id.is_valid() && self.nonce.len() <= MAX_NONCE_BYTES
+	}
 }
 
 #[derive(Debug, Serialize)]
@@ -134,6 +158,9 @@ impl GatewayHandle {
 	}
 
 	pub fn request_members(&self, request: MemberRequest<'_>) -> Result<(), SendError> {
+		if !request.is_valid() {
+			return Err(SendError::Invalid);
+		}
 		let data = match request.lookup {
 			MemberLookup::Ids(user_ids) => json!({
 				"guild_id": [request.guild_id],
@@ -264,6 +291,9 @@ impl GatewayHandle {
 	}
 
 	fn queue_frame(&self, opcode: Opcode, frame: String) -> Result<(), SendError> {
+		if frame.len() > MAX_SEND_BYTES {
+			return Err(SendError::Invalid);
+		}
 		let lane = match Lane::of(opcode) {
 			Lane::Bulk => &self.bulk,
 			Lane::Urgent | Lane::Control => &self.urgent,

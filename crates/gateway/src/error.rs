@@ -41,6 +41,8 @@ pub enum SendError {
 	Full,
 	#[error("gateway session has stopped")]
 	Closed,
+	#[error("outgoing gateway payload is not valid")]
+	Invalid,
 }
 
 pub const FATAL_CLOSE_CODES: [u16; 8] = [AUTHENTICATION_FAILED, 4010, 4011, 4012, 4013, 4014, 4015, 4016];

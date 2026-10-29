@@ -496,6 +496,7 @@ impl Session {
 	}
 
 	async fn transmit(&mut self, connection: &mut Connection, frame: String) -> Option<Ended> {
+		log_send(&frame);
 		match connection.socket.send(Message::text(frame)).await {
 			Ok(()) => None,
 			Err(error) => Some(Ended::lost(transport::read_error(error).to_string())),
@@ -571,6 +572,19 @@ async fn until(deadline: Option<Instant>) {
 
 async fn stopped(shutdown: &mut watch::Receiver<bool>) {
 	let _ = shutdown.wait_for(|stop| *stop).await;
+}
+
+fn log_send(frame: &str) {
+	match frames::shape(frame) {
+		Some(shape) => debug!(
+			opcode = ?shape.opcode,
+			frame = "text",
+			bytes = frame.len(),
+			fields = %shape.fields,
+			"gateway send"
+		),
+		None => debug!(frame = "text", bytes = frame.len(), "gateway send unparsed"),
+	}
 }
 
 fn log_ready_shape(data: &RawValue) {

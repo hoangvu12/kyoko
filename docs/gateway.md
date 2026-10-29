@@ -153,3 +153,17 @@ GUILD_MEMBER_REMOVE no longer edits the list, because Discord also sends a list 
 - **Deduplication:** ids that are queued, in flight, or were answered in the last 60 s (found or `not_found`) are not requested again.
 - **Rate limits:** a RATE_LIMITED dispatch for op 8 puts that request back at the front of its guild's queue. The guild is held for `retry_after` seconds, or 5 s if Discord gave none, and never more than 120 s.
 - **Reconnects:** after a new READY, unanswered requests are queued again and holds are cleared.
+- **Valid ids only:** an id goes into `user_ids` only when it is a real snowflake: above 0 and at most `i64::MAX` (`Snowflake::is_valid`). Mentions parsed out of message text (`<@0>`, `<@18446744073709551615>`) are filtered in `state` and again by the scheduler. An empty search is never sent.
+
+### Pending memberships
+
+While your own member in a guild is `pending` (membership screening or a join request) or has started onboarding without finishing it (`State::is_membership_pending`), the session sends no op 8 and no op 37 for that guild: opening its channels, `SubscribeGuild`, `SetMemberViewport`, `SearchMembers` and author backfill are all skipped, and queued requests for it are dropped when they come due. A GUILD_MEMBER_UPDATE that ends the pending state subscribes the open channel again.
+
+## Outgoing payloads (v1 124)
+
+Discord closes the gateway with 4002 "Error while decoding payload." when it can't decode or validate a payload you send, or when a payload passes 15 KiB (docs.discord.food, "Sending Events"). On 2026-10-29 that happened eight times in one real run, and each time the resume failed and kyoko identified again.
+
+- `GatewayHandle` refuses any frame over 15 KiB and any op 8 that breaks Discord's rules: ids not valid snowflakes, more than 100 or duplicated `user_ids`, a `limit` above 100 or not 0 with an empty `query`, a nonce over 32 bytes. These requests fail with `SendError::Invalid`. The member scheduler drops an invalid request instead of queueing it again.
+- Op 3 sends a custom status emoji only when it has a name, as the web client does.
+- Every frame kyoko sends is logged at debug (`RUST_LOG=gateway=debug`) as `gateway send` with the opcode name, the frame type (always `text`), its length in bytes and the top-level field names of `d`. Arrays show their length, objects their key count: `fields=guild_id[1],nonce,presences,user_ids[100]` or `fields=subscriptions{2}`. Values are never logged, so the token in identify and resume and any ids stay out of the log. A real run shows what went out just before a close.
+- Mockcord is strict like Discord (`tools/mockcord/src/strict.rs`). It closes with 4002 "Error while decoding payload." on a payload over 15 KiB, an op 8 with bad or duplicated ids, too many ids, a bad limit or nonce, or one for a pending guild (`Control::mark_first_guild_pending`), an op 37 with a bad guild or channel id or a bad range, an op 3 with an unknown status or an activity without `name` and `type`, an op 4 with bad ids or field types, and a heartbeat that isn't a number or null. Session tests that send such a payload see the gateway drop (`payloads.rs`).

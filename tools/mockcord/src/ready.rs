@@ -75,16 +75,19 @@ fn live_guilds<'a>(fixtures: &'a Fixtures, store: &Store) -> impl Iterator<Item 
 		.filter(|guild| !store.left_guilds.contains(&guild.id))
 }
 
-fn merged_members(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Value {
+fn merged_members(fixtures: &Fixtures, store: &Store, dedupe: bool, pending: &[u64]) -> Value {
 	let per_guild: Vec<Vec<Value>> = live_guilds(fixtures, store)
-		.map(|guild| vec![merged_member(guild, dedupe)])
+		.map(|guild| vec![merged_member(guild, dedupe, pending.contains(&guild.id))])
 		.collect();
 	json!(per_guild)
 }
 
-fn merged_member(guild: &GuildFixture, dedupe: bool) -> Value {
+fn merged_member(guild: &GuildFixture, dedupe: bool, pending: bool) -> Value {
 	let member = guild.current_member();
 	let mut value = to_json(member);
+	if pending {
+		value["pending"] = json!(true);
+	}
 	if dedupe
 		&& let Some(fields) = value.as_object_mut()
 		&& let Some(user) = &member.user
@@ -253,6 +256,7 @@ pub fn build(
 	let client_state = &identify["client_state"];
 	let dedupe = has(capabilities, DEDUPE_USER_OBJECTS);
 	let prioritized = has(capabilities, PRIORITIZED_READY_PAYLOAD);
+	let pending = shared.scenario.pending_guilds();
 
 	let fixtures = &shared.fixtures;
 	let store = shared.store.lock();
@@ -295,7 +299,7 @@ pub fn build(
 			"client_info": { "client": "desktop", "os": "windows", "version": 0 },
 			"active": true,
 		}],
-		"merged_members": merged_members(fixtures, &store, dedupe),
+		"merged_members": merged_members(fixtures, &store, dedupe, &pending),
 		"analytics_token": "x",
 		"api_code_version": API_CODE_VERSION,
 		"apex_experiments": { "installation": installation_id(shared.config.seed) },
@@ -320,7 +324,7 @@ pub fn build(
 	};
 	let supplemental = json!({
 		"merged_presences": merged_presences,
-		"merged_members": merged_members(fixtures, &store, dedupe),
+		"merged_members": merged_members(fixtures, &store, dedupe, &pending),
 		"guilds": live_guilds(fixtures, &store)
 			.map(|guild| json!({ "id": guild.id.to_string(), "voice_states": guild.voice_states }))
 			.collect::<Vec<_>>(),

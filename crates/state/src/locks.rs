@@ -136,6 +136,19 @@ impl State {
 		self.risky.enabled = enabled;
 	}
 
+	pub fn is_membership_pending(&self, guild_id: Snowflake) -> bool {
+		let (Some(guild), Some(me)) = (self.guilds.get(&guild_id), self.current_user_id()) else {
+			return false;
+		};
+		let Some(member) = guild.members.get(&me) else {
+			return false;
+		};
+		member.pending == Some(true)
+			|| (has_feature(guild, ONBOARDING_FEATURE)
+				&& has_flag(member.flags, MEMBER_STARTED_ONBOARDING)
+				&& !has_flag(member.flags, MEMBER_COMPLETED_ONBOARDING))
+	}
+
 	pub fn is_risky_confirmed(&self, target: RiskyTarget, reason: RiskyReason) -> bool {
 		self.risky.confirmed.contains(&(target, reason))
 	}

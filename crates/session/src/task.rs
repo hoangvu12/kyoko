@@ -7,6 +7,7 @@ use std::time::{Duration, Instant as StdInstant};
 use chrono::Utc;
 use gateway::{
 	ClientStateSource, GatewayConfig, GatewayError, GatewayEvent, GatewayHandle, MemberLookup, MemberRequest,
+	SendError,
 };
 use parking_lot::Mutex;
 use protocol::fingerprint::channel_referer;
@@ -703,6 +704,7 @@ impl Core {
 			}
 			DispatchEvent::ChannelPinsUpdate(update) => self.reload_pins(update.channel_id),
 			DispatchEvent::GuildCreate(guild) => self.select_new_guild(guild.id),
+			DispatchEvent::GuildMemberUpdate(member) => self.membership_changed(member.guild_id),
 			DispatchEvent::GuildMembersChunk(chunk) => {
 				self.member_requests.answered(&chunk, Instant::now());
 				self.backfill_members_answered(&chunk);
@@ -1050,7 +1052,7 @@ impl Core {
 				custom_status,
 			} => self.set_presence_command(status, custom_status),
 			Command::SetAfk(afk) => self.set_afk(afk),
-			Command::SubscribeGuild { guild_id } => {
+			Command::SubscribeGuild { guild_id } if !self.state.read().is_membership_pending(guild_id) => {
 				let channel_id = self.subscription_channel(guild_id);
 				self.subscriptions.touch(guild_id, channel_id, Instant::now());
 			}
@@ -1059,15 +1061,20 @@ impl Core {
 				channel_id,
 				first,
 				last,
-			} => self.subscriptions.member_viewport(
+			} if !self.state.read().is_membership_pending(guild_id) => self.subscriptions.member_viewport(
 				guild_id,
 				channel_id,
 				subscriptions::MemberViewport { first, last },
 				Instant::now(),
 			),
-			Command::SearchMembers { guild_id, query } => {
+			Command::SearchMembers { guild_id, query }
+				if !self.state.read().is_membership_pending(guild_id) =>
+			{
 				self.member_requests.search(guild_id, query, Instant::now());
 			}
+			Command::SubscribeGuild { .. }
+			| Command::SetMemberViewport { .. }
+			| Command::SearchMembers { .. } => {}
 			Command::RequestMembers { guild_id, user_ids } => self.request_members(guild_id, user_ids),
 			Command::OpenDm { user_id } => self.open_dm(user_id),
 			Command::MessageUser { user_id, content } => self.message_user(user_id, content),
@@ -1144,10 +1151,11 @@ impl Core {
 			self.store_last_channels();
 		}
 		match guild_id {
-			Some(guild_id) => self
-				.subscriptions
-				.open(guild_id, Some(channel_id), Instant::now()),
-			None => self.subscriptions.leave_guilds(),
+			Some(guild_id) if !self.state.read().is_membership_pending(guild_id) => {
+				self.subscriptions
+					.open(guild_id, Some(channel_id), Instant::now())
+			}
+			_ => self.subscriptions.leave_guilds(),
 		}
 		let (has_messages, has_draft, forum) = {
 			let state = self.state.read();
@@ -1446,6 +1454,22 @@ impl Core {
 		true
 	}
 
+	fn membership_changed(&mut self, guild_id: Option<Snowflake>) {
+		let open = {
+			let state = self.state.read();
+			state
+				.selected()
+				.and_then(|selected| Some((selected.guild_id?, selected.channel_id)))
+				.filter(|(selected, _)| {
+					Some(*selected) == guild_id && !state.is_membership_pending(*selected)
+				})
+		};
+		if let Some((guild_id, channel_id)) = open {
+			self.subscriptions
+				.open(guild_id, Some(channel_id), Instant::now());
+		}
+	}
+
 	fn subscription_channel(&self, guild_id: Snowflake) -> Option<Snowflake> {
 		let state = self.state.read();
 		state
@@ -1462,6 +1486,9 @@ impl Core {
 	}
 
 	pub(crate) fn request_members(&mut self, guild_id: Snowflake, user_ids: Vec<Snowflake>) {
+		if self.state.read().is_membership_pending(guild_id) {
+			return;
+		}
 		self.member_requests.want_ids(guild_id, user_ids, Instant::now());
 	}
 
@@ -1513,6 +1540,10 @@ impl Core {
 			self.flush_favorites();
 		}
 		for request in self.member_requests.due(now) {
+			if self.state.read().is_membership_pending(request.guild_id) {
+				self.member_requests.dropped(&request);
+				continue;
+			}
 			let lookup = match &request.lookup {
 				member_requests::Lookup::Ids(ids) => MemberLookup::Ids(ids),
 				member_requests::Lookup::Query(query) => MemberLookup::Query {
@@ -1525,9 +1556,16 @@ impl Core {
 				nonce: &request.nonce,
 				lookup,
 			});
-			if let Err(error) = sent {
-				tracing::warn!(%error, "member request was not sent");
-				self.member_requests.unsent(request, now);
+			match sent {
+				Ok(()) => {}
+				Err(SendError::Invalid) => {
+					tracing::warn!("member request was invalid and dropped");
+					self.member_requests.dropped(&request);
+				}
+				Err(error) => {
+					tracing::warn!(%error, "member request was not sent");
+					self.member_requests.unsent(request, now);
+				}
 			}
 		}
 	}
@@ -1543,11 +1581,13 @@ impl Core {
 
 	fn lazy_connected(&mut self) {
 		let now = Instant::now();
-		let open = self
-			.state
-			.read()
-			.selected()
-			.and_then(|selected| Some((selected.guild_id?, selected.channel_id)));
+		let open = {
+			let state = self.state.read();
+			state
+				.selected()
+				.and_then(|selected| Some((selected.guild_id?, selected.channel_id)))
+				.filter(|(guild_id, _)| !state.is_membership_pending(*guild_id))
+		};
 		self.subscriptions.connected(open, now);
 		self.member_requests.connected(now);
 	}

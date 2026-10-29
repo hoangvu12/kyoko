@@ -32,6 +32,7 @@ mod rest;
 mod scenario;
 mod server;
 mod state;
+mod strict;
 mod threads;
 mod traffic;
 mod voice;

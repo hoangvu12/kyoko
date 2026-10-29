@@ -87,10 +87,12 @@ fn custom_activity(custom: &CustomStatus) -> Value {
 	if let Some(text) = &custom.text {
 		activity["state"] = json!(text);
 	}
-	if let Some(emoji) = &custom.emoji {
+	if let Some(emoji) = &custom.emoji
+		&& let Some(name) = &emoji.name
+	{
 		activity["emoji"] = json!({
-			"id": emoji.id.map(|id| id.to_string()),
-			"name": emoji.name,
+			"id": emoji.id.filter(|id| id.is_valid()).map(|id| id.to_string()),
+			"name": name,
 			"animated": emoji.animated,
 		});
 	}

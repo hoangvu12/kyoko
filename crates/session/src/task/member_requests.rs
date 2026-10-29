@@ -65,9 +65,10 @@ impl MemberRequests {
 	) {
 		let fresh: Vec<Snowflake> = ids
 			.into_iter()
+			.filter(|id| id.is_valid())
 			.filter(|id| !self.is_recent(guild_id, *id, now) && !self.is_in_flight(guild_id, *id))
 			.collect();
-		if fresh.is_empty() {
+		if fresh.is_empty() || !guild_id.is_valid() {
 			return;
 		}
 		let queue = self.queues.entry(guild_id).or_default();
@@ -76,6 +77,9 @@ impl MemberRequests {
 	}
 
 	pub(crate) fn search(&mut self, guild_id: Snowflake, query: String, now: Instant) {
+		if query.is_empty() || !guild_id.is_valid() {
+			return;
+		}
 		let queue = self.queues.entry(guild_id).or_default();
 		queue.query = Some(query);
 		queue.ready_at.get_or_insert(now + BATCH_DELAY);
@@ -157,6 +161,10 @@ impl MemberRequests {
 		if self.in_flight.remove(&request.nonce).is_some() {
 			self.requeue(request, now);
 		}
+	}
+
+	pub(crate) fn dropped(&mut self, request: &Request) {
+		self.in_flight.remove(&request.nonce);
 	}
 
 	pub(crate) fn answered(&mut self, chunk: &GuildMembersChunk, now: Instant) {
