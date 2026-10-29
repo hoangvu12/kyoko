@@ -16,6 +16,10 @@ pub trait VideoSource: Send {
 	fn next_frame(&mut self) -> Result<VideoFrame, VideoError>;
 
 	fn size(&self) -> (u32, u32);
+
+	fn hidden(&self) -> bool {
+		false
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +66,7 @@ pub struct ScreenTarget {
 	pub name: String,
 	pub width: u32,
 	pub height: u32,
+	pub process: u32,
 }
 
 #[cfg(windows)]

@@ -1,14 +1,16 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mockcord::{GatewayFrame, MockStream, VoiceFrame, VoiceRecording, VoiceVideoFrame};
+use mockcord::{GatewayFrame, MockStream, VoiceFrame, VoicePacket, VoiceRecording, VoiceVideoFrame};
+use opus::{Channels, Decoder};
 use protocol::{Opcode, Snowflake};
 use serde_json::{Value, json};
-use session::Command;
+use session::{Command, FAKE_SOUND_HZ, FAKE_SOUND_LEVEL, FakeCapture, VoiceSetup};
 use state::State;
 use voice::video::{H264Decoder, ScreenKind, ScreenTarget, VideoQuality};
+use voice::{SILENCE_FRAME, SoundTarget, VoiceConnection};
 
-use crate::voice::{Voice, identifies, start};
+use crate::voice::{Voice, identifies, manual_setup, start};
 
 const READY: i64 = 2;
 const VIDEO: i64 = 12;
@@ -22,6 +24,15 @@ const QUIET: Duration = Duration::from_millis(600);
 const SENT_SIZE: (u32, u32) = (1_280, 720);
 const OP_18_KEYS: [&str; 4] = ["type", "guild_id", "channel_id", "preferred_region"];
 const OP_22_KEYS: [&str; 2] = ["stream_key", "paused"];
+const SPEAKING: i64 = 5;
+const SOUNDSHARE: i64 = 2;
+const SHARED_PROCESS: u32 = 4_100;
+const SOUND_PACKETS: usize = 25;
+const SOUND_SKIPPED: usize = 5;
+const STEREO_FRAME: usize = 1_920;
+const TONE_SHARE: f32 = 0.9;
+const LEVEL_SLACK_DB: f32 = 3.0;
+const SWAPPED_SIZE: (u32, u32) = (1_920, 1_080);
 
 fn shared_window() -> ScreenTarget {
 	ScreenTarget {
@@ -30,7 +41,84 @@ fn shared_window() -> ScreenTarget {
 		name: "Kyoko".to_owned(),
 		width: 1_600,
 		height: 900,
+		process: SHARED_PROCESS,
 	}
+}
+
+fn shared_screen() -> ScreenTarget {
+	ScreenTarget {
+		kind: ScreenKind::Screen,
+		id: 1,
+		name: "Screen 1".to_owned(),
+		width: 1_920,
+		height: 1_080,
+		process: 0,
+	}
+}
+
+fn full_hd() -> VideoQuality {
+	VideoQuality {
+		width: 1_920,
+		height: 1_080,
+		fps: 15,
+		bitrate: 4_000_000,
+	}
+}
+
+fn sound_after(recording: &VoiceRecording, ssrc: u32, after: Instant) -> Vec<VoicePacket> {
+	recording
+		.packets_from(ssrc)
+		.filter(|packet| packet.at > after && packet.payload != SILENCE_FRAME)
+		.cloned()
+		.collect()
+}
+
+fn decoded_sound(packets: &[VoicePacket]) -> Vec<f32> {
+	let mut decoder = Decoder::new(48_000, Channels::Stereo).expect("an opus decoder");
+	let mut frame = vec![0.0f32; STEREO_FRAME];
+	let mut samples = Vec::new();
+	for packet in packets.iter().skip(SOUND_SKIPPED) {
+		let opened = packet.opened.as_deref().expect("the viewer opens the sound");
+		let decoded = decoder
+			.decode_float(opened, &mut frame, false)
+			.expect("the sound decodes");
+		samples.extend(
+			frame[..decoded * 2]
+				.as_chunks::<2>()
+				.0
+				.iter()
+				.map(|[left, right]| (left + right) * 0.5),
+		);
+	}
+	samples
+}
+
+fn tone_share(samples: &[f32], hz: f32) -> f32 {
+	let step = hz * std::f32::consts::TAU / 48_000.0;
+	let (sine, cosine) =
+		samples
+			.iter()
+			.enumerate()
+			.fold((0.0f32, 0.0f32), |(sine, cosine), (index, sample)| {
+				let phase = index as f32 * step;
+				(sine + sample * phase.sin(), cosine + sample * phase.cos())
+			});
+	let tone = 2.0 * (sine * sine + cosine * cosine) / samples.len() as f32;
+	let energy: f32 = samples.iter().map(|sample| sample * sample).sum();
+	tone / energy.max(f32::EPSILON)
+}
+
+fn level_db(samples: &[f32]) -> f32 {
+	let energy: f32 = samples.iter().map(|sample| sample * sample).sum();
+	10.0 * (energy / samples.len().max(1) as f32 + 1e-12).log10()
+}
+
+fn soundshare_flags(recording: &VoiceRecording, connection: u64, after: Instant) -> Vec<i64> {
+	recording
+		.frames_with(SPEAKING)
+		.filter(|frame| frame.connection == connection && frame.at > after)
+		.filter_map(|frame| frame.data["speaking"].as_i64())
+		.collect()
 }
 
 fn quality() -> VideoQuality {
@@ -140,6 +228,78 @@ impl Voice {
 		frames_after(&recording, ssrc, after)
 	}
 
+	async fn sound_packets(&self, ssrc: u32, after: Instant, what: &str) -> Vec<VoicePacket> {
+		let recording = self
+			.voice_until(what, |recording| {
+				sound_after(recording, ssrc, after).len() >= SOUND_PACKETS + SOUND_SKIPPED
+			})
+			.await;
+		sound_after(&recording, ssrc, after)
+	}
+
+	async fn sound_goes_quiet(&self, ssrc: u32, why: &str) {
+		tokio::time::sleep(DRAIN).await;
+		let quiet_from = Instant::now();
+		tokio::time::sleep(QUIET).await;
+		assert!(
+			sound_after(&self.running.voice().recording(), ssrc, quiet_from).is_empty(),
+			"{why}"
+		);
+	}
+
+	fn fake_capture(&self) -> FakeCapture {
+		let capture = FakeCapture::default();
+		self.running.session().set_voice_setup(VoiceSetup {
+			capture: capture.clone(),
+			..manual_setup(&self.running)
+		});
+		capture
+	}
+
+	async fn live_with_a_viewer(&self, sound: bool) -> (MockStream, Arc<VoiceConnection>, Instant) {
+		let control = self.running.voice();
+		control.set_dave_version(1);
+		control.add_member(self.lounge.get(), MEMBER);
+		self.join(self.lounge);
+		self.connected_to(self.lounge).await;
+		let session = self.running.session();
+		self.running
+			.eventually("the call's DAVE group to form", || {
+				control.dave_group(self.lounge.get()).len() == 2
+					&& session
+						.voice_connection()
+						.is_some_and(|connection| connection.dave().enabled())
+			})
+			.await;
+		let asked = self.command(Command::GoLive {
+			source: shared_window(),
+			quality: quality(),
+			sound,
+		});
+		let stream = self.own_stream().await;
+		control.add_member(stream.rtc_channel_id, VIEWER);
+		self.running
+			.eventually("the go live connection to come up", || {
+				session.share_connection().is_some()
+			})
+			.await;
+		let connection = session.share_connection().expect("the go live connection");
+		self.running
+			.eventually("the stream's DAVE group to form", || {
+				control.dave_group(stream.rtc_channel_id).len() == 2 && connection.dave().enabled()
+			})
+			.await;
+		(stream, connection, asked)
+	}
+
+	fn stream_socket(&self, stream: &MockStream) -> u64 {
+		identifies(&self.running.voice().recording())
+			.into_iter()
+			.find(|frame| frame.data["server_id"] == json!(stream.rtc_server_id.to_string()))
+			.expect("the stream identify")
+			.connection
+	}
+
 	async fn screen_goes_quiet(&self, ssrc: u32, why: &str) {
 		tokio::time::sleep(DRAIN).await;
 		let quiet_from = Instant::now();
@@ -176,6 +336,7 @@ async fn going_live_sends_dave_h264_on_one_screen_layer_honours_wants_pauses_and
 	let asked = voice.command(Command::GoLive {
 		source: shared_window(),
 		quality: quality(),
+		sound: false,
 	});
 	let op_18 = voice
 		.gateway_frame(Opcode::StreamCreate, asked, "op 18", |_| true)
@@ -356,6 +517,7 @@ async fn going_live_needs_a_call_and_leaving_the_call_ends_the_stream() {
 	voice.command(Command::GoLive {
 		source: shared_window(),
 		quality: quality(),
+		sound: false,
 	});
 	voice
 		.running
@@ -382,6 +544,7 @@ async fn going_live_needs_a_call_and_leaving_the_call_ends_the_stream() {
 	voice.command(Command::GoLive {
 		source: shared_window(),
 		quality: quality(),
+		sound: false,
 	});
 	let stream = voice.own_stream().await;
 	voice
@@ -405,6 +568,220 @@ async fn going_live_needs_a_call_and_leaving_the_call_ends_the_stream() {
 	voice
 		.running
 		.until("the call to end", |state| state.voice().is_none())
+		.await;
+	voice.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn going_live_shares_the_windows_sound_dave_encrypted_and_minimising_pauses_it() {
+	let voice = start("go-live-sound").await;
+	let capture = voice.fake_capture();
+	let session = voice.running.session();
+	let me = me(&voice);
+	let (stream, connection, asked) = voice.live_with_a_viewer(true).await;
+	let socket = voice.stream_socket(&stream);
+	let ssrc = screen_ssrc(&voice.running.voice().recording(), socket);
+	let audio_ssrc = connection.ssrc().expect("the stream connection's ssrc");
+	voice
+		.running
+		.eventually("the window's sound to open", || {
+			!capture.sound_targets().is_empty()
+		})
+		.await;
+	assert_eq!(
+		capture.sound_targets(),
+		[SoundTarget::App {
+			process: SHARED_PROCESS
+		}],
+		"an app shares only its own process tree's sound"
+	);
+
+	let encrypted = Instant::now();
+	let sound = voice
+		.sound_packets(audio_ssrc, encrypted, "the stream's sound")
+		.await;
+	for packet in &sound {
+		assert!(packet.payload.ends_with(&DAVE_MARKER), "a DAVE frame");
+		let opened = packet.opened.as_deref().expect("the viewer opens the sound");
+		assert_ne!(opened, packet.payload.as_slice(), "the sound was encrypted");
+	}
+	let heard = decoded_sound(&sound);
+	let share = tone_share(&heard, FAKE_SOUND_HZ);
+	let level = level_db(&heard);
+	let expected = 20.0 * (FAKE_SOUND_LEVEL / std::f32::consts::SQRT_2).log10();
+	eprintln!("stream sound: {share:.3} of it the tone at {level:.1} dB (sent at {expected:.1} dB)");
+	assert!(
+		share > TONE_SHARE,
+		"the viewer hears the shared sound: {share:.3}"
+	);
+	assert!(
+		(level - expected).abs() <= LEVEL_SLACK_DB,
+		"the sound keeps its level, no voice processing: {level:.1} dB against {expected:.1} dB"
+	);
+	assert!(
+		soundshare_flags(&voice.running.voice().recording(), socket, asked).contains(&SOUNDSHARE),
+		"op 5 announces the sound as soundshare"
+	);
+	assert_eq!(
+		connection.stats().frames_echo_cancelled + connection.stats().frames_denoised,
+		0,
+		"stream sound skips the microphone's processing"
+	);
+	voice
+		.running
+		.eventually("your own stream to preview from local frames", || {
+			session.stream_feed().decoded(me) >= STREAM_FRAMES as u64
+		})
+		.await;
+
+	let minimised = Instant::now();
+	capture.set_minimised(true);
+	let op_22 = voice
+		.gateway_frame(Opcode::StreamSetPaused, minimised, "op 22 on minimise", |data| {
+			data["paused"] == json!(true)
+		})
+		.await;
+	assert_eq!(op_22.data["stream_key"], json!(stream.key));
+	voice
+		.running
+		.until("your stream to show as paused", |state| {
+			state.stream_of(me).is_some_and(|summary| summary.paused)
+		})
+		.await;
+	voice
+		.screen_goes_quiet(ssrc, "a minimised window sends no video")
+		.await;
+	voice
+		.sound_goes_quiet(audio_ssrc, "a minimised window sends no sound")
+		.await;
+	assert!(
+		soundshare_flags(&voice.running.voice().recording(), socket, minimised).contains(&0),
+		"op 5 ends the soundshare while paused"
+	);
+
+	let restored = Instant::now();
+	capture.set_minimised(false);
+	voice
+		.gateway_frame(Opcode::StreamSetPaused, restored, "op 22 on restore", |data| {
+			data["paused"] == json!(false)
+		})
+		.await;
+	let frames = voice
+		.screen_frames(ssrc, restored, "the screen after restoring")
+		.await;
+	assert!(frames[0].is_keyframe(), "a restored window resumes on a keyframe");
+	voice
+		.sound_packets(audio_ssrc, restored, "the sound after restoring")
+		.await;
+
+	voice.command(Command::StopGoLive);
+	voice
+		.running
+		.eventually("the own preview to clear", || {
+			session.share_connection().is_none() && session.stream_feed().decoded(me) == 0
+		})
+		.await;
+	voice.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changing_windows_swaps_the_capture_on_the_same_stream_connection_and_key() {
+	let voice = start("go-live-swap").await;
+	let capture = voice.fake_capture();
+	let session = voice.running.session();
+	let control = voice.running.voice();
+	let (stream, connection, asked) = voice.live_with_a_viewer(true).await;
+	let socket = voice.stream_socket(&stream);
+	let ssrc = screen_ssrc(&control.recording(), socket);
+	let frames = voice.screen_frames(ssrc, asked, "the window's frames").await;
+	assert_eq!(decoded_size(&frames), Some(SENT_SIZE));
+
+	let swapped = voice.command(Command::GoLive {
+		source: shared_screen(),
+		quality: full_hd(),
+		sound: true,
+	});
+	let recording = voice
+		.voice_until("op 12 announcing the new size", |recording| {
+			video_states(recording, socket, swapped)
+				.iter()
+				.any(|state| state.data["streams"][0]["max_resolution"]["width"] == json!(SWAPPED_SIZE.0))
+		})
+		.await;
+	let announced = video_states(&recording, socket, swapped)
+		.into_iter()
+		.find(|state| state.data["streams"][0]["max_resolution"]["width"] == json!(SWAPPED_SIZE.0))
+		.expect("the new size");
+	assert_eq!(announced.data["video_ssrc"], json!(ssrc), "the same layer");
+	assert_eq!(
+		announced.data["streams"][0]["max_resolution"]["height"],
+		json!(SWAPPED_SIZE.1)
+	);
+	let frames = voice.screen_frames(ssrc, swapped, "the screen's frames").await;
+	let first = frames
+		.iter()
+		.position(VoiceVideoFrame::is_keyframe)
+		.expect("a keyframe after the swap");
+	for frame in &frames[first..] {
+		assert!(frame.opened.is_some(), "the viewer still opens the frames");
+	}
+	voice
+		.running
+		.eventually("frames at the new size", || {
+			decoded_size(&frames_after(&control.recording(), ssrc, swapped)) == Some(SWAPPED_SIZE)
+		})
+		.await;
+	voice
+		.running
+		.eventually("the screen's sound", || capture.sound_targets().len() == 2)
+		.await;
+	assert_eq!(
+		capture.sound_targets(),
+		[
+			SoundTarget::App {
+				process: SHARED_PROCESS
+			},
+			SoundTarget::Everything {
+				except: std::process::id()
+			}
+		],
+		"a screen shares everything but kyoko's own sound"
+	);
+	voice
+		.sound_packets(
+			connection.ssrc().expect("an ssrc"),
+			Instant::now(),
+			"the screen's sound",
+		)
+		.await;
+
+	let still = session.share_connection().expect("the stream connection");
+	assert!(Arc::ptr_eq(&still, &connection), "the same stream connection");
+	let gateway = voice.running.mock().recording();
+	assert_eq!(
+		gateway.frames_with(Opcode::StreamCreate).count(),
+		1,
+		"no second op 18"
+	);
+	assert_eq!(gateway.frames_with(Opcode::StreamDelete).count(), 0, "no op 19");
+	let recording = control.recording();
+	assert_eq!(
+		identifies(&recording)
+			.into_iter()
+			.filter(|frame| frame.data["server_id"] == json!(stream.rtc_server_id.to_string()))
+			.count(),
+		1,
+		"the stream connection never reconnected"
+	);
+	assert!(
+		!recording.closes.iter().any(|(closed, _)| *closed == socket),
+		"the stream socket stayed open"
+	);
+	voice
+		.running
+		.until("the same stream key", |state| {
+			sharing(state).as_deref() == Some(stream.key.as_str())
+		})
 		.await;
 	voice.stop().await;
 }

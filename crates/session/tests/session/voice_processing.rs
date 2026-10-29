@@ -5,6 +5,7 @@ use std::time::Duration;
 use denoise::testing::{level_db, speech};
 use mockcord::VoiceControl;
 use opus::{Application, Channels, Decoder, Encoder};
+use protocol::Snowflake;
 use session::Command;
 use store::VoiceSettings;
 use tokio::task::JoinHandle;
@@ -135,8 +136,14 @@ impl Sent {
 	}
 }
 
-fn play_far_end(control: VoiceControl, channel_id: u64, far_end: Vec<f32>) -> JoinHandle<()> {
-	control.speak_as(FAR_END_USER, FAR_END_SSRC, true);
+#[derive(Debug, Clone, Copy)]
+struct FarEnd {
+	channel_id: u64,
+	user: u64,
+	ssrc: u32,
+}
+
+fn play_far_end(control: VoiceControl, far: FarEnd, far_end: Vec<f32>) -> JoinHandle<()> {
 	tokio::spawn(async move {
 		let mut encoder = Encoder::new(48_000, Channels::Mono, Application::Voip).expect("an opus encoder");
 		let mut packet = vec![0; OPUS_PACKET_BYTES];
@@ -148,9 +155,9 @@ fn play_far_end(control: VoiceControl, channel_id: u64, far_end: Vec<f32>) -> Jo
 				.encode_float(frame, &mut packet)
 				.expect("the far end encodes");
 			control.send_as(
-				channel_id,
-				FAR_END_USER,
-				FAR_END_SSRC,
+				far.channel_id,
+				far.user,
+				far.ssrc,
 				index as u16,
 				&packet[..length],
 			);
@@ -163,16 +170,21 @@ struct Microphone {
 	near_end: Vec<f32>,
 }
 
-async fn echo_path(connection: Arc<VoiceConnection>, near_end: Vec<f32>, frames: usize) -> Microphone {
+async fn echo_path(
+	speaker: Arc<VoiceConnection>,
+	connection: Arc<VoiceConnection>,
+	near_end: Vec<f32>,
+	frames: usize,
+) -> Microphone {
 	let mut path: VecDeque<f32> = std::iter::repeat_n(0.0, PATH_SAMPLES).collect();
 	let mut echo = Vec::with_capacity(frames * FRAME_SAMPLES);
-	let _ = connection.take_output();
+	let _ = speaker.take_output();
 	for _ in 0..PATH_FRAMES {
 		connection.feed_input(&[0; FRAME_SAMPLES]);
 		echo.extend([0.0; FRAME_SAMPLES]);
 	}
 	while echo.len() < frames * FRAME_SAMPLES {
-		for played in connection.take_output() {
+		for played in speaker.take_output() {
 			path.extend(mono(&played));
 			let start = echo.len();
 			echo.extend(path.drain(..FRAME_SAMPLES).map(|sample| sample * ECHO_GAIN));
@@ -212,11 +224,27 @@ struct EchoRun {
 
 impl EchoRun {
 	async fn record(voice: &Voice, near_end: Vec<f32>, frames: usize) -> Self {
+		voice.running.voice().speak_as(FAR_END_USER, FAR_END_SSRC, true);
+		let far = FarEnd {
+			channel_id: voice.lounge.get(),
+			user: FAR_END_USER,
+			ssrc: FAR_END_SSRC,
+		};
+		Self::record_from(voice, far, connection(voice), near_end, frames).await
+	}
+
+	async fn record_from(
+		voice: &Voice,
+		far: FarEnd,
+		speaker: Arc<VoiceConnection>,
+		near_end: Vec<f32>,
+		frames: usize,
+	) -> Self {
 		let control = voice.running.voice();
 		let sent = Sent::marked(voice).await;
 		let far_end = looped(&speech(), (frames + PATH_FRAMES) * FRAME_SAMPLES);
-		let player = play_far_end(control.clone(), voice.lounge.get(), far_end);
-		let microphone = echo_path(connection(voice), near_end, frames).await;
+		let player = play_far_end(control.clone(), far, far_end);
+		let microphone = echo_path(speaker, connection(voice), near_end, frames).await;
 		player.abort();
 		tokio::time::sleep(ROUND_TRIP_SLACK).await;
 		Self {
@@ -406,5 +434,49 @@ async fn the_mic_test_plays_your_voice_back_through_gain_control() {
 		"the mic test raises a quiet voice into {LEVELLED:?} dB: {input:.1} -> {output:.1} dB"
 	);
 	voice.command(Command::StopMicTest);
+	voice.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_watched_streams_sound_plays_through_the_call_and_is_cancelled_from_your_microphone() {
+	let voice = processing("voice-stream-echo", |settings| {
+		settings.echo_cancellation = true;
+	})
+	.await;
+	voice.running.voice().hold_echo();
+	let session = voice.running.session();
+	let owner = Snowflake(FAR_END_USER);
+	let stream = voice
+		.running
+		.mock()
+		.start_stream(voice.guild_id.0, voice.lounge.0, FAR_END_USER);
+	voice.command(Command::WatchStream {
+		stream_key: stream.key.clone(),
+	});
+	voice
+		.running
+		.eventually("the stream connection to name the streamer", || {
+			session
+				.stream_connection()
+				.is_some_and(|watched| watched.video_users().contains(&owner))
+		})
+		.await;
+	let far = FarEnd {
+		channel_id: stream.rtc_channel_id,
+		user: FAR_END_USER,
+		ssrc: stream.audio_ssrc(),
+	};
+	let run = EchoRun::record_from(&voice, far, connection(&voice), Vec::new(), ECHO_FRAMES).await;
+	let erle = run.median_erle_db(CONVERGED..ECHO_FRAMES);
+	let stats = connection(&voice).stats();
+	eprintln!("a watched stream's sound echoed into the call: ERLE {erle:.1} dB, {stats:?}");
+	assert!(
+		stats.stream_frames_played > 0,
+		"the watched stream plays through the call"
+	);
+	assert!(
+		erle >= ERLE_ON_DB,
+		"the stream's echo is taken down by {ERLE_ON_DB} dB: {erle:.1} dB"
+	);
 	voice.stop().await;
 }

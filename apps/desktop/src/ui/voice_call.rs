@@ -437,6 +437,7 @@ fn tile_value(tile: &CallTile, avatar: Option<&str>) -> Value {
 		("stream", false.into()),
 		("stream_key", "".into()),
 		("watching", false.into()),
+		("paused", false.into()),
 	])
 }
 
@@ -447,7 +448,7 @@ fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
 		("id", stream.user_id.to_string().as_str().into()),
 		("name", stream.name.as_str().into()),
 		("avatar", avatar.as_str().into()),
-		("me", false.into()),
+		("me", stream.me.into()),
 		("muted", false.into()),
 		("deafened", false.into()),
 		("video", "stream".into()),
@@ -457,6 +458,7 @@ fn stream_value(stream: &CallStream, avatar: Option<&str>) -> Value {
 		("stream", true.into()),
 		("stream_key", stream.stream_key.as_str().into()),
 		("watching", stream.watching.into()),
+		("paused", stream.paused.into()),
 	])
 }
 

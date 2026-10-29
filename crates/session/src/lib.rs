@@ -42,4 +42,4 @@ pub use video_feed::{
 	FOCUSED_MAX_FPS, FOCUSED_QUALITY, THUMBNAIL_MAX_FPS, THUMBNAIL_QUALITY, VideoFeed, VideoUpdate, VideoView,
 };
 pub use voice::{AudioDevices, AudioIo, DeviceInfo, devices as audio_devices};
-pub use voice_setup::{CameraIo, VoiceSetup};
+pub use voice_setup::{CameraIo, FAKE_SOUND_HZ, FAKE_SOUND_LEVEL, FakeCapture, VoiceSetup};

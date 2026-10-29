@@ -771,6 +771,7 @@ export type CallTile = {
 	stream: boolean,
 	stream_key: string,
 	watching: boolean,
+	paused: boolean,
 }
 export type VoiceCall = {
 	open: boolean,

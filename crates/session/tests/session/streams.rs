@@ -330,7 +330,7 @@ fn level(frames: &[MixedFrame]) -> (f32, i16) {
 struct StreamAudio<'a> {
 	voice: &'a Voice,
 	stream: &'a MockStream,
-	connection: Arc<VoiceConnection>,
+	call: Arc<VoiceConnection>,
 	sequence: u16,
 }
 
@@ -343,7 +343,7 @@ impl StreamAudio<'_> {
 
 	fn heard(&self) -> Vec<MixedFrame> {
 		let ssrc = self.stream.audio_ssrc();
-		self.connection
+		self.call
 			.take_output()
 			.into_iter()
 			.filter(|frame| frame.sources.contains(&ssrc))
@@ -352,12 +352,12 @@ impl StreamAudio<'_> {
 
 	async fn level(&mut self) -> (f32, i16) {
 		tokio::time::sleep(SETTLE).await;
-		let _ = self.connection.take_output();
+		let _ = self.call.take_output();
 		let sender = self.play();
 		let heard = RefCell::new(Vec::new());
 		self.voice
 			.running
-			.eventually("the stream's audio to be mixed", || {
+			.eventually("the stream's audio to play through the call", || {
 				let mut heard = heard.borrow_mut();
 				heard.extend(self.heard());
 				heard.len() >= WARMUP_FRAMES + MEASURED_FRAMES
@@ -369,7 +369,7 @@ impl StreamAudio<'_> {
 
 	async fn unheard(&mut self) -> usize {
 		tokio::time::sleep(SETTLE).await;
-		let _ = self.connection.take_output();
+		let _ = self.call.take_output();
 		self.play().await.expect("the stream audio was sent");
 		tokio::time::sleep(SETTLE).await;
 		self.heard().len()
@@ -417,7 +417,7 @@ async fn a_watched_streams_audio_plays_at_its_own_volume_sends_nothing_and_follo
 	let mut audio = StreamAudio {
 		voice: &voice,
 		stream: &stream,
-		connection: connection.clone(),
+		call: session.voice_connection().expect("the call's connection"),
 		sequence: 1,
 	};
 

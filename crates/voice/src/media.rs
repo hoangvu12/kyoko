@@ -11,7 +11,9 @@ use tokio::time::{MissedTickBehavior, interval};
 use tracing::{debug, warn};
 
 use crate::chain::{CaptureChain, PlaybackChain};
-use crate::codec::{DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, VoiceEncoder};
+use crate::codec::{
+	DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRAME_SAMPLES, SoundEncoder, VoiceEncoder,
+};
 use crate::gate::{VoiceGate, decayed_db, meter_level, rms, to_db};
 use crate::jitter::Push;
 use crate::mixer::Mixer;
@@ -48,6 +50,10 @@ pub(crate) struct Media {
 	capture: CaptureChain,
 	playback: PlaybackChain,
 	encoder: VoiceEncoder,
+	sound_encoder: Option<SoundEncoder>,
+	sound_pending: Vec<f32>,
+	sound_frame: Vec<f32>,
+	sharing_sound: bool,
 	suppressor: NoiseSuppressor,
 	processor: Processor,
 	gate: VoiceGate,
@@ -86,6 +92,10 @@ impl Media {
 			audio_io,
 			capture: CaptureChain::default(),
 			encoder: VoiceEncoder::new()?,
+			sound_encoder: None,
+			sound_pending: Vec::new(),
+			sound_frame: vec![0.0; STEREO_FRAME_SAMPLES],
+			sharing_sound: false,
 			suppressor: NoiseSuppressor::new(),
 			processor: Processor::default(),
 			gate: VoiceGate::default(),
@@ -169,6 +179,66 @@ impl Media {
 			self.send_frame(&mut frame);
 		}
 		self.frame = frame;
+		self.sound_tick();
+	}
+
+	fn sound_tick(&mut self) {
+		let mut pending = std::mem::take(&mut self.sound_pending);
+		self.shared.sound.drain_into(&mut pending);
+		if !self.shared.sharing_sound() || self.shared.video.outgoing.paused() {
+			pending.clear();
+			self.end_sound();
+			self.sound_pending = pending;
+			return;
+		}
+		let mut frame = std::mem::take(&mut self.sound_frame);
+		while pending.len() >= STEREO_FRAME_SAMPLES {
+			frame.copy_from_slice(&pending[..STEREO_FRAME_SAMPLES]);
+			pending.drain(..STEREO_FRAME_SAMPLES);
+			self.send_sound(&frame);
+		}
+		self.sound_frame = frame;
+		self.sound_pending = pending;
+	}
+
+	fn send_sound(&mut self, stereo: &[f32]) {
+		if !self.sharing_sound {
+			self.sharing_sound = true;
+			let _ = self.control.send(Control::SoundShare(true));
+		}
+		if self.sound_encoder.is_none() {
+			match SoundEncoder::new() {
+				Ok(encoder) => self.sound_encoder = Some(encoder),
+				Err(error) => {
+					warn!(%error, "failed to create the stream sound encoder");
+					return;
+				}
+			}
+		}
+		let encoded = self
+			.sound_encoder
+			.as_mut()
+			.map(|encoder| encoder.encode(stereo).map(<[u8]>::to_vec));
+		match encoded {
+			Some(Ok(packet)) => {
+				self.send_audio(&packet);
+				self.shared.counters.sound_sent.fetch_add(1, Ordering::Relaxed);
+			}
+			Some(Err(error)) => warn!(%error, "stream sound encode failed"),
+			None => {}
+		}
+		self.timestamp = self.timestamp.wrapping_add(FRAME_SAMPLES as u32);
+	}
+
+	fn end_sound(&mut self) {
+		if !std::mem::take(&mut self.sharing_sound) {
+			return;
+		}
+		for _ in 0..SILENCE_FRAMES_BEFORE_PAUSE {
+			self.send_payload(&SILENCE_FRAME);
+			self.timestamp = self.timestamp.wrapping_add(FRAME_SAMPLES as u32);
+		}
+		let _ = self.control.send(Control::SoundShare(false));
 	}
 
 	fn inject(&mut self, now: Instant) {
@@ -358,7 +428,9 @@ impl Media {
 		while self.next_playout <= now {
 			let sources = self.mix_frame(now);
 			self.next_playout += FRAME_DURATION;
-			if !self.audio_io {
+			if let Some(feed) = self.shared.playback_out.lock().as_ref() {
+				feed.push(self.mixer.output(), sources);
+			} else if !self.audio_io {
 				self.tap_output(sources);
 			}
 		}
@@ -411,7 +483,13 @@ impl Media {
 		} else {
 			self.shared.output_volume.load()
 		};
-		let level = meter_level(rms(self.mixer.finish(master)));
+		self.mixer.finish(master);
+		if let Some(fed) = self.shared.playback_in.pop() {
+			self.mixer.mix_in(&fed.stereo);
+			sources.extend(fed.sources);
+			self.shared.counters.stream_played.fetch_add(1, Ordering::Relaxed);
+		}
+		let level = meter_level(rms(self.mixer.output()));
 		self.processor
 			.render(self.shared.processing(), self.mixer.output());
 		let previous = self.shared.output_level.load();

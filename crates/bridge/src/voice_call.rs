@@ -25,7 +25,9 @@ pub struct CallStream {
 	pub user_id: Snowflake,
 	pub name: String,
 	pub stream_key: String,
+	pub me: bool,
 	pub watching: bool,
+	pub paused: bool,
 	pub volume: u8,
 }
 
@@ -105,13 +107,15 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 	tiles.sort_by_cached_key(|tile| (tile.name.to_lowercase(), tile.user_id));
 	let streams = tiles
 		.iter()
-		.filter(|tile| tile.live && !tile.me)
+		.filter(|tile| tile.live && (!tile.me || session.screen_share.is_some()))
 		.map(|tile| {
 			let stream_key = stream_key(guild_id, channel_id, tile.user_id);
 			CallStream {
 				user_id: tile.user_id,
 				name: tile.name.clone(),
-				watching: session.watching.as_deref() == Some(stream_key.as_str()),
+				me: tile.me,
+				watching: tile.me || session.watching.as_deref() == Some(stream_key.as_str()),
+				paused: state.stream_of(tile.user_id).is_some_and(|stream| stream.paused),
 				volume: state.user_audio(tile.user_id).stream_volume,
 				stream_key,
 			}

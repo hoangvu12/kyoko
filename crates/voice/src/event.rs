@@ -72,6 +72,7 @@ pub enum VoiceEvent {
 	DaveFailure(String),
 	CameraStopped,
 	VideoSourceEnded,
+	VideoSourceHidden(bool),
 	Stats {
 		ping_ms: u32,
 		packets_lost: u64,

@@ -4157,6 +4157,7 @@ dependencies = [
  "url",
  "uuid",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

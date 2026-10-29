@@ -299,7 +299,7 @@ impl Core {
 			}
 			VoiceEvent::DaveFailure(reason) => tracing::warn!(%reason, "voice e2ee failure"),
 			VoiceEvent::CameraStopped | VoiceEvent::VideoSourceEnded => self.camera_stopped(),
-			VoiceEvent::Stats { .. } => {}
+			VoiceEvent::Stats { .. } | VoiceEvent::VideoSourceHidden(_) => {}
 		}
 	}
 
@@ -402,15 +402,6 @@ impl Core {
 					output: settings.voice.output_device.clone(),
 				}
 			}
-			AudioIo::Playback { .. } | AudioIo::Manual => AudioIo::Manual,
-		}
-	}
-
-	pub(super) fn playback_io(&self) -> AudioIo {
-		match self.voice_shared.setup.lock().audio {
-			AudioIo::Devices { .. } | AudioIo::Playback { .. } => AudioIo::Playback {
-				output: self.store.settings.read().voice.output_device.clone(),
-			},
 			AudioIo::Manual => AudioIo::Manual,
 		}
 	}

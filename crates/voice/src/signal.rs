@@ -38,6 +38,7 @@ const MAX_BACKLOG_FRAMES: usize = 64;
 const NORMAL_CLOSE: u16 = 1000;
 const FULL_QUALITY: u8 = 100;
 const VOICE_FLAG: u32 = 1;
+const SOUNDSHARE_FLAG: u32 = 2;
 
 pub(crate) struct Credentials {
 	server_id: Snowflake,
@@ -469,7 +470,7 @@ async fn handshake(credentials: &Credentials) -> Result<Established> {
 	let description: SessionDescription = link.expect(opcode::SESSION_DESCRIPTION).await?;
 	let mode = EncryptionMode::from_name(&description.mode).ok_or(VoiceError::NoEncryptionMode)?;
 	let transport = discovered.secure(mode, &description.secret_key)?;
-	link.send(opcode::SPEAKING, speaking(false, ready.ssrc))
+	link.send(opcode::SPEAKING, speaking(false, false, ready.ssrc))
 		.await
 		.map_err(exit_error)?;
 	link.send(opcode::MEDIA_SINK_WANTS, SinkWants { any: FULL_QUALITY })
@@ -529,9 +530,9 @@ pub(crate) async fn resume(credentials: &Credentials, last_seq: i64) -> Result<L
 		.map_err(|_| VoiceError::Timeout)?
 }
 
-pub(crate) fn speaking(speaking: bool, ssrc: u32) -> SpeakingUpdate {
+pub(crate) fn speaking(speaking: bool, sound: bool, ssrc: u32) -> SpeakingUpdate {
 	SpeakingUpdate {
-		speaking: if speaking { VOICE_FLAG } else { 0 },
+		speaking: if speaking { VOICE_FLAG } else { 0 } | if sound { SOUNDSHARE_FLAG } else { 0 },
 		delay: 0,
 		ssrc,
 	}

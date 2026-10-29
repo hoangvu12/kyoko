@@ -713,6 +713,7 @@ pub enum Command {
 	GoLive {
 		source: ScreenTarget,
 		quality: VideoQuality,
+		sound: bool,
 	},
 	StopGoLive,
 	SetStreamPaused(bool),

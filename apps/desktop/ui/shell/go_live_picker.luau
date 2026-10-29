@@ -7,7 +7,7 @@ local kit = require("../settings/kit")
 
 local COLUMNS = 3
 local TILE_RATIO = 9 / 16
-local PICKED_CHROME = 300
+local PICKED_CHROME = 360
 local TABS = {
 	{ key = "window", label = "Applications", empty = "No windows to share." },
 	{ key = "screen", label = "Screens", empty = "No screens to share." },
@@ -358,7 +358,24 @@ local function quality()
 	}
 end
 
-local function picked()
+local function sound_choice(sound: any)
+	return kit.line(
+		"Sound",
+		"Share the sound of the app or screen you stream.",
+		kit.switch {
+			id = "go_live_sound",
+			label = "Sound",
+			checked = function()
+				return sound:get()
+			end,
+			on_change = function(on: boolean)
+				sound:set(on)
+			end,
+		}
+	)
+end
+
+local function picked(sound: any)
 	return ui.column {
 		w_full = true,
 		gap = theme.size.space_16,
@@ -367,6 +384,7 @@ local function picked()
 			id = "go_live_preview_size",
 		}),
 		quality(),
+		sound_choice(sound),
 	}
 end
 
@@ -374,7 +392,7 @@ local function ready(): boolean
 	return preview().running
 end
 
-local go_live_button = ui.component(function()
+local go_live_button = ui.component(function(props: { sound: any })
 	local hovered = ui.use_state(false)
 	return ui.button {
 		id = "go_live_start",
@@ -402,7 +420,7 @@ local go_live_button = ui.component(function()
 		on_click = function()
 			local shown = preview()
 			if shown.running then
-				actions.go_live_start(shown.id, shown.resolution, shown.fps)
+				actions.go_live_start(shown.id, shown.resolution, shown.fps, props.sound:get())
 			end
 		end,
 		ui.text {
@@ -423,11 +441,13 @@ end
 return ui.component(function()
 	local open = ui.use_state(false)
 	local tab = ui.use_state("window")
+	local sound = ui.use_state(true)
 	ui.effect(function()
 		local wanted = sources().open
 		if open:peek() ~= wanted then
 			if wanted then
 				tab:set("window")
+				sound:set(true)
 			end
 			open:set(wanted)
 		end
@@ -461,7 +481,7 @@ return ui.component(function()
 				return ui.column {
 					w_full = true,
 					p = theme.size.space_16,
-					if step == "picked" then picked() else source_list(tab),
+					if step == "picked" then picked(sound) else source_list(tab),
 				}
 			end, {
 				key = function(step: string)
@@ -487,7 +507,7 @@ return ui.component(function()
 					height = theme.size.button_height_md,
 					on_click = close,
 				},
-				ui.show(choosing, go_live_button {})
+				ui.show(choosing, go_live_button { sound = sound })
 			),
 		}),
 	}

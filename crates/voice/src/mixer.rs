@@ -29,6 +29,12 @@ impl Mixer {
 		&self.accumulator
 	}
 
+	pub fn mix_in(&mut self, frame: &[f32]) {
+		for (sum, sample) in self.accumulator.iter_mut().zip(frame) {
+			*sum = soft_clip(*sum + sample);
+		}
+	}
+
 	pub fn output(&self) -> &[f32] {
 		&self.accumulator
 	}

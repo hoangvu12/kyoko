@@ -6,7 +6,7 @@ use state::LocalEvent;
 use store::VoiceSettings;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use voice::{ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
+use voice::{AudioIo, ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
 
 use super::go_live::Share;
 use super::voice_link::volume;
@@ -242,6 +242,13 @@ impl Core {
 		connection.set_user_volume(owner, self.state.read().user_audio(owner).stream_gain());
 		connection.set_output_volume(volume(self.store.settings.read().voice.output_volume));
 		connection.set_video_sink(Some(self.voice_shared.stream_feed.sink()));
+		connection.play_through(
+			self.voice_shared
+				.connection
+				.lock()
+				.as_ref()
+				.map(|call| call.playback_feed()),
+		);
 		let internal = self.internal.clone();
 		let mut events = connection.events();
 		watch.pump = Some(self.runtime.spawn(async move {
@@ -322,7 +329,7 @@ impl Core {
 		let user_id = self.state.read().current_user_id();
 		let session_id = self.voice_session_id();
 		let mut options = self.voice_options();
-		options.audio = self.playback_io();
+		options.audio = AudioIo::Manual;
 		options.kind = ConnectionKind::Stream;
 		let Some(watch) = self.streams.watching(generation) else {
 			return;

@@ -745,6 +745,7 @@ fn the_go_live_picker_lists_screens_and_windows_previews_one_and_closes() {
 		"1080p",
 		"Source",
 		"60 FPS",
+		"Sound",
 		"Go Live",
 	] {
 		assert!(
@@ -779,8 +780,17 @@ fn the_go_live_picker_lists_screens_and_windows_previews_one_and_closes() {
 	app.frames(2);
 	assert_eq!(
 		last_call(&calls, "voice.go_live_start"),
-		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 30 })),
-		"Go Live goes live with the previewed source and quality"
+		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 30, "sound": true })),
+		"Go Live goes live with the previewed source and quality, sound on by default"
+	);
+	app.click("go_live_sound");
+	app.frames(2);
+	app.click("go_live_start");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.go_live_start"),
+		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 30, "sound": false })),
+		"the Sound switch turns the stream's sound off"
 	);
 
 	app.click("go_live_change");
@@ -887,6 +897,63 @@ fn going_live_shows_your_live_badge_and_the_screen_button_stops_it() {
 	));
 	shows(&mut app, "your stream", "grace", &live);
 	assert_eq!(badges(&mut app), before + 1, "your own tile shows LIVE");
+
+	let own_stream = |paused: bool| {
+		json!({
+			"key": "s30", "id": "30", "name": "ada", "avatar": "", "me": true, "muted": false,
+			"deafened": false, "video": "stream", "live": true, "volume": 100, "local_muted": false,
+			"stream": true, "stream_key": "guild:20:21:30", "watching": true, "paused": paused,
+		})
+	};
+	let with_stream = |paused: bool| {
+		let mut values = live.clone();
+		for (key, value) in &mut values {
+			if *key == "voice.call" {
+				value["tiles"]
+					.as_array_mut()
+					.expect("the tiles")
+					.insert(0, own_stream(paused));
+			}
+		}
+		values
+	};
+	shows(&mut app, "your own stream tile", "grace", &with_stream(false));
+	assert!(
+		app.find("call_stream_video_30").is_some(),
+		"your own stream previews on its tile"
+	);
+	assert!(
+		app.find("call_watch_30").is_none(),
+		"your own stream needs no Watch Stream"
+	);
+	let views = last_call(&calls, "voice.stream_views").expect("your stream's view is reported");
+	assert_eq!(
+		views[0]["id"],
+		json!("30"),
+		"your own preview is sized like a stream tile"
+	);
+	app.click("call_stream_30");
+	app.frames(2);
+	assert!(app.find("call_stop_watching_30").is_none());
+	app.click("call_change_windows");
+	app.frames(2);
+	assert_eq!(
+		last_call(&calls, "voice.go_live"),
+		Some(json!(true)),
+		"Change Windows opens the picker"
+	);
+	calls.borrow_mut().clear();
+	app.click("call_stop_streaming");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.stop_go_live"), Some(json!(true)));
+	shows(
+		&mut app,
+		"your paused stream",
+		"Your stream is paused",
+		&with_stream(true),
+	);
+
+	calls.borrow_mut().clear();
 	app.click("call_screen");
 	app.frames(2);
 	assert_eq!(last_call(&calls, "voice.stop_go_live"), Some(json!(true)));

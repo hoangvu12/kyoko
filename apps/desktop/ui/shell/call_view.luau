@@ -416,6 +416,77 @@ local function full_window_button(tile: state.CallTile, viewing: any)
 	}
 end
 
+local function paused_label(tile: state.CallTile)
+	return ui.show(
+		tile.paused,
+		ui.text {
+			if tile.me then "Your stream is paused" else "Stream paused",
+			id = "call_stream_paused_" .. tile.id,
+			literal = true,
+			absolute = true,
+			top = gap(),
+			left = gap(),
+			px = theme.size.space_8,
+			py = theme.size.space_2,
+			rounded = theme.size.radius_sm,
+			bg = theme.color.overlay_button_background,
+			text_size = theme.size.font_size_sm,
+			line_height = theme.size.line_height_sm,
+			weight = theme.weight.medium,
+			color = theme.color.text_1,
+		}
+	)
+end
+
+local function stream_controls(tile: state.CallTile, focused: any, viewing: any)
+	if tile.me then
+		return ui.row {
+			absolute = true,
+			top = gap(),
+			right = gap(),
+			gap = theme.size.space_8,
+			full_window_button(tile, viewing),
+			stream_button {
+				id = "call_change_windows",
+				label = "Change Windows",
+				primary = false,
+				on_click = function()
+					actions.set_go_live(true)
+				end,
+			},
+			stream_button {
+				id = "call_stop_streaming",
+				label = "Stop Streaming",
+				primary = false,
+				on_click = function()
+					if focused:get() == tile.key then
+						focused:set("")
+					end
+					actions.stop_go_live()
+				end,
+			},
+		}
+	end
+	return ui.row {
+		absolute = true,
+		top = gap(),
+		right = gap(),
+		gap = theme.size.space_8,
+		full_window_button(tile, viewing),
+		stream_button {
+			id = "call_stop_watching_" .. tile.id,
+			label = "Stop Watching",
+			primary = false,
+			on_click = function()
+				if focused:get() == tile.key then
+					focused:set("")
+				end
+				actions.stop_watching(tile.stream_key)
+			end,
+		},
+	}
+end
+
 local stream_tile = ui.component(function(props: {
 	tile: state.CallTile,
 	size: () -> number,
@@ -518,29 +589,10 @@ local stream_tile = ui.component(function(props: {
 				color = theme.color.text_2,
 			}
 		),
-		ui.show(
-			function()
-				return tile.watching and controls_shown()
-			end,
-			ui.row {
-				absolute = true,
-				top = gap(),
-				right = gap(),
-				gap = theme.size.space_8,
-				full_window_button(tile, props.viewing),
-				stream_button {
-					id = "call_stop_watching_" .. tile.id,
-					label = "Stop Watching",
-					primary = false,
-					on_click = function()
-						if focused:get() == tile.key then
-							focused:set("")
-						end
-						actions.stop_watching(tile.stream_key)
-					end,
-				},
-			}
-		),
+		paused_label(tile),
+		ui.show(function()
+			return tile.watching and controls_shown()
+		end, stream_controls(tile, focused, props.viewing)),
 		ui.row {
 			absolute = true,
 			left = gap(),
@@ -675,25 +727,35 @@ local function viewer_body(tile: state.CallTile, viewing: any)
 				bg = theme.color.bg_3,
 				border = theme.size.border_thickness,
 				border_color = theme.color.border,
-				icon { name = "volume", size = theme.number(theme.size.icon_size_md)(), color = theme.color.text_3 },
-				ui.div {
-					w = theme.size.call_menu_width,
-					volume_slider {
-						slider = "stream_viewer_volume",
-						label = "Stream Volume",
-						volume = tile.volume,
-						commit = function(volume: number)
-							actions.set_stream_volume(tile.id, volume)
-						end,
-					},
-				},
+				ui.show(
+					not tile.me,
+					icon { name = "volume", size = theme.number(theme.size.icon_size_md)(), color = theme.color.text_3 }
+				),
+				ui.show(
+					not tile.me,
+					ui.div {
+						w = theme.size.call_menu_width,
+						volume_slider {
+							slider = "stream_viewer_volume",
+							label = "Stream Volume",
+							volume = tile.volume,
+							commit = function(volume: number)
+								actions.set_stream_volume(tile.id, volume)
+							end,
+						},
+					}
+				),
 				stream_button {
 					id = "stream_viewer_stop",
-					label = "Stop Watching",
+					label = if tile.me then "Stop Streaming" else "Stop Watching",
 					primary = false,
 					on_click = function()
 						viewing:set("")
-						actions.stop_watching(tile.stream_key)
+						if tile.me then
+							actions.stop_go_live()
+						else
+							actions.stop_watching(tile.stream_key)
+						end
 					end,
 				},
 				icon_button {
@@ -791,7 +853,7 @@ local stage = ui.component(function()
 		for _, tile in call().tiles do
 			if tile.stream and tile.watching then
 				now[tile.key] = true
-				if not watched[tile.key] then
+				if not watched[tile.key] and not tile.me then
 					focused:set(tile.key)
 				end
 			end

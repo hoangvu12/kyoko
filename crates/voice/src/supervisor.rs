@@ -80,6 +80,7 @@ pub(crate) struct Supervisor {
 	media: MediaHandle,
 	ssrc: u32,
 	speaking: bool,
+	sound: bool,
 	dave: DaveSession,
 	outbox: Vec<Outgoing>,
 	sent_wants: Option<Value>,
@@ -121,6 +122,7 @@ impl Supervisor {
 			media,
 			ssrc,
 			speaking: false,
+			sound: false,
 			dave,
 			outbox: Vec::new(),
 			sent_wants: Some(handshake_wants()),
@@ -180,7 +182,13 @@ impl Supervisor {
 					Some(Control::Speaking(now)) => {
 						self.speaking = now;
 						self.shared.speaking(self.credentials.user_id(), now);
-						if let Err(exit) = self.link.send(opcode::SPEAKING, speaking(now, self.ssrc)).await {
+						if let Err(exit) = self.send_speaking().await {
+							return Drive::Exit(exit);
+						}
+					}
+					Some(Control::SoundShare(now)) => {
+						self.sound = now;
+						if let Err(exit) = self.send_speaking().await {
 							return Drive::Exit(exit);
 						}
 					}
@@ -357,6 +365,12 @@ impl Supervisor {
 		Ok(())
 	}
 
+	async fn send_speaking(&mut self) -> std::result::Result<(), Exit> {
+		self.link
+			.send(opcode::SPEAKING, speaking(self.speaking, self.sound, self.ssrc))
+			.await
+	}
+
 	async fn flush_camera(&mut self) -> std::result::Result<(), Exit> {
 		if !std::mem::take(&mut self.announce) || !self.camera {
 			return Ok(());
@@ -509,7 +523,7 @@ impl Supervisor {
 	async fn after_resume(&mut self) -> Recovery {
 		if self
 			.link
-			.send(opcode::SPEAKING, speaking(self.speaking, self.ssrc))
+			.send(opcode::SPEAKING, speaking(self.speaking, self.sound, self.ssrc))
 			.await
 			.is_err()
 		{
@@ -531,6 +545,7 @@ impl Supervisor {
 		if std::mem::take(&mut self.speaking) {
 			self.shared.speaking(self.credentials.user_id(), false);
 		}
+		self.sound = false;
 		match spawn_media(
 			established.transport,
 			&self.shared,

@@ -81,7 +81,6 @@ impl MicCheck {
 		});
 		let sink = match options.audio {
 			AudioIo::Devices { input, output } => open_devices(input, output)?,
-			AudioIo::Playback { .. } => return Err(VoiceError::Audio("no input device".to_owned())),
 			AudioIo::Manual => Sink::Manual,
 		};
 		let mut running = Loop {

@@ -13,6 +13,7 @@ use crate::codec::DEFAULT_BITRATE_BPS;
 use crate::event::{EventHub, VoiceEvent};
 use crate::gate::LEVEL_FLOOR_DB;
 use crate::processing::Processing;
+use crate::sound::{PlaybackFeed, SoundCapture, SoundRing};
 use crate::talk::Talkers;
 use crate::video::hub::VideoHub;
 
@@ -39,6 +40,8 @@ pub struct VoiceStats {
 	pub suppressor: Option<Suppression>,
 	pub frames_echo_cancelled: u64,
 	pub frames_gain_controlled: u64,
+	pub sound_frames_sent: u64,
+	pub stream_frames_played: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -55,6 +58,7 @@ pub struct MixedFrame {
 
 pub(crate) enum Control {
 	Speaking(bool),
+	SoundShare(bool),
 	VideoWants,
 	CameraOn,
 	CameraOff,
@@ -69,6 +73,8 @@ pub(crate) struct Counters {
 	pub suppressor: AtomicU8,
 	pub echo_cancelled: AtomicU64,
 	pub gain_controlled: AtomicU64,
+	pub sound_sent: AtomicU64,
+	pub stream_played: AtomicU64,
 	pub jitter_ms: AtomicF32,
 	ping_ms: AtomicU32,
 }
@@ -84,6 +90,8 @@ impl Counters {
 			suppressor: AtomicU8::new(Suppression::Off.code()),
 			echo_cancelled: AtomicU64::new(0),
 			gain_controlled: AtomicU64::new(0),
+			sound_sent: AtomicU64::new(0),
+			stream_played: AtomicU64::new(0),
 			jitter_ms: AtomicF32::new(0.0),
 			ping_ms: AtomicU32::new(NO_PING),
 		}
@@ -106,6 +114,8 @@ impl Counters {
 				.filter(|suppressor| *suppressor != Suppression::Off),
 			frames_echo_cancelled: self.echo_cancelled.load(Ordering::Relaxed),
 			frames_gain_controlled: self.gain_controlled.load(Ordering::Relaxed),
+			sound_frames_sent: self.sound_sent.load(Ordering::Relaxed),
+			stream_frames_played: self.stream_played.load(Ordering::Relaxed),
 		}
 	}
 
@@ -145,6 +155,10 @@ pub(crate) struct Shared {
 	pub video: VideoHub,
 	pub counters: Counters,
 	pub manual_input: Mutex<VecDeque<Vec<f32>>>,
+	pub sound: Arc<SoundRing>,
+	pub sound_capture: Mutex<Option<SoundCapture>>,
+	pub playback_in: PlaybackFeed,
+	pub playback_out: Mutex<Option<PlaybackFeed>>,
 	manual_output: Mutex<Vec<MixedFrame>>,
 }
 
@@ -177,8 +191,16 @@ impl Shared {
 			video: VideoHub::default(),
 			counters: Counters::new(),
 			manual_input: Mutex::new(VecDeque::new()),
+			sound: Arc::new(SoundRing::default()),
+			sound_capture: Mutex::new(None),
+			playback_in: PlaybackFeed::default(),
+			playback_out: Mutex::new(None),
 			manual_output: Mutex::new(Vec::new()),
 		}
+	}
+
+	pub fn sharing_sound(&self) -> bool {
+		self.sound_capture.lock().is_some()
 	}
 
 	pub fn input_mode(&self) -> InputMode {

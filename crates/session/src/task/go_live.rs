@@ -5,12 +5,15 @@ use protocol::{Snowflake, StreamDelete, StreamServerUpdate, StreamState, Token};
 use state::LocalEvent;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use voice::video::{ScreenTarget, TestPattern, VideoError, VideoQuality, VideoSource, fit, open_screen};
-use voice::{AudioIo, ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
+use voice::video::{ScreenKind, ScreenTarget, VideoError, VideoQuality, VideoSource, fit, open_screen};
+use voice::{
+	AudioIo, ConnectionKind, SoundSource, SoundTarget, StopReason, VoiceConnection, VoiceError, VoiceEvent,
+	VoiceParams, open_loopback,
+};
 
 use super::streams::{delete_text, stream_owner};
 use super::{Core, Internal};
-use crate::voice_setup::CameraIo;
+use crate::voice_setup::{CameraIo, VoiceSetup};
 
 const GO_LIVE_TIMEOUT: Duration = Duration::from_secs(15);
 const NOT_IN_A_CALL: &str = "Join a voice channel to go live.";
@@ -24,6 +27,8 @@ pub(crate) struct Share {
 	generation: u64,
 	source: ScreenTarget,
 	quality: VideoQuality,
+	sound: bool,
+	capture: u64,
 	key: Option<String>,
 	rtc_server_id: Option<Snowflake>,
 	rtc_channel_id: Option<Snowflake>,
@@ -32,6 +37,7 @@ pub(crate) struct Share {
 	connecting: bool,
 	pump: Option<JoinHandle<()>>,
 	paused: bool,
+	hidden: bool,
 }
 
 impl Share {
@@ -50,20 +56,54 @@ fn capture_size(source: &ScreenTarget, quality: VideoQuality) -> VideoQuality {
 }
 
 async fn open_source(
-	camera: CameraIo,
+	setup: &VoiceSetup,
 	source: ScreenTarget,
 	quality: VideoQuality,
 ) -> Result<Box<dyn VideoSource>, VideoError> {
-	match camera {
-		CameraIo::Pattern => Ok(Box::new(TestPattern::new(capture_size(&source, quality)))),
+	match setup.camera {
+		CameraIo::Pattern => Ok(setup.capture.screen(capture_size(&source, quality))),
 		CameraIo::Devices => tokio::task::spawn_blocking(move || open_screen(&source, quality))
 			.await
 			.unwrap_or(Err(VideoError::Stopped)),
 	}
 }
 
+fn sound_target(source: &ScreenTarget) -> Option<SoundTarget> {
+	let own = std::process::id();
+	match source.kind {
+		ScreenKind::Screen => Some(SoundTarget::Everything { except: own }),
+		ScreenKind::Window if source.process == 0 || source.process == own => None,
+		ScreenKind::Window => Some(SoundTarget::App {
+			process: source.process,
+		}),
+	}
+}
+
+async fn open_sound(setup: &VoiceSetup, target: SoundTarget) -> Result<Box<dyn SoundSource>, VoiceError> {
+	match setup.camera {
+		CameraIo::Pattern => Ok(setup.capture.sound(target)),
+		CameraIo::Devices => tokio::task::spawn_blocking(move || open_loopback(target))
+			.await
+			.map_err(|error| VoiceError::Audio(error.to_string()))?,
+	}
+}
+
+async fn share_sound(setup: &VoiceSetup, source: &ScreenTarget, connection: &VoiceConnection) {
+	let Some(target) = sound_target(source) else {
+		return;
+	};
+	let started = match open_sound(setup, target).await {
+		Ok(sound) => connection.start_sound(sound),
+		Err(error) => Err(error),
+	};
+	match started {
+		Ok(()) => tracing::debug!("sharing the stream's sound"),
+		Err(error) => tracing::warn!(%error, "the stream's sound was not shared"),
+	}
+}
+
 impl Core {
-	pub(super) fn go_live(&mut self, source: ScreenTarget, quality: VideoQuality) {
+	pub(super) fn go_live(&mut self, source: ScreenTarget, quality: VideoQuality, sound: bool) {
 		let call = self
 			.state
 			.read()
@@ -73,15 +113,10 @@ impl Core {
 			self.reject(NOT_IN_A_CALL);
 			return;
 		};
-		if self
-			.streams
-			.share
-			.as_ref()
-			.is_some_and(|share| share.source == source && share.quality == quality)
-		{
+		if self.streams.share.is_some() {
+			self.swap_source(source, quality, sound);
 			return;
 		}
-		self.end_share(true, None);
 		let region = self.preferred_region();
 		if let Err(error) = self
 			.gateway
@@ -96,6 +131,8 @@ impl Core {
 			generation,
 			source,
 			quality,
+			sound,
+			capture: 0,
 			key: None,
 			rtc_server_id: None,
 			rtc_channel_id: None,
@@ -104,11 +141,59 @@ impl Core {
 			connecting: false,
 			pump: None,
 			paused: false,
+			hidden: false,
 		});
 		let internal = self.internal.clone();
 		self.runtime.spawn(async move {
 			sleep(GO_LIVE_TIMEOUT).await;
 			let _ = internal.send(Internal::StreamTimeout(generation));
+		});
+	}
+
+	fn swap_source(&mut self, source: ScreenTarget, quality: VideoQuality, sound: bool) {
+		let Some(share) = self.streams.share.as_mut() else {
+			return;
+		};
+		if share.source == source && share.quality == quality && share.sound == sound {
+			return;
+		}
+		share.source = source;
+		share.quality = quality;
+		share.sound = sound;
+		share.capture += 1;
+		let connection = share.connection.clone();
+		if std::mem::take(&mut share.hidden) {
+			self.set_stream_paused(false);
+		}
+		if let Some(connection) = connection {
+			tracing::debug!("swapping the stream's source");
+			self.start_capture(connection, true);
+		}
+	}
+
+	fn start_capture(&self, connection: Arc<VoiceConnection>, swap: bool) {
+		let Some(share) = self.streams.share.as_ref() else {
+			return;
+		};
+		let setup = self.voice_shared.setup.lock().clone();
+		let (source, quality, sound) = (share.source.clone(), share.quality, share.sound);
+		let (generation, capture) = (share.generation, share.capture);
+		connection.stop_sound();
+		let internal = self.internal.clone();
+		self.runtime.spawn(async move {
+			let result = match open_source(&setup, source.clone(), quality).await {
+				Ok(video) if swap => connection.replace_screen(video, quality, setup.codecs).await,
+				Ok(video) => connection.start_screen(video, quality, setup.codecs).await,
+				Err(error) => Err(error),
+			};
+			if result.is_ok() && sound {
+				share_sound(&setup, &source, &connection).await;
+			}
+			let _ = internal.send(Internal::ShareStarted {
+				generation,
+				capture,
+				result,
+			});
 		});
 	}
 
@@ -262,6 +347,7 @@ impl Core {
 		connection.set_mute(true);
 		connection.set_deaf(true);
 		connection.set_video_paused(share.paused);
+		connection.set_video_sink(Some(self.voice_shared.stream_feed.sink()));
 		let generation = share.generation;
 		let internal = self.internal.clone();
 		let mut events = connection.events();
@@ -277,20 +363,16 @@ impl Core {
 		}));
 		share.connection = Some(connection.clone());
 		*self.voice_shared.share_connection.lock() = Some(connection.clone());
-		let setup = self.voice_shared.setup.lock().clone();
-		let (source, quality) = (share.source.clone(), share.quality);
-		let internal = self.internal.clone();
-		self.runtime.spawn(async move {
-			let result = match open_source(setup.camera, source, quality).await {
-				Ok(source) => connection.start_screen(source, quality, setup.codecs).await,
-				Err(error) => Err(error),
-			};
-			let _ = internal.send(Internal::ShareStarted { generation, result });
-		});
+		self.start_capture(connection, false);
 	}
 
-	pub(super) fn on_share_started(&mut self, generation: u64, result: Result<(), VideoError>) {
-		if !self.is_share(generation) {
+	pub(super) fn on_share_started(&mut self, generation: u64, capture: u64, result: Result<(), VideoError>) {
+		let current = self
+			.streams
+			.share
+			.as_ref()
+			.is_some_and(|share| share.generation == generation && share.capture == capture);
+		if !current {
 			return;
 		}
 		match result {
@@ -317,6 +399,7 @@ impl Core {
 				self.end_share(true, Some(STREAM_LOST));
 			}
 			VoiceEvent::VideoSourceEnded => self.end_share(true, Some(SOURCE_CLOSED)),
+			VoiceEvent::VideoSourceHidden(hidden) => self.on_source_hidden(hidden),
 			VoiceEvent::CameraStopped => self.end_share(true, Some(CAPTURE_STOPPED)),
 			VoiceEvent::Dave {
 				epoch,
@@ -330,12 +413,25 @@ impl Core {
 		}
 	}
 
+	fn on_source_hidden(&mut self, hidden: bool) {
+		let Some(share) = self.streams.share.as_mut() else {
+			return;
+		};
+		if share.hidden == hidden {
+			return;
+		}
+		share.hidden = hidden;
+		tracing::debug!(hidden, "the shared window was minimised or restored");
+		self.set_stream_paused(hidden);
+	}
+
 	fn drop_share_connection(share: &mut Share) {
 		share.connecting = false;
 		if let Some(pump) = share.pump.take() {
 			pump.abort();
 		}
 		if let Some(connection) = share.connection.take() {
+			connection.stop_sound();
 			connection.stop_camera();
 			connection.disconnect();
 		}

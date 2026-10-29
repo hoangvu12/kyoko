@@ -16,6 +16,7 @@ use crate::media::SharedTransform;
 use crate::processing::Processing;
 use crate::shared::{AudioDevicesInUse, Control, InputMode, MixedFrame, Shared, VoiceStats};
 use crate::signal::{Browser, Credentials, establish};
+use crate::sound::{PlaybackFeed, SoundCapture, SoundSource};
 use crate::supervisor::{Signals, Supervisor};
 use crate::transform::DaveTransform;
 use crate::video::send::{Camera, CameraSender};
@@ -60,9 +61,6 @@ pub enum ConnectionKind {
 pub enum AudioIo {
 	Devices {
 		input: Option<String>,
-		output: Option<String>,
-	},
-	Playback {
 		output: Option<String>,
 	},
 	Manual,
@@ -129,14 +127,6 @@ impl VoiceConnection {
 					output: output.clone(),
 				};
 				let engine = tokio::task::spawn_blocking(move || AudioEngine::start(rings, input, output))
-					.await
-					.map_err(|error| VoiceError::Audio(error.to_string()))??;
-				*shared.engine.lock() = Some(engine);
-				true
-			}
-			AudioIo::Playback { output } => {
-				shared.devices.lock().output.clone_from(&output);
-				let engine = tokio::task::spawn_blocking(move || AudioEngine::playback(rings, output))
 					.await
 					.map_err(|error| VoiceError::Audio(error.to_string()))??;
 				*shared.engine.lock() = Some(engine);
@@ -354,6 +344,41 @@ impl VoiceConnection {
 		self.start_camera(source, quality, codecs).await
 	}
 
+	pub async fn replace_screen(
+		&self,
+		source: Box<dyn VideoSource>,
+		quality: VideoQuality,
+		codecs: VideoCodecs,
+	) -> std::result::Result<(), VideoError> {
+		drop(self.shared.video.outgoing.sender.lock().take());
+		self.start_screen(source, quality, codecs).await
+	}
+
+	pub fn start_sound(&self, source: Box<dyn SoundSource>) -> Result<()> {
+		let mut slot = self.shared.sound_capture.lock();
+		drop(slot.take());
+		self.shared.sound.clear();
+		*slot = Some(SoundCapture::spawn(source, self.shared.sound.clone())?);
+		Ok(())
+	}
+
+	pub fn stop_sound(&self) {
+		drop(self.shared.sound_capture.lock().take());
+		self.shared.sound.clear();
+	}
+
+	pub fn sharing_sound(&self) -> bool {
+		self.shared.sharing_sound()
+	}
+
+	pub fn playback_feed(&self) -> PlaybackFeed {
+		self.shared.playback_in.clone()
+	}
+
+	pub fn play_through(&self, feed: Option<PlaybackFeed>) {
+		*self.shared.playback_out.lock() = feed;
+	}
+
 	pub fn set_video_paused(&self, paused: bool) {
 		self.shared.video.outgoing.set_paused(paused);
 	}
@@ -400,6 +425,8 @@ impl VoiceConnection {
 
 	pub fn disconnect(&self) {
 		self.shared.video.outgoing.sender.lock().take();
+		self.stop_sound();
+		self.play_through(None);
 		let _ = self.shutdown.send(true);
 	}
 }
@@ -407,6 +434,7 @@ impl VoiceConnection {
 impl Drop for VoiceConnection {
 	fn drop(&mut self) {
 		self.shared.video.outgoing.sender.lock().take();
+		self.stop_sound();
 		let _ = self.shutdown.send(true);
 	}
 }

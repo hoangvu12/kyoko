@@ -80,6 +80,7 @@ struct Pipeline {
 	started: Instant,
 	base_timestamp: u32,
 	last_encoded: Option<Instant>,
+	hidden: bool,
 }
 
 impl Pipeline {
@@ -93,6 +94,7 @@ impl Pipeline {
 			started: Instant::now(),
 			base_timestamp: rand::random(),
 			last_encoded: None,
+			hidden: false,
 		}
 	}
 
@@ -132,6 +134,21 @@ impl Pipeline {
 		debug!("camera pipeline stopped");
 	}
 
+	fn preview(&self, frame: &Arc<super::VideoFrame>) {
+		let sink = self.shared.video.sink.lock();
+		if let Some(sink) = sink.as_ref()
+			&& !self.stop.load(Ordering::Acquire)
+		{
+			sink.frame(
+				VideoStream {
+					user_id: self.camera.user_id,
+					ssrc: 0,
+				},
+				frame.clone(),
+			);
+		}
+	}
+
 	fn encoder_for(&mut self, layer: u8, source: (u32, u32)) -> Result<&mut H264Encoder, VideoError> {
 		let target = self.camera.quality.layer(layer);
 		let (width, height) = fit(source.0, source.1, target.width, target.height);
@@ -160,15 +177,12 @@ impl Pipeline {
 
 	fn step(&mut self) -> Result<(), VideoError> {
 		let frame = Arc::new(self.camera.source.next_frame()?);
-		if let Some(sink) = self.shared.video.sink() {
-			sink.frame(
-				VideoStream {
-					user_id: self.camera.user_id,
-					ssrc: 0,
-				},
-				frame.clone(),
-			);
+		let hidden = self.camera.source.hidden();
+		if hidden != self.hidden {
+			self.hidden = hidden;
+			self.shared.hub.emit(VoiceEvent::VideoSourceHidden(hidden));
 		}
+		self.preview(&frame);
 		let outgoing = &self.shared.video.outgoing;
 		if !outgoing.sending() || outgoing.paused() {
 			return Ok(());

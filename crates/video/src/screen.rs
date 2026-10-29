@@ -26,7 +26,8 @@ use windows::Win32::System::WinRT::Direct3D11::{
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 use windows::Win32::UI::WindowsAndMessaging::{
 	EnumWindows, GW_OWNER, GWL_EXSTYLE, GetClassNameW, GetWindow, GetWindowLongW, GetWindowRect,
-	GetWindowTextLengthW, GetWindowTextW, IsIconic, IsWindow, IsWindowVisible, WS_EX_TOOLWINDOW,
+	GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+	WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, IInspectable, Interface, PCWSTR};
 
@@ -288,6 +289,11 @@ impl VideoSource for ScreenSource {
 		}
 	}
 
+	fn hidden(&self) -> bool {
+		self.window
+			.is_some_and(|window| unsafe { IsIconic(HWND(window as *mut _)) }.as_bool())
+	}
+
 	fn size(&self) -> (u32, u32) {
 		self.last.as_ref().map_or_else(
 			|| fit(self.pool_size.0, self.pool_size.1, self.largest.0, self.largest.1),
@@ -366,6 +372,7 @@ fn monitors() -> Vec<ScreenTarget> {
 			name: format!("Screen {}", index + 1),
 			width: monitor.width,
 			height: monitor.height,
+			process: 0,
 		})
 		.collect()
 }
@@ -435,12 +442,15 @@ fn describe_window(window: HWND) -> Option<ScreenTarget> {
 		let mut rect = RECT::default();
 		GetWindowRect(window, &mut rect).ok()?;
 		let (width, height) = ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32);
+		let mut process = 0u32;
+		GetWindowThreadProcessId(window, Some(&mut process));
 		(copied > 0 && width > 1 && height > 1).then(|| ScreenTarget {
 			kind: ScreenKind::Window,
 			id: window.0 as usize as u64,
 			name: String::from_utf16_lossy(&title[..copied as usize]),
 			width,
 			height,
+			process,
 		})
 	}
 }

@@ -26,11 +26,11 @@ const DEFAULT_RESOLUTION: &str = "720";
 const DEFAULT_FPS: u32 = 30;
 const WINDOW_CLOSED: &str = "The window you picked was closed.";
 const SCREEN_GONE: &str = "Couldn't capture that screen.";
-const MOCK_SOURCES: [(ScreenKind, &str, u32, u32); 4] = [
-	(ScreenKind::Screen, "Screen 1", 1920, 1080),
-	(ScreenKind::Window, "Kyoko", 1600, 900),
-	(ScreenKind::Window, "Mock Browser", 1280, 800),
-	(ScreenKind::Window, "Mock Notes", 960, 720),
+const MOCK_SOURCES: [(ScreenKind, &str, u32, u32, u32); 4] = [
+	(ScreenKind::Screen, "Screen 1", 1920, 1080, 0),
+	(ScreenKind::Window, "Kyoko", 1600, 900, 0),
+	(ScreenKind::Window, "Mock Browser", 1280, 800, 4_100),
+	(ScreenKind::Window, "Mock Notes", 960, 720, 4_200),
 ];
 const CAPTURE_FRAMES: u64 = 3;
 const BASE_PIXEL_RATE: f64 = 1280.0 * 720.0 * 30.0;
@@ -166,12 +166,13 @@ fn mock_targets() -> Vec<ScreenTarget> {
 	MOCK_SOURCES
 		.iter()
 		.enumerate()
-		.map(|(index, (kind, name, width, height))| ScreenTarget {
+		.map(|(index, (kind, name, width, height, process))| ScreenTarget {
 			kind: *kind,
 			id: index as u64 + 1,
 			name: (*name).to_owned(),
 			width: *width,
 			height: *height,
+			process: *process,
 		})
 		.collect()
 }
@@ -241,6 +242,10 @@ fn list_sources(mock: bool, generation: u64, listing: &AtomicU64, wakes: &Inbox<
 	}
 }
 
+fn sound_choice(argument: &Value) -> bool {
+	!matches!(field(argument, "sound"), Some(Value::Bool(false)))
+}
+
 fn choice(argument: &Value) -> Option<(String, &'static str, u32)> {
 	let key = match field(argument, "id")? {
 		Value::Str(key) if !key.is_empty() => key.to_string(),
@@ -288,7 +293,7 @@ impl Link {
 		let actions = Rc::downgrade(link);
 		host.action("voice.go_live_start", move |argument| {
 			if let (Some(link), Some((key, resolution, fps))) = (actions.upgrade(), choice(&argument)) {
-				link.start_go_live(&key, resolution, fps);
+				link.start_go_live(&key, resolution, fps, sound_choice(&argument));
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -417,7 +422,7 @@ impl Link {
 		});
 	}
 
-	pub(super) fn start_go_live(&self, key: &str, resolution: &'static str, fps: u32) {
+	pub(super) fn start_go_live(&self, key: &str, resolution: &'static str, fps: u32, sound: bool) {
 		let target = self
 			.go_live
 			.targets
@@ -433,6 +438,7 @@ impl Link {
 		self.send(Command::GoLive {
 			source: target,
 			quality,
+			sound,
 		});
 	}
 
@@ -551,7 +557,7 @@ impl Link {
 			tracing::warn!("no share source to go live with");
 			return;
 		};
-		self.start_go_live(&key, DEFAULT_RESOLUTION, DEFAULT_FPS);
+		self.start_go_live(&key, DEFAULT_RESOLUTION, DEFAULT_FPS, true);
 		self.until_capture(Link::shows_live).await;
 		zgx::timer::sleep(capture::SETTLE).await;
 		tracing::info!("went live for the capture");
