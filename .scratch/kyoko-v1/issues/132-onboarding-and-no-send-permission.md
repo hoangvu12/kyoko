@@ -7,7 +7,7 @@
 
 **Blocked by:** 124 (same run; read its Answer)
 
-**Status:** ready-for-agent
+**Status:** claimed (lane A)
 
 - [ ] The 403 explained; no error toast for it; the onboarding banner matches Discord's behaviour
 - [ ] Composer refuses typing without Send Messages and shows Discord's message; session test proves no send request and a bridge/UI test proves the composer state
