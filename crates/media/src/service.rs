@@ -21,11 +21,20 @@ const SHRINK_THRESHOLD: u32 = 2;
 pub struct Variant {
 	pub hint: SizeHint,
 	pub shape: Shape,
+	pub still: bool,
 }
 
 impl Variant {
 	pub const fn new(hint: SizeHint, shape: Shape) -> Self {
-		Self { hint, shape }
+		Self {
+			hint,
+			shape,
+			still: false,
+		}
+	}
+
+	pub const fn first_frame(self) -> Self {
+		Self { still: true, ..self }
 	}
 }
 
@@ -141,6 +150,7 @@ impl MediaService {
 		let plan = Plan {
 			hint: variant.hint,
 			kept_bytes,
+			first_frame: variant.still,
 			prepare: Arc::new(move |image| fit_variant(image, variant)),
 		};
 		spawn_blocking(move || decode_planned(bytes, &limits, &plan))

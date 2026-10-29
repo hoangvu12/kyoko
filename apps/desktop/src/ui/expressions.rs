@@ -24,6 +24,7 @@ pub(super) struct Expressions {
 	gifs: RefCell<GifSearch>,
 	due: Inbox<Instant>,
 	stickers_asked: Cell<bool>,
+	gifs_asked: Cell<bool>,
 	composer: Cell<Option<Slot>>,
 	top_asked: RefCell<HashSet<Snowflake>>,
 }
@@ -39,6 +40,7 @@ impl Expressions {
 			gifs: RefCell::default(),
 			due: Inbox::new(),
 			stickers_asked: Cell::new(false),
+			gifs_asked: Cell::new(false),
 			composer: Cell::new(None),
 			top_asked: RefCell::default(),
 		}
@@ -177,6 +179,7 @@ impl Link {
 			let state = shared.read();
 			let expressions = &self.expressions;
 			expressions.stickers_asked.set(false);
+			expressions.gifs_asked.set(false);
 			expressions.picker.set_emoji(EmojiPicker::of(&state, guild_id));
 			expressions
 				.picker
@@ -212,7 +215,15 @@ impl Link {
 			let expressions = &self.expressions;
 			let mut gifs = expressions.gifs.borrow_mut();
 			let commands = match &search {
-				Search::Typed(Tab::Gif, typed) => gifs.typed(&state, typed, now),
+				Search::Typed(Tab::Gif, typed) => {
+					let mut commands = if expressions.gifs_asked.replace(true) {
+						Vec::new()
+					} else {
+						gifs.shown(&state)
+					};
+					commands.extend(gifs.typed(&state, typed, now));
+					commands
+				}
 				Search::Submitted(Tab::Gif, typed) => gifs.submit(&state, typed),
 				Search::Category(name) => gifs.browse_category(&state, name),
 				Search::Trending => gifs.show_trending(&state),

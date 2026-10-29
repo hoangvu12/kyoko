@@ -172,6 +172,60 @@ async fn queued_images_start_visible_first_in_request_order_and_drop_when_they_s
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hovered_image_jumps_ahead_of_the_visible_images_queued_before_it() {
+	let origin = HeldOrigin::start().await;
+	let fetcher = bridge::media_fetcher_builder(&fingerprint())
+		.only_loopback(origin.port)
+		.per_host(1, 1)
+		.build()
+		.expect("the fetcher builds");
+	let service = MediaService::new(fetcher.clone(), scratch("media-queue-hover"), Limits::default());
+	let gallery = Gallery::new(service, tokio::runtime::Handle::current());
+
+	let plug = gallery.request(image(origin.url("/plug.gif")));
+	until("the first request to hold the only slot", || {
+		origin.arrived() == ["/plug.gif"]
+	})
+	.await;
+	let stills: Vec<ImageName> = (0..BURST)
+		.map(|index| gallery.request(image(origin.url(&format!("/still-{index}.gif")))))
+		.collect();
+	let mut shown: Vec<&str> = stills.iter().map(ImageName::as_str).collect();
+	shown.push(plug.as_str());
+	gallery.set_visible(shown.iter().copied());
+	let hovered = gallery.request(image(origin.url("/hovered.gif")));
+	gallery.set_hovered(Some(hovered.as_str()));
+	let tail = gallery.request(image(origin.url("/tail.gif")));
+	gallery.set_visible(shown.iter().copied().chain([hovered.as_str(), tail.as_str()]));
+	until("everything to queue behind the held request", || {
+		fetcher.waiting() == BURST + 2
+	})
+	.await;
+
+	origin.release_all();
+	until("every image to load", || {
+		stills
+			.iter()
+			.chain([&hovered, &tail])
+			.all(|name| matches!(gallery.status(name), Some(Status::Ready { .. })))
+	})
+	.await;
+	let arrived = origin.arrived();
+	assert_eq!(
+		arrived.get(1).map(String::as_str),
+		Some("/hovered.gif"),
+		"the image under the pointer starts first: {arrived:?}"
+	);
+	let mut expected = vec!["/plug.gif".to_owned(), "/hovered.gif".to_owned()];
+	expected.extend((0..BURST).map(|index| format!("/still-{index}.gif")));
+	expected.push("/tail.gif".to_owned());
+	assert_eq!(
+		arrived, expected,
+		"then the visible ones in the order they were asked for"
+	);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_burst_of_images_to_one_host_shares_one_http2_connection() {
 	let listener = HelloListener::start(Mode::Complete)
 		.await

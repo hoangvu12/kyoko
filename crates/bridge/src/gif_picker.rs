@@ -53,14 +53,19 @@ fn normalized(text: &str) -> String {
 impl GifSearch {
 	pub fn open(&mut self, state: &State) -> Vec<Command> {
 		*self = GifSearch::default();
-		let mut commands = Vec::new();
-		if state.gif_trending().is_none() {
-			commands.push(Command::LoadGifTrending);
+		if state.favorites_loaded() {
+			Vec::new()
+		} else {
+			vec![Command::LoadFavorites]
 		}
-		if !state.favorites_loaded() {
-			commands.push(Command::LoadFavorites);
+	}
+
+	pub fn shown(&self, state: &State) -> Vec<Command> {
+		if state.gif_trending().is_some() {
+			Vec::new()
+		} else {
+			vec![Command::LoadGifTrending]
 		}
-		commands
 	}
 
 	pub fn typed(&mut self, _state: &State, text: &str, now: Instant) -> Vec<Command> {
@@ -293,18 +298,6 @@ pub fn gif_masonry(gifs: &[Gif], column: f32, gap: f32) -> [Vec<GifTile>; 2] {
 		});
 	}
 	columns
-}
-
-pub fn gif_still(gif: &Gif) -> &str {
-	if gif.preview.is_empty() {
-		&gif.gif_src
-	} else {
-		&gif.preview
-	}
-}
-
-pub fn gif_motion(gif: &Gif) -> Option<&str> {
-	(!gif.gif_src.is_empty()).then_some(gif.gif_src.as_str())
 }
 
 pub fn is_video_url(url: &str) -> bool {

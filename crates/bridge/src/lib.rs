@@ -101,8 +101,8 @@ pub use friends::{
 };
 pub use gif_picker::{
 	FAVORITES_TITLE, GIF_SEARCH_DELAY, GifSearch, GifTile, GifView, TRENDING_TITLE, favorite_gif,
-	favorite_gif_attachment, favorite_gifs, favorite_of_gif, gif_masonry, gif_motion, gif_of_favorite,
-	gif_still, gif_tile_height, is_video_url,
+	favorite_gif_attachment, favorite_gifs, favorite_of_gif, gif_masonry, gif_of_favorite, gif_tile_height,
+	is_video_url,
 };
 pub use guild_admin::{
 	AUDIT_FILTERS, AuditChangeLine, AuditRow, AuditTone, BAN_HISTORY_CHOICES, BanRow, DEFAULT_TIMEOUT,
@@ -117,9 +117,10 @@ pub use hidden::{
 };
 pub use images::{
 	Avatar, app_icon_request, app_tile_request, attachment_request, avatar_request, avatar_url,
-	device_pixels, embed_icon_request, embed_request, emoji_request, gif_still_request, gifv_request,
-	guild_icon_request, is_image, is_video, local_audio, local_media, local_video, media_fetcher,
-	media_fetcher_builder, refresh_command, sticker_request, tenor_gif_url, video_poster_request,
+	device_pixels, embed_icon_request, embed_request, emoji_request, gif_category_request,
+	gif_motion_request, gif_still_request, gifv_request, guild_icon_request, is_image, is_video, local_audio,
+	local_media, local_video, media_fetcher, media_fetcher_builder, refresh_command, sticker_request,
+	tenor_gif_url, video_poster_request,
 };
 pub use inbox::{Inbox, changes_notifier};
 pub use inbox_popout::{

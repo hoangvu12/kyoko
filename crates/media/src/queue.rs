@@ -63,6 +63,10 @@ impl Ticket {
 		self.rank.fetch_min(Rank::Visible as u8, Ordering::Relaxed);
 	}
 
+	pub fn hurry(&self) {
+		self.rank.store(Rank::Urgent as u8, Ordering::Relaxed);
+	}
+
 	pub fn drop_unless_started(&self) {
 		if !self.started() {
 			self.dropped.store(true, Ordering::Relaxed);

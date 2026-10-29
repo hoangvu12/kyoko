@@ -178,6 +178,7 @@ impl ExpressionPicker {
 		*picker.watcher.borrow_mut() = Some(effect);
 		picker.emoji.watch(&picker);
 		picker.sticker.watch(&picker);
+		picker.gif.watch(&picker);
 		picker
 	}
 
@@ -326,9 +327,7 @@ impl ExpressionPicker {
 	}
 
 	pub fn set_gifs(&self, view: GifView) {
-		if self.gif.view.with_untracked(|shown| **shown != view) {
-			self.gif.view.set(Rc::new(view));
-		}
+		self.gif.show(view);
 	}
 
 	pub fn set_stickers(&self, model: StickerPicker) {

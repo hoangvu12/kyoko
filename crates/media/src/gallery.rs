@@ -441,7 +441,9 @@ impl Inner {
 	}
 
 	fn queue(&mut self, key: u64) -> Arc<Ticket> {
-		let rank = if self.visible.contains(&key) {
+		let rank = if self.hovered == Some(key) {
+			Rank::Urgent
+		} else if self.visible.contains(&key) {
 			Rank::Visible
 		} else {
 			Rank::Asked
@@ -798,7 +800,15 @@ impl Gallery {
 	}
 
 	pub fn set_hovered(&self, name: Option<&str>) {
-		self.shared.inner.lock().hovered = name.and_then(key_of_name);
+		let hurried = {
+			let mut inner = self.shared.inner.lock();
+			inner.hovered = name.and_then(key_of_name);
+			let queued = inner.hovered.and_then(|key| inner.queued.get(&key));
+			queued.inspect(|ticket| ticket.hurry()).is_some()
+		};
+		if hurried {
+			self.shared.loader.fetcher().reschedule();
+		}
 		self.changed();
 	}
 

@@ -8,9 +8,10 @@ use bridge::{
 };
 use markdown::Node;
 use media::cdn::Quality;
-use media::{Gallery, ImageName, ImageRequest, Shape, SizeHint, Status, Variant};
+use media::{Gallery, ImageName, ImageRequest, Status};
 use protocol::{
-	Attachment, Embed, EmbedKind, EmbedMedia, MessageFlags, PartialEmoji, Snowflake, StickerItem, User,
+	Attachment, Embed, EmbedKind, EmbedMedia, Gif, GifCategory, MessageFlags, PartialEmoji, Snowflake,
+	StickerItem, User,
 };
 use zgx::image::ImageData;
 use zgx::reactive::{Runtime, Signal};
@@ -263,13 +264,19 @@ impl Pictures {
 		Some(self.request(request))
 	}
 
-	pub fn remote(&self, url: &str, size: (f32, f32)) -> ImageName {
-		let scale = self.scale.get();
-		let hint = SizeHint::new(
-			media::cdn::device_pixels(f64::from(size.0), scale),
-			media::cdn::device_pixels(f64::from(size.1), scale),
-		);
-		self.request(ImageRequest::new(url, Variant::new(hint, Shape::Square)))
+	pub fn gif_still(&self, gif: &Gif, size: (f32, f32)) -> Option<ImageName> {
+		let request = bridge::gif_still_request(gif, points(size), self.scale.get())?;
+		Some(self.request(request))
+	}
+
+	pub fn gif_motion(&self, gif: &Gif, size: (f32, f32)) -> Option<ImageName> {
+		let request = bridge::gif_motion_request(gif, points(size), self.scale.get())?;
+		Some(self.request(request))
+	}
+
+	pub fn gif_category(&self, category: &GifCategory, size: (f32, f32)) -> Option<ImageName> {
+		let request = bridge::gif_category_request(category, points(size), self.scale.get())?;
+		Some(self.request(request))
 	}
 
 	pub fn lightbox(&self, image: &bridge::LightboxImage, window: (f32, f32)) -> Option<ImageName> {
@@ -447,6 +454,10 @@ impl Pictures {
 			names.extend(self.embed_media(thumbnail, (EMBED_THUMBNAIL, EMBED_THUMBNAIL)));
 		}
 	}
+}
+
+fn points(size: (f32, f32)) -> (f64, f64) {
+	(f64::from(size.0), f64::from(size.1))
 }
 
 pub fn bare_box(embed: &Embed) -> (f32, f32) {

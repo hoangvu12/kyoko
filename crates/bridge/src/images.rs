@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use media::cdn::{self, ProxyFormat, ProxySize, Quality, StickerFormat};
 use media::{ImageRequest, MediaFetcher, MediaFetcherBuilder, Origin, Shape, SizeHint, Variant};
 use protocol::fingerprint::Fingerprint;
-use protocol::{Attachment, Embed, EmbedMedia, Member, Snowflake, StickerItem, User};
+use protocol::{Attachment, Embed, EmbedMedia, Gif, GifCategory, Member, Snowflake, StickerItem, User};
 use session::Command;
 use state::State;
 use url::Url;
@@ -15,6 +15,10 @@ const ANIMATED_MEDIA: u64 = 1 << 5;
 const TENOR_HOSTS: [&str; 2] = ["media.tenor.com", "c.tenor.com"];
 const TENOR_FORMAT_CODE: usize = 5;
 const TENOR_GIF_CODE: &str = "AAAAC";
+const TENOR_STILL_CODE: &str = "AAAAe";
+const TENOR_TINY_GIF_CODE: &str = "AAAAM";
+const TENOR_MEDIA_HOST: &str = "media.tenor.com";
+const CDN_ATTACHMENTS: &str = "https://cdn.discordapp.com/attachments/";
 const MOCK_MEDIA_EXTENSIONS: [&str; 4] = ["gif", "webp", "png", "json"];
 const MOCK_MEDIA_FLAGS: [&str; 2] = ["animated", "passthrough"];
 const IMAGE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
@@ -477,16 +481,111 @@ pub fn embed_icon_request(url: &str, points: f64, scale: f64) -> ImageRequest {
 	ImageRequest::new(url, Variant::new(SizeHint::square(pixels), Shape::Circle))
 }
 
-pub fn gif_still_request(gif: &protocol::Gif, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
-	let still = crate::gif_picker::gif_still(gif);
-	if still.is_empty() || crate::gif_picker::is_video_url(still) {
+fn tenor_path(parsed: &Url) -> Option<String> {
+	let host = parsed.host_str()?;
+	if TENOR_HOSTS.contains(&host) {
+		return Some(parsed.path().to_owned());
+	}
+	if !cdn::is_media_proxy(parsed.as_str()) {
 		return None;
 	}
-	let hint = SizeHint::new(
+	let (_, target) = parsed.path().strip_prefix("/external/")?.split_once('/')?;
+	TENOR_HOSTS
+		.iter()
+		.find_map(|host| target.strip_prefix(&format!("https/{host}")))
+		.map(str::to_owned)
+}
+
+fn tenor_rendition(url: &str, code: &str, extension: &str) -> Option<String> {
+	let path = tenor_path(&Url::parse(url).ok()?)?;
+	let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+	let [id, file] = segments.as_slice() else {
+		return None;
+	};
+	let stem = file.rsplit_once('.').map_or(*file, |(stem, _)| stem);
+	if id.len() <= TENOR_FORMAT_CODE || !id.is_ascii() || stem.is_empty() {
+		return None;
+	}
+	Some(format!(
+		"https://{TENOR_MEDIA_HOST}/{}{code}/{stem}.{extension}",
+		&id[..id.len() - TENOR_FORMAT_CODE]
+	))
+}
+
+fn gif_sources(gif: &Gif) -> impl Iterator<Item = &str> {
+	[gif.gif_src.as_str(), gif.src.as_str()]
+		.into_iter()
+		.filter(|url| !url.is_empty())
+}
+
+fn shown_image(url: &str) -> bool {
+	!url.is_empty() && !crate::gif_picker::is_video_url(url)
+}
+
+fn on_discord_proxy(url: &str) -> bool {
+	cdn::is_media_proxy(url) || url.starts_with(CDN_ATTACHMENTS)
+}
+
+fn gif_hint(box_points: (f64, f64), scale: f64) -> SizeHint {
+	SizeHint::new(
 		cdn::device_pixels(box_points.0, scale),
 		cdn::device_pixels(box_points.1, scale),
-	);
-	Some(ImageRequest::new(still, Variant::new(hint, Shape::Square)))
+	)
+}
+
+fn proxied_gif(url: &str, hint: SizeHint, format: Option<ProxyFormat>) -> String {
+	cdn::proxy_sized(
+		url,
+		ProxySize {
+			width: hint.width,
+			height: hint.height,
+			format,
+			animated: false,
+		},
+	)
+}
+
+pub fn gif_still_request(gif: &Gif, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
+	let hint = gif_hint(box_points, scale);
+	let url = gif_sources(gif)
+		.find_map(|url| tenor_rendition(url, TENOR_STILL_CODE, "png"))
+		.or_else(|| shown_image(&gif.preview).then(|| gif.preview.clone()))
+		.or_else(|| {
+			gif_sources(gif)
+				.find(|url| on_discord_proxy(url))
+				.map(|url| proxied_gif(url, hint, Some(ProxyFormat::Webp)))
+		})
+		.or_else(|| gif_sources(gif).find(|url| shown_image(url)).map(str::to_owned))?;
+	Some(ImageRequest::new(
+		url,
+		Variant::new(hint, Shape::Square).first_frame(),
+	))
+}
+
+pub fn gif_motion_request(gif: &Gif, box_points: (f64, f64), scale: f64) -> Option<ImageRequest> {
+	let hint = gif_hint(box_points, scale);
+	let url = gif_sources(gif)
+		.find_map(|url| tenor_rendition(url, TENOR_TINY_GIF_CODE, "gif"))
+		.or_else(|| {
+			gif_sources(gif)
+				.find(|url| on_discord_proxy(url) && shown_image(url))
+				.map(|url| proxied_gif(url, hint, None))
+		})
+		.or_else(|| gif_sources(gif).find(|url| shown_image(url)).map(str::to_owned))?;
+	Some(ImageRequest::new(url, Variant::new(hint, Shape::Square)))
+}
+
+pub fn gif_category_request(
+	category: &GifCategory,
+	box_points: (f64, f64),
+	scale: f64,
+) -> Option<ImageRequest> {
+	let url = tenor_rendition(&category.src, TENOR_STILL_CODE, "png")
+		.or_else(|| shown_image(&category.src).then(|| category.src.clone()))?;
+	Some(ImageRequest::new(
+		url,
+		Variant::new(gif_hint(box_points, scale), Shape::Square).first_frame(),
+	))
 }
 
 pub fn sticker_request(sticker: &StickerItem, points: f64, scale: f64) -> Option<ImageRequest> {

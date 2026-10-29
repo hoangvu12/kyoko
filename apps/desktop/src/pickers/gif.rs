@@ -1,15 +1,12 @@
-use std::cell::Cell;
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
 
-use bridge::{
-	FAVORITES_TITLE, GifTile, GifView, TRENDING_TITLE, favorite_of_gif, gif_masonry, gif_motion, gif_still,
-	is_video_url,
-};
+use bridge::{FAVORITES_TITLE, GifTile, GifView, TRENDING_TITLE, favorite_of_gif, gif_masonry};
 use media::ImageName;
 use protocol::{Gif, GifCategory};
 use zgx::compose::prelude::*;
 use zgx::input::{EventPhase, InputEvent, PointerButton};
-use zgx::reactive::{Runtime, Signal};
+use zgx::reactive::{Effect, Runtime, Signal};
 
 use super::{ExpressionPicker, Favorite, INNER_WIDTH, Search};
 use crate::timeline::{icon, tok};
@@ -24,6 +21,8 @@ const STAR_BUTTON: f32 = 28.;
 const STAR_ICON: f32 = 20.;
 const STAR_INSET: f32 = 6.;
 const EMPTY_ICON: f32 = 48.;
+pub(super) const GIF_BATCH: usize = 25;
+const REVEAL_AHEAD: f32 = TILE_HEIGHT * 2.;
 
 type Hovered = Option<(String, Option<ImageName>)>;
 
@@ -31,7 +30,44 @@ pub(super) struct GifState {
 	pub(super) view: Signal<Rc<GifView>>,
 	hovered: Signal<Hovered>,
 	scroll: Signal<f32>,
+	shown: Signal<usize>,
 	starred: Rc<Cell<bool>>,
+	visible: RefCell<Option<Effect>>,
+}
+
+struct Seen {
+	names: Vec<ImageName>,
+	bottom: f32,
+	total: usize,
+}
+
+fn same_list(shown: &GifView, next: &GifView) -> bool {
+	match (shown, next) {
+		(GifView::Home { .. }, GifView::Home { .. }) => true,
+		(
+			GifView::Results { query, browsing, .. },
+			GifView::Results {
+				query: next_query,
+				browsing: next_browsing,
+				..
+			},
+		) => query == next_query && browsing == next_browsing,
+		_ => false,
+	}
+}
+
+fn placed(gifs: &[Gif], count: usize) -> Vec<(GifTile, f32)> {
+	gif_masonry(&gifs[..count.min(gifs.len())], COLUMN, GAP)
+		.into_iter()
+		.flat_map(|tiles| {
+			let mut top = PADDING;
+			tiles.into_iter().map(move |tile| {
+				let at = top;
+				top += tile.height + GAP;
+				(tile, at)
+			})
+		})
+		.collect()
 }
 
 impl GifState {
@@ -44,13 +80,60 @@ impl GifState {
 			})),
 			hovered: runtime.signal(None),
 			scroll: runtime.signal(0.),
+			shown: runtime.signal(GIF_BATCH),
 			starred: Rc::new(Cell::new(false)),
+			visible: RefCell::new(None),
 		}
 	}
 
 	pub(super) fn reset(&self) {
 		self.hovered.set(None);
 		self.scroll.set(0.);
+		self.shown.set(GIF_BATCH);
+	}
+
+	pub(super) fn show(&self, view: GifView) {
+		let (same, new_list) = self
+			.view
+			.with_untracked(|shown| (**shown == view, !same_list(shown, &view)));
+		if same {
+			return;
+		}
+		if new_list {
+			self.shown.set(GIF_BATCH);
+			self.scroll.set(0.);
+		}
+		self.view.set(Rc::new(view));
+	}
+
+	pub(super) fn watch(&self, picker: &Rc<ExpressionPicker>) {
+		let weak: Weak<ExpressionPicker> = Rc::downgrade(picker);
+		let (view, shown, offset, hovered) = (
+			self.view.clone(),
+			self.shown.clone(),
+			self.scroll.clone(),
+			self.hovered.clone(),
+		);
+		let (open, tab) = (picker.open.clone(), picker.tab.clone());
+		let height = picker.body_height();
+		let effect = picker.pictures.runtime().effect(move || {
+			if !open.get() || tab.get() != super::Tab::Gif {
+				return;
+			}
+			let top = offset.get();
+			let (view, count) = (view.get(), shown.get());
+			let moving = hovered.with(|hovered| hovered.as_ref().and_then(|(_, name)| name.clone()));
+			let Some(picker) = weak.upgrade() else {
+				return;
+			};
+			let mut seen = picker.gif_images(&view, count, (top, top + height));
+			seen.names.extend(moving);
+			picker.shown_images(seen.names);
+			if count < seen.total && top + height + REVEAL_AHEAD >= seen.bottom {
+				shown.set(count + GIF_BATCH);
+			}
+		});
+		*self.visible.borrow_mut() = Some(effect);
 	}
 
 	pub(super) fn hover_first(&self) {
@@ -66,64 +149,64 @@ impl GifState {
 	}
 }
 
-fn usable_still(gif: &Gif) -> Option<&str> {
-	let still = gif_still(gif);
-	(!still.is_empty() && !is_video_url(still)).then_some(still)
-}
-
 impl ExpressionPicker {
 	pub(super) fn gif_pane(self: &Rc<Self>) -> View {
 		let this = self.clone();
-		let (view, hovered) = (self.gif.view.clone(), self.gif.hovered.clone());
+		let (view, shown) = (self.gif.view.clone(), self.gif.shown.clone());
 		let height = self.body_height();
 		column().w(INNER_WIDTH).h(height).bg(tok("bg_4")).child(switch(
-			move || view.get(),
-			move |view: Rc<GifView>, _| {
-				let content = this.gif_content(&view);
-				let motion =
-					hovered.with_untracked(|hovered| hovered.as_ref().and_then(|(_, name)| name.clone()));
-				let mut names = this.gif_images(&view);
-				names.extend(motion);
-				this.shown_images(names);
-				scroll(this.gif.scroll.clone())
-					.w(INNER_WIDTH)
-					.h(height)
-					.child(column().w(INNER_WIDTH).p(PADDING).child(content))
+			move || (view.get(), shown.get()),
+			move |(view, count): (Rc<GifView>, usize), _| {
+				scroll(this.gif.scroll.clone()).w(INNER_WIDTH).h(height).child(
+					column()
+						.w(INNER_WIDTH)
+						.p(PADDING)
+						.child(this.gif_content(&view, count)),
+				)
 			},
 		))
 	}
 
-	fn gif_images(&self, view: &GifView) -> Vec<ImageName> {
+	fn gif_images(&self, view: &GifView, count: usize, (top, bottom): (f32, f32)) -> Seen {
 		match view {
 			GifView::Home {
 				trending, categories, ..
-			} => trending
-				.first()
-				.and_then(usable_still)
-				.map(|url| self.pictures.remote(url, (COLUMN, TILE_HEIGHT)))
-				.into_iter()
-				.chain(
-					categories
-						.iter()
-						.filter(|category| !is_video_url(&category.src))
-						.map(|category| self.pictures.remote(&category.src, (COLUMN, TILE_HEIGHT))),
-				)
-				.collect(),
-			GifView::Results { gifs, .. } => self.still_names(gifs.as_deref().unwrap_or_default()),
+			} => {
+				Seen {
+					names: trending
+						.first()
+						.and_then(|gif| self.pictures.gif_still(gif, (COLUMN, TILE_HEIGHT)))
+						.into_iter()
+						.chain(categories.iter().filter_map(|category| {
+							self.pictures.gif_category(category, (COLUMN, TILE_HEIGHT))
+						}))
+						.collect(),
+					bottom: f32::MAX,
+					total: 0,
+				}
+			}
+			GifView::Results { gifs, .. } => {
+				let gifs = gifs.as_deref().unwrap_or_default();
+				let tiles = placed(gifs, count);
+				let names = tiles
+					.iter()
+					.filter(|(tile, at)| *at < bottom && at + tile.height > top)
+					.filter_map(|(tile, _)| self.pictures.gif_still(&tile.gif, (COLUMN, tile.height)))
+					.collect();
+				let bottom = tiles
+					.iter()
+					.map(|(tile, at)| at + tile.height + PADDING)
+					.fold(PADDING, f32::max);
+				Seen {
+					names,
+					bottom,
+					total: gifs.len(),
+				}
+			}
 		}
 	}
 
-	fn still_names(&self, gifs: &[Gif]) -> Vec<ImageName> {
-		gif_masonry(gifs, COLUMN, GAP)
-			.into_iter()
-			.flatten()
-			.filter_map(|tile| {
-				usable_still(&tile.gif).map(|still| self.pictures.remote(still, (COLUMN, tile.height)))
-			})
-			.collect()
-	}
-
-	fn gif_content(self: &Rc<Self>, view: &GifView) -> View {
+	fn gif_content(self: &Rc<Self>, view: &GifView, count: usize) -> View {
 		match view {
 			GifView::Home {
 				trending, categories, ..
@@ -136,10 +219,10 @@ impl ExpressionPicker {
 				.children(categories.iter().map(|category| self.category_tile(category))),
 			GifView::Results { gifs, favorites, .. } => {
 				let empty = gifs.as_ref().is_some_and(Vec::is_empty);
-				let gifs = gifs.clone().unwrap_or_default();
+				let gifs = gifs.as_deref().unwrap_or_default();
 				column()
 					.gap(GAP)
-					.child(self.masonry(&gifs, Rc::new(favorites.clone())))
+					.child(self.masonry(&gifs[..count.min(gifs.len())], Rc::new(favorites.clone())))
 					.when(empty, |content| {
 						content.child(
 							column()
@@ -168,9 +251,7 @@ impl ExpressionPicker {
 	}
 
 	fn trending_tile(self: &Rc<Self>, first: Option<&Gif>) -> View {
-		let still = first
-			.and_then(usable_still)
-			.map(|url| self.pictures.remote(url, (COLUMN, TILE_HEIGHT)));
+		let still = first.and_then(|gif| self.pictures.gif_still(gif, (COLUMN, TILE_HEIGHT)));
 		let this = self.clone();
 		self.tile(TRENDING_TITLE, Some("picker_trending"), still, false, move || {
 			this.search(Search::Trending)
@@ -179,8 +260,7 @@ impl ExpressionPicker {
 	}
 
 	fn category_tile(self: &Rc<Self>, category: &GifCategory) -> View {
-		let still = (!is_video_url(&category.src))
-			.then(|| self.pictures.remote(&category.src, (COLUMN, TILE_HEIGHT)));
+		let still = self.pictures.gif_category(category, (COLUMN, TILE_HEIGHT));
 		let (this, name) = (self.clone(), category.name.clone());
 		self.tile(&category.name, None, still, false, move || {
 			this.search(Search::Category(name.clone()))
@@ -256,13 +336,11 @@ impl ExpressionPicker {
 
 	fn gif_tile(self: &Rc<Self>, tile: GifTile, favorites: &Rc<Vec<String>>) -> View {
 		let GifTile { gif, height } = tile;
-		let still = usable_still(&gif).map(|url| {
-			self.pictures
-				.picture(&self.pictures.remote(url, (COLUMN, height)))
-		});
-		let motion = gif_motion(&gif)
-			.filter(|url| !is_video_url(url))
-			.map(str::to_owned);
+		let still = self
+			.pictures
+			.gif_still(&gif, (COLUMN, height))
+			.map(|name| self.pictures.picture(&name));
+		let moving = gif.clone();
 		let favorite = favorites.contains(&gif.url);
 		let (hovered, styled, pictures, chooser) = (
 			self.gif.hovered.clone(),
@@ -273,7 +351,6 @@ impl ExpressionPicker {
 		let shown_pictures = self.pictures.clone();
 		let (id, styled_id, star_id) = (gif.id.clone(), gif.id.clone(), gif.id.clone());
 		let (starred, unstarred) = (self.gif.starred.clone(), self.gif.starred.clone());
-		let this = self.clone();
 		let star_hover = self.gif.hovered.clone();
 		let star = favorite_star(self, &gif, favorite);
 		let menu_favorite = Favorite::Gif(favorite_of_gif(&gif), !favorite);
@@ -310,20 +387,9 @@ impl ExpressionPicker {
 			})
 			.on_event(move |event| match event.event {
 				InputEvent::PointerEnter => {
-					let name = motion
-						.as_deref()
-						.map(|url| pictures.remote(url, (COLUMN, height)));
+					let name = pictures.gif_motion(&moving, (COLUMN, height));
 					pictures.hover(name.as_ref());
 					hovered.set(Some((id.clone(), name)));
-					let names =
-						this.gif.view.with_untracked(|view| {
-							let mut names = this.gif_images(view);
-							names.extend(this.gif.hovered.with_untracked(|hovered| {
-								hovered.as_ref().and_then(|(_, name)| name.clone())
-							}));
-							names
-						});
-					this.shown_images(names);
 				}
 				InputEvent::PointerLeave
 					if hovered

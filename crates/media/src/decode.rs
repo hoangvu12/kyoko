@@ -43,6 +43,7 @@ pub type Prepare = Arc<dyn Fn(DecodedImage) -> DecodedImage + Send + Sync>;
 pub struct Plan {
 	pub hint: SizeHint,
 	pub kept_bytes: usize,
+	pub first_frame: bool,
 	pub prepare: Prepare,
 }
 
@@ -51,6 +52,7 @@ impl Plan {
 		Self {
 			hint: SizeHint::ORIGINAL,
 			kept_bytes: usize::MAX,
+			first_frame: false,
 			prepare: Arc::new(|image| image),
 		}
 	}
@@ -191,6 +193,9 @@ fn gather(
 			continue;
 		}
 		let image = (plan.prepare)(into_decoded(frame.into_buffer()));
+		if plan.first_frame {
+			return Ok(Decoded::Still(image));
+		}
 		if first.is_none() {
 			first = Some(image.clone());
 		}

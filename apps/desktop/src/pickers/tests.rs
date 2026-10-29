@@ -374,6 +374,108 @@ fn a_left_click_on_a_gif_sends_it_and_a_right_click_offers_favorite() {
 	assert!(!rig.picker.is_open(), "a pick closes the picker");
 }
 
+fn many_gifs(rig: &Rig, count: usize) -> Vec<protocol::Gif> {
+	(0..count)
+		.map(|index| {
+			let src = format!("http://{}/media/tile-{index}.gif", rig._server.address());
+			protocol::Gif {
+				id: format!("tile-{index}"),
+				url: format!("https://tenor.com/view/tile-gif-{index}"),
+				src: src.clone(),
+				gif_src: src,
+				width: 498,
+				height: 280,
+				..protocol::Gif::default()
+			}
+		})
+		.collect()
+}
+
+fn until_shown(rig: &Rig, names: &[media::ImageName]) {
+	let deadline = Instant::now() + WAIT;
+	while !names
+		.iter()
+		.all(|name| rig.pictures.picture(name).with_untracked(Option::is_some))
+	{
+		assert!(Instant::now() < deadline, "the GIF images arrive");
+		rig.pump();
+		std::thread::sleep(Duration::from_millis(2));
+	}
+}
+
+#[test]
+fn a_long_gif_list_shows_a_batch_of_first_frame_stills_reveals_more_on_scroll_and_moves_on_hover() {
+	let mut rig = rig(MockConfig::default(), "picker-gif-batches");
+	let gifs = many_gifs(&rig, 60);
+	rig.picker.set_gifs(bridge::GifView::Results {
+		query: bridge::TRENDING_TITLE.to_owned(),
+		browsing: true,
+		gifs: Some(gifs.clone()),
+		favorites: Vec::new(),
+	});
+	rig.open_on(Tab::Gif);
+	assert!(
+		rig.app.find("picker-gif-tile-24").is_some(),
+		"the first batch of 25 is built"
+	);
+	assert!(
+		rig.app.find("picker-gif-tile-25").is_none(),
+		"the rest waits until the list is scrolled near its end"
+	);
+	let visible = rig.picker.images();
+	assert!(
+		!visible.is_empty() && visible.len() < super::gif::GIF_BATCH,
+		"only the stills on screen rank as visible, {} of them",
+		visible.len()
+	);
+	until_shown(&rig, &visible);
+	for name in &visible {
+		assert_eq!(
+			rig.gallery.status(name),
+			Some(media::Status::Ready { frames: 1 }),
+			"a tile's still keeps the GIF's first frame only"
+		);
+	}
+
+	let first = rig.app.bounds("picker-gif-tile-0");
+	let (x, y) = (first.x + first.width / 2., first.y + first.height / 2.);
+	rig.app.ui.dispatch(InputEvent::PointerMove { x, y });
+	rig.app.frames(2);
+	let hovered = rig.picker.images();
+	let moving: Vec<media::ImageName> = hovered
+		.iter()
+		.filter(|name| !visible.contains(name))
+		.cloned()
+		.collect();
+	assert_eq!(moving.len(), 1, "hovering adds the tile's animation");
+	until_shown(&rig, &moving);
+	assert_eq!(
+		rig.gallery.status(&moving[0]),
+		Some(media::Status::Ready {
+			frames: mockcord::MEDIA_FRAMES
+		}),
+		"the hovered tile plays every frame"
+	);
+
+	for _ in 0..40 {
+		rig.app.ui.dispatch(InputEvent::Scroll {
+			x,
+			y,
+			delta_x: 0.,
+			delta_y: 400.,
+		});
+		rig.app.frames(2);
+	}
+	assert!(
+		rig.app.find("picker-gif-tile-59").is_some(),
+		"scrolling to the end reveals the later batches"
+	);
+	assert!(
+		!rig.picker.images().contains(&visible[0]),
+		"stills scrolled away no longer rank as visible"
+	);
+}
+
 struct Timing {
 	first_frame: Duration,
 	first_images: Duration,

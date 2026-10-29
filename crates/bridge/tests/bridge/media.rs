@@ -800,6 +800,100 @@ async fn apng_and_gif_stickers_play_and_a_lottie_sticker_is_drawn() {
 	running.stop().await;
 }
 
+fn picker_gif(src: &str, preview: &str) -> protocol::Gif {
+	protocol::Gif {
+		id: src.to_owned(),
+		url: "https://tenor.com/view/cat-dance-gif-1".to_owned(),
+		src: src.to_owned(),
+		gif_src: String::new(),
+		preview: preview.to_owned(),
+		width: 498,
+		height: 280,
+		..protocol::Gif::default()
+	}
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gif_picker_tiles_show_a_small_first_frame_still_and_play_a_small_gif_on_hover() {
+	let running = Running::start("media-gif-tiles").await;
+	let images = Images::new(&running, media::DEFAULT_BUDGET_BYTES);
+	let tile = (200., 112.);
+
+	let tenor = picker_gif("https://media.tenor.com/aBcDeFgHiJkAAAPo/cat-dance.mp4", "");
+	let still = bridge::gif_still_request(&tenor, tile, 1.).expect("a tenor favourite has a still");
+	assert_eq!(
+		still.url,
+		"https://media.tenor.com/aBcDeFgHiJkAAAAe/cat-dance.png"
+	);
+	assert!(still.variant.still, "a still decodes its first frame only");
+	let motion = bridge::gif_motion_request(&tenor, tile, 1.).expect("a tenor favourite moves on hover");
+	assert_eq!(
+		motion.url,
+		"https://media.tenor.com/aBcDeFgHiJkAAAAM/cat-dance.gif"
+	);
+	let name = images.ready(mocked(&running, motion)).await;
+	assert_eq!(
+		images.gallery.status(&name),
+		Some(Status::Ready { frames: MEDIA_FRAMES })
+	);
+
+	let proxied_tenor = picker_gif(
+		"https://images-ext-1.discordapp.net/external/kyoko/https/media.tenor.com/aBcDeFgHiJkAAAPo/cat-dance.mp4",
+		"",
+	);
+	assert_eq!(
+		bridge::gif_still_request(&proxied_tenor, tile, 1.).map(|request| request.url),
+		Some("https://media.tenor.com/aBcDeFgHiJkAAAAe/cat-dance.png".to_owned()),
+		"a tenor GIF behind the media proxy gets the same still"
+	);
+
+	let plain = picker_gif("https://static.klipy.com/cat-dance.gif", "");
+	let still = bridge::gif_still_request(&plain, tile, 1.).expect("a GIF favourite has a still");
+	assert_eq!(still.url, plain.src);
+	let still = images.ready(mocked(&running, still)).await;
+	assert_eq!(
+		images.gallery.status(&still),
+		Some(Status::Ready { frames: 1 }),
+		"the still keeps only the first frame of the GIF"
+	);
+	let motion = bridge::gif_motion_request(&plain, tile, 1.).expect("the GIF itself moves");
+	let motion = images.ready(mocked(&running, motion)).await;
+	assert_ne!(still, motion, "the still and the animation are kept apart");
+	assert_eq!(
+		images.gallery.status(&motion),
+		Some(Status::Ready { frames: MEDIA_FRAMES })
+	);
+
+	let attachment = picker_gif(
+		"https://cdn.discordapp.com/attachments/1/2/cat.gif?ex=1&is=2&hm=3",
+		"",
+	);
+	let still = bridge::gif_still_request(&attachment, tile, 1.).expect("an attachment favourite");
+	assert!(
+		still
+			.url
+			.starts_with("https://media.discordapp.net/attachments/1/2/cat.gif?")
+			&& still.url.contains("format=webp")
+			&& still.url.contains("width=200"),
+		"an attachment's still is a small proxy WebP: {}",
+		still.url
+	);
+
+	let video = picker_gif("https://static.klipy.com/cat-dance.mp4", "");
+	assert!(bridge::gif_still_request(&video, tile, 1.).is_none());
+	assert!(bridge::gif_motion_request(&video, tile, 1.).is_none());
+	let previewed = picker_gif(
+		"https://static.klipy.com/cat-dance.mp4",
+		"https://static.klipy.com/cat-dance.webp",
+	);
+	assert_eq!(
+		bridge::gif_still_request(&previewed, tile, 1.).map(|request| request.url),
+		Some(previewed.preview.clone()),
+		"Discord's own preview is used when there is no smaller rendition"
+	);
+	running.stop().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn gif_embeds_play_a_gif_and_fall_back_to_their_still() {
 	let running = Running::start("media-gifv").await;
