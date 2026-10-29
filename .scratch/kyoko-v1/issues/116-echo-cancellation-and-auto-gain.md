@@ -4,7 +4,7 @@
 
 **Blocked by:** 115 (same capture chain; order below)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Capture order: 48 kHz → high-pass + AEC3 → noise suppression (115) → AGC2 → input volume → gate → Opus. WebRTC's own noise suppressor stays off
 - [ ] Render reference: every mixed 10 ms output frame (after per-user volumes, output volume and deafen, right before the device) goes to `process_render_f32`; the device delay is estimated from cpal's buffer latency and set with `set_stream_delay_ms`; the mic test path gets the same treatment
