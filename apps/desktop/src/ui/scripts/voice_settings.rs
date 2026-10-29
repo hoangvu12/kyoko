@@ -73,6 +73,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		"Low CPU",
 		"Off",
 		"Echo Cancellation",
+		"Automatic Gain Control",
 		"Video Settings",
 		"Camera",
 		"Test Video",
@@ -91,6 +92,18 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		Some(true),
 		"High Quality is chosen by default"
 	);
+	for toggle in ["voice_echo_cancellation", "voice_auto_gain_control"] {
+		let found = app.find(toggle).expect("the processing toggle");
+		assert_eq!(
+			app.ui
+				.semantics
+				.borrow()
+				.get(found)
+				.and_then(|semantic| semantic.checked),
+			Some(true),
+			"{toggle} is on by default"
+		);
+	}
 	assert!(
 		app.find("voice_sensitivity").is_none(),
 		"automatic sensitivity hides the threshold"
@@ -162,6 +175,7 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 	app.click("voice_auto_sensitivity");
 	app.click("voice_noise_suppression_2");
 	app.click("voice_echo_cancellation");
+	app.click("voice_auto_gain_control");
 	app.frames(2);
 	let written = setting_calls(&calls);
 	for wanted in [
@@ -169,16 +183,12 @@ fn the_voice_page_tests_the_mic_and_writes_every_voice_setting() {
 		json!({ "key": "voice.push_to_talk", "value": true }),
 		json!({ "key": "voice.auto_sensitivity", "value": false }),
 		json!({ "key": "voice.noise_suppression", "value": "low_cpu" }),
+		json!({ "key": "voice.echo_cancellation", "value": false }),
+		json!({ "key": "voice.auto_gain_control", "value": false }),
 		json!({ "key": "voice.camera_device", "value": "camera-1" }),
 	] {
 		assert!(written.contains(&wanted), "{wanted} was not written: {written:?}");
 	}
-	assert!(
-		written
-			.iter()
-			.all(|call| !call["key"].as_str().unwrap_or_default().contains("echo")),
-		"echo cancellation is not available"
-	);
 
 	shows(
 		&mut app,

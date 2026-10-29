@@ -80,7 +80,11 @@ pub(crate) async fn start(name: &'static str) -> Voice {
 	manual_audio(&running);
 	running
 		.store()
-		.update_settings(|settings| settings.voice.noise_suppression = NoiseSuppression::Off)
+		.update_settings(|settings| {
+			settings.voice.noise_suppression = NoiseSuppression::Off;
+			settings.voice.echo_cancellation = false;
+			settings.voice.auto_gain_control = false;
+		})
 		.expect("the settings save");
 	Voice {
 		running,

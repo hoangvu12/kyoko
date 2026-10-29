@@ -8,8 +8,8 @@ use store::{NoiseSuppression, VoiceSettings};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use voice::{
-	AudioIo, ConnectionKind, InputMode, StopReason, Suppression, VoiceConnection, VoiceError, VoiceEvent,
-	VoiceOptions, VoiceParams,
+	AudioIo, ConnectionKind, InputMode, Processing, StopReason, Suppression, VoiceConnection, VoiceError,
+	VoiceEvent, VoiceOptions, VoiceParams,
 };
 
 use super::{Core, Internal};
@@ -97,6 +97,13 @@ pub(super) fn suppression(settings: &VoiceSettings) -> Suppression {
 		NoiseSuppression::HighQuality => Suppression::HighQuality,
 		NoiseSuppression::LowCpu => Suppression::LowCpu,
 		NoiseSuppression::Off => Suppression::Off,
+	}
+}
+
+pub(super) fn processing(settings: &VoiceSettings) -> Processing {
+	Processing {
+		echo_cancellation: settings.echo_cancellation,
+		auto_gain_control: settings.auto_gain_control,
 	}
 }
 
@@ -414,6 +421,7 @@ impl Core {
 		connection.set_input_mode(input_mode(settings));
 		connection.set_vad_threshold_db(sensitivity_db(settings));
 		connection.set_noise_suppression(suppression(settings));
+		connection.set_processing(processing(settings));
 		connection.set_transmitting(self.voice.transmitting);
 	}
 

@@ -169,6 +169,8 @@ pub struct VoiceSettings {
 	pub push_to_talk_release_delay: u16,
 	#[serde(deserialize_with = "lenient_noise_suppression")]
 	pub noise_suppression: NoiseSuppression,
+	pub echo_cancellation: bool,
+	pub auto_gain_control: bool,
 	pub auto_sensitivity: bool,
 	pub sensitivity_db: i8,
 	pub camera_device: Option<String>,
@@ -385,6 +387,8 @@ impl Default for VoiceSettings {
 			push_to_talk: false,
 			push_to_talk_release_delay: 20,
 			noise_suppression: NoiseSuppression::HighQuality,
+			echo_cancellation: true,
+			auto_gain_control: true,
 			auto_sensitivity: true,
 			sensitivity_db: -50,
 			camera_device: None,

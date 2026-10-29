@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{
@@ -64,6 +65,8 @@ pub(crate) struct Rings {
 	playback: Mutex<VecDeque<f32>>,
 	capture_rate: AtomicU32,
 	playback_rate: AtomicU32,
+	input_latency_us: AtomicU32,
+	output_latency_us: AtomicU32,
 }
 
 impl Rings {
@@ -73,7 +76,19 @@ impl Rings {
 			playback: Mutex::new(VecDeque::new()),
 			capture_rate: AtomicU32::new(0),
 			playback_rate: AtomicU32::new(0),
+			input_latency_us: AtomicU32::new(0),
+			output_latency_us: AtomicU32::new(0),
 		}
+	}
+
+	pub fn echo_delay(&self) -> Duration {
+		let rate = u64::from(self.playback_rate()).max(1);
+		let queued = Duration::from_micros(self.playback_len() as u64 / 2 * 1_000_000 / rate);
+		let device = self
+			.input_latency_us
+			.load(Ordering::Relaxed)
+			.saturating_add(self.output_latency_us.load(Ordering::Relaxed));
+		queued + Duration::from_micros(u64::from(device))
 	}
 
 	pub fn capture_rate(&self) -> u32 {
@@ -282,7 +297,12 @@ where
 	let rings = rings.clone();
 	device.build_input_stream(
 		config,
-		move |data: &[T], _| {
+		move |data: &[T], info: &cpal::InputCallbackInfo| {
+			let timestamp = info.timestamp();
+			store_latency(
+				&rings.input_latency_us,
+				timestamp.callback.duration_since(timestamp.capture),
+			);
 			rings.push_capture(data.chunks_exact(channels).map(|frame| {
 				frame.iter().map(|sample| sample.to_sample::<f32>()).sum::<f32>() / channels as f32
 			}));
@@ -304,7 +324,12 @@ where
 	let rings = rings.clone();
 	device.build_output_stream(
 		config,
-		move |data: &mut [T], _| {
+		move |data: &mut [T], info: &cpal::OutputCallbackInfo| {
+			let timestamp = info.timestamp();
+			store_latency(
+				&rings.output_latency_us,
+				timestamp.playback.duration_since(timestamp.callback),
+			);
 			let mut ring = rings.playback.lock();
 			for frame in data.chunks_exact_mut(channels) {
 				let (Some(left), Some(right)) = (ring.pop_front(), ring.pop_front()) else {
@@ -321,4 +346,11 @@ where
 		|error| warn!(%error, "output stream error"),
 		None,
 	)
+}
+
+fn store_latency(slot: &AtomicU32, latency: Duration) {
+	slot.store(
+		u32::try_from(latency.as_micros()).unwrap_or(u32::MAX),
+		Ordering::Relaxed,
+	);
 }

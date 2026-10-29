@@ -244,6 +244,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 `crates/denoise/fixtures/speech.wav` (16 kHz, 4.2 s) is test data, not shipped: an excerpt of the LibriVox recording of Lincoln's *The Gettysburg Address* read by John Greenman (2006, <https://archive.org/details/gettysburg_johng_librivox>), which is in the public domain (LibriVox's public domain dedication). `crates/denoise/fixtures/README.md` gives the exact file, excerpt and hashes. The noise the tests mix in is generated in code.
 
+## Echo cancellation and gain control: sonora (WebRTC audio processing)
+
+Echo cancellation (AEC3), the high-pass filter and automatic gain control (AGC2) come from `sonora` 0.2.0 with `sonora-aec3`, `sonora-agc2`, `sonora-common-audio`, `sonora-ns`, `sonora-fft` and `sonora-simd` 0.2.0, a pure-Rust port of the WebRTC Native Code audio processing module (M145) by dignifiedquire, linked unmodified. It is distributed under the following licence:
+
+```
+Copyright (c) 2011, The WebRTC Project Authors. All rights reserved.
+Copyright (c) 2016, Arun Raghavan and contributors. All rights reserved.
+Copyright (c) 2026, dignifiedquire. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ## Voice end-to-end encryption (DAVE)
 
 `crates/dave` ports the DAVE protocol code of oxidcord's `crates/voice/src/dave` (MIT OR Apache-2.0, kyoko's fork origin). It runs MLS with `openmls` 0.9, `openmls_traits` 0.6, `openmls_memory_storage` 0.6 and `openmls_serialization_helpers` 0.1 (the OpenMLS authors, MIT) and `tls_codec` 0.5 with `tls_codec_derive` (the RustCrypto developers, MIT OR Apache-2.0, used under MIT), linked unmodified. Their cryptography is kyoko's own provider on BoringSSL (below); no RustCrypto curve, HPKE or AEAD crate is linked for it. `davey` (MIT) is a test-only dependency and is not shipped.

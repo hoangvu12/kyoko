@@ -48,5 +48,6 @@ mod uploads;
 mod versions;
 mod video;
 mod voice;
+mod voice_processing;
 mod voice_settings;
 mod wire;

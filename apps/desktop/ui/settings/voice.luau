@@ -373,32 +373,6 @@ local function sensitivity_row()
 	}
 end
 
-local function unavailable_switch()
-	return ui.row {
-		id = "voice_echo_cancellation",
-		label = "Echo Cancellation",
-		role = "switch",
-		checked = false,
-		w = theme.size.switch_width,
-		h = theme.size.switch_height,
-		shrink = 0,
-		px = theme.size.space_4,
-		items = "center",
-		rounded = theme.size.switch_height,
-		cursor = "not_allowed",
-		opacity = theme.size.disabled_opacity_control,
-		border = theme.size.border_thickness,
-		border_color = theme.color.border,
-		bg = theme.color.bg_3,
-		ui.div {
-			w = theme.size.switch_thumb_size,
-			h = theme.size.switch_thumb_size,
-			rounded = theme.size.switch_thumb_size,
-			bg = theme.color.text_3,
-		},
-	}
-end
-
 return {
 	headings = {
 		{
@@ -528,11 +502,18 @@ return {
 					},
 				},
 				{
-					kind = "custom",
+					key = "voice.echo_cancellation",
+					id = "voice_echo_cancellation",
 					title = "Echo Cancellation",
-					note = "Not available in Kyoko yet. Use headphones so your speakers don't echo into the call.",
-					keywords = "echo cancellation feedback speakers",
-					control = unavailable_switch,
+					note = "Stops what plays from your speakers from reaching your microphone, so others don't hear themselves.",
+					keywords = "echo cancellation feedback speakers aec",
+				},
+				{
+					key = "voice.auto_gain_control",
+					id = "voice_auto_gain_control",
+					title = "Automatic Gain Control",
+					note = "Evens out your microphone volume so you're never too quiet or too loud.",
+					keywords = "automatic gain control agc volume level loudness",
 				},
 			},
 		},

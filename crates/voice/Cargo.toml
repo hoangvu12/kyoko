@@ -30,6 +30,7 @@ uuid.workspace = true
 opus.workspace = true
 rubato.workspace = true
 denoise.workspace = true
+sonora.workspace = true
 aes-gcm.workspace = true
 chacha20poly1305.workspace = true
 cpal.workspace = true
@@ -38,6 +39,7 @@ video.workspace = true
 openh264 = { workspace = true, optional = true }
 
 [dev-dependencies]
+denoise = { workspace = true, features = ["testing"] }
 mockcord = { workspace = true, features = ["tls"] }
 dave = { workspace = true, features = ["testing"] }
 openmls.workspace = true

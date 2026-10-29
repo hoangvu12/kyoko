@@ -12,6 +12,7 @@ use crate::audio::{AudioEngine, Rings};
 use crate::codec::DEFAULT_BITRATE_BPS;
 use crate::event::{EventHub, VoiceEvent};
 use crate::gate::LEVEL_FLOOR_DB;
+use crate::processing::Processing;
 use crate::talk::Talkers;
 use crate::video::hub::VideoHub;
 
@@ -36,6 +37,8 @@ pub struct VoiceStats {
 	pub jitter_ms: f32,
 	pub frames_denoised: u64,
 	pub suppressor: Option<Suppression>,
+	pub frames_echo_cancelled: u64,
+	pub frames_gain_controlled: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -64,6 +67,8 @@ pub(crate) struct Counters {
 	pub lost: AtomicU64,
 	pub denoised: AtomicU64,
 	pub suppressor: AtomicU8,
+	pub echo_cancelled: AtomicU64,
+	pub gain_controlled: AtomicU64,
 	pub jitter_ms: AtomicF32,
 	ping_ms: AtomicU32,
 }
@@ -77,6 +82,8 @@ impl Counters {
 			lost: AtomicU64::new(0),
 			denoised: AtomicU64::new(0),
 			suppressor: AtomicU8::new(Suppression::Off.code()),
+			echo_cancelled: AtomicU64::new(0),
+			gain_controlled: AtomicU64::new(0),
 			jitter_ms: AtomicF32::new(0.0),
 			ping_ms: AtomicU32::new(NO_PING),
 		}
@@ -97,6 +104,8 @@ impl Counters {
 			frames_denoised: self.denoised.load(Ordering::Relaxed),
 			suppressor: Some(Suppression::from_code(self.suppressor.load(Ordering::Relaxed)))
 				.filter(|suppressor| *suppressor != Suppression::Off),
+			frames_echo_cancelled: self.echo_cancelled.load(Ordering::Relaxed),
+			frames_gain_controlled: self.gain_controlled.load(Ordering::Relaxed),
 		}
 	}
 
@@ -114,6 +123,7 @@ pub(crate) struct Shared {
 	pub deafened: AtomicBool,
 	pub transmitting: AtomicBool,
 	noise_suppression: AtomicU8,
+	processing: AtomicU8,
 	input_mode: AtomicU8,
 	pub vad_threshold_db: AtomicF32,
 	pub input_volume: AtomicF32,
@@ -145,6 +155,7 @@ impl Shared {
 			deafened: AtomicBool::new(false),
 			transmitting: AtomicBool::new(false),
 			noise_suppression: AtomicU8::new(Suppression::default().code()),
+			processing: AtomicU8::new(Processing::OFF.code()),
 			input_mode: AtomicU8::new(InputMode::VoiceActivity as u8),
 			vad_threshold_db: AtomicF32::new(DEFAULT_VAD_THRESHOLD_DB),
 			input_volume: AtomicF32::new(1.0),
@@ -189,6 +200,14 @@ impl Shared {
 	pub fn set_noise_suppression(&self, suppression: Suppression) {
 		self.noise_suppression
 			.store(suppression.code(), Ordering::Relaxed);
+	}
+
+	pub fn processing(&self) -> Processing {
+		Processing::from_code(self.processing.load(Ordering::Relaxed))
+	}
+
+	pub fn set_processing(&self, processing: Processing) {
+		self.processing.store(processing.code(), Ordering::Relaxed);
 	}
 
 	pub fn heard(&self, user_id: Snowflake, now: Instant) {

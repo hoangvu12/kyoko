@@ -15,6 +15,7 @@ use crate::codec::{DEFAULT_BITRATE_BPS, FRAME_SAMPLES, SILENCE_FRAME, STEREO_FRA
 use crate::gate::{VoiceGate, decayed_db, meter_level, rms, to_db};
 use crate::jitter::Push;
 use crate::mixer::Mixer;
+use crate::processing::Processor;
 use crate::remote::{Frame, RemoteStream};
 use crate::rtp;
 use crate::shared::{Control, InputMode, MixedFrame, Shared};
@@ -48,6 +49,7 @@ pub(crate) struct Media {
 	playback: PlaybackChain,
 	encoder: VoiceEncoder,
 	suppressor: NoiseSuppressor,
+	processor: Processor,
 	gate: VoiceGate,
 	mixer: Mixer,
 	streams: HashMap<u32, RemoteStream>,
@@ -85,6 +87,7 @@ impl Media {
 			capture: CaptureChain::default(),
 			encoder: VoiceEncoder::new()?,
 			suppressor: NoiseSuppressor::new(),
+			processor: Processor::default(),
 			gate: VoiceGate::default(),
 			mixer: Mixer::new(STEREO_FRAME_SAMPLES),
 			streams: HashMap::new(),
@@ -180,8 +183,17 @@ impl Media {
 	}
 
 	fn send_frame(&mut self, frame: &mut [f32]) {
+		let processing = self.shared.processing();
+		let delay_ms = self.echo_delay_ms();
+		let counters = &self.shared.counters;
+		if self.processor.cancel_echo(processing, delay_ms, frame) {
+			counters.echo_cancelled.fetch_add(1, Ordering::Relaxed);
+		}
 		let suppressor = self.suppressor.process(self.shared.noise_suppression(), frame);
-		self.shared.counters.denoised_by(suppressor);
+		counters.denoised_by(suppressor);
+		if self.processor.control_gain(processing, frame) {
+			counters.gain_controlled.fetch_add(1, Ordering::Relaxed);
+		}
 		let gain = self.shared.input_volume.load();
 		for sample in frame.iter_mut() {
 			*sample *= gain;
@@ -220,6 +232,13 @@ impl Media {
 			}
 		}
 		self.timestamp = self.timestamp.wrapping_add(FRAME_SAMPLES as u32);
+	}
+
+	fn echo_delay_ms(&self) -> i32 {
+		if !self.audio_io {
+			return 0;
+		}
+		i32::try_from(self.shared.rings.echo_delay().as_millis()).unwrap_or(i32::MAX)
 	}
 
 	fn should_transmit(&mut self, level_db: f32) -> bool {
@@ -339,7 +358,7 @@ impl Media {
 		while self.next_playout <= now {
 			let sources = self.mix_frame(now);
 			self.next_playout += FRAME_DURATION;
-			if !self.audio_io && !sources.is_empty() {
+			if !self.audio_io {
 				self.tap_output(sources);
 			}
 		}
@@ -393,6 +412,8 @@ impl Media {
 			self.shared.output_volume.load()
 		};
 		let level = meter_level(rms(self.mixer.finish(master)));
+		self.processor
+			.render(self.shared.processing(), self.mixer.output());
 		let previous = self.shared.output_level.load();
 		self.shared.output_level.store(level.max(previous * METER_DECAY));
 		sources.sort_unstable();

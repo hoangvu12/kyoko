@@ -72,12 +72,14 @@ pub enum SettingKey {
 	VoiceAutoSensitivity,
 	VoiceSensitivity,
 	VoiceNoiseSuppression,
+	VoiceEchoCancellation,
+	VoiceAutoGainControl,
 	VoiceCamera,
 	PushToTalkKey,
 }
 
 impl SettingKey {
-	pub const ALL: [SettingKey; 45] = [
+	pub const ALL: [SettingKey; 47] = [
 		Self::Theme,
 		Self::Locale,
 		Self::CompactMessages,
@@ -121,6 +123,8 @@ impl SettingKey {
 		Self::VoiceAutoSensitivity,
 		Self::VoiceSensitivity,
 		Self::VoiceNoiseSuppression,
+		Self::VoiceEchoCancellation,
+		Self::VoiceAutoGainControl,
 		Self::VoiceCamera,
 		Self::PushToTalkKey,
 	];
@@ -170,6 +174,8 @@ impl SettingKey {
 			Self::VoiceAutoSensitivity => "voice.auto_sensitivity",
 			Self::VoiceSensitivity => "voice.sensitivity_db",
 			Self::VoiceNoiseSuppression => "voice.noise_suppression",
+			Self::VoiceEchoCancellation => "voice.echo_cancellation",
+			Self::VoiceAutoGainControl => "voice.auto_gain_control",
 			Self::VoiceCamera => "voice.camera_device",
 			Self::PushToTalkKey => "keybinds.push_to_talk",
 		}
@@ -239,6 +245,8 @@ impl SettingKey {
 			Self::VoiceAutoSensitivity => Value::from(settings.voice.auto_sensitivity),
 			Self::VoiceSensitivity => Value::from(settings.voice.sensitivity_db),
 			Self::VoiceNoiseSuppression => Value::from(settings.voice.noise_suppression.name()),
+			Self::VoiceEchoCancellation => Value::from(settings.voice.echo_cancellation),
+			Self::VoiceAutoGainControl => Value::from(settings.voice.auto_gain_control),
 			Self::VoiceCamera => Value::from(settings.voice.camera_device.clone().unwrap_or_default()),
 			Self::PushToTalkKey => Value::from(settings.keybinds.push_to_talk.clone().unwrap_or_default()),
 		}
@@ -308,6 +316,8 @@ impl SettingKey {
 				Some(choice) => replace(&mut settings.voice.noise_suppression, choice),
 				None => false,
 			},
+			Self::VoiceEchoCancellation => set_flag(&mut settings.voice.echo_cancellation, value),
+			Self::VoiceAutoGainControl => set_flag(&mut settings.voice.auto_gain_control, value),
 			Self::VoiceCamera => set_device(&mut settings.voice.camera_device, value),
 			Self::PushToTalkKey => match binding(value) {
 				Some(binding) => replace(&mut settings.keybinds.push_to_talk, binding),
@@ -328,6 +338,8 @@ impl SettingKey {
 				| Self::VoiceAutoSensitivity
 				| Self::VoiceSensitivity
 				| Self::VoiceNoiseSuppression
+				| Self::VoiceEchoCancellation
+				| Self::VoiceAutoGainControl
 		)
 	}
 }

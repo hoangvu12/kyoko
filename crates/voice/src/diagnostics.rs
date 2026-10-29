@@ -14,6 +14,7 @@ use crate::codec::{FRAME_SAMPLES, STEREO_FRAME_SAMPLES, VoiceDecoder, VoiceEncod
 use crate::connection::AudioIo;
 use crate::error::{Result, VoiceError};
 use crate::gate::{LEVEL_FLOOR_DB, decayed_db, rms, to_db};
+use crate::processing::{Processing, Processor};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
 const PLAYBACK_PRIME_FRAMES: usize = 3;
@@ -26,12 +27,14 @@ pub struct MicCheckOptions {
 	pub audio: AudioIo,
 	pub input_volume: f32,
 	pub noise_suppression: Suppression,
+	pub processing: Processing,
 }
 
 struct Checked {
 	stop: AtomicBool,
 	input_volume: AtomicF32,
 	noise_suppression: AtomicU8,
+	processing: AtomicU8,
 	level_db: AtomicF32,
 	manual_input: Mutex<VecDeque<Vec<f32>>>,
 	manual_output: Mutex<VecDeque<Vec<i16>>>,
@@ -60,6 +63,7 @@ struct Loop {
 	encoder: VoiceEncoder,
 	decoder: VoiceDecoder,
 	suppressor: NoiseSuppressor,
+	processor: Processor,
 	microphone: Vec<f32>,
 	speaker: Vec<f32>,
 }
@@ -70,6 +74,7 @@ impl MicCheck {
 			stop: AtomicBool::new(false),
 			input_volume: AtomicF32::new(options.input_volume.clamp(0.0, MAX_VOLUME)),
 			noise_suppression: AtomicU8::new(options.noise_suppression.code()),
+			processing: AtomicU8::new(options.processing.code()),
 			level_db: AtomicF32::new(LEVEL_FLOOR_DB),
 			manual_input: Mutex::new(VecDeque::new()),
 			manual_output: Mutex::new(VecDeque::new()),
@@ -86,6 +91,7 @@ impl MicCheck {
 			encoder: VoiceEncoder::new()?,
 			decoder: VoiceDecoder::new()?,
 			suppressor: NoiseSuppressor::new(),
+			processor: Processor::default(),
 			microphone: vec![0.0; FRAME_SAMPLES],
 			speaker: vec![0.0; STEREO_FRAME_SAMPLES],
 		};
@@ -107,6 +113,12 @@ impl MicCheck {
 		self.checked
 			.noise_suppression
 			.store(suppression.code(), Ordering::Relaxed);
+	}
+
+	pub fn set_processing(&self, processing: Processing) {
+		self.checked
+			.processing
+			.store(processing.code(), Ordering::Relaxed);
 	}
 
 	pub fn level_db(&self) -> f32 {
@@ -198,8 +210,13 @@ impl Loop {
 	}
 
 	fn process(&mut self) -> f32 {
+		let processing = self.processing();
+		let delay_ms = self.echo_delay_ms();
+		self.processor
+			.cancel_echo(processing, delay_ms, &mut self.microphone);
 		let suppression = Suppression::from_code(self.checked.noise_suppression.load(Ordering::Relaxed));
 		self.suppressor.process(suppression, &mut self.microphone);
+		self.processor.control_gain(processing, &mut self.microphone);
 		let gain = self.checked.input_volume.load();
 		for sample in &mut self.microphone {
 			*sample *= gain;
@@ -211,9 +228,23 @@ impl Loop {
 		level
 	}
 
+	fn processing(&self) -> Processing {
+		Processing::from_code(self.checked.processing.load(Ordering::Relaxed))
+	}
+
+	fn echo_delay_ms(&self) -> i32 {
+		match &self.sink {
+			Sink::Devices(devices) => {
+				i32::try_from(devices.rings.echo_delay().as_millis()).unwrap_or(i32::MAX)
+			}
+			Sink::Manual => 0,
+		}
+	}
+
 	fn play_back(&mut self) -> Result<()> {
 		let packet = self.encoder.encode(&self.microphone)?;
 		self.decoder.decode(packet, false, &mut self.speaker)?;
+		self.processor.render(self.processing(), &self.speaker);
 		match &mut self.sink {
 			Sink::Devices(devices) => devices.playback.push(&self.speaker),
 			Sink::Manual => {

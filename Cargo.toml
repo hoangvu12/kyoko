@@ -121,6 +121,7 @@ chacha20poly1305 = "0.11"
 opus = "0.4"
 rubato = "5.0"
 denoise = { path = "crates/denoise", package = "kyoko-denoise" }
+sonora = "=0.2.0"
 tract-onnx = { version = "0.23.9", default-features = false }
 tract-pulse = "0.23.9"
 tract-nnef = "0.23.9"

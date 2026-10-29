@@ -13,6 +13,7 @@ use crate::codec::{MAX_BITRATE_BPS, MIN_BITRATE_BPS};
 use crate::error::{Result, VoiceError};
 use crate::event::VoiceEvent;
 use crate::media::SharedTransform;
+use crate::processing::Processing;
 use crate::shared::{AudioDevicesInUse, Control, InputMode, MixedFrame, Shared, VoiceStats};
 use crate::signal::{Browser, Credentials, establish};
 use crate::supervisor::{Signals, Supervisor};
@@ -92,6 +93,7 @@ impl Default for VoiceOptions {
 
 pub struct VoiceConnection {
 	user_id: Snowflake,
+	kind: ConnectionKind,
 	shared: Arc<Shared>,
 	dave: Arc<DaveStats>,
 	control: mpsc::UnboundedSender<Control>,
@@ -106,7 +108,8 @@ impl VoiceConnection {
 			trust: &options.trust,
 			kind: options.kind,
 		};
-		let group = params.dave_group(options.kind);
+		let kind = options.kind;
+		let group = params.dave_group(kind);
 		let credentials = Credentials::new(
 			[params.server_id(), params.channel_id, params.user_id],
 			params.session_id,
@@ -163,6 +166,7 @@ impl VoiceConnection {
 		tokio::spawn(supervisor.run());
 		Ok(Self {
 			user_id: params.user_id,
+			kind,
 			shared,
 			dave: dave_stats,
 			control,
@@ -264,6 +268,16 @@ impl VoiceConnection {
 	pub fn set_noise_suppression(&self, suppression: Suppression) {
 		denoise::prepare(suppression);
 		self.shared.set_noise_suppression(suppression);
+	}
+
+	pub fn set_processing(&self, processing: Processing) {
+		if self.kind == ConnectionKind::Voice {
+			self.shared.set_processing(processing);
+		}
+	}
+
+	pub fn processing(&self) -> Processing {
+		self.shared.processing()
 	}
 
 	pub fn input_level(&self) -> f32 {
