@@ -691,6 +691,9 @@ pub fn apply_update(message: &mut Message, update: &MessageUpdate) {
 	if let Some(stickers) = &update.sticker_items {
 		message.sticker_items = stickers.clone();
 	}
+	if let Some(call) = &update.call {
+		message.call = Some(call.clone());
+	}
 	if let Some(poll) = &update.poll {
 		message.poll = Some(poll.clone());
 	}

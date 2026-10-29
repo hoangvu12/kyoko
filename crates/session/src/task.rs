@@ -45,6 +45,7 @@ mod commands;
 mod community;
 mod components;
 mod deletes;
+mod dm_call;
 mod embeds;
 mod emoji_rank;
 mod expressions;
@@ -188,6 +189,10 @@ pub(crate) enum Internal {
 	EmojiRanked(Option<state::EmojiRanking>),
 	FavoritesSaved(favorite_writes::FavoriteKind, bool),
 	VoiceJoinTimeout(u64),
+	RingTimedOut {
+		channel_id: Snowflake,
+		serial: u64,
+	},
 	PushToTalkReleased(u64),
 	VoiceConnected {
 		generation: u64,
@@ -710,6 +715,8 @@ impl Core {
 			DispatchEvent::InteractionModalCreate(modal) => self.modal_created(*modal),
 			DispatchEvent::VoiceStateUpdate(voice) => self.voice_state_update(&voice),
 			DispatchEvent::VoiceServerUpdate(update) => self.voice_server_update(update),
+			DispatchEvent::CallCreate(call) | DispatchEvent::CallUpdate(call) => self.call_changed(&call),
+			DispatchEvent::CallDelete(call) => self.call_ended(&call),
 			DispatchEvent::ChannelUpdate(channel) => self.voice_channel_updated(channel.id),
 			DispatchEvent::StreamCreate(stream) | DispatchEvent::StreamUpdate(stream) => {
 				self.stream_created(&stream);
@@ -866,6 +873,7 @@ impl Core {
 			}),
 			Internal::EmojiRanked(ranking) => self.emoji_ranked(ranking),
 			Internal::VoiceJoinTimeout(generation) => self.on_voice_join_timeout(generation),
+			Internal::RingTimedOut { channel_id, serial } => self.ring_timed_out(channel_id, serial),
 			Internal::PushToTalkReleased(press) => self.push_to_talk_released(press),
 			Internal::VoiceConnected { generation, result } => self.on_voice_connected(generation, result),
 			Internal::VoiceEvent { generation, event } => self.on_voice_event(generation, event),
@@ -1081,6 +1089,8 @@ impl Core {
 			Command::ShowDeletedMessages(show) => self.apply_local(LocalEvent::ShowDeletedMessages(show)),
 			Command::JoinVoice { guild_id, channel_id } => self.join_voice(guild_id, channel_id),
 			Command::LeaveVoice => self.leave_voice(),
+			Command::StartCall { channel_id, video } => self.start_call(channel_id, video),
+			Command::DeclineCall { channel_id } => self.decline_call(channel_id),
 			Command::SetSelfMute(muted) => self.set_self_mute(muted),
 			Command::SetSelfDeaf(deafened) => self.set_self_deaf(deafened),
 			Command::SetUserVolume { user_id, volume } => self.set_user_volume(user_id, volume),

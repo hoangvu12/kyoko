@@ -327,7 +327,7 @@ pub struct Poll {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CallInfo {
-	pub participants: Vec<Snowflake>,
+	pub participants: LenientVec<Snowflake>,
 	#[serde(deserialize_with = "timestamp")]
 	pub ended_timestamp: Option<DateTime<Utc>>,
 }
@@ -461,4 +461,5 @@ pub struct MessageUpdate {
 	pub components: Option<LenientVec<Component>>,
 	pub sticker_items: Option<LenientVec<StickerItem>>,
 	pub poll: Option<Poll>,
+	pub call: Option<CallInfo>,
 }

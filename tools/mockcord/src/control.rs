@@ -190,6 +190,30 @@ impl Control {
 		self.shared.hub.broadcast("VOICE_STATE_UPDATE", &event);
 	}
 
+	pub fn ring_me(&self, channel_id: u64, caller: u64) -> bool {
+		self.shared.ring_me(channel_id, caller)
+	}
+
+	pub fn call_join_as(&self, channel_id: u64, user_id: u64) {
+		self.shared.call_join_as(channel_id, user_id);
+	}
+
+	pub fn call_leave_as(&self, channel_id: u64, user_id: u64) {
+		self.shared.call_leave_as(channel_id, user_id);
+	}
+
+	pub fn answer_elsewhere(&self, channel_id: u64) {
+		self.shared.answer_elsewhere(channel_id);
+	}
+
+	pub fn stop_ringing_me(&self, channel_id: u64) {
+		self.shared.stop_ringing(channel_id, None);
+	}
+
+	pub fn call(&self, channel_id: u64) -> Option<crate::calls::MockCall> {
+		self.shared.calls.get(channel_id)
+	}
+
 	pub fn dispatch(&self, event: &str, data: &Value) {
 		self.shared.hub.broadcast(event, data);
 	}

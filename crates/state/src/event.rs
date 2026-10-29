@@ -173,6 +173,7 @@ pub enum LocalEvent {
 		output: f32,
 	},
 	CameraChanged(bool),
+	CallDeclined(Snowflake),
 	ScreenShareChanged(Option<StreamInfo>),
 	Watching(Option<String>),
 	RemoteVideo {

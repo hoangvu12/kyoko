@@ -2,6 +2,7 @@ mod actions;
 mod alerts;
 mod backfill;
 mod caches;
+mod calls;
 mod camera;
 mod capabilities;
 mod channel_open;

@@ -214,8 +214,8 @@ pub fn router(shared: Arc<Shared>) -> Router {
 			get(interactions::user_index),
 		)
 		.route("/interactions", post(interactions::create_interaction))
-		.route("/channels/{id}/call/ring", post(channels::call_signal))
-		.route("/channels/{id}/call/stop-ringing", post(channels::call_signal))
+		.route("/channels/{id}/call/ring", post(channels::ring_call))
+		.route("/channels/{id}/call/stop-ringing", post(channels::stop_ringing))
 		.route("/channels/{id}/threads", post(channels::create_thread))
 		.route("/channels/{id}/threads/search", get(admin::search_threads))
 		.route(

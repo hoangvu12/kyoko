@@ -8,6 +8,7 @@ mod feed;
 mod opus;
 mod output;
 mod playhead;
+mod ring;
 
 pub use chime::message_chime;
 pub use clip::Clip;
@@ -17,3 +18,4 @@ pub use decode::{DEFAULT_MAX_SAMPLES, Limits, decode, duration};
 pub use error::{AudioError, Result};
 pub use feed::Feed;
 pub use output::{Output, SILENT_RATE, Sink};
+pub use ring::ringtone;

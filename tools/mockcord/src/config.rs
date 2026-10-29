@@ -94,6 +94,8 @@ pub struct MockConfig {
 	pub bucket_window: Duration,
 	pub cameras: Option<CameraPlan>,
 	pub streams: usize,
+	pub answer_calls: bool,
+	pub ring: bool,
 }
 
 impl Default for MockConfig {
@@ -128,6 +130,8 @@ impl Default for MockConfig {
 			bucket_window: Duration::from_secs(2),
 			cameras: None,
 			streams: 0,
+			answer_calls: false,
+			ring: false,
 		}
 	}
 }

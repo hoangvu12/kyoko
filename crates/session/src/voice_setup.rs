@@ -12,6 +12,7 @@ use crate::video_feed::{VideoFeed, VideoView};
 const JOIN_TIMEOUT: Duration = Duration::from_secs(15);
 pub const FAKE_SOUND_HZ: f32 = 440.0;
 pub const FAKE_SOUND_LEVEL: f32 = 0.25;
+const RING_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CameraIo {
@@ -72,6 +73,7 @@ pub struct VoiceSetup {
 	pub audio: AudioIo,
 	pub trust: Trust,
 	pub join_timeout: Duration,
+	pub ring_timeout: Duration,
 	pub camera: CameraIo,
 	pub codecs: VideoCodecs,
 	pub capture: FakeCapture,
@@ -86,6 +88,7 @@ impl Default for VoiceSetup {
 			},
 			trust: Trust::default(),
 			join_timeout: JOIN_TIMEOUT,
+			ring_timeout: RING_TIMEOUT,
 			camera: CameraIo::Devices,
 			codecs: VideoCodecs::System,
 			capture: FakeCapture::default(),

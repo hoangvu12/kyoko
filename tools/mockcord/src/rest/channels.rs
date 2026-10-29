@@ -299,11 +299,30 @@ pub async fn typing(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> R
 	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn call_signal(
+fn call_recipients(body: Option<Json<Value>>) -> Option<Vec<u64>> {
+	let Json(body) = body?;
+	body["recipients"]
+		.as_array()
+		.map(|recipients| recipients.iter().filter_map(parse_id).collect())
+}
+
+pub async fn ring_call(
 	State(shared): State<Arc<Shared>>,
 	Path(id): Path<u64>,
+	body: Option<Json<Value>>,
 ) -> Result<StatusCode, ApiError> {
 	require_channel(&shared.store.lock(), id)?;
+	shared.ring(id, call_recipients(body));
+	Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn stop_ringing(
+	State(shared): State<Arc<Shared>>,
+	Path(id): Path<u64>,
+	body: Option<Json<Value>>,
+) -> Result<StatusCode, ApiError> {
+	require_channel(&shared.store.lock(), id)?;
+	shared.stop_ringing(id, call_recipients(body));
 	Ok(StatusCode::NO_CONTENT)
 }
 

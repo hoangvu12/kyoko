@@ -123,18 +123,41 @@ pub struct StreamSummary {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Call {
 	pub channel_id: Snowflake,
+	pub message_id: Option<Snowflake>,
 	pub ringing: Vec<Snowflake>,
-	pub participants: Vec<Snowflake>,
+	pub voice_states: Vec<VoiceState>,
 	pub region: Option<String>,
+	pub unavailable: bool,
+	pub declined: bool,
+}
+
+impl Call {
+	pub fn participants(&self) -> impl Iterator<Item = Snowflake> + '_ {
+		self.voice_states.iter().map(|voice| voice.user_id)
+	}
+
+	pub fn has(&self, user_id: Snowflake) -> bool {
+		self.voice_states.iter().any(|voice| voice.user_id == user_id)
+	}
+
+	pub fn rings(&self, user_id: Snowflake) -> bool {
+		self.ringing.contains(&user_id)
+	}
+
+	pub fn voice_state(&self, user_id: Snowflake) -> Option<&VoiceState> {
+		self.voice_states.iter().find(|voice| voice.user_id == user_id)
+	}
 }
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct CallPayload {
 	channel_id: Snowflake,
-	ringing: LenientVec<Snowflake>,
+	message_id: Option<Snowflake>,
+	ringing: Option<LenientVec<Snowflake>>,
 	region: Option<String>,
 	voice_states: Option<LenientVec<VoiceState>>,
+	unavailable: Option<bool>,
 }
 
 impl State {
@@ -178,9 +201,13 @@ impl State {
 
 	pub fn incoming_calls(&self) -> impl Iterator<Item = &Call> {
 		let me = self.current_user_id();
-		self.calls
-			.values()
-			.filter(move |call| me.is_some_and(|me| call.ringing.contains(&me)))
+		let joined = self.voice.as_ref().map(|session| session.channel_id);
+		self.calls.values().filter(move |call| {
+			me.is_some_and(|me| call.rings(me) && !call.has(me))
+				&& !call.declined
+				&& !call.unavailable
+				&& joined != Some(call.channel_id)
+		})
 	}
 
 	pub(crate) fn voice_connection(
@@ -305,19 +332,38 @@ impl State {
 		let Ok(payload) = CallPayload::deserialize(payload) else {
 			return Changes::default();
 		};
+		if payload.channel_id.0 == 0 {
+			return Changes::default();
+		}
+		let me = self.current_user_id();
 		let call = self.calls.entry(payload.channel_id).or_insert_with(|| Call {
 			channel_id: payload.channel_id,
 			..Call::default()
 		});
-		call.ringing = payload.ringing.into_vec();
+		if let Some(ringing) = payload.ringing {
+			call.ringing = ringing.into_vec();
+		}
+		if me.is_none_or(|me| !call.rings(me)) {
+			call.declined = false;
+		}
+		if payload.message_id.is_some() {
+			call.message_id = payload.message_id;
+		}
 		if payload.region.is_some() {
 			call.region = payload.region;
 		}
+		if let Some(unavailable) = payload.unavailable {
+			call.unavailable = unavailable;
+		}
 		if let Some(voice_states) = payload.voice_states {
-			call.participants = voice_states
+			call.voice_states = voice_states
 				.into_vec()
 				.into_iter()
-				.map(|voice| voice.user_id)
+				.filter(|voice| {
+					voice
+						.channel_id
+						.is_none_or(|channel_id| channel_id == payload.channel_id)
+				})
 				.collect();
 		}
 		calls_changed()
@@ -327,20 +373,46 @@ impl State {
 		let Ok(payload) = CallPayload::deserialize(payload) else {
 			return Changes::default();
 		};
+		if payload.unavailable == Some(true)
+			&& let Some(call) = self.calls.get_mut(&payload.channel_id)
+		{
+			call.unavailable = true;
+			return calls_changed();
+		}
 		calls_changed_if(self.calls.remove(&payload.channel_id).is_some())
+	}
+
+	pub(crate) fn call_declined(&mut self, channel_id: Snowflake) -> Changes {
+		let changed = self
+			.calls
+			.get_mut(&channel_id)
+			.is_some_and(|call| !std::mem::replace(&mut call.declined, true));
+		calls_changed_if(changed)
 	}
 
 	pub(crate) fn call_voice_state(&mut self, voice: &VoiceState) -> Changes {
 		let mut changed = false;
 		for call in self.calls.values_mut() {
 			let joined = voice.channel_id == Some(call.channel_id);
-			let present = call.participants.contains(&voice.user_id);
-			if joined && !present {
-				call.participants.push(voice.user_id);
-				changed = true;
-			} else if !joined && present {
-				call.participants.retain(|user_id| *user_id != voice.user_id);
-				changed = true;
+			let at = call
+				.voice_states
+				.iter()
+				.position(|seen| seen.user_id == voice.user_id);
+			match (joined, at) {
+				(true, Some(at)) => {
+					changed |= call.voice_states[at] != *voice;
+					call.voice_states[at] = voice.clone();
+				}
+				(true, None) => {
+					call.voice_states.push(voice.clone());
+					call.ringing.retain(|user_id| *user_id != voice.user_id);
+					changed = true;
+				}
+				(false, Some(at)) => {
+					call.voice_states.remove(at);
+					changed = true;
+				}
+				(false, None) => {}
 			}
 		}
 		calls_changed_if(changed)

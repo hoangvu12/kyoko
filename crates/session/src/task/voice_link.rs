@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,9 +23,9 @@ const AUTO_SENSITIVITY_DB: f32 = -50.0;
 const FULL_VOLUME_PERCENT: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Target {
-	guild_id: Snowflake,
-	channel_id: Snowflake,
+pub(super) struct Target {
+	pub(super) guild_id: Option<Snowflake>,
+	pub(super) channel_id: Snowflake,
 }
 
 struct Server {
@@ -41,7 +42,7 @@ pub(crate) struct CameraLink {
 
 #[derive(Default)]
 pub(crate) struct VoiceLink {
-	target: Option<Target>,
+	pub(super) target: Option<Target>,
 	session_id: Option<String>,
 	server: Option<Server>,
 	pub(super) connection: Option<Arc<VoiceConnection>>,
@@ -56,6 +57,10 @@ pub(crate) struct VoiceLink {
 	transmitting: bool,
 	presses: u64,
 	regions: Vec<String>,
+	pub(super) video_on_join: bool,
+	pub(super) ring_after_join: Option<Snowflake>,
+	pub(super) rings: HashMap<Snowflake, u64>,
+	pub(super) ring_serial: u64,
 }
 
 impl VoiceLink {
@@ -135,7 +140,13 @@ impl Core {
 			self.reject(NOT_A_VOICE_CHANNEL);
 			return;
 		}
-		let target = Target { guild_id, channel_id };
+		self.enter_voice(Target {
+			guild_id: Some(guild_id),
+			channel_id,
+		});
+	}
+
+	pub(super) fn enter_voice(&mut self, target: Target) {
 		if self.voice.target == Some(target) {
 			return;
 		}
@@ -183,8 +194,17 @@ impl Core {
 		let Some(target) = self.voice.target else {
 			return;
 		};
-		if update.guild_id != Some(target.guild_id)
+		let elsewhere = {
+			let state = self.state.read();
+			let ours = &state.session().session_id;
+			update
+				.session_id
+				.as_ref()
+				.is_some_and(|session_id| !ours.is_empty() && session_id != ours)
+		};
+		if update.guild_id != target.guild_id
 			|| self.state.read().current_user_id() != Some(update.user_id)
+			|| elsewhere
 		{
 			return;
 		}
@@ -218,11 +238,16 @@ impl Core {
 		let Some(target) = self.voice.target else {
 			return;
 		};
-		let (true, Some(token), Some(endpoint)) = (
-			update.guild_id == Some(target.guild_id),
-			update.token,
-			update.endpoint,
-		) else {
+		let same_place = match target.guild_id {
+			Some(guild_id) => update.guild_id == Some(guild_id),
+			None => {
+				update.guild_id.is_none()
+					&& update
+						.channel_id
+						.is_none_or(|channel_id| channel_id == target.channel_id)
+			}
+		};
+		let (true, Some(token), Some(endpoint)) = (same_place, update.token, update.endpoint) else {
 			return;
 		};
 		if self.voice.connection.is_some() || self.voice.connecting {
@@ -476,14 +501,18 @@ impl Core {
 		let Some(target) = self.voice.target else {
 			return;
 		};
-		let bitrate = self
-			.state
-			.read()
-			.guild(target.guild_id)
-			.and_then(|guild| guild.channels.get(&target.channel_id))
-			.and_then(|channel| channel.bitrate)
-			.and_then(|bitrate| u32::try_from(bitrate).ok())
-			.filter(|bitrate| *bitrate > 0);
+		let state = self.state.read();
+		let bitrate = match target.guild_id {
+			Some(guild_id) => state
+				.guild(guild_id)
+				.and_then(|guild| guild.channels.get(&target.channel_id))
+				.and_then(|channel| channel.bitrate),
+			None => state
+				.channel(target.channel_id)
+				.and_then(|channel| channel.bitrate),
+		}
+		.and_then(|bitrate| u32::try_from(bitrate).ok())
+		.filter(|bitrate| *bitrate > 0);
 		if let Some(bitrate) = bitrate {
 			connection.set_bitrate(bitrate);
 		}
@@ -537,9 +566,13 @@ impl Core {
 		self.apply_stream_deafen();
 	}
 
-	fn send_voice_state(&self, guild_id: Snowflake, channel_id: Option<Snowflake>) -> Result<(), SendError> {
+	fn send_voice_state(
+		&self,
+		guild_id: Option<Snowflake>,
+		channel_id: Option<Snowflake>,
+	) -> Result<(), SendError> {
 		self.gateway.update_voice_state(&VoiceStateRequest {
-			guild_id: Some(guild_id),
+			guild_id,
 			channel_id,
 			self_mute: self.voice.sends_muted(),
 			self_deaf: self.voice.self_deaf,
@@ -557,7 +590,7 @@ impl Core {
 		self.apply_local(LocalEvent::VoiceConnection {
 			status,
 			channel_id: target.channel_id,
-			guild_id: Some(target.guild_id),
+			guild_id: target.guild_id,
 		});
 	}
 
@@ -571,13 +604,15 @@ impl Core {
 		self.voice.server = None;
 		self.voice.server_mute = false;
 		self.voice.server_deaf = false;
+		self.voice.video_on_join = false;
+		self.voice.ring_after_join = None;
 		if notify_gateway && let Err(error) = self.send_voice_state(target.guild_id, None) {
 			tracing::warn!(%error, "voice state was not sent");
 		}
 		self.apply_local(LocalEvent::VoiceConnection {
 			status: VoiceStatus::Disconnected { reason: None },
 			channel_id: target.channel_id,
-			guild_id: Some(target.guild_id),
+			guild_id: target.guild_id,
 		});
 		if let Some(reason) = reason {
 			self.reject(reason);
@@ -613,7 +648,7 @@ impl Core {
 			return;
 		};
 		let params = VoiceParams {
-			guild_id: Some(target.guild_id),
+			guild_id: target.guild_id,
 			channel_id: target.channel_id,
 			user_id,
 			session_id,
@@ -655,6 +690,9 @@ impl Core {
 		*self.voice_shared.connection.lock() = Some(connection.clone());
 		self.voice.pump = Some(self.spawn_pump(&connection));
 		self.voice.connection = Some(connection);
+		if std::mem::take(&mut self.voice.video_on_join) {
+			self.set_self_video(true);
+		}
 	}
 
 	fn apply_to_connection_of(&self, connection: &VoiceConnection) {

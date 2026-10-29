@@ -691,6 +691,7 @@ impl State {
 				});
 			}
 			LocalEvent::CameraChanged(on) => return self.camera_changed(*on),
+			LocalEvent::CallDeclined(channel_id) => return self.call_declined(*channel_id),
 			LocalEvent::ScreenShareChanged(info) => return self.screen_share_changed(info.clone()),
 			LocalEvent::Watching(stream_key) => return self.watching_changed(stream_key.clone()),
 			LocalEvent::RemoteVideo {

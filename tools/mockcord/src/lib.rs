@@ -1,6 +1,7 @@
 mod admin;
 mod alt;
 pub mod audio;
+pub mod calls;
 mod cdn;
 pub mod clip;
 mod community;

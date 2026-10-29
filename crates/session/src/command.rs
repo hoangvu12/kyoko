@@ -683,6 +683,13 @@ pub enum Command {
 		channel_id: Snowflake,
 	},
 	LeaveVoice,
+	StartCall {
+		channel_id: Snowflake,
+		video: bool,
+	},
+	DeclineCall {
+		channel_id: Snowflake,
+	},
 	SetSelfMute(bool),
 	SetSelfDeaf(bool),
 	SetUserVolume {

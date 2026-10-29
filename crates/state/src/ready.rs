@@ -108,6 +108,7 @@ impl State {
 		self.presences.clear();
 		self.relationships.clear();
 		self.typing.clear();
+		self.calls.clear();
 		for cache in self.messages.values_mut() {
 			cache.clear_ephemeral();
 		}

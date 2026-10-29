@@ -308,6 +308,9 @@ impl Connection {
 		self.issue_refreshed_token(capabilities, &mut ready);
 		hub.dispatch_to(&session_id, "READY", &ready);
 		hub.dispatch_to(&session_id, "READY_SUPPLEMENTAL", &supplemental);
+		if self.shared.config.ring && !alt {
+			self.shared.ring_once_after_ready();
+		}
 		self.session = Some(session_id);
 		true
 	}
@@ -604,6 +607,7 @@ impl Connection {
 		let moved = self.shared.scenario.move_voice(session, channel_id);
 		self.shared.scenario.remember_voice_state(session, event.clone());
 		self.shared.hub.broadcast("VOICE_STATE_UPDATE", &event);
+		self.shared.call_voice_moved(CURRENT_USER_ID, channel_id, &event);
 		if let (true, Some(channel_id)) = (moved, channel_id) {
 			let mut server = json!({
 				"token": format!("{VOICE_TOKEN}-{channel_id}"),

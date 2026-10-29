@@ -240,6 +240,7 @@ pub struct Shared {
 	pub remote_auth: RemoteAuth,
 	pub password: PasswordAuth,
 	pub voice: VoiceControl,
+	pub calls: crate::calls::Calls,
 	token: Mutex<String>,
 	windows: Mutex<HashMap<String, Window>>,
 }
@@ -272,6 +273,7 @@ impl Shared {
 			remote_auth: RemoteAuth::default(),
 			password: PasswordAuth::default(),
 			voice,
+			calls: crate::calls::Calls::default(),
 			token,
 			windows: Mutex::new(HashMap::new()),
 		}
