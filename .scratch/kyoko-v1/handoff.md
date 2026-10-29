@@ -1,5 +1,42 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: fourteenth orchestrator hands off (zeron chat `5e46db85`, "kyoko orchestrator 14", same machine, main `e0065e5` + this note)
+
+Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-29).
+
+### Decisions the user made this session
+
+- **115 size:** shrink before merging. Done: NNEF, bit-identical, exe 117.4 MB (+28.4).
+- **oxidcord upstream:** "ok" to the routine and the three fixes (117, merged). `upstream` remote added to the main checkout (`--no-tags`); `.scratch/upstream/last-reviewed` = `d3840fc` (all 41 commits reviewed). Then "prob yeah" to the extras: 119, 120 merged; 121, 122 running.
+- **Go Live sound (118):** "do like Discord": screen = whole computer's sound minus kyoko's own (process loopback EXCLUDE), app = that app only (INCLUDE). Merged.
+- **DM calls (108):** yes, planned and built.
+- **Provider embeds (122):** "ok use webview": WebView2 via `wry`, created only on play.
+
+### Waiting on the user (ask in plain words)
+
+1. **108's AUTO_CALL_CONNECT.** The worker raised IDENTIFY `capabilities` 509 -> 4605 (bit 12) from docs.discord.food's example, not from a capture of the web client; docs/gateway.md says capabilities change only after comparing with the web client. Without it, a call already ringing when kyoko connects only shows on its next CALL_UPDATE. I recommended **leave it (option 1)** and settle the value from the real web client (Chrome 157 bump, 74, or the user's devtools). The commit is parked on branch **`lane-a-with-auto-call`** (`770262c`, on top of the old base): if the user says option 2, cherry-pick it onto lane-a after the merge, run fmt/clippy/build and the calls + capabilities tests, merge it, and note it in 108's Answer and docs/gateway.md.
+
+### Running at handoff (all workers report to `5e46db85`: send each a short note so they report to you)
+
+- **Lane A** `kyoko-lane-a`: **108** DM and group calls, worker `884153cb` (idle, done). lane-a was reset to the first two commits and rebased on `e0065e5` (`c6a52db` Join, ring and decline DM and group calls; `da36d76` Show incoming calls and the DM call view; 57 files). **My verify was running in my background shell** (`verify.sh` then tls-capture and `parity capture --apps kyoko --port 8494 --screens dm-call-incoming,dm-call,voice-call`, log `kyoko-lane-a/target/orch-verify.log`). Check the log; if it was cut off, rerun the missing steps (`verify-rest.sh` from the test step). Look at `target/parity/dm-call*/kyoko.png`. Then merge, Answer from the worker's report (in its chat: research facts with sources in docs/voice.md "DM and group calls"; ring once with `recipients: null` after joining; decline = stop-ringing null; 60 s local ring timeout; `audio::Cue::looping(audio::ringtone)`; mockcord controls `ring_me`, `call_join_as`, `answer_elsewhere`...; flags `--ring`, `--answer-calls`; for 102: check whether Discord rings by itself, the real ring timeout and the web client's capabilities value).
+- **Lane B** `kyoko-lane-b`: **121** paste and drop files (oxidcord b3c036b), worker `08f4b83d`, base `6aae203`, told main moved to `e0065e5`.
+- **Lane C** `kyoko-lane-c`: **122** provider embeds with WebView2 (oxidcord fc1dc43), worker `233cbcbd`, base `e0065e5`, warm target. Check at verify: isolation boxes (own user-data folder, nothing Discord reaches the frame, navigation limits), exe size, `cargo deny` for wry's licences.
+
+### Merged this session (Answers written)
+
+105 screen capture + picker, 107 going live, 115 noise suppression (NNEF), 117 oxidcord fixes, 116 echo cancellation + AGC (sonora `=0.2.0`; bump on 0.3), 119 message chime + DND (`audio::Cue`), 118 Go Live sound/pause/own tile/source swap/stream audio through the call mixer (`AudioIo::Playback` removed), 120 GIF picker stills. New tickets 117-122.
+
+### What's left
+
+108 (verify + merge), 121, 122 running. 74 Chrome 157 bump after 2026-11-03 (also capture the web client's `capabilities` and an `<audio>` accept-encoding). 75 crash needs a real run with stderr. 102 user's real call (`ready-for-human`, "not now"): also first real test of NS/AEC, stream sound (EXCLUDE loopback never run for real), minimise pause, DM ringing. Skipped: 39, 58. 78 wontfix.
+
+### Gotchas this session
+
+- New load flake added to rules.md: `voice_settings::high_quality_noise_suppression_is_the_default_and_cleans_noisy_speech` (SI-SDR under load).
+- A worker hit the usage limit mid-turn (116); "restaty" from the user meant resume it. Send "resume" with where it stopped.
+- Mockup parity images land in `target/parity-mockup/<screen>/` (kyoko-only captures in `target/parity/<screen>/`).
+- My `.bashrc` prints a BOM warning on line 1 in Bash; harmless.
+- Disk ~160 GB free; lane B's target was cleaned before 121 (cold).
 ## Latest: thirteenth orchestrator hands off (chat `a9466879`, "kyoko orchestrator 13", same machine, main `27fdb1d` + this note)
 
 Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-29).
