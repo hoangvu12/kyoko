@@ -65,7 +65,7 @@ pub struct ThreadsShown {
 pub struct PinsShown {
 	pub loaded: bool,
 	pub entries: Vec<(PinEntry, Option<ImageName>)>,
-	pub can_manage: bool,
+	pub can_pin: bool,
 }
 
 pub struct ThreadsLayer {

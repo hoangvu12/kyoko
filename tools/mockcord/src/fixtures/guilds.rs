@@ -128,6 +128,7 @@ fn build_roles(ids: &RoleIds) -> Vec<Role> {
 			true,
 			3,
 			Permissions::MANAGE_MESSAGES
+				| Permissions::PIN_MESSAGES
 				| Permissions::KICK_MEMBERS
 				| Permissions::BAN_MEMBERS
 				| Permissions::MODERATE_MEMBERS

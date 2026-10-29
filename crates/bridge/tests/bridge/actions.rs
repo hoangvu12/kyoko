@@ -131,12 +131,37 @@ async fn the_message_menu_follows_ownership_and_permissions() {
 	);
 	let member = Access {
 		manage_messages: false,
+		pin_messages: false,
 		..admin
 	};
 	let plain = actions(&bridge::message_menu(&theirs, &member, MenuContext::default()));
 	assert!(
 		!plain.contains(&Delete) && !plain.contains(&Select) && !plain.contains(&Pin),
-		"without Manage Messages: {plain:?}"
+		"without Manage Messages or Pin Messages: {plain:?}"
+	);
+	let pinner = actions(&bridge::message_menu(
+		&theirs,
+		&Access {
+			pin_messages: true,
+			..member
+		},
+		MenuContext::default(),
+	));
+	assert!(
+		pinner.contains(&Pin) && !pinner.contains(&Delete),
+		"Pin Messages alone offers Pin: {pinner:?}"
+	);
+	let manager = actions(&bridge::message_menu(
+		&theirs,
+		&Access {
+			pin_messages: false,
+			..admin
+		},
+		MenuContext::default(),
+	));
+	assert!(
+		!manager.contains(&Pin) && manager.contains(&Delete),
+		"Manage Messages alone no longer offers Pin: {manager:?}"
 	);
 	let own_as_member = actions(&bridge::message_menu(&own, &member, MenuContext::default()));
 	assert!(own_as_member.contains(&Delete) && own_as_member.contains(&Select));

@@ -278,7 +278,7 @@ impl Core {
 				channel_id,
 				message_id,
 			} => {
-				if self.channel_allows(channel_id, Permissions::MANAGE_MESSAGES, "Manage Messages") {
+				if self.channel_allows(channel_id, Permissions::PIN_MESSAGES, "Pin Messages") {
 					self.spawn_action("pin message", move |rest| async move {
 						rest.pin_message(channel_id, message_id).await
 					});
@@ -288,7 +288,7 @@ impl Core {
 				channel_id,
 				message_id,
 			} => {
-				if self.channel_allows(channel_id, Permissions::MANAGE_MESSAGES, "Manage Messages") {
+				if self.channel_allows(channel_id, Permissions::PIN_MESSAGES, "Pin Messages") {
 					self.spawn_action("unpin message", move |rest| async move {
 						rest.unpin_message(channel_id, message_id).await
 					});

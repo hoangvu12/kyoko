@@ -1136,7 +1136,7 @@ impl Link {
 				layer.show_pins(PinsShown {
 					loaded: state.pins(popout.channel_id).is_some(),
 					entries,
-					can_manage: state.can_manage_messages(popout.channel_id),
+					can_pin: state.can_pin(popout.channel_id),
 				});
 			}
 		}

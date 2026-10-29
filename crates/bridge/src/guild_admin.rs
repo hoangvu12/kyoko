@@ -402,7 +402,17 @@ pub const RIGHT_GROUPS: &[RightGroup] = &[
 			right(
 				Permissions::MANAGE_MESSAGES,
 				"Manage Messages",
-				"Delete messages by other members or pin any message.",
+				"Delete messages by other members.",
+			),
+			right(
+				Permissions::PIN_MESSAGES,
+				"Pin Messages",
+				"Pin or unpin any message.",
+			),
+			right(
+				Permissions::BYPASS_SLOWMODE,
+				"Bypass Slowmode",
+				"Send messages without being affected by slowmode.",
 			),
 			right(
 				Permissions::MANAGE_THREADS,

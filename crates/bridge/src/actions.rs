@@ -15,6 +15,7 @@ pub struct Access {
 	pub read_history: bool,
 	pub add_reactions: bool,
 	pub manage_messages: bool,
+	pub pin_messages: bool,
 	pub create_threads: bool,
 	pub in_thread: bool,
 	pub lock: Option<RiskyLock>,
@@ -32,6 +33,7 @@ impl Access {
 			read_history: has(Permissions::READ_MESSAGE_HISTORY),
 			add_reactions: has(Permissions::ADD_REACTIONS),
 			manage_messages: guild && has(Permissions::MANAGE_MESSAGES),
+			pin_messages: has(Permissions::PIN_MESSAGES),
 			create_threads: guild && has(Permissions::CREATE_PUBLIC_THREADS),
 			in_thread: state.channel(channel_id).is_some_and(|channel| {
 				matches!(
@@ -44,7 +46,7 @@ impl Access {
 	}
 
 	pub fn can_pin(&self) -> bool {
-		self.manage_messages || self.guild_id.is_none()
+		self.pin_messages
 	}
 }
 

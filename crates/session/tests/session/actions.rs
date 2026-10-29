@@ -117,10 +117,7 @@ async fn pins_and_new_reactions_without_permission_never_reach_rest() {
 	let channel_id = open_member_channel(&running).await;
 	let message_id = {
 		let state = running.session().state().read();
-		assert!(
-			!state.can_manage_messages(channel_id),
-			"the member cannot manage messages"
-		);
+		assert!(!state.can_pin(channel_id), "the member cannot pin messages");
 		assert!(
 			!state.can_react(channel_id),
 			"the muted member cannot add reactions"
@@ -138,7 +135,7 @@ async fn pins_and_new_reactions_without_permission_never_reach_rest() {
 	});
 	running
 		.until("the pin to be refused", |state| {
-			rejected_with(state, before, "Manage Messages")
+			rejected_with(state, before, "Pin Messages")
 		})
 		.await;
 	let before = rejections(&running);

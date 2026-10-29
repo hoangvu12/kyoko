@@ -13,7 +13,8 @@ pub const DM_PERMISSIONS: Permissions = Permissions::VIEW_CHANNEL
 	.union(Permissions::USE_EXTERNAL_EMOJIS)
 	.union(Permissions::USE_EXTERNAL_STICKERS)
 	.union(Permissions::SEND_VOICE_MESSAGES)
-	.union(Permissions::SEND_POLLS);
+	.union(Permissions::SEND_POLLS)
+	.union(Permissions::PIN_MESSAGES);
 
 const TIMEOUT_PERMISSIONS: Permissions = Permissions::VIEW_CHANNEL.union(Permissions::READ_MESSAGE_HISTORY);
 
@@ -193,6 +194,11 @@ impl State {
 		self.my_permissions(channel_id).contains(
 			Permissions::VIEW_CHANNEL | Permissions::READ_MESSAGE_HISTORY | Permissions::ADD_REACTIONS,
 		)
+	}
+
+	pub fn can_pin(&self, channel_id: Snowflake) -> bool {
+		self.my_permissions(channel_id)
+			.contains(Permissions::VIEW_CHANNEL | Permissions::PIN_MESSAGES)
 	}
 
 	pub fn can_manage_messages(&self, channel_id: Snowflake) -> bool {

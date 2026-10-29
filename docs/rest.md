@@ -49,7 +49,7 @@ A message send is `POST /channels/<id>/messages`, and creating a thread or a for
 - Mark server read and mark everything read send one bulk ack per 100 channels. 2 s between them spreads a large "mark all read" over a few seconds instead of a burst.
 - Pacing only ever delays. Nothing is dropped or merged, so a burst of user actions still completes, just at a human pace.
 
-Reactions, pins and unpins are mutations. Before any request the session checks permissions: adding a reaction needs Read Message History, and Add Reactions when nobody has reacted with that emoji yet; pinning needs Manage Messages in a server. A refusal never reaches REST, and a REST failure is reported as a `CommandRejected` with the reason; neither is retried.
+Reactions, pins and unpins are mutations. Before any request the session checks permissions: adding a reaction needs Read Message History, and Add Reactions when nobody has reacted with that emoji yet; pinning and unpinning need Pin Messages (`1 << 51`, `State::can_pin`; Manage Messages alone no longer pins, as on Discord since the permission split). Bypass Slowmode (`1 << 52`) is known to the role and channel permission editors; kyoko keeps no slowmode timer of its own, so nothing else reads it. A refusal never reaches REST, and a REST failure is reported as a `CommandRejected` with the reason; neither is retried.
 
 Reaction routes, as the web client sends them (docs.discord.food, "Message"), all through `rest::api::ReactionRef` (channel, message, emoji as `name` or `name:id`, burst):
 

@@ -189,3 +189,95 @@ async fn files_without_attach_files_never_reach_rest() {
 	);
 	running.stop().await;
 }
+
+async fn open(running: &Running, guild: usize) -> (Snowflake, Snowflake) {
+	let channel_id = text_channel(running, guild);
+	running.session().send(Command::SelectChannel {
+		guild_id: Some(Snowflake(running.fixtures().guilds[guild].id)),
+		channel_id,
+	});
+	running
+		.until("the channel history to load", |state| {
+			state
+				.messages(channel_id)
+				.is_some_and(|cache| !cache.ordered.is_empty())
+		})
+		.await;
+	let message_id = running
+		.session()
+		.state()
+		.read()
+		.messages(channel_id)
+		.and_then(|cache| cache.ordered.last().map(|message| message.id))
+		.expect("a message");
+	(channel_id, message_id)
+}
+
+fn update_role(running: &Running, guild: usize, name: &str, change: impl Fn(Permissions) -> Permissions) {
+	let fixture = &running.fixtures().guilds[guild];
+	let mut role = fixture
+		.roles
+		.iter()
+		.find(|role| role.name == name)
+		.cloned()
+		.expect("the role");
+	role.permissions = change(role.permissions);
+	running.mock().dispatch(
+		"GUILD_ROLE_UPDATE",
+		&serde_json::json!({
+			"guild_id": fixture.id.to_string(),
+			"role": serde_json::to_value(&role).expect("role json"),
+		}),
+	);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pinning_follows_pin_messages_not_manage_messages() {
+	let running = start("permissions-pin").await;
+	let (moderated, moderated_message) = open(&running, MOD_GUILD).await;
+	update_role(&running, MOD_GUILD, "Mods", |permissions| {
+		permissions - Permissions::PIN_MESSAGES
+	});
+	running
+		.until("Mods to lose Pin Messages", |state| {
+			state.can_manage_messages(moderated) && !state.can_pin(moderated)
+		})
+		.await;
+	let before = rejections(&running);
+	running.session().send(Command::PinMessage {
+		channel_id: moderated,
+		message_id: moderated_message,
+	});
+	running
+		.until("the pin to be refused", |state| {
+			rejected_with(state, before, "Pin Messages")
+		})
+		.await;
+	let (muted, muted_message) = open(&running, MUTED_GUILD).await;
+	update_role(&running, MUTED_GUILD, "Members", |permissions| {
+		permissions | Permissions::PIN_MESSAGES
+	});
+	running
+		.until("Members to gain Pin Messages", |state| {
+			!state.can_manage_messages(muted) && state.can_pin(muted)
+		})
+		.await;
+	running.session().send(Command::PinMessage {
+		channel_id: muted,
+		message_id: muted_message,
+	});
+	let route = format!("/channels/{muted}/messages/pins/{muted_message}");
+	running
+		.until_wire("the pin request", |recording| {
+			(count(recording, "PUT", &route) > 0).then_some(())
+		})
+		.await;
+	tokio::time::sleep(QUIET).await;
+	let recording = running.mock().recording();
+	assert_eq!(
+		count(&recording, "PUT", "/channels/*/messages/pins/*"),
+		1,
+		"only the allowed pin"
+	);
+	running.stop().await;
+}

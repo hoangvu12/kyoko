@@ -314,7 +314,7 @@ fn pin_cards(layer: &Rc<ThreadsLayer>, channel_id: Snowflake, shown: &PinsShown)
 		shown
 			.entries
 			.iter()
-			.map(|(entry, avatar)| pin_card(layer, channel_id, entry, avatar.as_ref(), shown.can_manage)),
+			.map(|(entry, avatar)| pin_card(layer, channel_id, entry, avatar.as_ref(), shown.can_pin)),
 	)
 }
 
@@ -422,7 +422,7 @@ fn pin_card(
 	channel_id: Snowflake,
 	entry: &PinEntry,
 	avatar: Option<&ImageName>,
-	can_manage: bool,
+	can_pin: bool,
 ) -> View {
 	let (jump, unpin) = (layer.clone(), layer.clone());
 	let message_id = entry.id;
@@ -434,7 +434,7 @@ fn pin_card(
 				message_id,
 			})
 		}))
-		.when(can_manage, move |tools| {
+		.when(can_pin, move |tools| {
 			tools.child(
 				button()
 					.size(CARD_BUTTON, CARD_BUTTON)
