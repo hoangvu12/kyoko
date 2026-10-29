@@ -23,6 +23,12 @@ impl UploadFile {
 		}
 	}
 
+	pub fn named(name: impl Into<String>, bytes: impl Into<Bytes>) -> Self {
+		let name = name.into();
+		let content_type = content_type(&name);
+		Self::new(name, bytes, content_type)
+	}
+
 	pub fn upload_name(&self) -> String {
 		if self.spoiler && !self.name.starts_with(SPOILER_PREFIX) {
 			format!("{SPOILER_PREFIX}{}", self.name)
@@ -33,6 +39,39 @@ impl UploadFile {
 
 	pub fn size(&self) -> u64 {
 		self.bytes.len() as u64
+	}
+}
+
+pub fn content_type(name: &str) -> &'static str {
+	let extension = name
+		.rsplit_once('.')
+		.map(|(_, extension)| extension.to_ascii_lowercase())
+		.unwrap_or_default();
+	match extension.as_str() {
+		"png" | "apng" => "image/png",
+		"jpg" | "jpeg" | "jfif" => "image/jpeg",
+		"gif" => "image/gif",
+		"webp" => "image/webp",
+		"bmp" => "image/bmp",
+		"avif" => "image/avif",
+		"heic" => "image/heic",
+		"svg" => "image/svg+xml",
+		"mp4" | "m4v" => "video/mp4",
+		"webm" => "video/webm",
+		"mov" => "video/quicktime",
+		"mkv" => "video/x-matroska",
+		"avi" => "video/x-msvideo",
+		"mp3" => "audio/mpeg",
+		"ogg" | "opus" => "audio/ogg",
+		"wav" => "audio/wav",
+		"m4a" => "audio/mp4",
+		"aac" => "audio/aac",
+		"flac" => "audio/flac",
+		"txt" | "log" | "md" => "text/plain",
+		"json" => "application/json",
+		"pdf" => "application/pdf",
+		"zip" => "application/zip",
+		_ => "application/octet-stream",
 	}
 }
 

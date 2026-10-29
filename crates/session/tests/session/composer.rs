@@ -647,3 +647,74 @@ async fn a_spoilered_upload_reaches_discord_as_a_spoiler_with_its_alt_text() {
 	assert_eq!(attachment.description.as_deref(), Some("a sleepy cat"));
 	running.stop().await;
 }
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
+const HELD_PAST_TIMEOUT: Duration = Duration::from_millis(2500);
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn slow_uploads_outlast_the_request_timeout_and_keep_their_content_types() {
+	let tuning = RestTuning {
+		request_timeout: REQUEST_TIMEOUT,
+		..unpaced()
+	};
+	let running = Running::start_with(Options::new("composer-upload-slow").rest(tuning)).await;
+	let channel_id = running.open_text_channel().await;
+	running.mock().hold_requests("PUT", "/upload/**");
+	let names = [
+		"clip.MOV",
+		"song.flac",
+		"photo.jfif",
+		"voice.opus",
+		"shot.avif",
+		"README",
+	];
+	send_files(
+		&running,
+		channel_id,
+		"slow files",
+		names
+			.iter()
+			.map(|name| UploadFile::named(*name, vec![5u8; SMALL]))
+			.collect(),
+	);
+	running
+		.until("the uploads to start", |state| {
+			pending_upload(state, channel_id, "slow files").is_some()
+		})
+		.await;
+	tokio::time::sleep(HELD_PAST_TIMEOUT).await;
+	running.mock().release_requests();
+	delivered(&running, channel_id, "slow files").await;
+	let recording = running.mock().recording();
+	let mut types: Vec<(String, String)> = recording
+		.requests_to("PUT", "/upload/**")
+		.map(|request| {
+			(
+				request.path.rsplit('/').next().unwrap_or_default().to_owned(),
+				request.header("content-type").unwrap_or_default().to_owned(),
+			)
+		})
+		.collect();
+	types.sort();
+	assert_eq!(
+		types,
+		[
+			("README", "application/octet-stream"),
+			("clip.MOV", "video/quicktime"),
+			("photo.jfif", "image/jpeg"),
+			("shot.avif", "image/avif"),
+			("song.flac", "audio/flac"),
+			("voice.opus", "audio/ogg"),
+		]
+		.map(|(name, kind)| (name.to_owned(), kind.to_owned()))
+	);
+	assert!(
+		running
+			.session()
+			.state()
+			.read()
+			.messages(channel_id)
+			.is_some_and(|cache| cache.pending.iter().all(|pending| pending.failure.is_none()))
+	);
+	running.stop().await;
+}

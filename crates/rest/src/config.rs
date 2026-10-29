@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use net::Trust;
 use protocol::fingerprint::{API_VERSION, WEB_ORIGIN};
 use url::Url;
@@ -11,7 +9,6 @@ use crate::tuning::RestTuning;
 pub struct RestConfig {
 	pub base_url: Url,
 	pub identity: ClientIdentity,
-	pub timeout: Duration,
 	pub max_body: usize,
 	pub tuning: RestTuning,
 	pub trust: Trust,
@@ -22,7 +19,6 @@ impl RestConfig {
 		Self {
 			base_url,
 			identity,
-			timeout: Duration::from_secs(30),
 			max_body: 16 * 1024 * 1024,
 			tuning: RestTuning::default(),
 			trust: Trust::default(),

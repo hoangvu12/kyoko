@@ -16,7 +16,7 @@ pub use cookies::CookieJar;
 pub use error::{RestError, Result};
 pub use identity::ClientIdentity;
 pub use limiter::{Probe, RateLimiter};
-pub use request::{Request, UploadFile, encode_component};
+pub use request::{Request, UploadFile, content_type, encode_component};
 pub use route::{RouteKey, route_key};
 pub use safety::{Release, Releases};
 pub use tuning::RestTuning;

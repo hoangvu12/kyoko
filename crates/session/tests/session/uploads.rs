@@ -386,3 +386,70 @@ async fn a_refused_upload_comes_back_as_a_rejection() {
 	rejected_with(&running, "the upload failure", "Create emoji").await;
 	running.stop().await;
 }
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
+const HELD_PAST_TIMEOUT: Duration = Duration::from_millis(2500);
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_slow_gif_sticker_outlasts_the_request_timeout_as_a_gif_but_a_json_write_does_not() {
+	let tuning = RestTuning {
+		request_timeout: REQUEST_TIMEOUT,
+		..tuning()
+	};
+	let running = Running::start_with(Options::new("uploads-slow").rest(tuning)).await;
+	running.connected().await;
+	let guild_id = Snowflake(running.fixtures().guilds[0].id);
+	running
+		.until("a guild where I may add expressions", |state| {
+			state.may_create_expressions(guild_id) && state.guild_stickers(guild_id).is_some()
+		})
+		.await;
+	let stickers = format!("/guilds/{guild_id}/stickers");
+	running.mock().hold_requests("POST", &stickers);
+	running.session().send(Command::CreateSticker {
+		guild_id,
+		name: "dancing".to_owned(),
+		description: String::new(),
+		tags: "dance".to_owned(),
+		file: GIF.to_vec(),
+	});
+	tokio::time::sleep(HELD_PAST_TIMEOUT).await;
+	running.mock().release_requests();
+	let request = running
+		.until_wire("the sticker upload", |recording| {
+			posts(recording, &stickers).pop()
+		})
+		.await;
+	let parts = form_parts(&request);
+	let file = field(&parts, "file").expect("a file part");
+	assert!(
+		file.headers.contains("filename=\"dancing.gif\""),
+		"{}",
+		file.headers
+	);
+	assert!(
+		file.headers
+			.to_ascii_lowercase()
+			.contains("content-type: image/gif"),
+		"{}",
+		file.headers
+	);
+	assert_eq!(file.body, GIF);
+	running
+		.until("the GIF sticker in the server", |state: &State| {
+			state
+				.guild_stickers(guild_id)
+				.is_some_and(|stickers| stickers.iter().any(|sticker| sticker.name == "dancing"))
+		})
+		.await;
+	let emojis = format!("/guilds/{guild_id}/emojis");
+	running.mock().hold_requests("POST", &emojis);
+	running.session().send(Command::CreateEmoji {
+		guild_id,
+		name: "too_slow".to_owned(),
+		image: PNG.to_vec(),
+	});
+	rejected_with(&running, "the emoji request to time out", "Create emoji failed").await;
+	running.mock().release_requests();
+	running.stop().await;
+}

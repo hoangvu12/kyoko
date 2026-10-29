@@ -31,7 +31,6 @@ use wreq::redirect::Policy;
 use wreq::{Body as HttpBody, Method, Response, StatusCode};
 
 const FALLBACK_RETRY_AFTER: Duration = Duration::from_secs(1);
-const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const UPLOAD_CHUNK: usize = 64 * 1024;
 const X_DISCORD_LOCALE: HeaderName = HeaderName::from_static("x-discord-locale");
 const X_DISCORD_TIMEZONE: HeaderName = HeaderName::from_static("x-discord-timezone");
@@ -60,6 +59,7 @@ struct Inner {
 	limiter: RateLimiter,
 	safety: Safety,
 	max_retry_wait: Duration,
+	upload_timeout: Duration,
 	identity: ClientIdentity,
 	referer: RwLock<HeaderValue>,
 }
@@ -196,7 +196,7 @@ impl RestClient {
 		let fingerprint = config.identity.fingerprint();
 		let http = chrome_client(&config.trust)
 			.redirect(Policy::none())
-			.timeout(config.timeout)
+			.timeout(config.tuning.request_timeout)
 			.user_agent(fingerprint.user_agent())
 			.default_headers(default_headers(&fingerprint))
 			.cookie_provider(config.identity.cookies().clone())
@@ -204,7 +204,7 @@ impl RestClient {
 			.expect("http client initializes");
 		let uploads = chrome_client(&config.trust)
 			.redirect(Policy::none())
-			.timeout(UPLOAD_TIMEOUT)
+			.timeout(config.tuning.upload_timeout)
 			.user_agent(fingerprint.user_agent())
 			.default_headers(upload_headers())
 			.build()
@@ -219,6 +219,7 @@ impl RestClient {
 				limiter: RateLimiter::default(),
 				safety: Safety::new(&config.tuning),
 				max_retry_wait: config.tuning.max_retry_wait,
+				upload_timeout: config.tuning.upload_timeout,
 				identity: config.identity,
 				referer: RwLock::new(HeaderValue::from_static(HOME_REFERER)),
 			}),
@@ -364,10 +365,12 @@ impl RestClient {
 			Body::Json(bytes) => builder
 				.header(CONTENT_TYPE, "application/json")
 				.body(bytes.clone()),
-			Body::Multipart { payload_json, files } => {
-				builder.multipart(multipart_form(payload_json, files)?)
-			}
-			Body::Form { fields, files } => builder.multipart(fields_form(fields, files)?),
+			Body::Multipart { payload_json, files } => builder
+				.timeout(self.inner.upload_timeout)
+				.multipart(multipart_form(payload_json, files)?),
+			Body::Form { fields, files } => builder
+				.timeout(self.inner.upload_timeout)
+				.multipart(fields_form(fields, files)?),
 			Body::Invalid => return Err(RestError::InvalidRequest),
 		};
 		builder.send().await.map_err(network_error)

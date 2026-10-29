@@ -23,6 +23,8 @@ pub struct RestTuning {
 	pub search_delay: Duration,
 	pub guild_write_gap: Duration,
 	pub profile_gap: Duration,
+	pub request_timeout: Duration,
+	pub upload_timeout: Duration,
 }
 
 impl Default for RestTuning {
@@ -49,6 +51,8 @@ impl Default for RestTuning {
 			search_delay: Duration::from_millis(300),
 			guild_write_gap: Duration::from_millis(500),
 			profile_gap: Duration::from_millis(500),
+			request_timeout: Duration::from_secs(30),
+			upload_timeout: Duration::from_secs(15 * 60),
 		}
 	}
 }
