@@ -583,6 +583,7 @@ impl Core {
 					identity::save_installation_id(self.rest.identity(), &self.store, &self.runtime, id);
 				}
 				self.apply(Event::Ready(&ready));
+				self.restore_presence();
 				self.voice_ready(ready.geo_ordered_rtc_regions.clone().into_vec());
 				let event = DispatchEvent::Ready(ready);
 				guarded(&self.hooks, "on_dispatch", |hooks| hooks.on_dispatch(&event));

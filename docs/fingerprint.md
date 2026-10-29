@@ -318,7 +318,7 @@ Interop: `crates/dave/tests/interop.rs` puts a kyoko member and a `davey` 0.1.5 
 
 Keys in this order: `token`, `properties`, `compress` (`false`), `presence`, `capabilities`, `client_state`. There is no `large_threshold`; the user default is already 250.
 
-`presence` is `{"activities":[],"status":"unknown","since":0,"afk":false}`, as the docs say a user client sends on a fresh IDENTIFY. Discord then applies the status from the user's settings.
+`presence` is `{"activities":[],"status":"unknown","since":0,"afk":false}`, as the docs say a user client sends on a fresh IDENTIFY. Discord then applies the status from the user's settings, and READY's `user_settings_proto` restores it in `state` (`State::own_status`). After a fresh READY (not a resume) the session sends op 3 again only when Discord's copy would be wrong: while away (`Command::SetAfk(true)`, sent as `idle` with `afk: true`) or while a status write is still waiting or in flight, whose status it also keeps over READY's older one (`Core::restore_presence`). Otherwise kyoko sends no op 3 after IDENTIFY.
 
 `client_state` always carries `api_code_version`: READY's value once kyoko has seen one, `0` before that. See `docs/client-state.md`.
 

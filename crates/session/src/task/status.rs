@@ -219,6 +219,13 @@ impl Core {
 		}
 	}
 
+	pub(super) fn restore_presence(&mut self) {
+		self.keep_intended_status();
+		if self.afk || self.status.intended().is_some() {
+			self.publish_presence();
+		}
+	}
+
 	pub(super) fn is_dnd(&self) -> bool {
 		self.state.read().own_status() == StatusKind::Dnd
 	}

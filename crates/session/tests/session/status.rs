@@ -40,6 +40,17 @@ fn presences(recording: &Recording) -> Vec<Value> {
 		.collect()
 }
 
+fn presences_since_a_fresh_identify(recording: &Recording) -> Option<Vec<Value>> {
+	let identified = recording.frames_with(Opcode::Identify).nth(1)?.at;
+	Some(
+		recording
+			.frames_with(Opcode::PresenceUpdate)
+			.filter(|frame| frame.at > identified)
+			.map(|frame| frame.data.clone())
+			.collect(),
+	)
+}
+
 async fn settle() {
 	tokio::time::sleep(GAP * 2).await;
 }
@@ -380,5 +391,86 @@ async fn with_activity_sharing_off_presence_carries_nothing_but_the_custom_statu
 		types.iter().all(|kind| *kind == json!(4)),
 		"only the custom status goes out while sharing is off: {types:?}"
 	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_unsaved_status_survives_a_fresh_session_and_goes_out_again() {
+	let running = start("status-fresh-session").await;
+	running.mock().hold_requests("PATCH", SETTINGS);
+	running.session().send(Command::SetStatus(StatusKind::Dnd));
+	running
+		.until_wire("the dnd presence", |recording| {
+			presences(recording)
+				.pop()
+				.filter(|presence| presence["status"] == "dnd")
+		})
+		.await;
+	let old_session = running.session().state().read().session().session_id.clone();
+	running.mock().invalidate_session(false);
+	let again = running
+		.until_wire("the status sent on the fresh session", |recording| {
+			presences_since_a_fresh_identify(recording)?.pop()
+		})
+		.await;
+	assert_eq!(again["status"], "dnd");
+	assert_eq!(again["afk"], false);
+	running
+		.until("a fresh session that kept the status", |state: &State| {
+			state.session().connected
+				&& state.session().session_id != old_session
+				&& state.own_status() == StatusKind::Dnd
+		})
+		.await;
+	running.mock().release_requests();
+	let saved = running
+		.until_wire("the settings write", |recording| writes(recording).pop())
+		.await;
+	assert_eq!(saved.status.as_deref(), Some("dnd"));
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn being_away_goes_out_again_after_a_fresh_session() {
+	let running = start("status-away-fresh").await;
+	running.session().send(Command::SetAfk(true));
+	running
+		.until_wire("the idle presence", |recording| {
+			presences(recording)
+				.pop()
+				.filter(|presence| presence["afk"] == true)
+		})
+		.await;
+	running.mock().invalidate_session(false);
+	let again = running
+		.until_wire("the idle presence on the fresh session", |recording| {
+			presences_since_a_fresh_identify(recording)?.pop()
+		})
+		.await;
+	assert_eq!(again["status"], "idle");
+	assert_eq!(again["afk"], true);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_fresh_session_leaves_a_saved_status_to_discord() {
+	let running = start("status-saved-fresh").await;
+	running.session().send(Command::SetStatus(StatusKind::Dnd));
+	running
+		.until_wire("the settings write", |recording| writes(recording).pop())
+		.await;
+	settle().await;
+	let old_session = running.session().state().read().session().session_id.clone();
+	running.mock().invalidate_session(false);
+	running
+		.until("the saved status from the fresh session", |state: &State| {
+			state.session().connected
+				&& state.session().session_id != old_session
+				&& state.own_status() == StatusKind::Dnd
+		})
+		.await;
+	settle().await;
+	let recording = running.mock().recording();
+	assert_eq!(presences_since_a_fresh_identify(&recording), Some(Vec::new()));
 	running.stop().await;
 }
