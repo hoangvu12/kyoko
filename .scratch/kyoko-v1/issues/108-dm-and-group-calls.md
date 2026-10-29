@@ -31,5 +31,5 @@ Merged `e322367` (lane A, worker `884153cb`; commits `55946c4` Join, ring and de
 - A voice state update for you from another device no longer moves this session's call (server calls too).
 - Mockcord: fake DM call server, controls `ring_me`, `call_join_as`, `answer_elsewhere`; flags `--ring`, `--answer-calls`. Tests: 5 session (incl. a three-person group DM), 2 bridge, 2 Luau UI.
 - Not done: the " — Join the call" link on a running call's message, an outgoing "calling" sound, the `GET /call` ring-eligibility check (endcord found it failing).
-- **AUTO_CALL_CONNECT (IDENTIFY capabilities bit 12, 509 -> 4605) left out**, waiting on the user; parked on branch `lane-a-with-auto-call` (`770262c`). Without it a call already ringing when kyoko connects shows only on its next CALL_UPDATE. Settle the value from the real web client (74's Chrome 157 bump).
+- **AUTO_CALL_CONNECT (IDENTIFY capabilities bit 12, 509 -> 4605) merged** as `06afc91` after the user approved it (2026-10-29: "we dont have to always make it up to date with chrome"). A call already ringing when kyoko connects arrives as CALL_CREATE after READY. The value is docs.discord.food's example, not a web client capture (noted in docs/gateway.md); 74 compares it.
 - For 102 (real call): check whether Discord rings the others by itself, the real ring timeout, and the web client's `capabilities` value.
