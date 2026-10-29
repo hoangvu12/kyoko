@@ -6,7 +6,7 @@ Plan ticket V11 of `nguyenvu/.research/voice-plan/plan.md` (read its sections 1â
 
 **Blocked by:** 105, 106
 
-**Status:** open
+**Status:** claimed
 
 - [ ] Session test (fake capture): Go Live sends op 18 with type `guild`, connects, announces op 12 and sends encrypted H264; viewers' wants are honoured; Stop sends op 19 and closes only the stream connection
 - [ ] The LIVE badge shows on your own row and in the call view
