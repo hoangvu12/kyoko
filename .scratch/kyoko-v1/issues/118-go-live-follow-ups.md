@@ -10,9 +10,13 @@
 
 **Blocked by:** 107
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Session tests (fake capture + fake loopback audio): stream audio reaches a scripted viewer DAVE-encrypted; minimise pauses (op 22) and restore resumes on a keyframe; swapping source keeps the same stream connection and key
 - [ ] Tests and captures never capture the real screen, real system audio or other people's windows
 - [ ] Captures of the call view with your own stream tile and of the picker with the Sound toggle, checked by eye
 - [ ] `docs/voice.md` updated
+
+## Decision (user, 2026-10-29)
+
+"Do like Discord": sharing a **screen** shares the whole computer's sound **minus kyoko's own** (so people in the call don't hear their own voices echoed back); sharing an **app** shares only that app's sound (its process tree). On Windows this is WASAPI process loopback (`ActivateAudioInterfaceAsync` with `AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`): `PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE` on kyoko's own PID for a screen, `INCLUDE_TARGET_PROCESS_TREE` on the window's PID for an app. Sound on by default, with Discord's toggle in the picker. Stream audio bypasses mic noise suppression, echo cancellation and gain control.
