@@ -8,6 +8,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use voice::{ConnectionKind, StopReason, VoiceConnection, VoiceError, VoiceEvent, VoiceParams};
 
+use super::go_live::Share;
 use super::voice_link::volume;
 use super::{Core, Internal};
 use crate::video_feed::VideoView;
@@ -62,9 +63,15 @@ struct Watch {
 pub(crate) struct StreamLink {
 	generation: u64,
 	watch: Option<Watch>,
+	pub(super) share: Option<Share>,
 }
 
 impl StreamLink {
+	pub(super) fn next_generation(&mut self) -> u64 {
+		self.generation += 1;
+		self.generation
+	}
+
 	fn watching(&mut self, generation: u64) -> Option<&mut Watch> {
 		self.watch.as_mut().filter(|watch| watch.generation == generation)
 	}
@@ -102,8 +109,7 @@ impl Core {
 			self.reject(STREAM_UNREACHABLE);
 			return;
 		}
-		self.streams.generation += 1;
-		let generation = self.streams.generation;
+		let generation = self.streams.next_generation();
 		self.streams.watch = Some(Watch {
 			key: key.clone(),
 			owner,
@@ -131,6 +137,7 @@ impl Core {
 
 	pub(super) fn end_streams(&mut self, notify_gateway: bool) {
 		self.end_watch(notify_gateway, None);
+		self.end_share(notify_gateway, None);
 	}
 
 	pub(super) fn set_stream_views(&mut self, views: Vec<VideoView>) {
@@ -147,6 +154,9 @@ impl Core {
 	}
 
 	pub(super) fn stream_created(&mut self, stream: &StreamState) {
+		if self.share_created(stream) {
+			return;
+		}
 		let Some(watch) = self.streams.watching_key(&stream.stream_key) else {
 			return;
 		};
@@ -157,6 +167,9 @@ impl Core {
 	}
 
 	pub(super) fn stream_server_updated(&mut self, update: StreamServerUpdate) {
+		let Some(update) = self.share_server_updated(update) else {
+			return;
+		};
 		let Some(watch) = self.streams.watching_key(&update.stream_key) else {
 			return;
 		};
@@ -172,6 +185,9 @@ impl Core {
 	}
 
 	pub(super) fn stream_deleted(&mut self, delete: &StreamDelete) {
+		if self.share_deleted(delete) {
+			return;
+		}
 		if self
 			.streams
 			.watch
@@ -183,6 +199,10 @@ impl Core {
 	}
 
 	pub(super) fn on_stream_timeout(&mut self, generation: u64) {
+		if self.is_share(generation) {
+			self.on_share_timeout();
+			return;
+		}
 		let waiting = self
 			.streams
 			.watching(generation)
@@ -197,6 +217,10 @@ impl Core {
 		generation: u64,
 		result: Result<Arc<VoiceConnection>, VoiceError>,
 	) {
+		if self.is_share(generation) {
+			self.on_share_connected(result);
+			return;
+		}
 		let Some(watch) = self.streams.watching(generation) else {
 			if let Ok(connection) = result {
 				connection.disconnect();
@@ -236,6 +260,10 @@ impl Core {
 	}
 
 	pub(super) fn on_stream_event(&mut self, generation: u64, event: VoiceEvent) {
+		if self.is_share(generation) {
+			self.on_share_event(event);
+			return;
+		}
 		if self.streams.watching(generation).is_none() {
 			return;
 		}

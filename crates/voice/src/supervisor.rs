@@ -375,7 +375,7 @@ impl Supervisor {
 			.map(|state| {
 				let layer = quality.layer(state.layer.quality);
 				StreamAnnouncement {
-					kind: "video",
+					kind: self.credentials.video_kind(),
 					rid: state.layer.rid.clone(),
 					ssrc: state.layer.ssrc,
 					active: state.wanted(),

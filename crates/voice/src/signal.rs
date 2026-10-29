@@ -63,6 +63,13 @@ impl Credentials {
 		self.user_id
 	}
 
+	pub fn video_kind(&self) -> &'static str {
+		match self.kind {
+			ConnectionKind::Voice => CAMERA_LAYERS[0].kind,
+			ConnectionKind::Stream => SCREEN_LAYERS[0].kind,
+		}
+	}
+
 	pub fn new(
 		ids: [Snowflake; 3],
 		session_id: String,

@@ -978,6 +978,7 @@ impl Link {
 			capture::Screen::SettingsCamera => self.drive_settings_camera().await,
 			capture::Screen::GoLive => self.drive_go_live().await,
 			capture::Screen::GoLivePreview => self.drive_go_live_preview().await,
+			capture::Screen::GoingLive => self.drive_going_live().await,
 			capture::Screen::VoiceRowHover => self.point_at_voice_row().await,
 			capture::Screen::MemberList
 			| capture::Screen::MemberListScrolled

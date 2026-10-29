@@ -51,4 +51,5 @@ pub(crate) struct VoiceShared {
 	pub(crate) stream_connection: Mutex<Option<Arc<VoiceConnection>>>,
 	pub(crate) stream_feed: VideoFeed,
 	pub(crate) stream_views: Mutex<Vec<VideoView>>,
+	pub(crate) share_connection: Mutex<Option<Arc<VoiceConnection>>>,
 }

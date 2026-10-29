@@ -328,6 +328,24 @@ impl VoiceConnection {
 		}
 	}
 
+	pub async fn start_screen(
+		&self,
+		source: Box<dyn VideoSource>,
+		quality: VideoQuality,
+		codecs: VideoCodecs,
+	) -> std::result::Result<(), VideoError> {
+		self.shared.video.outgoing.set_paused(false);
+		self.start_camera(source, quality, codecs).await
+	}
+
+	pub fn set_video_paused(&self, paused: bool) {
+		self.shared.video.outgoing.set_paused(paused);
+	}
+
+	pub fn video_paused(&self) -> bool {
+		self.shared.video.outgoing.paused()
+	}
+
 	pub fn camera_on(&self) -> bool {
 		self.shared.video.outgoing.sender.lock().is_some()
 	}

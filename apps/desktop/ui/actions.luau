@@ -585,6 +585,14 @@ function M.set_go_live(open: boolean)
 	ui.invoke("voice.go_live", open)
 end
 
+function M.go_live_start(id: string, resolution: string, fps: number)
+	ui.invoke("voice.go_live_start", { id = id, resolution = resolution, fps = fps })
+end
+
+function M.stop_go_live()
+	ui.invoke("voice.stop_go_live", true)
+end
+
 function M.preview_screen(id: string, resolution: string, fps: number)
 	ui.invoke("voice.screen_preview", { id = id, resolution = resolution, fps = fps })
 end

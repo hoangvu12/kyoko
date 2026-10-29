@@ -7,6 +7,7 @@ use rest::UploadFile;
 use rest::api::SearchQuery;
 use serde_json::Value;
 use state::{EmojiCandidate, RiskyReason, RiskyTarget, Viewport};
+use voice::video::{ScreenTarget, VideoQuality};
 
 use crate::poll::PollDraft;
 use crate::video_feed::VideoView;
@@ -709,6 +710,12 @@ pub enum Command {
 		volume: u8,
 	},
 	SetSelfVideo(bool),
+	GoLive {
+		source: ScreenTarget,
+		quality: VideoQuality,
+	},
+	StopGoLive,
+	SetStreamPaused(bool),
 }
 
 impl Command {

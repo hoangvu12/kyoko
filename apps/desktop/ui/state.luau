@@ -785,6 +785,7 @@ export type VoiceControls = {
 	server_muted: boolean,
 	server_deafened: boolean,
 	camera: boolean,
+	live: boolean,
 }
 
 export type AudioDevice = { id: string, name: string }
@@ -823,6 +824,7 @@ M.voice = {
 		server_muted = false,
 		server_deafened = false,
 		camera = false,
+		live = false,
 	} :: VoiceControls),
 	call = ui.shared("voice.call", {
 		open = false,

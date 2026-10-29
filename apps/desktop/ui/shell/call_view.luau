@@ -983,12 +983,18 @@ local function bottom_bar()
 		control {
 			id = "call_screen",
 			name = "screen_share",
-			tooltip = "Share Your Screen",
+			tooltip = function()
+				return if controls().live then "Stop Streaming" else "Share Your Screen"
+			end,
 			lit = function()
-				return state.voice.screens:get().open
+				return controls().live or state.voice.screens:get().open
 			end,
 			on_click = function()
-				actions.set_go_live(true)
+				if controls().live then
+					actions.stop_go_live()
+				else
+					actions.set_go_live(true)
+				end
 			end,
 		},
 		control {

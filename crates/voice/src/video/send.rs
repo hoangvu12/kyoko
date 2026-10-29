@@ -113,6 +113,11 @@ impl Pipeline {
 		while !self.stop.load(Ordering::Acquire) {
 			match self.step() {
 				Ok(()) => failures = 0,
+				Err(VideoError::Ended) => {
+					debug!("the video source ended");
+					self.shared.hub.emit(VoiceEvent::VideoSourceEnded);
+					break;
+				}
 				Err(error) => {
 					failures += 1;
 					warn!(%error, "camera frame was not sent");
@@ -165,7 +170,7 @@ impl Pipeline {
 			);
 		}
 		let outgoing = &self.shared.video.outgoing;
-		if !outgoing.sending() {
+		if !outgoing.sending() || outgoing.paused() {
 			return Ok(());
 		}
 		let now = Instant::now();

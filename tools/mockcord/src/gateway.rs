@@ -449,8 +449,41 @@ impl Connection {
 	}
 
 	fn stream_create(&self, session: &str, data: &Value) {
-		if let Some((key, guild_id, channel_id)) = Self::stream_key(data) {
-			self.announce_stream(session, &key, guild_id, channel_id, &[]);
+		let Some((_, guild_id, channel_id)) = Self::stream_key(data) else {
+			return;
+		};
+		let stream = self.shared.voice.own_stream(guild_id, channel_id);
+		let hub = &self.shared.hub;
+		hub.dispatch_to(
+			session,
+			"STREAM_CREATE",
+			&json!({
+				"stream_key": stream.key,
+				"rtc_server_id": stream.rtc_server_id.to_string(),
+				"rtc_channel_id": stream.rtc_channel_id.to_string(),
+				"region": "mock",
+				"viewer_ids": [],
+				"paused": false,
+			}),
+		);
+		hub.dispatch_to(
+			session,
+			"STREAM_SERVER_UPDATE",
+			&json!({
+				"token": format!("{VOICE_TOKEN}-stream-{}", stream.rtc_server_id),
+				"stream_key": stream.key,
+				"guild_id": guild_id.map(|id| id.to_string()),
+				"endpoint": self.shared.urls.voice,
+			}),
+		);
+		self.broadcast_own_streaming(session, true);
+	}
+
+	fn broadcast_own_streaming(&self, session: &str, streaming: bool) {
+		if let Some(mut state) = self.shared.scenario.own_voice_state(session) {
+			state["self_stream"] = json!(streaming);
+			self.shared.scenario.remember_voice_state(session, state.clone());
+			self.shared.hub.broadcast("VOICE_STATE_UPDATE", &state);
 		}
 	}
 
@@ -510,12 +543,22 @@ impl Connection {
 	}
 
 	fn stream_delete(&self, session: &str, data: &Value) {
-		if let Some(key) = data["stream_key"].as_str() {
-			self.shared.hub.dispatch_to(
-				session,
-				"STREAM_DELETE",
-				&json!({ "stream_key": key, "reason": "user_requested" }),
-			);
+		let Some(key) = data["stream_key"].as_str() else {
+			return;
+		};
+		self.shared.hub.dispatch_to(
+			session,
+			"STREAM_DELETE",
+			&json!({ "stream_key": key, "reason": "user_requested" }),
+		);
+		let own = self
+			.shared
+			.voice
+			.stream(key)
+			.is_some_and(|stream| stream.owner == CURRENT_USER_ID);
+		if own {
+			self.shared.voice.end_stream(key);
+			self.broadcast_own_streaming(session, false);
 		}
 	}
 
@@ -553,12 +596,13 @@ impl Connection {
 			"mute": false,
 			"self_deaf": data["self_deaf"].as_bool().unwrap_or(false),
 			"self_mute": data["self_mute"].as_bool().unwrap_or(false),
-			"self_stream": false,
+			"self_stream": channel_id.is_some_and(|id| self.shared.voice.streaming_in(id, CURRENT_USER_ID)),
 			"self_video": data["self_video"].as_bool().unwrap_or(false),
 			"suppress": false,
 			"request_to_speak_timestamp": data["request_to_speak_timestamp"].clone(),
 		});
 		let moved = self.shared.scenario.move_voice(session, channel_id);
+		self.shared.scenario.remember_voice_state(session, event.clone());
 		self.shared.hub.broadcast("VOICE_STATE_UPDATE", &event);
 		if let (true, Some(channel_id)) = (moved, channel_id) {
 			let mut server = json!({

@@ -95,7 +95,7 @@ pub fn voice_call(state: &State) -> Option<VoiceCall> {
 				} else {
 					member.video
 				},
-				live: member.live,
+				live: member.live || (mine && session.screen_share.is_some()),
 				volume: audio.volume,
 				local_muted: !mine && audio.muted,
 				name: member.name,

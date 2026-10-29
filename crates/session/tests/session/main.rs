@@ -20,6 +20,7 @@ mod favourites;
 mod fingerprint;
 mod friends;
 mod gateway;
+mod go_live;
 mod harness;
 mod hidden;
 mod hooks;

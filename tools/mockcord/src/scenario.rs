@@ -143,6 +143,7 @@ pub struct Scenario {
 	limited_member_requests: Mutex<Vec<f64>>,
 	full_voice_channels: Mutex<Vec<u64>>,
 	voice_channels: Mutex<HashMap<String, u64>>,
+	own_voice_states: Mutex<HashMap<String, serde_json::Value>>,
 }
 
 impl Scenario {
@@ -152,6 +153,14 @@ impl Scenario {
 
 	pub fn voice_channel_full(&self, channel_id: u64) -> bool {
 		self.full_voice_channels.lock().contains(&channel_id)
+	}
+
+	pub fn remember_voice_state(&self, session: &str, state: serde_json::Value) {
+		self.own_voice_states.lock().insert(session.to_owned(), state);
+	}
+
+	pub fn own_voice_state(&self, session: &str) -> Option<serde_json::Value> {
+		self.own_voice_states.lock().get(session).cloned()
 	}
 
 	pub fn move_voice(&self, session: &str, channel_id: Option<u64>) -> bool {

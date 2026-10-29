@@ -777,9 +777,10 @@ fn the_go_live_picker_lists_screens_and_windows_previews_one_and_closes() {
 	calls.borrow_mut().clear();
 	app.click("go_live_start");
 	app.frames(2);
-	assert!(
-		last_call(&calls, "voice.screen_preview").is_none() && last_call(&calls, "voice.go_live").is_none(),
-		"Go Live waits for going live"
+	assert_eq!(
+		last_call(&calls, "voice.go_live_start"),
+		Some(json!({ "id": "screen-1", "resolution": "720", "fps": 30 })),
+		"Go Live goes live with the previewed source and quality"
 	);
 
 	app.click("go_live_change");
@@ -859,4 +860,38 @@ fn the_go_live_picker_lists_screens_and_windows_previews_one_and_closes() {
 	app.click("go_live_cancel");
 	app.frames(3);
 	assert_eq!(last_call(&calls, "voice.go_live"), Some(json!(false)));
+}
+
+#[test]
+fn going_live_shows_your_live_badge_and_the_screen_button_stops_it() {
+	let calls: Calls = Calls::default();
+	let mut app = recording_app(&calls, "default");
+	app.ui.scene.borrow_mut().resize(WIDE.0, WIDE.1);
+	shows(&mut app, "a server", "general", &server_values(false));
+	shows(&mut app, "the call view", "grace", &call_values());
+	let badges =
+		|app: &mut zgx_script::testing::TestApp| app.texts().iter().filter(|text| *text == "LIVE").count();
+	let before = badges(&mut app);
+	let mut live = call_values();
+	for (key, value) in &mut live {
+		if *key == "voice.call" {
+			value["tiles"][0]["live"] = json!(true);
+		}
+	}
+	live.push((
+		"voice.controls",
+		json!({
+			"muted": false, "deafened": false, "server_muted": false, "server_deafened": false,
+			"camera": false, "live": true,
+		}),
+	));
+	shows(&mut app, "your stream", "grace", &live);
+	assert_eq!(badges(&mut app), before + 1, "your own tile shows LIVE");
+	app.click("call_screen");
+	app.frames(2);
+	assert_eq!(last_call(&calls, "voice.stop_go_live"), Some(json!(true)));
+	assert!(
+		last_call(&calls, "voice.go_live").is_none(),
+		"while live the screen button stops the stream instead of opening the picker"
+	);
 }

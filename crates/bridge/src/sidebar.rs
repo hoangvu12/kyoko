@@ -489,7 +489,7 @@ fn voice_members(state: &State, guild_id: Snowflake, channel_id: Snowflake) -> V
 }
 
 pub(crate) fn voice_member(state: &State, guild_id: Snowflake, voice: &VoiceState) -> VoiceMember {
-	let streaming = voice.self_stream == Some(true);
+	let streaming = voice.self_stream == Some(true) || going_live(state, voice);
 	VoiceMember {
 		user_id: voice.user_id,
 		name: voice_name(state, guild_id, voice),
@@ -504,6 +504,13 @@ pub(crate) fn voice_member(state: &State, guild_id: Snowflake, voice: &VoiceStat
 		},
 		live: streaming,
 	}
+}
+
+fn going_live(state: &State, voice: &VoiceState) -> bool {
+	Some(voice.user_id) == state.current_user_id()
+		&& state.voice().is_some_and(|session| {
+			session.screen_share.is_some() && voice.channel_id == Some(session.channel_id)
+		})
 }
 
 fn voice_name(state: &State, guild_id: Snowflake, voice: &VoiceState) -> String {

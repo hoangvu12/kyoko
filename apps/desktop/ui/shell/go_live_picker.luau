@@ -370,7 +370,12 @@ local function picked()
 	}
 end
 
-local function go_live_button()
+local function ready(): boolean
+	return preview().running
+end
+
+local go_live_button = ui.component(function()
+	local hovered = ui.use_state(false)
 	return ui.button {
 		id = "go_live_start",
 		h = theme.size.button_height_md,
@@ -382,10 +387,24 @@ local function go_live_button()
 		focus = { border = theme.size.border_thickness, border_color = theme.color.accent_2 },
 		justify = "center",
 		items = "center",
-		opacity = 0.5,
-		cursor = "not-allowed",
-		bg = theme.color.accent_3,
-		tooltip = "Going live comes in a later version",
+		opacity = function()
+			return if ready() then 1 else 0.5
+		end,
+		cursor = function()
+			return if ready() then "pointer" else "not-allowed"
+		end,
+		bg = function()
+			return if ready() and hovered:get() then theme.color.accent_2 else theme.color.accent_3
+		end,
+		on_hover = function(inside: boolean)
+			hovered:set(inside)
+		end,
+		on_click = function()
+			local shown = preview()
+			if shown.running then
+				actions.go_live_start(shown.id, shown.resolution, shown.fps)
+			end
+		end,
 		ui.text {
 			"Go Live",
 			literal = true,
@@ -395,7 +414,7 @@ local function go_live_button()
 			color = theme.color.text_0,
 		},
 	}
-end
+end)
 
 local function choosing(): boolean
 	return preview().id ~= ""
@@ -468,7 +487,7 @@ return ui.component(function()
 					height = theme.size.button_height_md,
 					on_click = close,
 				},
-				ui.show(choosing, go_live_button())
+				ui.show(choosing, go_live_button {})
 			),
 		}),
 	}

@@ -216,6 +216,10 @@ impl Session {
 		self.voice.stream_connection.lock().clone()
 	}
 
+	pub fn share_connection(&self) -> Option<Arc<voice::VoiceConnection>> {
+		self.voice.share_connection.lock().clone()
+	}
+
 	pub fn shutdown(mut self) {
 		self.gateway.shutdown();
 		let _ = self.commands.try_send(Command::Shutdown);

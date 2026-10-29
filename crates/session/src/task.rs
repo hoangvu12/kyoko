@@ -50,6 +50,7 @@ mod emoji_rank;
 mod expressions;
 mod failures;
 mod favorite_writes;
+mod go_live;
 mod guild_writes;
 mod hidden;
 mod interactions;
@@ -214,6 +215,10 @@ pub(crate) enum Internal {
 		level_db: f32,
 	},
 	CameraStarted {
+		generation: u64,
+		result: Result<(), voice::video::VideoError>,
+	},
+	ShareStarted {
 		generation: u64,
 		result: Result<(), voice::video::VideoError>,
 	},
@@ -868,6 +873,7 @@ impl Core {
 			Internal::MicCheckStarted { generation, result } => self.on_mic_check_started(generation, result),
 			Internal::MicTestLevel { generation, level_db } => self.on_mic_test_level(generation, level_db),
 			Internal::CameraStarted { generation, result } => self.on_camera_started(generation, result),
+			Internal::ShareStarted { generation, result } => self.on_share_started(generation, result),
 		}
 	}
 
@@ -1083,6 +1089,9 @@ impl Core {
 			Command::SetStreamViews(views) => self.set_stream_views(views),
 			Command::SetStreamVolume { user_id, volume } => self.set_stream_volume(user_id, volume),
 			Command::SetSelfVideo(on) => self.set_self_video(on),
+			Command::GoLive { source, quality } => self.go_live(source, quality),
+			Command::StopGoLive => self.stop_go_live(),
+			Command::SetStreamPaused(paused) => self.set_stream_paused(paused),
 			Command::Logout => {
 				self.begin_sign_out();
 				return false;

@@ -65,6 +65,7 @@ pub(crate) struct EncodedUnit {
 pub(crate) struct Outgoing {
 	layers: Mutex<Vec<Arc<LayerState>>>,
 	sending: AtomicBool,
+	paused: AtomicBool,
 	quality: Mutex<VideoQuality>,
 	queue: Mutex<VecDeque<EncodedUnit>>,
 	pub ready: Notify,
@@ -110,6 +111,23 @@ impl Outgoing {
 		}
 	}
 
+	pub fn paused(&self) -> bool {
+		self.paused.load(Ordering::Acquire)
+	}
+
+	pub fn set_paused(&self, paused: bool) {
+		if self.paused.swap(paused, Ordering::AcqRel) == paused {
+			return;
+		}
+		if paused {
+			self.queue.lock().clear();
+		} else {
+			for layer in self.layers.lock().iter() {
+				layer.request_keyframe();
+			}
+		}
+	}
+
 	pub fn quality(&self) -> VideoQuality {
 		*self.quality.lock()
 	}
@@ -131,7 +149,7 @@ impl Outgoing {
 	}
 
 	pub fn pop(&self) -> Option<EncodedUnit> {
-		if !self.sending() {
+		if !self.sending() || self.paused() {
 			self.queue.lock().clear();
 			return None;
 		}

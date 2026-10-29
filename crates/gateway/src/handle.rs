@@ -47,6 +47,21 @@ pub struct VoiceStateRequest<'a> {
 	pub flags: u64,
 }
 
+#[derive(Debug, Serialize)]
+struct StreamCreateRequest<'a> {
+	#[serde(rename = "type")]
+	kind: &'static str,
+	guild_id: Option<Snowflake>,
+	channel_id: Snowflake,
+	preferred_region: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+struct StreamPausedRequest<'a> {
+	stream_key: &'a str,
+	paused: bool,
+}
+
 impl Gateway {
 	pub fn spawn(config: GatewayConfig, handle: Handle) -> (GatewayHandle, mpsc::Receiver<GatewayEvent>) {
 		Self::spawn_when(async move { Some(config) }, handle)
@@ -201,15 +216,15 @@ impl GatewayHandle {
 		channel_id: Snowflake,
 		preferred_region: Option<&str>,
 	) -> Result<(), SendError> {
-		let kind = if guild_id.is_some() { "guild" } else { "call" };
-		self.queue(
+		let request = StreamCreateRequest {
+			kind: if guild_id.is_some() { "guild" } else { "call" },
+			guild_id,
+			channel_id,
+			preferred_region,
+		};
+		self.queue_frame(
 			Opcode::StreamCreate,
-			json!({
-				"type": kind,
-				"guild_id": guild_id,
-				"channel_id": channel_id,
-				"preferred_region": preferred_region,
-			}),
+			frames::encode(Opcode::StreamCreate, &request).map_err(|_| SendError::Closed)?,
 		)
 	}
 
@@ -222,9 +237,10 @@ impl GatewayHandle {
 	}
 
 	pub fn stream_set_paused(&self, stream_key: &str, paused: bool) -> Result<(), SendError> {
-		self.queue(
+		let request = StreamPausedRequest { stream_key, paused };
+		self.queue_frame(
 			Opcode::StreamSetPaused,
-			json!({ "stream_key": stream_key, "paused": paused }),
+			frames::encode(Opcode::StreamSetPaused, &request).map_err(|_| SendError::Closed)?,
 		)
 	}
 

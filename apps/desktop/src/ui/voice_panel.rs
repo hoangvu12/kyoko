@@ -67,6 +67,7 @@ fn controls_value(controls: VoiceControls) -> Value {
 		("server_muted", controls.server_muted.into()),
 		("server_deafened", controls.server_deafened.into()),
 		("camera", controls.camera.into()),
+		("live", controls.live.into()),
 	])
 }
 
@@ -119,6 +120,14 @@ impl Link {
 	pub(super) fn voice_apply(&self, state: &State) {
 		self.voice.publish(state);
 		self.publish_call(state);
+	}
+
+	pub(super) fn shows_live(&self) -> bool {
+		self.voice
+			.shown
+			.borrow()
+			.as_ref()
+			.is_some_and(|(_, controls)| controls.live)
 	}
 
 	fn voice_controls(&self) -> Option<VoiceControls> {

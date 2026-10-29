@@ -35,7 +35,7 @@ impl MockStream {
 
 struct Playing {
 	stream: MockStream,
-	task: JoinHandle<()>,
+	task: Option<JoinHandle<()>>,
 }
 
 #[derive(Default)]
@@ -46,8 +46,8 @@ pub(super) struct Streams {
 
 impl Drop for Streams {
 	fn drop(&mut self) {
-		for playing in self.playing.values() {
-			playing.task.abort();
+		for task in self.playing.values().filter_map(|playing| playing.task.as_ref()) {
+			task.abort();
 		}
 	}
 }
@@ -90,7 +90,7 @@ impl Voice {
 			.lock()
 			.playing
 			.values()
-			.find(|playing| playing.stream.rtc_channel_id == channel_id)
+			.find(|playing| playing.stream.rtc_channel_id == channel_id && playing.task.is_some())
 			.map(|playing| playing.stream.clone());
 		let Some(stream) = stream else {
 			return;
@@ -121,6 +121,34 @@ impl Voice {
 
 impl VoiceControl {
 	pub fn start_stream(&self, guild_id: Option<u64>, channel_id: u64, owner: u64) -> MockStream {
+		if let Some(stream) = self.stream(&stream_key(guild_id, channel_id, owner)) {
+			return stream;
+		}
+		let stream = self.open_stream(guild_id, channel_id, owner);
+		if self.0.settings.lock().dave_version > 0 {
+			self.add_member(stream.rtc_channel_id, owner);
+		}
+		let task = ScriptedCamera::new(self.clone(), stream.rtc_channel_id, owner, stream.video_ssrc).play();
+		if let Some(playing) = self.0.streams.lock().playing.get_mut(&stream.key) {
+			playing.task = Some(task);
+		}
+		stream
+	}
+
+	pub fn own_stream(&self, guild_id: Option<u64>, channel_id: u64) -> MockStream {
+		self.open_stream(guild_id, channel_id, CURRENT_USER_ID)
+	}
+
+	pub fn streaming_in(&self, channel_id: u64, owner: u64) -> bool {
+		self.0
+			.streams
+			.lock()
+			.playing
+			.values()
+			.any(|playing| playing.stream.channel_id == channel_id && playing.stream.owner == owner)
+	}
+
+	fn open_stream(&self, guild_id: Option<u64>, channel_id: u64, owner: u64) -> MockStream {
 		let key = stream_key(guild_id, channel_id, owner);
 		if let Some(stream) = self.stream(&key) {
 			return stream;
@@ -145,15 +173,11 @@ impl VoiceControl {
 			.rooms
 			.lock()
 			.set_group(stream.rtc_channel_id, stream.dave_group());
-		if self.0.settings.lock().dave_version > 0 {
-			self.add_member(stream.rtc_channel_id, owner);
-		}
-		let task = ScriptedCamera::new(self.clone(), stream.rtc_channel_id, owner, stream.video_ssrc).play();
 		self.0.streams.lock().playing.insert(
 			key,
 			Playing {
 				stream: stream.clone(),
-				task,
+				task: None,
 			},
 		);
 		stream
@@ -189,8 +213,10 @@ impl VoiceControl {
 
 	pub fn end_stream(&self, key: &str) -> Option<MockStream> {
 		let playing = self.0.streams.lock().playing.remove(key)?;
-		playing.task.abort();
-		self.disconnect_in(playing.stream.rtc_channel_id, playing.stream.owner);
+		if let Some(task) = playing.task {
+			task.abort();
+			self.disconnect_in(playing.stream.rtc_channel_id, playing.stream.owner);
+		}
 		Some(playing.stream)
 	}
 

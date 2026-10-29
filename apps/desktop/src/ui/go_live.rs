@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use bridge::{Inbox, ToastKind};
+use session::Command;
 use voice::video::{
 	CameraPreview, Picture, ScreenKind, ScreenTarget, TestPattern, VideoError, VideoQuality, VideoSource,
 };
@@ -32,6 +33,10 @@ const MOCK_SOURCES: [(ScreenKind, &str, u32, u32); 4] = [
 	(ScreenKind::Window, "Mock Notes", 960, 720),
 ];
 const CAPTURE_FRAMES: u64 = 3;
+const BASE_PIXEL_RATE: f64 = 1280.0 * 720.0 * 30.0;
+const BASE_BITRATE: f64 = 2_500_000.0;
+const MIN_BITRATE: f64 = 1_000_000.0;
+const MAX_BITRATE: f64 = 8_000_000.0;
 
 enum ShareWake {
 	Listed(u64, Vec<ScreenTarget>),
@@ -179,6 +184,19 @@ fn largest(resolution: &str, target: &ScreenTarget) -> (u32, u32) {
 	}
 }
 
+fn stream_quality(resolution: &str, target: &ScreenTarget, fps: u32) -> VideoQuality {
+	let (width, height) = largest(resolution, target);
+	let (sent_width, sent_height) = voice::video::fit(target.width, target.height, width, height);
+	let pixel_rate = f64::from(sent_width) * f64::from(sent_height) * f64::from(fps);
+	let bitrate = (BASE_BITRATE * pixel_rate / BASE_PIXEL_RATE).clamp(MIN_BITRATE, MAX_BITRATE);
+	VideoQuality {
+		width,
+		height,
+		fps,
+		bitrate: bitrate.round() as u32,
+	}
+}
+
 fn mock_frame_size(resolution: &str, target: &ScreenTarget) -> (u32, u32) {
 	let (width, height) = largest(resolution, target);
 	voice::video::fit(target.width, target.height, width, height)
@@ -265,6 +283,18 @@ impl Link {
 				} else {
 					link.close_go_live();
 				}
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.go_live_start", move |argument| {
+			if let (Some(link), Some((key, resolution, fps))) = (actions.upgrade(), choice(&argument)) {
+				link.start_go_live(&key, resolution, fps);
+			}
+		});
+		let actions = Rc::downgrade(link);
+		host.action("voice.stop_go_live", move |_| {
+			if let Some(link) = actions.upgrade() {
+				link.send(Command::StopGoLive);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -387,6 +417,25 @@ impl Link {
 		});
 	}
 
+	pub(super) fn start_go_live(&self, key: &str, resolution: &'static str, fps: u32) {
+		let target = self
+			.go_live
+			.targets
+			.borrow()
+			.iter()
+			.find(|target| key_of(target) == key)
+			.cloned();
+		let Some(target) = target else {
+			return;
+		};
+		let quality = stream_quality(resolution, &target, fps);
+		self.close_go_live();
+		self.send(Command::GoLive {
+			source: target,
+			quality,
+		});
+	}
+
 	pub(super) fn stop_screen_preview(&self) {
 		let view = &self.go_live;
 		view.preview_generation.set(view.preview_generation.get() + 1);
@@ -493,5 +542,18 @@ impl Link {
 			.await;
 		zgx::timer::sleep(capture::SETTLE).await;
 		tracing::info!("the screen preview shows for the capture");
+	}
+
+	pub(super) async fn drive_going_live(&self) {
+		self.drive_go_live_preview().await;
+		let first = self.go_live.targets.borrow().first().map(key_of);
+		let Some(key) = first else {
+			tracing::warn!("no share source to go live with");
+			return;
+		};
+		self.start_go_live(&key, DEFAULT_RESOLUTION, DEFAULT_FPS);
+		self.until_capture(Link::shows_live).await;
+		zgx::timer::sleep(capture::SETTLE).await;
+		tracing::info!("went live for the capture");
 	}
 }

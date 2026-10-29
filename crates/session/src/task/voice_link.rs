@@ -283,7 +283,7 @@ impl Core {
 				tracing::debug!(epoch, version, members = members.len(), "voice e2ee epoch");
 			}
 			VoiceEvent::DaveFailure(reason) => tracing::warn!(%reason, "voice e2ee failure"),
-			VoiceEvent::CameraStopped => self.camera_stopped(),
+			VoiceEvent::CameraStopped | VoiceEvent::VideoSourceEnded => self.camera_stopped(),
 			VoiceEvent::Stats { .. } => {}
 		}
 	}
@@ -364,6 +364,10 @@ impl Core {
 		if let Some(connection) = &self.voice.connection {
 			connection.set_transmitting(held);
 		}
+	}
+
+	pub(super) fn preferred_region(&self) -> Option<String> {
+		self.voice.regions.first().cloned()
 	}
 
 	pub(super) fn voice_session_id(&self) -> Option<String> {
