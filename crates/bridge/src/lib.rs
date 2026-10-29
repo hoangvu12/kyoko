@@ -12,6 +12,7 @@ mod display;
 mod dm_list;
 mod dm_panel;
 mod emoji_picker;
+mod expression_files;
 mod expression_popout;
 mod friends;
 mod gif_picker;
@@ -77,10 +78,10 @@ pub use community::{
 pub use composer::{
 	ActiveCommand, Attachment, BuiltIn, ChoiceList, CommandApp, CommandEntry, CommandHint, CommandPicker,
 	CommandResult, CommandResults, CommandSection, CommandSource, Composer, FileEdit, LineState, Mark,
-	Marked, Moderation, ModerationAsk, Notice, OptionChoices, OptionField, OptionFile, Outcome, Prepared,
-	Query, Reply, Suggestion, Trigger, Visual, apply_suggestion, command_catalog, command_picker,
-	exact_command, failure_text, interaction_options, line_marks, option_value, placeholder, query_at,
-	suggestion_heading, suggestions, text_marks, too_big, typing_line,
+	Marked, Moderation, ModerationAsk, NO_ATTACH_PERMISSION, Notice, OptionChoices, OptionField, OptionFile,
+	Outcome, Prepared, Query, Reply, Suggestion, Trigger, Visual, apply_suggestion, command_catalog,
+	command_picker, exact_command, failure_text, interaction_options, line_marks, option_value, placeholder,
+	query_at, suggestion_heading, suggestions, text_marks, too_big, typing_line,
 };
 pub use composer::{AppSearch, AppsLauncher, LauncherApp, RECENT_TILES, apps_launcher, search_apps};
 pub use connection::{Banner, Connection, ConnectionWatch, OFFLINE_AFTER, Tone};
@@ -93,6 +94,7 @@ pub use emoji_picker::{
 	PickerSection, RECENT_SECTION, RailEntry, RailGroup, RailIcon, SEARCH_SECTION, TONE_SAMPLE, TONES,
 	UNAVAILABLE_LOCK, category_title, custom_markup, emoji_lock, toned,
 };
+pub use expression_files::{PickedImage, prepared_image};
 pub use expression_popout::{
 	Area, DEFAULT_EMOJI_NOTE, ExpressionDetails, PopoutServer, PopoutSubject, expression_details,
 	members_label, place_popout,

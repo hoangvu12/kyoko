@@ -448,6 +448,12 @@ local new_post_form = ui.component(function()
 			placeholder = "Write the first message of your post",
 			placeholder_color = theme.color.text_5,
 			value = body,
+			on_key = function(event)
+				if event.cmd and (event.key == "v" or event.key == "V") then
+					return actions.forum_paste()
+				end
+				return false
+			end,
 		},
 		ui.show(function()
 			return #state.forum.files:get() > 0

@@ -174,7 +174,11 @@ impl Link {
 		}
 	}
 
-	fn open_call_chat(&self) {
+	pub(super) fn call_shown(&self) -> bool {
+		self.call.open()
+	}
+
+	pub(super) fn open_call_chat(&self) {
 		self.call.anchor.set(None);
 		self.call.set_open(false);
 		if let Some(channel_id) = self.voice_channel() {

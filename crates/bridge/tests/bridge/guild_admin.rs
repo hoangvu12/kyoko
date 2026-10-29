@@ -1,6 +1,7 @@
 use bridge::{
-	AuditTone, ChannelKind, GuildAccess, MemberSort, ModerationItem, OpenChannel, ServerPage, audit_rows,
-	first_channel, member_rows, moderation_items, replacement_channel, role_move_to, role_rows,
+	AuditTone, ChannelKind, GuildAccess, MemberSort, ModerationItem, OpenChannel, PickedImage, ServerPage,
+	audit_rows, first_channel, member_rows, moderation_items, prepared_image, replacement_channel,
+	role_move_to, role_rows,
 };
 use chrono::Utc;
 use protocol::{Permissions, Snowflake};
@@ -280,4 +281,86 @@ async fn deleting_the_open_channel_moves_the_view_to_the_servers_first_channel()
 	);
 	assert!(running.open_channel(first).is_some(), "the replacement opens");
 	running.stop().await;
+}
+
+fn gif(side: u32, frames: u8, noisy: bool) -> Vec<u8> {
+	let mut encoded = Vec::new();
+	{
+		let mut encoder = image::codecs::gif::GifEncoder::new(&mut encoded);
+		encoder
+			.set_repeat(image::codecs::gif::Repeat::Infinite)
+			.expect("a looping gif");
+		let mut seed = 7u32;
+		for frame in 0..frames {
+			let picture = image::RgbaImage::from_fn(side, side, |x, y| {
+				seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+				let noise = if noisy { (seed >> 16) as u8 } else { 0 };
+				image::Rgba([(x as u8) ^ noise, (y as u8).wrapping_add(frame * 40), noise, 255])
+			});
+			encoder
+				.encode_frame(image::Frame::new(picture))
+				.expect("a gif frame");
+		}
+	}
+	encoded
+}
+
+fn png(width: u32, height: u32) -> Vec<u8> {
+	let picture = image::RgbaImage::from_pixel(width, height, image::Rgba([90, 120, 200, 255]));
+	let mut encoded = std::io::Cursor::new(Vec::new());
+	picture
+		.write_to(&mut encoded, image::ImageFormat::Png)
+		.expect("a png");
+	encoded.into_inner()
+}
+
+fn png_size(bytes: &[u8]) -> (u32, u32) {
+	assert!(bytes.starts_with(b"\x89PNG"), "not a png");
+	let picture = image::load_from_memory(bytes).expect("a readable png");
+	(picture.width(), picture.height())
+}
+
+#[test]
+fn picked_emoji_and_stickers_keep_their_animation_and_stills_are_fitted_as_png() {
+	let animated = gif(200, 3, false);
+	assert!(animated.len() <= state::EMOJI_MAX_BYTES);
+	assert_eq!(
+		prepared_image(animated.clone(), PickedImage::Emoji),
+		Some(animated.clone())
+	);
+	assert_eq!(
+		prepared_image(animated.clone(), PickedImage::Sticker),
+		Some(animated.clone())
+	);
+	assert_eq!(
+		png_size(&prepared_image(animated, PickedImage::Icon).expect("an icon")),
+		(200, 200)
+	);
+	let still = gif(200, 1, false);
+	assert_eq!(
+		png_size(&prepared_image(still, PickedImage::Emoji).expect("an emoji")),
+		(128, 128)
+	);
+	let heavy = gif(600, 2, true);
+	assert!(heavy.len() > state::STICKER_MAX_BYTES, "{} bytes", heavy.len());
+	assert_eq!(
+		png_size(&prepared_image(heavy.clone(), PickedImage::Emoji).expect("a flattened emoji")),
+		(128, 128)
+	);
+	assert_eq!(
+		png_size(&prepared_image(heavy, PickedImage::Sticker).expect("a flattened sticker")),
+		(320, 320)
+	);
+	assert_eq!(
+		png_size(&prepared_image(png(600, 300), PickedImage::Sticker).expect("a sticker")),
+		(320, 160)
+	);
+	assert_eq!(
+		png_size(&prepared_image(png(1024, 512), PickedImage::Icon).expect("an icon")),
+		(512, 256)
+	);
+	assert_eq!(
+		prepared_image(b"not a picture".to_vec(), PickedImage::Emoji),
+		None
+	);
 }

@@ -17,12 +17,14 @@ use zgx::compose::prelude::*;
 use zgx::reactive::{Runtime, Signal};
 use zgx_script::{ScriptHost, Shared, Value};
 
-use super::composer::{self, ComposerView, Pane, content_type};
+use super::composer::{self, ComposerView, Pane};
 use super::{Link, Slot, field, number, record, snowflake, text};
 use crate::capture;
+use crate::incoming::{self, Pasted, SystemClipboard};
 use crate::profile::Anchor;
 use crate::threads::{PinsShown, Request, ThreadsLayer, ThreadsShown};
 use crate::timeline::{Compose, Setup, TimelineView};
+use bridge::ToastKind;
 
 const FORUM_AVATAR: f64 = 24.;
 const STARTER_AVATAR: f64 = 40.;
@@ -80,7 +82,7 @@ pub(super) struct ThreadPane {
 	forum_avatars: RefCell<Vec<String>>,
 	channel_icon: Shared,
 	layer: Rc<ThreadsLayer>,
-	files: Inbox<UploadFile>,
+	files: Inbox<(u64, Result<UploadFile, String>)>,
 	follow: Cell<Option<Snowflake>>,
 }
 
@@ -269,6 +271,11 @@ impl Link {
 		self.threads.forum.get()
 	}
 
+	pub(super) fn thread_slot_left(&self) -> Option<f32> {
+		let slot = self.threads.reported.get();
+		(slot.width > 0.).then_some(slot.x)
+	}
+
 	pub(super) fn view_showing(&self, channel_id: Snowflake) -> Option<Rc<TimelineView>> {
 		if self.thread_open().map(|open| open.channel_id) == Some(channel_id) {
 			return Some(self.threads.view.clone());
@@ -349,6 +356,10 @@ impl Link {
 			if let Some(link) = actions.upgrade() {
 				link.threads.layer.pick_files();
 			}
+		});
+		let actions = Rc::downgrade(link);
+		host.function("forum.paste", move |_| {
+			Value::Bool(actions.upgrade().is_some_and(|link| link.paste_post_files()))
 		});
 		let actions = Rc::downgrade(link);
 		host.action("forum.remove_file", move |argument| {
@@ -507,8 +518,14 @@ impl Link {
 
 	pub(super) async fn follow_post_files(self: Rc<Self>) {
 		while let Some(batch) = self.threads.files.next().await {
-			for file in batch {
-				self.add_post_file(file);
+			for (serial, read) in batch {
+				if serial != self.threads.post_serial.get() || !self.forum_composing() {
+					continue;
+				}
+				match read {
+					Ok(file) => self.add_post_file(file),
+					Err(reason) => self.toasts.push(ToastKind::Error, &reason),
+				}
 			}
 		}
 	}
@@ -538,19 +555,61 @@ impl Link {
 		}
 	}
 
+	fn post_upload_limit(&self) -> Option<u64> {
+		let forum = self.forum_open()?;
+		let shared = self.state()?;
+		let state = shared.read();
+		if !state.can_attach(forum.channel_id) {
+			drop(state);
+			self.toasts.push(ToastKind::Error, bridge::NO_ATTACH_PERMISSION);
+			return None;
+		}
+		Some(state.upload_limit(forum.channel_id))
+	}
+
 	fn read_post_files(&self, paths: Vec<PathBuf>) {
+		let Some(limit) = self.post_upload_limit() else {
+			return;
+		};
+		let free = MAX_POST_FILES.saturating_sub(self.threads.uploads.borrow().len());
+		if let Some(refusal) = incoming::too_many(free, paths.len()) {
+			self.toasts.push(ToastKind::Error, &refusal);
+			return;
+		}
+		let serial = self.threads.post_serial.get();
 		for path in paths {
 			let files = self.threads.files.clone();
-			self.composer.runtime().spawn_blocking(move || {
-				let name = path
-					.file_name()
-					.map(|name| name.to_string_lossy().into_owned())
-					.unwrap_or_else(|| "file".to_owned());
-				match std::fs::read(&path) {
-					Ok(bytes) => files.push(UploadFile::new(name.clone(), bytes, content_type(&name))),
-					Err(error) => tracing::debug!(%error, "a post attachment could not be read"),
+			self.composer
+				.runtime()
+				.spawn_blocking(move || files.push((serial, incoming::read_upload(&path, limit))));
+		}
+	}
+
+	pub(super) fn drop_on_forum(&self, paths: Vec<PathBuf>) {
+		if !self.forum_composing() {
+			self.open_new_post("");
+		}
+		self.read_post_files(paths);
+	}
+
+	fn paste_post_files(&self) -> bool {
+		match incoming::pasted(&SystemClipboard) {
+			Pasted::Files(paths) => {
+				self.read_post_files(paths);
+				true
+			}
+			Pasted::Image(image) => {
+				if self.post_upload_limit().is_none() {
+					return true;
 				}
-			});
+				let serial = self.threads.post_serial.get();
+				let files = self.threads.files.clone();
+				self.composer
+					.runtime()
+					.spawn_blocking(move || files.push((serial, incoming::pasted_image(image))));
+				true
+			}
+			Pasted::Nothing => false,
 		}
 	}
 

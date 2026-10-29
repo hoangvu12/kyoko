@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,6 +20,8 @@ use zgx_script::{ScriptHost, Shared, Value};
 use super::{Link, field, record, snowflake, text, texts};
 use crate::capture;
 use crate::composer_layer::{PlusMenu, Request};
+use crate::drops::{DropTarget, DropZones, FileDrag};
+use crate::incoming::{self, Pasted, SystemClipboard};
 
 const DRAFT_DELAY: Duration = Duration::from_millis(500);
 const TICK: Duration = Duration::from_millis(250);
@@ -286,7 +288,8 @@ pub(super) struct ComposerView {
 	names: &'static Names,
 	composer: RefCell<Composer>,
 	runtime: Handle,
-	loads: Inbox<Loaded>,
+	loads: Inbox<(Option<Snowflake>, Loaded)>,
+	dragging: Cell<bool>,
 	serial: Cell<u64>,
 	focus_serial: Cell<u64>,
 	replaced: RefCell<Option<String>>,
@@ -317,28 +320,6 @@ pub(super) struct ComposerView {
 	command_focus: Cell<u64>,
 }
 
-pub(super) fn content_type(name: &str) -> &'static str {
-	let extension = name.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
-	match extension.as_str() {
-		"png" => "image/png",
-		"jpg" | "jpeg" => "image/jpeg",
-		"gif" => "image/gif",
-		"webp" => "image/webp",
-		"bmp" => "image/bmp",
-		"mp4" => "video/mp4",
-		"webm" => "video/webm",
-		"mov" => "video/quicktime",
-		"mp3" => "audio/mpeg",
-		"ogg" => "audio/ogg",
-		"wav" => "audio/wav",
-		"txt" | "log" | "md" => "text/plain",
-		"json" => "application/json",
-		"pdf" => "application/pdf",
-		"zip" => "application/zip",
-		_ => "application/octet-stream",
-	}
-}
-
 fn thumbnail(bytes: &[u8], kind: &str) -> Option<ImageData> {
 	if !kind.starts_with("image/") {
 		return None;
@@ -348,27 +329,8 @@ fn thumbnail(bytes: &[u8], kind: &str) -> Option<ImageData> {
 	ImageData::new(small.width(), small.height(), small.into_raw()).ok()
 }
 
-fn read_upload(path: &Path, limit: u64) -> Result<UploadFile, String> {
-	let name = path
-		.file_name()
-		.map(|name| name.to_string_lossy().into_owned())
-		.unwrap_or_else(|| "file".to_owned());
-	match std::fs::metadata(path) {
-		Ok(metadata) if metadata.is_dir() => return Err(format!("{name} is a folder")),
-		Ok(metadata) => {
-			if let Some(refusal) = bridge::too_big(&name, metadata.len(), limit) {
-				return Err(refusal);
-			}
-		}
-		Err(_) => return Err(format!("{name} could not be read")),
-	}
-	let bytes = std::fs::read(path).map_err(|_| format!("{name} could not be read"))?;
-	let kind = content_type(&name);
-	Ok(UploadFile::new(name, bytes, kind))
-}
-
 fn read_file(path: PathBuf, limit: u64) -> Loaded {
-	match read_upload(&path, limit) {
+	match incoming::read_upload(&path, limit) {
 		Ok(file) => Loaded::File {
 			thumbnail: thumbnail(&file.bytes, &file.content_type),
 			file,
@@ -381,7 +343,7 @@ fn read_direct(paths: &[PathBuf], limit: u64) -> Loaded {
 	let mut files = Vec::with_capacity(paths.len());
 	let mut refused = None;
 	for path in paths {
-		match read_upload(path, limit) {
+		match incoming::read_upload(path, limit) {
 			Ok(file) => files.push(file),
 			Err(reason) => refused = Some(reason),
 		}
@@ -431,24 +393,12 @@ fn install_marks(host: &ScriptHost) {
 }
 
 fn pasted_image(image: platform::clipboard::RgbaImage) -> Loaded {
-	let (Ok(width), Ok(height)) = (u32::try_from(image.width), u32::try_from(image.height)) else {
-		return Loaded::Failed("The pasted image is too large".to_owned());
-	};
-	let Some(buffer) = image::RgbaImage::from_raw(width, height, image.bytes) else {
-		return Loaded::Failed("The pasted image could not be read".to_owned());
-	};
-	let mut encoded = Cursor::new(Vec::new());
-	if buffer.write_to(&mut encoded, image::ImageFormat::Png).is_err() {
-		return Loaded::Failed("The pasted image could not be read".to_owned());
-	}
-	let bytes = encoded.into_inner();
-	Loaded::File {
-		thumbnail: thumbnail(&bytes, "image/png"),
-		file: UploadFile::new(
-			format!("image-{}.png", Utc::now().format("%Y%m%d-%H%M%S")),
-			bytes,
-			"image/png",
-		),
+	match incoming::pasted_image(image) {
+		Ok(file) => Loaded::File {
+			thumbnail: thumbnail(&file.bytes, &file.content_type),
+			file,
+		},
+		Err(reason) => Loaded::Failed(reason),
 	}
 }
 
@@ -486,6 +436,7 @@ impl ComposerView {
 			composer: RefCell::new(Composer::default()),
 			runtime,
 			loads: Inbox::new(),
+			dragging: Cell::new(false),
 			serial: Cell::new(0),
 			focus_serial: Cell::new(0),
 			replaced: RefCell::new(None),
@@ -1002,13 +953,14 @@ impl Link {
 		let limit = shared.read().upload_limit(channel_id);
 		let loads = view.loads.clone();
 		view.runtime.spawn_blocking(move || {
-			loads.push(match read_upload(&path, limit) {
+			let loaded = match incoming::read_upload(&path, limit) {
 				Ok(file) => Loaded::Option {
 					thumbnail: thumbnail(&file.bytes, &file.content_type),
 					file,
 				},
 				Err(reason) => Loaded::Failed(reason),
-			})
+			};
+			loads.push((Some(channel_id), loaded));
 		});
 	}
 
@@ -1106,8 +1058,10 @@ impl Link {
 	pub(super) async fn follow_composer_files(self: Rc<Self>, pane: Pane) {
 		let loads = self.pane_composer(pane).loads.clone();
 		while let Some(batch) = loads.next().await {
-			for loaded in batch {
-				self.composer_loaded(pane, loaded);
+			for (channel_id, loaded) in batch {
+				if self.pane_composer(pane).composer.borrow().channel() == channel_id {
+					self.composer_loaded(pane, loaded);
+				}
 			}
 			self.publish_composer_all(pane);
 		}
@@ -1117,6 +1071,9 @@ impl Link {
 		loop {
 			zgx::timer::sleep(TICK).await;
 			let now = Instant::now();
+			if self.composer.dragging.get() {
+				self.follow_drag();
+			}
 			for pane in [Pane::Main, Pane::Thread] {
 				let composer = self.pane_composer(pane);
 				if composer.draft_due.get().is_some_and(|due| due <= now) {
@@ -1130,36 +1087,88 @@ impl Link {
 		}
 	}
 
-	pub(super) fn files_dropped(&self, paths: &[PathBuf]) {
+	pub(super) fn drop_zones(&self) -> DropZones {
+		DropZones {
+			thread_left: self.thread_open().and_then(|_| self.thread_slot_left()),
+			forum: self.forum_open().is_some(),
+			call: self.call_shown(),
+			scale: self.scale_factor() as f32,
+		}
+	}
+
+	pub(super) fn file_drag(&self, drag: FileDrag) {
+		match drag {
+			FileDrag::Over(target) => {
+				tracing::debug!(?target, "files over the window");
+				self.composer.dragging.set(true);
+				self.composer.drop_hover.set(true.into());
+				self.composer_layer.show_drop(self.drop_label(target));
+			}
+			FileDrag::Left => {
+				self.composer.dragging.set(false);
+				self.composer.drop_hover.set(false.into());
+				self.composer_layer.show_drop(None);
+			}
+			FileDrag::Dropped(target, paths) => self.files_dropped(target, paths),
+		}
+	}
+
+	fn follow_drag(&self) {
+		let zones = self.drop_zones();
+		if let Some(at) = zones.pointer() {
+			self.composer_layer.show_drop(self.drop_label(zones.target(at)));
+		}
+	}
+
+	fn files_dropped(&self, target: DropTarget, paths: Vec<PathBuf>) {
 		let direct = platform::keyboard::shift_held();
-		tracing::debug!(files = paths.len(), direct, "files dropped on the window");
-		self.composer.drop_hover.set(false.into());
-		self.composer_layer.show_drop(None);
-		if self.composer.composer.borrow().wants_file() {
-			if let Some(path) = paths.first() {
-				self.composer_option_path(Pane::Main, path.clone());
+		tracing::debug!(
+			files = paths.len(),
+			?target,
+			direct,
+			"files dropped on the window"
+		);
+		let pane = match target {
+			DropTarget::Main => Pane::Main,
+			DropTarget::Thread => Pane::Thread,
+			DropTarget::ForumPost => {
+				self.drop_on_forum(paths);
+				return;
+			}
+			DropTarget::VoiceChat => {
+				self.open_call_chat();
+				Pane::Main
+			}
+		};
+		if self.pane_composer(pane).composer.borrow().wants_file() {
+			if let Some(path) = paths.into_iter().next() {
+				self.composer_option_path(pane, path);
 			}
 			return;
 		}
 		if direct {
-			self.composer_upload_now(Pane::Main, paths.to_vec());
+			self.composer_upload_now(pane, paths);
 		} else {
-			self.composer_add_paths(Pane::Main, paths.to_vec());
+			self.composer_add_paths(pane, paths);
 		}
 	}
 
-	pub(super) fn files_hovering(&self, hovering: bool) {
-		tracing::debug!(hovering, "files over the window");
-		self.composer.drop_hover.set(hovering.into());
-		let target = hovering.then(|| self.drop_target()).flatten();
-		self.composer_layer.show_drop(target);
-	}
-
-	fn drop_target(&self) -> Option<String> {
+	fn drop_label(&self, target: DropTarget) -> Option<String> {
 		let shared = self.state()?;
 		let state = shared.read();
-		self.composer.composer.borrow().channel()?;
-		let placeholder = self.composer_placeholder(Pane::Main, &state);
+		let placeholder = match target {
+			DropTarget::Main | DropTarget::Thread => {
+				let pane = if target == DropTarget::Thread {
+					Pane::Thread
+				} else {
+					Pane::Main
+				};
+				self.pane_composer(pane).composer.borrow().channel()?;
+				self.composer_placeholder(pane, &state)
+			}
+			DropTarget::ForumPost => bridge::placeholder(&state, self.forum_open()?.channel_id),
+			DropTarget::VoiceChat => bridge::placeholder(&state, self.voice_channel()?),
+		};
 		Some(
 			placeholder
 				.strip_prefix("Message ")
@@ -1178,8 +1187,12 @@ impl Link {
 		};
 		let limit = shared.read().upload_limit(channel_id);
 		let loads = view.loads.clone();
+		if let Some(refusal) = incoming::too_many(state::MAX_ATTACHMENTS, paths.len()) {
+			loads.push((Some(channel_id), Loaded::Failed(refusal)));
+			return;
+		}
 		view.runtime
-			.spawn_blocking(move || loads.push(read_direct(&paths, limit)));
+			.spawn_blocking(move || loads.push((Some(channel_id), read_direct(&paths, limit))));
 	}
 
 	fn flush_draft(&self, pane: Pane) {
@@ -1537,24 +1550,24 @@ impl Link {
 	}
 
 	fn composer_paste(&self, pane: Pane) -> bool {
-		let files = platform::clipboard::read_files().unwrap_or_default();
-		if !files.is_empty() {
-			self.composer_add_paths(pane, files);
-			return true;
-		}
-		let image = match platform::clipboard::read_image() {
-			Ok(Some(image)) => image,
-			Ok(None) => return false,
-			Err(error) => {
-				tracing::debug!(%error, "the clipboard image could not be read");
-				return false;
-			}
-		};
 		let view = self.pane_composer(pane);
-		let loads = view.loads.clone();
-		view.runtime
-			.spawn_blocking(move || loads.push(pasted_image(image)));
-		true
+		let editing = view.composer.borrow().editing().is_some();
+		match incoming::pasted(&SystemClipboard) {
+			Pasted::Files(_) if editing => true,
+			Pasted::Files(paths) => {
+				self.composer_add_paths(pane, paths);
+				true
+			}
+			Pasted::Image(_) if editing => false,
+			Pasted::Image(image) => {
+				let channel_id = view.composer.borrow().channel();
+				let loads = view.loads.clone();
+				view.runtime
+					.spawn_blocking(move || loads.push((channel_id, pasted_image(image))));
+				true
+			}
+			Pasted::Nothing => false,
+		}
 	}
 
 	fn composer_add_paths(&self, pane: Pane, paths: Vec<PathBuf>) {
@@ -1566,10 +1579,15 @@ impl Link {
 			return;
 		};
 		let limit = shared.read().upload_limit(channel_id);
+		let free = state::MAX_ATTACHMENTS.saturating_sub(view.composer.borrow().files().len());
+		if let Some(refusal) = incoming::too_many(free, paths.len()) {
+			view.loads.push((Some(channel_id), Loaded::Failed(refusal)));
+			return;
+		}
 		for path in paths {
 			let loads = view.loads.clone();
 			view.runtime
-				.spawn_blocking(move || loads.push(read_file(path, limit)));
+				.spawn_blocking(move || loads.push((Some(channel_id), read_file(path, limit))));
 		}
 	}
 
@@ -2188,7 +2206,7 @@ impl Link {
 			| capture::ComposerShot::BuiltInGif
 			| capture::ComposerShot::BuiltInSticker
 			| capture::ComposerShot::BuiltInThread => self.drive_built_in(shot).await,
-			capture::ComposerShot::Drop => self.files_hovering(true),
+			capture::ComposerShot::Drop => self.file_drag(FileDrag::Over(DropTarget::Main)),
 			capture::ComposerShot::UploadFailed => self.drive_failed_uploads().await,
 			capture::ComposerShot::PlusMenu => {
 				self.until_capture(|link| link.composer_slot().is_some()).await;
@@ -2269,7 +2287,8 @@ impl Link {
 		self.replace_text(Pane::Main, Some((String::new(), 0)));
 		self.publish_composer_all(Pane::Main);
 		if shot == capture::ComposerShot::CommandFilePicked {
-			self.composer.loads.push(capture_cat());
+			let channel_id = self.composer.composer.borrow().channel();
+			self.composer.loads.push((channel_id, capture_cat()));
 		}
 		self.until_capture(move |link| link.command_shot_ready(shot))
 			.await;
@@ -2478,8 +2497,9 @@ impl Link {
 	}
 
 	async fn drive_uploads(&self) {
+		let channel_id = self.composer.composer.borrow().channel();
 		for loaded in capture_uploads() {
-			self.composer.loads.push(loaded);
+			self.composer.loads.push((channel_id, loaded));
 		}
 		self.until_capture(|link| link.composer.composer.borrow().files().len() == CAPTURE_UPLOADS)
 			.await;

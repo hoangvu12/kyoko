@@ -27,7 +27,11 @@ local function pick()
 	picking = true
 	ui.task(function()
 		local ok, files = pcall(function()
-			return ui.open_files({ title = "Upload Emoji", multiple = false }):await()
+			return ui.open_files({
+				title = "Upload Emoji",
+				multiple = false,
+				filters = { { "Images", { "png", "jpg", "jpeg", "gif", "webp", "avif" } } },
+			}):await()
 		end)
 		picking = false
 		if ok and files[1] then

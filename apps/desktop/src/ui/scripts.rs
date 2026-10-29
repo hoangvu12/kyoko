@@ -15,6 +15,7 @@ mod channel_settings;
 mod decorations;
 mod hidden;
 mod login;
+mod paste;
 mod plugin_page;
 mod plugins;
 mod voice;

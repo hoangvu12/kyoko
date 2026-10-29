@@ -26,7 +26,11 @@ local function pick()
 	picking = true
 	ui.task(function()
 		local ok, files = pcall(function()
-			return ui.open_files({ title = "Upload Sticker", multiple = false }):await()
+			return ui.open_files({
+				title = "Upload Sticker",
+				multiple = false,
+				filters = { { "Stickers", { "png", "apng", "gif" } } },
+			}):await()
 		end)
 		picking = false
 		if ok and files[1] then

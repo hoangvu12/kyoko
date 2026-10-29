@@ -429,6 +429,10 @@ function M.forum_attach()
 	ui.invoke("forum.attach")
 end
 
+function M.forum_paste(): boolean
+	return ui.call_sync("forum.paste") == true
+end
+
 function M.forum_remove_file(index: number)
 	ui.invoke("forum.remove_file", index)
 end

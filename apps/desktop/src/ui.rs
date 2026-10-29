@@ -225,6 +225,7 @@ pub fn run(
 			cx.tasks.spawn(link.clone().follow_display());
 			cx.tasks.spawn(link.clone().follow_gif_search());
 			cx.tasks.spawn(link.clone().follow_server_settings());
+			cx.tasks.spawn(link.clone().follow_server_picks());
 			cx.tasks.spawn(link.clone().follow_channel_settings());
 			cx.tasks.spawn(link.clone().follow_connection());
 			cx.tasks.spawn(link.clone().follow_speaking());
@@ -279,7 +280,7 @@ pub fn run(
 			let video = link.timeline_view.video_view();
 			let motion = link.motion.clone();
 			let dropped = Rc::downgrade(&link);
-			let hovered = Rc::downgrade(&link);
+			let zoned = Rc::downgrade(&link);
 			let keys = Rc::downgrade(&link);
 			let pressed = Rc::downgrade(&link);
 			cx.on_closed(move || {
@@ -292,78 +293,70 @@ pub fn run(
 			});
 			cx.render(provide(
 				motion,
-				layered(
-					host.view(),
-					[
-						timeline_slot(slot, transcript, [forum_shown, hidden_shown, call_shown], float),
-						thread_view,
-						scrim,
-						profiles,
-						switcher,
-						thread_layer,
-						community,
-						expressions,
-						lightbox,
-						moderation,
-						toasts,
-						composer_layer,
-						friend_dialog,
-						apps,
-						inbox_layer,
-						video,
-					],
-				)
-				.on_event(move |event| {
-					if event.phase == zgx::input::EventPhase::Capture {
-						if matches!(
-							event.event,
-							zgx::input::InputEvent::PointerDown { .. }
-								| zgx::input::InputEvent::KeyDown { .. }
-						) && let Some(link) = pressed.upgrade()
-						{
-							link.plugin_input();
+				crate::drops::accept_files(
+					layered(
+						host.view(),
+						[
+							timeline_slot(slot, transcript, [forum_shown, hidden_shown, call_shown], float),
+							thread_view,
+							scrim,
+							profiles,
+							switcher,
+							thread_layer,
+							community,
+							expressions,
+							lightbox,
+							moderation,
+							toasts,
+							composer_layer,
+							friend_dialog,
+							apps,
+							inbox_layer,
+							video,
+						],
+					)
+					.on_event(move |event| {
+						if event.phase == zgx::input::EventPhase::Capture {
+							if matches!(
+								event.event,
+								zgx::input::InputEvent::PointerDown { .. }
+									| zgx::input::InputEvent::KeyDown { .. }
+							) && let Some(link) = pressed.upgrade()
+							{
+								link.plugin_input();
+							}
+							if let zgx::input::InputEvent::KeyDown { key, .. } = &event.event
+								&& pressed
+									.upgrade()
+									.is_some_and(|link| link.timeline_view.viewer_key(key))
+							{
+								event.stop_propagation();
+							}
+							return;
 						}
-						if let zgx::input::InputEvent::KeyDown { key, .. } = &event.event
-							&& pressed
-								.upgrade()
-								.is_some_and(|link| link.timeline_view.viewer_key(key))
+						if let zgx::input::InputEvent::KeyDown {
+							key: zgx::input::Key::Escape,
+							..
+						} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
 						{
 							event.stop_propagation();
+							return;
 						}
-						return;
-					}
-					if let zgx::input::InputEvent::KeyDown {
-						key: zgx::input::Key::Escape,
-						..
-					} = event.event && escaped.upgrade().is_some_and(|link| link.escape_overlay())
-					{
-						event.stop_propagation();
-						return;
-					}
-					if is_switcher_key(&event.event) {
-						if let Some(link) = keys.upgrade() {
-							link.open_switcher();
+						if is_switcher_key(&event.event) {
+							if let Some(link) = keys.upgrade() {
+								link.open_switcher();
+							}
+							event.prevent_default();
+							event.stop_propagation();
 						}
-						event.prevent_default();
-						event.stop_propagation();
-						return;
-					}
-					let hovering = match event.event {
-						zgx::input::InputEvent::FileHover { .. } => true,
-						zgx::input::InputEvent::FileHoverCancelled
-						| zgx::input::InputEvent::FilesDrop { .. }
-						| zgx::input::InputEvent::FilesDropRejected { .. } => false,
-						_ => return,
-					};
-					if let Some(link) = hovered.upgrade() {
-						link.files_hovering(hovering);
-					}
-				})
-				.on_files_drop(move |paths, _| {
-					if let Some(link) = dropped.upgrade() {
-						link.files_dropped(paths);
-					}
-				}),
+					}),
+					move || zoned.upgrade().map(|link| link.drop_zones()).unwrap_or_default(),
+					move |drag| {
+						if let Some(link) = dropped.upgrade() {
+							link.file_drag(drag);
+						}
+					},
+				),
 			));
 		})
 		.map_err(|error| anyhow!("the window failed: {error}"))

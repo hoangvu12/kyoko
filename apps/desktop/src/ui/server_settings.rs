@@ -4,9 +4,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use bridge::{
-	AUDIT_FILTERS, GuildAccess, Inbox, MEMBER_SORTS, MODERATION_PERMISSIONS, MemberSort, RIGHT_GROUPS,
-	RoleChip, SERVER_GROUPS, ServerPage, audit_filter, audit_rows, ban_rows, member_rows, moderation_items,
-	role_color, role_move_to, role_rows,
+	AUDIT_FILTERS, GuildAccess, Inbox, MEMBER_SORTS, MODERATION_PERMISSIONS, MemberSort, PickedImage,
+	RIGHT_GROUPS, RoleChip, SERVER_GROUPS, ServerPage, audit_filter, audit_rows, ban_rows, member_rows,
+	moderation_items, role_color, role_move_to, role_rows,
 };
 use chrono::Utc;
 use media::ImageName;
@@ -20,12 +20,9 @@ use super::{Link, field, number, record, text};
 use crate::moderation::{Confirm, ConfirmAction, MemberMenu, Request};
 
 const ROW_AVATAR: f64 = 32.;
-const ICON_SIDE: u32 = 512;
 const ICON_LIMIT: u64 = 10 * 1024 * 1024;
 const ICON_PREVIEW: &str = "server/icon";
 const UPLOAD_PREVIEW: &str = "server/upload";
-const EMOJI_SIDE: u32 = 128;
-const STICKER_SIDE: u32 = 320;
 const EMOJI_POINTS: f64 = 48.;
 const STICKER_POINTS: f64 = 104.;
 const EXPRESSION_NAME_MAX: usize = 32;
@@ -33,9 +30,16 @@ const ICON_POINTS: f64 = 96.;
 const TINT_ALPHA: u32 = 0x2e;
 
 struct Upload {
-	png: Vec<u8>,
+	bytes: Vec<u8>,
 	name: String,
 	serial: u64,
+}
+
+struct Picked {
+	kind: PickedImage,
+	bytes: Vec<u8>,
+	preview: zgx::image::ImageData,
+	name: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,6 +72,7 @@ pub(crate) struct ServerSettingsView {
 	shown: Cell<bool>,
 	ready: Cell<bool>,
 	wakes: Inbox<()>,
+	picks: Inbox<Picked>,
 	avatars: RefCell<HashMap<(Snowflake, Option<String>), ImageName>>,
 	icon: RefCell<Option<ImageName>>,
 	pending_icon: RefCell<Option<Vec<u8>>>,
@@ -99,6 +104,7 @@ impl ServerSettingsView {
 			shown: Cell::new(false),
 			ready: Cell::new(false),
 			wakes: Inbox::new(),
+			picks: Inbox::new(),
 			avatars: RefCell::new(HashMap::new()),
 			icon: RefCell::new(None),
 			pending_icon: RefCell::new(None),
@@ -265,7 +271,7 @@ impl Link {
 		let actions = Rc::downgrade(link);
 		host.action("server.icon", move |argument| {
 			if let (Some(link), Some(path)) = (actions.upgrade(), text(&argument)) {
-				link.pick_icon(std::path::Path::new(path));
+				link.pick_image(std::path::PathBuf::from(path), PickedImage::Icon);
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -278,7 +284,7 @@ impl Link {
 		let actions = Rc::downgrade(link);
 		host.action("server.upload_pick", move |argument| {
 			if let (Some(link), Some(path)) = (actions.upgrade(), text(&argument)) {
-				link.pick_upload(std::path::Path::new(path));
+				link.pick_upload(std::path::PathBuf::from(path));
 			}
 		});
 		let actions = Rc::downgrade(link);
@@ -557,23 +563,51 @@ impl Link {
 		});
 	}
 
-	fn pick_upload(&self, path: &std::path::Path) {
-		let side = match self.server.open.borrow().page {
-			Some(ServerPage::Stickers) => STICKER_SIDE,
-			_ => EMOJI_SIDE,
-		};
-		let Some((png, preview)) = picked_png(path, side) else {
-			tracing::warn!("the picked image could not be read");
+	fn upload_kind(&self) -> PickedImage {
+		match self.server.open.borrow().page {
+			Some(ServerPage::Stickers) => PickedImage::Sticker,
+			_ => PickedImage::Emoji,
+		}
+	}
+
+	fn pick_upload(&self, path: std::path::PathBuf) {
+		self.pick_image(path, self.upload_kind());
+	}
+
+	fn pick_image(&self, path: std::path::PathBuf, kind: PickedImage) {
+		let picks = self.server.picks.clone();
+		self.composer
+			.runtime()
+			.spawn_blocking(move || match read_picked(&path, kind) {
+				Some(picked) => picks.push(picked),
+				None => tracing::warn!("the picked image could not be read"),
+			});
+	}
+
+	pub(super) async fn follow_server_picks(self: Rc<Self>) {
+		while let Some(batch) = self.server.picks.next().await {
+			for picked in batch {
+				self.picked(picked);
+			}
+		}
+	}
+
+	fn picked(&self, picked: Picked) {
+		let Picked {
+			kind,
+			bytes,
+			preview,
+			name,
+		} = picked;
+		if kind == PickedImage::Icon {
+			self.host.image(ICON_PREVIEW, Some(Arc::new(preview)));
+			*self.server.pending_icon.borrow_mut() = Some(bytes);
+			self.republish_server();
 			return;
-		};
-		let name: String = path
-			.file_stem()
-			.map(|stem| stem.to_string_lossy().into_owned())
-			.unwrap_or_default()
-			.chars()
-			.filter(|character| character.is_ascii_alphanumeric() || *character == '_')
-			.take(EXPRESSION_NAME_MAX)
-			.collect();
+		}
+		if kind != self.upload_kind() {
+			return;
+		}
 		let serial = self
 			.server
 			.upload
@@ -582,7 +616,7 @@ impl Link {
 			.map_or(0, |upload| upload.serial)
 			+ 1;
 		self.host.image(UPLOAD_PREVIEW, Some(Arc::new(preview)));
-		*self.server.upload.borrow_mut() = Some(Upload { png, name, serial });
+		*self.server.upload.borrow_mut() = Some(Upload { bytes, name, serial });
 		self.republish_server();
 	}
 
@@ -608,12 +642,12 @@ impl Link {
 				name,
 				description: text_of("description"),
 				tags: text_of("tags"),
-				file: upload.png,
+				file: upload.bytes,
 			}),
 			_ => self.send(Command::CreateEmoji {
 				guild_id,
 				name,
-				image: upload.png,
+				image: upload.bytes,
 			}),
 		}
 		self.republish_server();
@@ -736,17 +770,6 @@ impl Link {
 			description,
 		});
 		self.republish_server();
-	}
-
-	fn pick_icon(&self, path: &std::path::Path) {
-		match picked_png(path, ICON_SIDE) {
-			Some((png, preview)) => {
-				self.host.image(ICON_PREVIEW, Some(Arc::new(preview)));
-				*self.server.pending_icon.borrow_mut() = Some(png);
-				self.republish_server();
-			}
-			None => tracing::warn!("the picked server icon could not be read"),
-		}
 	}
 
 	fn create_role(&self) {
@@ -1458,23 +1481,35 @@ impl Link {
 	}
 }
 
-fn picked_png(path: &std::path::Path, side: u32) -> Option<(Vec<u8>, zgx::image::ImageData)> {
+fn read_picked(path: &std::path::Path, kind: PickedImage) -> Option<Picked> {
 	let size = std::fs::metadata(path).ok()?.len();
 	if size > ICON_LIMIT {
 		return None;
 	}
-	let bytes = std::fs::read(path).ok()?;
-	let image = image::load_from_memory(&bytes).ok()?;
-	let fitted = if image.width() > side || image.height() > side {
-		image.thumbnail(side, side)
+	let bytes = bridge::prepared_image(std::fs::read(path).ok()?, kind)?;
+	let side = kind.side();
+	let first = image::load_from_memory(&bytes).ok()?;
+	let rgba = if first.width() > side || first.height() > side {
+		first.thumbnail(side, side)
 	} else {
-		image
-	};
-	let rgba = fitted.to_rgba8();
-	let mut encoded = std::io::Cursor::new(Vec::new());
-	rgba.write_to(&mut encoded, image::ImageFormat::Png).ok()?;
+		first
+	}
+	.to_rgba8();
 	let preview = zgx::image::ImageData::new(rgba.width(), rgba.height(), rgba.into_raw()).ok()?;
-	Some((encoded.into_inner(), preview))
+	let name = path
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default()
+		.chars()
+		.filter(|character| character.is_ascii_alphanumeric() || *character == '_')
+		.take(EXPRESSION_NAME_MAX)
+		.collect();
+	Some(Picked {
+		kind,
+		bytes,
+		preview,
+		name,
+	})
 }
 
 fn parse_hex(text: &str) -> Option<u32> {

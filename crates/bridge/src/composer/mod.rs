@@ -42,7 +42,7 @@ const SERVER_ONLY: &str = "This command only works in a server";
 const SIGNED_OUT: &str = "You are signed out.";
 const NO_THREADS: &str = "Threads can't be started in this channel";
 const NOTHING_FOUND: &str = "Nothing to send yet";
-const NO_ATTACH_PERMISSION: &str = "You do not have permission to attach files in this channel.";
+pub const NO_ATTACH_PERMISSION: &str = "You do not have permission to attach files in this channel.";
 const THREAD_ARCHIVE_MINUTES: u32 = 4320;
 
 #[derive(Default)]
