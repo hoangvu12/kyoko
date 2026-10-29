@@ -139,16 +139,21 @@ impl State {
 			return (override_level(settings, ids) != Some(NotificationLevel::NoMessages))
 				.then_some(AlertKind::DirectMessage);
 		};
-		let guild = self.guild(guild_id);
-		let level = override_level(settings, ids)
-			.or_else(|| explicit(settings.and_then(|settings| settings.message_notifications)))
-			.unwrap_or_else(|| guild_default(guild));
+		let level = override_level(settings, ids).unwrap_or_else(|| self.guild_notification_level(guild_id));
 		let mentioned = self.mentions_me(message, Some(guild_id));
 		match level {
 			NotificationLevel::NoMessages => None,
 			NotificationLevel::AllMessages if !mentioned => Some(AlertKind::Message),
 			_ => mentioned.then_some(AlertKind::Mention),
 		}
+	}
+
+	pub fn guild_notification_level(&self, guild_id: Snowflake) -> NotificationLevel {
+		explicit(
+			self.guild_settings(Some(guild_id))
+				.and_then(|settings| settings.message_notifications),
+		)
+		.unwrap_or_else(|| guild_default(self.guild(guild_id)))
 	}
 
 	fn is_blocked(&self, user_id: Snowflake) -> bool {

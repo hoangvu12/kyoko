@@ -134,20 +134,12 @@ pub fn rank_forward(targets: &[ForwardTarget], query: &str) -> Vec<usize> {
 }
 
 pub fn guild_notifications(state: &State, guild_id: Snowflake) -> GuildNotifications {
-	state.guild_settings(Some(guild_id)).map_or(
-		GuildNotifications {
-			level: NotificationLevel::AllMessages,
-			suppress_everyone: false,
-			suppress_roles: false,
-		},
-		|settings| GuildNotifications {
-			level: settings
-				.message_notifications
-				.unwrap_or(NotificationLevel::AllMessages),
-			suppress_everyone: settings.suppress_everyone,
-			suppress_roles: settings.suppress_roles,
-		},
-	)
+	let settings = state.guild_settings(Some(guild_id));
+	GuildNotifications {
+		level: state.guild_notification_level(guild_id),
+		suppress_everyone: settings.is_some_and(|settings| settings.suppress_everyone),
+		suppress_roles: settings.is_some_and(|settings| settings.suppress_roles),
+	}
 }
 
 pub fn channel_notifications(state: &State, channel_id: Snowflake) -> NotificationLevel {
