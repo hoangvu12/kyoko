@@ -24,6 +24,9 @@ mod links;
 pub(crate) mod pictures;
 mod polls;
 mod popout;
+pub(crate) mod provider;
+#[cfg(test)]
+mod provider_tests;
 #[cfg(test)]
 mod react_tests;
 mod reactions;
@@ -639,6 +642,7 @@ impl TimelineView {
 			let tasks = cx.tasks();
 			this.pictures.listening().run(&tasks);
 			this.pictures.watching().run(&tasks);
+			this.pictures.players().attach(&tasks);
 			*this.tasks.borrow_mut() = Some(tasks);
 			this.env.links.attach(cx.try_service::<PlatformService>());
 			this.watch();

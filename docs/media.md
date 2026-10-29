@@ -112,6 +112,19 @@ A video goes through the media client like every picture (`MediaFetcher::open_ra
 
 Tests: `crates/bridge/tests/bridge/video.rs` (a posted attachment fetched in several ranges with Chrome's `<video>` headers, played, paused, sought and run to its end; the size cap and a revoked link failing, the second asking for a fresh link; a GIF embed muted, looping and pausing off screen; an iframe player left alone), `media_fetch::video_fetches_send_chromes_video_request` (TLS seam), and `timeline::video_tests` (the desktop player in-process: play, controls, seek, mute, fullscreen, scrolling away). Mockcord serves `tools/mockcord/fixtures/video/clip.mp4` (54 KB, 3 s, 320x180 at 15 fps H.264 with 24 kb/s stereo AAC, made with `ffmpeg -f lavfi -i testsrc2=size=320x180:rate=15 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 3 -pix_fmt nv12 -c:v h264_mf -hw_encoding 0 -rate_control quality -quality 10 -g 15 -bf 0 -c:a aac -b:a 24k -ac 2 -movflags +faststart`) for every `.mp4` attachment and `/media/<hash>.mp4`, with `Range` answered by 206 and `Content-Range`; `bridge::local_video` sends mock runs there.
 
+## Provider players
+
+YouTube, Vimeo, Spotify and SoundCloud play in the provider's own embed player, in WebView2 through `wry` (v1 122; the user's decision, as Discord does with an iframe). The web view exists only while a player is open: it is created when play is pressed and torn down when the player closes, its row leaves the timeline or the account signs out. Isolation:
+
+- Its own WebView2 user-data folder, `<data dir>/embed-players`, in InPrivate mode, with its browsing data cleared on close. Web login's profile is a different folder, so no Discord cookie, token or header ever reaches it; kyoko sets no headers of its own.
+- The web view loads only `kyoko://localhost/frame` (served as `https://kyoko.localhost/frame` from memory): a page with no script that holds one sandboxed `<iframe>` (`allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation`, no top navigation) of the rebuilt player URL, under `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-src` the six provider origins, as a header and a meta tag, and `Referrer-Policy: strict-origin` (YouTube refuses embeds without a referrer).
+- Top-level navigation is limited to that page; any other link, and every new window the player asks for, opens in the system browser (`https` only). Downloads and every permission request (camera, microphone, location, notifications) are refused; devtools, the context menu, zoom keys, browser accelerator keys and the clipboard are off.
+- No IPC: no handler is registered, so page script cannot reach kyoko. The player's size comes from the provider table and closing from kyoko's own button.
+- Nothing autoplays before the click: no web view exists until then. The player URL carries `autoplay=1` because the click is the user asking to play.
+
+The UI still never touches the network itself: the web view is Edge's own network stack, started by a user's click, the same as opening the link in a browser. Mock runs make no exception (`--mock` with a real YouTube link loads YouTube); captures use `bridge::StandInFrames` and never create a web view.
+
+
 ## Video
 
 Camera video from other people in a call (v1 103) reaches the window as zgx host images, like pictures, but from the voice connection instead of the gallery. The receive path is in `docs/voice.md`, "Video"; this section is about turning frames into pixels on screen and what that costs.

@@ -23,6 +23,7 @@ mod mentions;
 mod ops;
 mod password;
 mod polls;
+pub mod providers;
 mod reactions;
 mod ready;
 mod record;

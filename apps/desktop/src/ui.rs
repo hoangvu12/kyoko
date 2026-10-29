@@ -9,6 +9,7 @@ mod connection;
 mod cursors;
 mod display;
 mod dm_call;
+mod embeds;
 mod expression_shots;
 mod expressions;
 mod friends;
@@ -241,6 +242,13 @@ pub fn run(
 			cx.tasks.spawn(async move { pictures.show_images().await });
 			cx.tasks.spawn(link.clone().flush_members());
 			cx.tasks.spawn(link.clone().attach_frame());
+			cx.tasks.spawn(
+				link.clone().attach_embed_frames(
+					capture
+						.is_none()
+						.then(|| desktop.store.paths.data_dir().join(embeds::PROFILE)),
+				),
+			);
 			if let (None, Some(half)) = (&capture, platform::caret::blink_time()) {
 				cx.tasks.spawn(crate::caret::run(
 					cx.ui.downgrade(),
@@ -1022,6 +1030,7 @@ impl Link {
 			capture::Screen::LinkPreview => self.drive_link_preview().await,
 			capture::Screen::VoiceMessage => self.drive_voice_message().await,
 			capture::Screen::VideoPlayer => self.drive_video_player().await,
+			capture::Screen::ProviderPlayer => self.drive_provider_player().await,
 			capture::Screen::Components(shot) => self.drive_component_shot(*shot).await,
 			capture::Screen::Polls(shot) => self.drive_polls(*shot).await,
 			capture::Screen::AppsLauncher => self.drive_apps().await,

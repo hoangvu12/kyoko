@@ -9,6 +9,7 @@ mod composer_layer;
 mod dm_panel;
 mod dm_sidebar;
 mod drops;
+mod embed_frames;
 mod emoji;
 mod fonts;
 mod frame;

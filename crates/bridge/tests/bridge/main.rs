@@ -34,6 +34,7 @@ mod playback;
 mod popouts;
 mod profile;
 mod profile_menu;
+mod providers;
 mod qr_login;
 mod rail;
 mod reorder;

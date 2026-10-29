@@ -65,6 +65,7 @@ const TEN: [(i64, i64); 10] = [
 pub const VIDEO_SECTIONS: [(&str, &str); 1] = [("timeline-video", "showcase: video")];
 pub const VIDEO_CAPTION: &str = "a clip from today";
 pub const VIDEO_EMBED_URL: &str = "https://clips.example.com/v/kyoko-showcase";
+pub const PROVIDER_SECTIONS: [(&str, &str); 1] = [("timeline-providers", "showcase: providers")];
 
 pub const COMPONENTS_SECTION: &str = "showcase: components";
 pub const RELEASE_QUESTION: &str = "did the release post go out";
@@ -92,6 +93,7 @@ pub fn screen_section(screen: &str) -> Option<&'static str> {
 		.iter()
 		.chain(IMAGE_GRID_SECTIONS.iter())
 		.chain(VIDEO_SECTIONS.iter())
+		.chain(PROVIDER_SECTIONS.iter())
 		.find(|(name, _)| *name == screen)
 		.map(|(_, section)| *section)
 }
@@ -658,6 +660,14 @@ pub fn build(spec: &Showcase) -> Built {
 			..Embed::default()
 		}]);
 	});
+
+	writer.section(PROVIDER_SECTIONS[0].1);
+	for (slot, link) in crate::providers::LINKS.into_iter().enumerate() {
+		writer.post(slot % 2 + 1, |message| {
+			message.content = link.to_owned();
+			message.embeds = LenientVec::from(crate::providers::embed(link).into_iter().collect::<Vec<_>>());
+		});
+	}
 
 	writer.section(SECTIONS[4].1);
 	let base = writer.time().timestamp_millis() as u64;

@@ -31,6 +31,7 @@ mod password_login;
 mod playback;
 mod polls;
 mod profile;
+mod providers;
 mod qr_login;
 mod rail;
 mod reactions;
@@ -166,6 +167,11 @@ pub use profile::{
 	PROFILE_LINK, PanelUser, ProfileBadge, ProfileBanner, ProfileCard, ProfileConnection, ProfileMenuItem,
 	ProfileTheme, Relation, RoleChip, StatusChoice, StatusLine, activity_line, dm_channel, invite_targets,
 	profile_link, profile_menu,
+};
+pub use providers::{
+	FRAME_ORIGIN, FRAME_ORIGINS, FRAME_SCHEME, FRAME_URL, FrameCall, FrameHost, FrameRect, Played,
+	PlayerLayout, Provider, ProviderFrames, ProviderPlayer, Sight, StandInFrames, frame_allows,
+	frame_document, frame_policy,
 };
 pub use qr_login::{QrEnd, QrEvents, QrSignIn, QrStage, scanner_avatar_request};
 pub use rail::{

@@ -722,3 +722,12 @@ Kyoko only (`--apps kyoko`): no Midnight mockup has a video player; compare by e
 |---|---|---|---|
 | `timeline-video` | 91 | As `timeline-markdown`, jump to `-# showcase: video`: a video attachment and a video embed at rest, each its poster with the round play button. | yes |
 | `video-player` | 91 | Open `#showcase` with the video section at the bottom, click the attachment's play button through `Ui::dispatch`, wait for frames, pause, click its seek bar at half: the clip paused at 0:01 / 0:03 with Discord's control bar (play, time, seek bar half filled, volume, fullscreen). | yes |
+
+### 122 Provider embeds
+
+Kyoko only (`--apps kyoko`): no Midnight mockup has a provider player; compare by eye with Discord and "Provider embeds" in `docs/ui.md`. Captures never create a WebView: the capture run's frame host is the stand-in (`bridge::StandInFrames`), so the open player shows kyoko's own black box (spinner and provider name) where WebView2 would draw.
+
+| Screen | Ticket | Steps | Kyoko |
+|---|---|---|---|
+| `timeline-providers` | 122 | As `timeline-markdown`, jump to `-# showcase: providers`: YouTube and Vimeo cards with the thumbnail and the play and open-in-browser pill, Spotify and SoundCloud cards with the art, title and pill. | yes |
+| `provider-player` | 122 | Open `#showcase` with the provider section at the bottom, click the YouTube card's play button through `Ui::dispatch`, wait for the player: the 400 by 225 player box in place of the thumbnail and the close button at the card's top right. | yes |

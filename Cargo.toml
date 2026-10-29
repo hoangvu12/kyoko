@@ -74,6 +74,7 @@ sha2 = "0.10"
 rsa = "0.9"
 qrcode = { version = "0.14", default-features = false }
 wry = { version = "0.57.1", default-features = false }
+webview2-com = "0.39.1"
 hex = "0.4"
 zeroize = { version = "1", features = ["derive"] }
 directories = "6.0"

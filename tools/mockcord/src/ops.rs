@@ -120,6 +120,9 @@ fn unfurled(content: &str) -> Vec<Embed> {
 			if let Some(provider) = gif_provider(&host) {
 				return Some(gif_embed(link, provider, &title));
 			}
+			if let Some(embed) = crate::providers::embed(link) {
+				return Some(embed);
+			}
 			Some(Embed {
 				kind: Some(EmbedKind::Link),
 				url: Some(link.to_owned()),

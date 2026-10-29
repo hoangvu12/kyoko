@@ -383,7 +383,7 @@ The image is `bridge::lightbox_request`: an attachment's original `url` (`Qualit
 
 ## Inline video
 
-Video attachments, video embeds whose video Discord proxies (`bridge::is_playable_embed`: a `video` on a media host, not an iframe player such as YouTube, Vimeo, Twitch or Spotify) and GIF embeds play in the timeline (`timeline/video.rs`, v1 91, after Discord's player in `b_Image_6.png`). The pipeline is in `docs/media.md`, "Inline video".
+Video attachments, video embeds whose video Discord proxies (`bridge::is_playable_embed`: a `video` on a media host, not an iframe player such as YouTube, Vimeo, Twitch or Spotify; the first four play their own player, see "Provider embeds") and GIF embeds play in the timeline (`timeline/video.rs`, v1 91, after Discord's player in `b_Image_6.png`). The pipeline is in `docs/media.md`, "Inline video".
 
 - Where: a video attachment is a tile of the message's mosaic (`bridge::mosaic_media`: images and videos together, "Image grid"), so one video alone keeps its shape within 550 by 350. A video embed's player takes the place of its large image (`EMBED_MEDIA_BOX`) inside the embed card. A GIF embed keeps its bare frame, star and GIF pill, and draws the video over its still. The lightbox still steps through images only.
 - At rest: the poster (an attachment's `bridge::video_poster_request`, the media proxy's first frame as WebP at the tile's size; an embed's thumbnail) under a 48-point round `overlay` disc with a 24-point `play_fill` in `overlay_text`. Loading shows the `spinner` until the first frame; a clip that fails shows `warning` and "Can't play this video" on `overlay`. A click anywhere on the video plays or pauses it.
@@ -391,6 +391,16 @@ Video attachments, video embeds whose video Discord proxies (`bridge::is_playabl
 - Fullscreen: the "video fullscreen" root layer (`Watching::view`, the last entry of `layered`) covers the window in black with the same player fitted inside, the button showing `fullscreen_exit`, and the window itself goes fullscreen (zgx `WindowHandle::set_fullscreen`). Escape, or the button, leaves both. Frames are converted at the window's size while it is open, at the tile's again after.
 - Scrolling a playing video off screen pauses it (the timeline reports its visible rows to `Watching::set_visible`); switching channels or signing out stops every player.
 - Ids: `video-<key>` (the surface), `video-play-<key>`, `video-controls-<key>`, `video-toggle-<key>`, `video-seek-<key>`, `video-mute-<key>`, `video-volume-<key>`, `video-fullscreen-button-<key>`, `video-fullscreen`; `<key>` is `attachment-<attachment id>` or `embed-<message id>-<embed index>`. `timeline::video_tests` drives them in-process.
+
+## Provider embeds
+
+YouTube, Vimeo, Spotify and SoundCloud links play the provider's own embed player inside the message (`timeline/provider.rs`, v1 122, ported from oxidcord `fc1dc43`). `bridge::ProviderPlayer::of(embed)` rebuilds the player URL from a validated id against a fixed list of origins (`bridge::FRAME_ORIGINS`); nothing from the embed payload is loaded as is. Twitch and other iframe players keep their link card.
+
+- At rest: YouTube and Vimeo keep the embed card and put the thumbnail in the large-media box (`EMBED_MEDIA_BOX`, 400 by 225 for 16:9) under a pill on `overlay`: play (`play_fill`) and open in browser (`external_link`), 40-point round buttons with 20-point icons in `overlay_text`. Spotify and SoundCloud add a row to the card instead, 400 wide and the provider's player height (Spotify track 80, episode 152, lists 352; SoundCloud track 166, set 400), on `bg_4` with the art, the title and the same pill; their side thumbnail is not drawn.
+- Play: the player box (`provider-frame-<key>`, black, a spinner and the provider name until WebView2 draws) takes the thumbnail's or the row's place, and a 24-point close button (`provider-close-<key>`) sits at the card's top right. One player lives at a time: playing another closes the first. Closing, signing out, or the row leaving the virtual list (scrolled far away, another channel) destroys it.
+- The frame is a WebView2 child window (`embed_frames.rs`, wry), not a zgx view, so it is drawn above the whole window. Every 16 ms while a player lives, `Players` asks the scene where its box is: outside the timeline's clip it is hidden, partly inside it is clipped (a container window the size of the visible part holds the web view at its full size), and if any node other than the box is topmost at one of 24 points over it (a menu, a popout, the lightbox, a dialog, settings) it is hidden until that closes. This is the overlay rule for a native window: nothing else is ever drawn under it.
+- Without the WebView2 runtime (`wry::webview_version` fails) the card shows "Opens in your browser: WebView2 isn't installed" under the media, and play opens the link through the link gate.
+- Ids: `provider-play-<key>`, `provider-open-<key>`, `provider-frame-<key>`, `provider-close-<key>`; `<key>` is `embed-<message id>-<embed index>`. `timeline::provider_tests` drives them in-process against `bridge::StandInFrames`, which records what the native host would do.
 
 ## Member list
 

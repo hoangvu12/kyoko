@@ -527,6 +527,7 @@ impl Link {
 		gallery.set_budget(0);
 		self.timeline_view.pictures().listening().stop();
 		self.timeline_view.pictures().watching().stop();
+		self.timeline_view.pictures().players().close();
 		*self.avatar.borrow_mut() = None;
 		self.avatar_requested_at.set(None);
 		self.avatar_shown.set(false);

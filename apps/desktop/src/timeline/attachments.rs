@@ -17,6 +17,7 @@ use super::body::{self, Look};
 use super::icons::icon;
 use super::pictures::{EMBED_ICON, Pictures, bare_box, bare_media, large_media, side_thumbnail};
 use super::popout;
+use super::provider::{self, Card};
 use super::rows::{RowEnv, TypeSize, tok};
 use super::voice;
 
@@ -464,6 +465,9 @@ fn embed_card(
 			zgx::theme::Themed::Value(rgb(color))
 		});
 	let texts = entry.body.embeds.get(index);
+	let player = bridge::ProviderPlayer::of(embed);
+	let layout = player.as_ref().map(|player| player.layout);
+	let key = format!("embed-{}-{index}", entry.message.id);
 	let mut column = column().grow().min_w(0.).gap(4.);
 	if let Some(provider) = embed.provider.as_ref().and_then(|provider| provider.name.clone()) {
 		column = column.child(
@@ -517,10 +521,20 @@ fn embed_card(
 			spoilers + SPOILER_STRIDE / 2,
 		));
 	}
-	if let Some(media) = large_media(embed)
-		&& (media.proxy_url.is_some() || media.url.is_some())
-	{
-		column = column.child(large(entry, index, media, embed, env));
+	match player.clone() {
+		Some(player) if player.layout == bridge::PlayerLayout::Video => {
+			column = column.child(provider_video(key.clone(), player, embed, env));
+		}
+		Some(player) => {
+			column = column.child(provider_widget(key.clone(), player, embed, env));
+		}
+		None => {
+			if let Some(media) = large_media(embed)
+				&& (media.proxy_url.is_some() || media.url.is_some())
+			{
+				column = column.child(large(entry, index, media, embed, env));
+			}
+		}
 	}
 	if embed.footer.is_some() || embed.timestamp.is_some() {
 		let footer = embed.footer.as_ref().map(|footer| footer.text.clone());
@@ -539,7 +553,7 @@ fn embed_card(
 				.text_color(tok("text_4")),
 		);
 	}
-	let thumbnail = side_thumbnail(embed).map(|media| {
+	let thumbnail = side_thumbnail(embed).filter(|_| layout.is_none()).map(|media| {
 		let name = env
 			.pictures
 			.embed_media(media, (EMBED_THUMBNAIL, EMBED_THUMBNAIL));
@@ -583,8 +597,47 @@ fn embed_card(
 					.p(EMBED_PADDING)
 					.child(column)
 					.when_some(thumbnail, |row, thumbnail| row.child(thumbnail)),
-			),
+			)
+			.when(layout.is_some(), |card| {
+				card.child(provider::close_button(&env.pictures.players(), &key))
+			}),
 	)
+}
+
+fn provider_video(key: String, player: bridge::ProviderPlayer, embed: &Embed, env: &Rc<RowEnv>) -> View {
+	let poster = large_media(embed).filter(|media| media.proxy_url.is_some() || media.url.is_some());
+	let name = poster.and_then(|media| env.pictures.embed_media(media, player.size));
+	let placeholder = poster.and_then(|media| media.placeholder.clone());
+	let pictures = env.pictures.clone();
+	Card {
+		key,
+		player,
+		links: env.links.clone(),
+	}
+	.video(&env.pictures.players(), move || {
+		picture(&pictures, name.clone(), placeholder.as_deref(), ObjectFit::Cover)
+	})
+}
+
+fn provider_widget(key: String, player: bridge::ProviderPlayer, embed: &Embed, env: &Rc<RowEnv>) -> View {
+	let (width, height) = player.size;
+	let side = height.min(width / 3.);
+	let art = embed.thumbnail.as_ref().map(|media| {
+		let name = env.pictures.embed_media(media, (side, side));
+		let placeholder = media.placeholder.clone();
+		let pictures = env.pictures.clone();
+		move || picture(&pictures, name.clone(), placeholder.as_deref(), ObjectFit::Cover)
+	});
+	let title = embed
+		.title
+		.clone()
+		.unwrap_or_else(|| player.provider.name().to_owned());
+	Card {
+		key,
+		player,
+		links: env.links.clone(),
+	}
+	.widget(&env.pictures.players(), art, title)
 }
 
 fn fields(

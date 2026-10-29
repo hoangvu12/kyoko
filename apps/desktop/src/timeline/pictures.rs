@@ -16,6 +16,7 @@ use protocol::{
 use zgx::image::ImageData;
 use zgx::reactive::{Runtime, Signal};
 
+use super::provider::Players;
 use super::video::Watching;
 use super::voice::Listening;
 
@@ -35,6 +36,7 @@ pub struct Pictures {
 	gallery: Gallery,
 	listening: Rc<Listening>,
 	watching: Rc<Watching>,
+	players: Rc<Players>,
 	cdn: String,
 	mock_origin: Option<String>,
 	scale: Cell<f64>,
@@ -51,6 +53,7 @@ impl Pictures {
 		Self {
 			listening: Rc::new(Listening::new(&runtime, &gallery, mock_origin.clone())),
 			watching: Rc::new(Watching::new(&runtime, &gallery, mock_origin.clone())),
+			players: Rc::new(Players::new(&runtime)),
 			runtime,
 			gallery,
 			cdn,
@@ -77,12 +80,17 @@ impl Pictures {
 		self.watching.clone()
 	}
 
+	pub fn players(&self) -> Rc<Players> {
+		self.players.clone()
+	}
+
 	pub fn set_quality(&self, quality: Quality) {
 		self.quality.set(quality);
 	}
 
 	pub fn set_scale(&self, scale: f64) {
 		self.watching.set_scale(scale);
+		self.players.set_scale(scale);
 		if self.scale.replace(scale) != scale {
 			self.avatars.borrow_mut().clear();
 		}
