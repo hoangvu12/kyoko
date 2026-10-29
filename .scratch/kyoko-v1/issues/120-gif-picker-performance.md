@@ -4,7 +4,7 @@
 
 **Blocked by:** 119 (same lane, run after)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Picker opens fast with small stills; animation on hover; categories and favourites fetched when opened
 - [ ] GIF favourites read/written through Discord's own endpoints the way the web client does (check against the web client; record in `docs/rest.md`)
