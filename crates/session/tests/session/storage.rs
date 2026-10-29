@@ -236,6 +236,70 @@ async fn the_plaintext_opt_in_writes_a_file_and_warns() {
 	running.stop().await;
 }
 
+fn secret_files(store: &Store) -> Vec<PathBuf> {
+	let mut files = files_under(&store.paths.config_dir().join("account-tokens"));
+	files.extend(
+		[store.paths.token_path(), store.paths.cache_key_path()]
+			.into_iter()
+			.filter(|path| path.exists()),
+	);
+	files
+}
+
+fn assert_owner_only(store: &Store) {
+	let files = secret_files(store);
+	assert!(files.len() >= 3, "token, account token and cache key: {files:?}");
+	for path in files {
+		assert!(
+			store::owner_only(&path).expect("the file's ACL is readable"),
+			"{} is readable by others",
+			path.display()
+		);
+	}
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn plaintext_secret_files_stay_owner_only_when_rewritten() {
+	let running = Running::start_with(Options::new("storage-plaintext-acl").plaintext_secrets(true)).await;
+	running.connected().await;
+	let user_id = current_user_id(&running);
+	running
+		.eventually("the account token to reach a file", || {
+			running
+				.store()
+				.accounts
+				.token_for(user_id)
+				.ok()
+				.flatten()
+				.is_some()
+		})
+		.await;
+	let store = running.store();
+	store
+		.tokens
+		.save("first-written")
+		.expect("the token file is written");
+	assert_owner_only(store);
+	store
+		.tokens
+		.save("written-again")
+		.expect("the token file is rewritten");
+	assert_eq!(
+		store.tokens.load().ok().flatten().as_deref(),
+		Some("written-again")
+	);
+	assert_owner_only(store);
+	store
+		.update_settings(|settings| settings.storage.plaintext_token = false)
+		.expect("secrets move to the keyring");
+	assert!(secret_files(store).is_empty(), "no secret file is left behind");
+	store
+		.update_settings(|settings| settings.storage.plaintext_token = true)
+		.expect("secrets move back to files");
+	assert_owner_only(store);
+	running.stop().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn turning_the_opt_in_on_and_off_moves_the_secrets() {
 	let running = Running::start("storage-plaintext-toggle").await;

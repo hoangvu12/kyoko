@@ -1,4 +1,6 @@
 mod accounts;
+#[cfg(windows)]
+mod acl;
 mod atomic;
 mod database;
 mod error;
@@ -20,6 +22,8 @@ use protocol::Snowflake;
 use zeroize::Zeroizing;
 
 pub use accounts::{Account, AccountStore};
+#[cfg(windows)]
+pub use acl::owner_only;
 pub use atomic::write_atomic;
 pub use database::{
 	Database, DeletedRow, KeptDeleted, KeptLimits, KeptVersion, MediaEntry, MessageLimits, ReadState, Table,

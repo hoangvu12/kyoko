@@ -153,6 +153,7 @@ impl MediaFoundationDecoder {
 	fn drain(&mut self, timestamp: Duration, latest: &mut Option<VideoFrame>) -> Result<(), VideoError> {
 		loop {
 			match mf::process_output(&self.transform, self.allocate_bytes).map_err(failure)? {
+				mf::Output::Sample(_) if !mf::within_pixel_cap(self.layout.width, self.layout.height) => {}
 				mf::Output::Sample(sample) => *latest = Some(self.convert(&sample, timestamp)?),
 				mf::Output::NeedInput => return Ok(()),
 				mf::Output::StreamChange => self.select_output()?,

@@ -153,6 +153,9 @@ impl SourceReader {
 		if width == 0 || height == 0 {
 			return Err(VideoError::InvalidFrame("the video has no size"));
 		}
+		if !mf::within_pixel_cap(width, height) {
+			return Err(VideoError::InvalidFrame("the video is too large"));
+		}
 		let stride = unsafe { current.GetUINT32(&MF_MT_DEFAULT_STRIDE) }
 			.map_or(width, |stride| stride as i32 as usize);
 		Ok(Layout {

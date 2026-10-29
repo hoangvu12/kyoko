@@ -9,7 +9,7 @@ use windows::core::{HSTRING, w};
 
 use crate::{PlatformError, Result};
 
-const ALLOWED_SCHEMES: [&str; 3] = ["http", "https", "mailto"];
+const ALLOWED_SCHEMES: [&str; 2] = ["http", "https"];
 
 pub fn open_url(raw: &str) -> Result<()> {
 	let url = Url::parse(raw)?;

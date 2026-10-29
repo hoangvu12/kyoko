@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::Mutex;
 use zeroize::Zeroizing;
 
-use crate::atomic::write_atomic;
+use crate::atomic::write_private;
 use crate::error::{Result, StoreError};
 
 const KEYRING_SERVICE: &str = "kyoko";
@@ -260,7 +260,7 @@ impl SecretSlot {
 		if let Some(parent) = self.file.parent() {
 			fs::create_dir_all(parent)?;
 		}
-		write_atomic(&self.file, secret.as_bytes())
+		write_private(&self.file, secret.as_bytes())
 	}
 
 	pub(crate) fn remove_from(&self, secrets: &Secrets, plaintext: bool) -> Result<()> {

@@ -220,7 +220,7 @@ fn links_open_directly_only_for_trusted_hosts() {
 			host: "notexample.com".to_owned()
 		}
 	);
-	assert_eq!(bridge::link_action("mailto:a@b.c", &[]), LinkAction::Open);
+	assert_eq!(bridge::link_action("mailto:a@b.c", &[]), LinkAction::Ignore);
 	assert_eq!(bridge::link_action("file:///c:/x", &[]), LinkAction::Ignore);
 	assert_eq!(bridge::link_action("not a url", &[]), LinkAction::Ignore);
 }

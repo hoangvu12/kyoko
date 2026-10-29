@@ -511,10 +511,8 @@ pub fn link_action(url: &str, trusted: &[String]) -> LinkAction {
 	let Ok(parsed) = Url::parse(url) else {
 		return LinkAction::Ignore;
 	};
-	match parsed.scheme() {
-		"mailto" => return LinkAction::Open,
-		"http" | "https" => {}
-		_ => return LinkAction::Ignore,
+	if !matches!(parsed.scheme(), "http" | "https") {
+		return LinkAction::Ignore;
 	}
 	let Some(host) = parsed.host_str().map(str::to_ascii_lowercase) else {
 		return LinkAction::Ignore;

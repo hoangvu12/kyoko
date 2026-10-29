@@ -14,6 +14,7 @@ use super::VideoError;
 
 const APERTURE_BYTES: usize = 16;
 const APERTURE_AREA_OFFSET: usize = 8;
+const MAX_PIXELS: usize = 7680 * 4320;
 
 pub fn device_error(error: windows::core::Error) -> VideoError {
 	VideoError::Device(error.message())
@@ -139,6 +140,10 @@ pub fn display_size(media_type: &IMFMediaType) -> (usize, usize) {
 	}
 	let (width, height) = size_of(media_type, &MF_MT_FRAME_SIZE).unwrap_or_default();
 	(width as usize & !1, height as usize & !1)
+}
+
+pub fn within_pixel_cap(width: usize, height: usize) -> bool {
+	width.saturating_mul(height) <= MAX_PIXELS
 }
 
 pub fn packed_nv12(data: &[u8], width: usize, height: usize, stride: usize) -> Option<Vec<u8>> {
