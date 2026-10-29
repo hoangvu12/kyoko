@@ -7,7 +7,6 @@ use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 use crate::Result;
 use crate::registry::Key;
 
-const SOUND_NAME: &str = "Default";
 const APP_IDS_KEY: &str = r"Software\Classes\AppUserModelId";
 
 #[derive(Debug, Clone)]
@@ -16,7 +15,6 @@ pub struct Notification {
 	pub body: String,
 	pub icon_path: Option<PathBuf>,
 	pub app_id: String,
-	pub sound: bool,
 }
 
 pub fn show(notification: &Notification, on_click: impl FnOnce() + Send + 'static) -> Result<()> {
@@ -28,9 +26,6 @@ pub fn show(notification: &Notification, on_click: impl FnOnce() + Send + 'stati
 		.app_id(&notification.app_id);
 	if let Some(icon_path) = &notification.icon_path {
 		toast.image_path(&icon_path.to_string_lossy());
-	}
-	if notification.sound {
-		toast.sound_name(SOUND_NAME);
 	}
 	let handle = toast.show()?;
 	thread::Builder::new()

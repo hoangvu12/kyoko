@@ -53,7 +53,7 @@ pub use actions::{
 	has_actions, message_link, message_menu, reaction_allowed, reaction_toggle, reaction_toggle_of,
 	toolbar_actions,
 };
-pub use alerts::{ToastText, toast_text};
+pub use alerts::{AlertOutlet, ToastText, raise_alerts, toast_text};
 pub use channel_admin::{
 	CANDIDATE_LIMIT, ChannelAccess, ChannelForm, ChannelPage, ChannelRight, ChannelRightGroup,
 	ChannelSettings, OverwriteCandidate, OverwriteRow, SLOWMODE_CHOICES, channel_right_groups,

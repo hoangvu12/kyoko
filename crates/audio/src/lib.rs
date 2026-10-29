@@ -1,4 +1,6 @@
+mod chime;
 mod clip;
+mod cue;
 mod deck;
 mod decode;
 mod error;
@@ -7,7 +9,9 @@ mod opus;
 mod output;
 mod playhead;
 
+pub use chime::message_chime;
 pub use clip::Clip;
+pub use cue::{Cue, Render};
 pub use deck::{Deck, DeckStatus};
 pub use decode::{DEFAULT_MAX_SAMPLES, Limits, decode, duration};
 pub use error::{AudioError, Result};

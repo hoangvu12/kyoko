@@ -1,6 +1,7 @@
 use protocol::{ChannelType, Message, Snowflake};
 use session::{Alert, AlertKind};
 use state::State;
+use store::Settings;
 
 const BODY_LIMIT: usize = 200;
 
@@ -8,6 +9,27 @@ const BODY_LIMIT: usize = 200;
 pub struct ToastText {
 	pub title: String,
 	pub body: String,
+}
+
+pub trait AlertOutlet {
+	fn chime(&self);
+	fn toast(&self, alert: &Alert, text: ToastText);
+}
+
+pub fn raise_alerts(state: &State, settings: &Settings, alerts: &[Alert], outlet: &dyn AlertOutlet) {
+	if alerts.is_empty() {
+		return;
+	}
+	let notifications = &settings.notifications;
+	if notifications.sounds && !settings.streamer_mode.mutes_sounds() {
+		outlet.chime();
+	}
+	if !notifications.enabled {
+		return;
+	}
+	for alert in alerts {
+		outlet.toast(alert, toast_text(state, alert, notifications.show_content));
+	}
 }
 
 pub fn toast_text(state: &State, alert: &Alert, show_content: bool) -> ToastText {

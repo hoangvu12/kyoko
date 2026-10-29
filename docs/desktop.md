@@ -16,16 +16,18 @@ The session decides; the desktop shows.
 
 The session (`crates/session/src/task/alerts.rs`) applies that to every live `MESSAGE_CREATE` and also drops the alert when:
 
-- your status is Do Not Disturb (`Command::SetStatus`);
+- your status is Do Not Disturb (`Command::SetStatus`, or the status saved in Discord's settings, which READY restores), so DND silences every toast and the chime;
 - the message is in the selected channel while viewing (`Command::SetViewing(true)`, the default, which the desktop keeps in step with window focus);
 - the burst limit is spent: `SessionConfig::alerts` (`AlertPacing`), three alerts per ten seconds by default;
 - the `allow_notification` hook returns false (run on a blocking worker; a failing hook allows).
 
-The burst limit is checked first and reserves a place, so the hook only hears of alerts that would show; a veto gives the place back. Hook calls for separate messages run side by side, so their alerts can reach the queue out of order. The sound plays with the toast, so a vetoed alert is silent too; unread counts, badges and the tray are never affected by the hook.
+The burst limit is checked first and reserves a place, so the hook only hears of alerts that would show; a veto gives the place back. Hook calls for separate messages run side by side, so their alerts can reach the queue out of order. The chime plays only for accepted alerts, so a vetoed alert is silent too; unread counts, badges and the tray are never affected by the hook.
 
-Accepted alerts queue (at most 16) behind `Session::take_alerts()`, and `Changes::alerts` wakes the UI. The desktop formats them with `bridge::toast_text` (author, `#channel, Guild` or group name; mentions, channels, roles and custom emoji made readable; 200 characters) and posts a toast on a worker thread.
+Accepted alerts queue (at most 16) behind `Session::take_alerts()`, and `Changes::alerts` wakes the UI. The desktop formats them with `bridge::toast_text` (author, `#channel, Guild` or group name; mentions, channels, roles and custom emoji made readable; 200 characters) and hands each batch to `bridge::raise_alerts`, which plays the chime once for the batch and posts one toast per alert through an `AlertOutlet`. The desktop's outlet (`apps/desktop/src/notify.rs`, `Desk`) plays the chime with `audio::Cue` and posts silent toasts on a worker thread; tests use a recording outlet, so they never play sound or show a real notification.
 
-Settings: `notifications.enabled`, `notifications.show_content` (off: "Mentioned you" or "Sent a message"), `notifications.sounds` (silenced by streamer mode's `disable_sounds`).
+Settings: `notifications.enabled` (toasts), `notifications.show_content` (off: "Mentioned you" or "Sent a message"), `notifications.sounds` (the chime, shown as Sounds > Message; independent of `enabled`, as in Discord, and silenced by streamer mode's `disable_sounds`). The Send Test button plays the chime when sounds are on.
+
+The chime is kyoko's own, synthesized at the output device's rate by `audio::message_chime` (two decaying sine notes, G4 then C5, about 0.4 s; no Discord audio asset). `audio::Cue` (`crates/audio/src/cue.rs`) is the small reusable player: `Cue::once(render)` or `Cue::looping(render)`, `play()` (ignored while that cue already plays, so a burst of alerts chimes once), `stop()`, `is_playing()`. It opens the default output device with cpal only while it plays, on its own thread.
 
 Toasts are posted under the AppUserModelID `io.github.hoangvu12.Kyoko`, also in `--mock` runs. At startup the desktop writes `HKCU\Software\Classes\AppUserModelId\io.github.hoangvu12.Kyoko` (`DisplayName` Kyoko, `IconUri` a copy of the icon in the cache directory), which an unpackaged app needs for toasts to show. Clicking a toast while kyoko runs shows the window and opens the channel. Windows' global notification switch (`PushNotifications\ToastEnabled`) and Focus Assist still apply.
 

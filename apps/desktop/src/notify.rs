@@ -1,7 +1,11 @@
 use std::path::Path;
 
-use bridge::ToastText;
+use audio::Cue;
+use bridge::{AlertOutlet, Inbox, ToastText};
 use platform::notifications::{self, Notification};
+use session::Alert;
+
+use crate::integration::Request;
 
 const DISPLAY_NAME: &str = "Kyoko";
 const ICON_FILE: &str = "kyoko-notification.png";
@@ -21,13 +25,12 @@ pub fn register(app_id: &str, icon_dir: &Path) {
 	}
 }
 
-pub fn show(app_id: &str, text: ToastText, sound: bool, on_click: impl FnOnce() + Send + 'static) {
+pub fn show(app_id: &str, text: ToastText, on_click: impl FnOnce() + Send + 'static) {
 	let notification = Notification {
 		title: text.title,
 		body: text.body,
 		icon_path: None,
 		app_id: app_id.to_owned(),
-		sound,
 	};
 	let spawned = std::thread::Builder::new()
 		.name("kyoko-notify".to_owned())
@@ -37,5 +40,25 @@ pub fn show(app_id: &str, text: ToastText, sound: bool, on_click: impl FnOnce() 
 		});
 	if let Err(error) = spawned {
 		tracing::warn!(%error, "the notification thread did not start");
+	}
+}
+
+pub struct Desk {
+	pub app_id: &'static str,
+	pub chime: Cue,
+	pub requests: Inbox<Request>,
+}
+
+impl AlertOutlet for Desk {
+	fn chime(&self) {
+		self.chime.play();
+	}
+
+	fn toast(&self, alert: &Alert, text: ToastText) {
+		let requests = self.requests.clone();
+		let (guild_id, channel_id) = (alert.guild_id, alert.channel_id());
+		show(self.app_id, text, move || {
+			requests.push(Request::Open { guild_id, channel_id });
+		});
 	}
 }

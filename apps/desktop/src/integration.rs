@@ -3,7 +3,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{DeepLink, Inbox, SettingKey, parse_deep_link};
+use bridge::{AlertOutlet, DeepLink, Inbox, SettingKey, parse_deep_link};
 use platform::hotkeys::{HotkeyEvent, Hotkeys};
 use platform::push_to_talk::{Binding, TalkHook};
 use platform::tray::TrayEvent;
@@ -115,7 +115,7 @@ pub struct Integration {
 	link: Rc<Link>,
 	store: Arc<Store>,
 	requests: Inbox<Request>,
-	toast_id: &'static str,
+	desk: notify::Desk,
 	tray: RefCell<Option<TrayIcon>>,
 	hotkeys: RefCell<Option<Hotkeys>>,
 	talk: RefCell<Option<TalkHook>>,
@@ -153,8 +153,12 @@ impl Integration {
 			hotkeys: RefCell::new(hotkeys),
 			talk: RefCell::new(None),
 			store: desktop.store,
+			desk: notify::Desk {
+				app_id: desktop.toast_id,
+				chime: audio::Cue::once(audio::message_chime),
+				requests: desktop.requests.clone(),
+			},
 			requests: desktop.requests,
-			toast_id: desktop.toast_id,
 			tray: RefCell::new(tray),
 			visible: Cell::new(true),
 			viewing: Cell::new(None),
@@ -294,11 +298,14 @@ impl Integration {
 			let settings = self.store.settings.read();
 			settings.notifications.sounds && !settings.streamer_mode.mutes_sounds()
 		};
+		if sound {
+			self.desk.chime();
+		}
 		let text = bridge::ToastText {
 			title: "Kyoko".to_owned(),
 			body: TEST_BODY.to_owned(),
 		};
-		notify::show(self.toast_id, text, sound, || {});
+		notify::show(self.desk.app_id, text, || {});
 		self.link
 			.settings_view()
 			.note(TEST_NOTE_KEY, Some(TEST_SENT.to_owned()));
@@ -378,29 +385,12 @@ impl Integration {
 		if alerts.is_empty() {
 			return;
 		}
-		let (enabled, show_content, sound) = {
-			let settings = self.store.settings.read();
-			(
-				settings.notifications.enabled,
-				settings.notifications.show_content,
-				settings.notifications.sounds && !settings.streamer_mode.mutes_sounds(),
-			)
-		};
-		tracing::debug!(alerts = alerts.len(), enabled, "notifications raised");
-		if !enabled {
-			return;
-		}
+		tracing::debug!(alerts = alerts.len(), "notifications raised");
 		let Some(state) = self.link.state() else {
 			return;
 		};
-		for alert in alerts {
-			let text = bridge::toast_text(&state.read(), &alert, show_content);
-			let requests = self.requests.clone();
-			let (guild_id, channel_id) = (alert.guild_id, alert.channel_id());
-			notify::show(self.toast_id, text, sound, move || {
-				requests.push(Request::Open { guild_id, channel_id });
-			});
-		}
+		let settings = self.store.settings.read();
+		bridge::raise_alerts(&state.read(), &settings, &alerts, &self.desk);
 	}
 
 	fn schedule_attention(self: &Rc<Self>) {

@@ -41,9 +41,9 @@ return {
 			rows = {
 				{
 					key = "notifications.sounds",
-					title = "Notification Sounds",
-					note = "Play a sound with each notification.",
-					keywords = "audio ding mute",
+					title = "Message",
+					note = "Play a sound when a message would notify you, even with desktop notifications off. Do Not Disturb silences it.",
+					keywords = "audio ding mute chime notification sounds",
 				},
 			},
 		},

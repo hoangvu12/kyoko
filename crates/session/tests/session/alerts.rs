@@ -5,7 +5,11 @@ use std::time::Duration;
 use anyhow::Result;
 use mockcord::Fixtures;
 use parking_lot::Mutex;
-use protocol::{ChannelType, Message, NotificationLevel, Snowflake};
+use protocol::{
+	ChannelType, Message, NotificationLevel, ProtoStatusSettings, Snowflake, StatusKind,
+	encode_status_settings,
+};
+use serde_json::Value;
 use session::{Alert, AlertKind, AlertPacing, Command, SessionHooks};
 use state::State;
 
@@ -458,6 +462,36 @@ async fn a_muted_guild_dims_its_icon_but_not_its_channels() {
 		rows.iter()
 			.all(|row| row.muted == (Some(row.id) == muted_channel)),
 		"only the channel muted on its own is dimmed"
+	);
+	running.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn do_not_disturb_from_the_saved_settings_silences_every_alert() {
+	let encoded = encode_status_settings(&ProtoStatusSettings {
+		status: Some("dnd".to_owned()),
+		..ProtoStatusSettings::default()
+	});
+	let options = roomy("alerts-dnd").prepare(move |mock| {
+		mock.transform_ready(move |_, ready| ready["user_settings_proto"] = Value::from(encoded.as_str()));
+	});
+	let running = Running::start_with(options).await;
+	let scene = scene(&running).await;
+	assert_eq!(running.session().state().read().own_status(), StatusKind::Dnd);
+	let seen = Seen::new();
+	scene.post_dm(&running, "a quiet hello").await;
+	scene.post(&running, &scene.mention("a quiet mention")).await;
+	running.session().send(Command::SetStatus(StatusKind::Online));
+	running
+		.until("the status to be online again", |state| {
+			state.own_status() == StatusKind::Online
+		})
+		.await;
+	assert_eq!(scene.only(&running, &seen).await, Vec::new());
+	scene.post_dm(&running, "a hello that rings").await;
+	assert_eq!(
+		scene.only(&running, &seen).await,
+		vec![(AlertKind::DirectMessage, "a hello that rings".to_owned())]
 	);
 	running.stop().await;
 }
