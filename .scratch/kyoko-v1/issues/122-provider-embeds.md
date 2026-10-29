@@ -2,9 +2,7 @@
 
 **What to build:** Discord's playable link embeds: YouTube, Vimeo, Spotify and SoundCloud links show their preview card and, on play, the provider's real player inside the message. Port from oxidcord `fc1dc43` ("Add chat media player and provider embeds": `crates/ui/src/webframe.rs` hosts a sandboxed frame through `wry`, i.e. WebView2; `crates/media/src/providers.rs`), adapted to kyoko (zgx window, Luau UI, Rust timeline above the Luau tree). Only the provider-embed part: kyoko already plays video/audio attachments (91), so skip upstream's player crate, FFmpeg codec pack and symphonia, and the reply-mention toggle / inbox / help buttons unless kyoko lacks them (report).
 
-**Blocked by:** 121 (same lane, run after)
-
-**Status:** ready-for-agent
+**Status:** claimed (lane C)
 
 ## Decision (user, 2026-10-29)
 
