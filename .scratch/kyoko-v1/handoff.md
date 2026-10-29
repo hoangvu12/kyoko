@@ -1,5 +1,32 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: fifteenth orchestrator hands off (zeron chat `300bf7a3`, "kyoko orchestrator 15", same machine, main `9281edb` + this note)
+
+Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-30) after their first real run since 10-27.
+
+### Decisions the user made this session
+
+- **108's AUTO_CALL_CONNECT: put it in** ("we dont have to always make it up to date with chrome, i dont think its that big of the deal"). Merged `06afc91`; docs/gateway.md notes the value comes from docs.discord.food's example, 74 compares it. Read this as: small fingerprint differences are acceptable to the user, but still ask before changing IDENTIFY, headers or the handshake.
+- **123 flake fix: yes.** Merged.
+
+### Merged this session (Answers written)
+
+108 DM and group calls, AUTO_CALL_CONNECT (`06afc91`), 121 paste and drop files, 122 provider embeds (WebView2; isolation code read by me), 123 the headless ShowMeYourName / dont_round flakes (test races; both off rules.md's list). Added to rules.md's flake list: `voice_processing::echo_cancellation_removes_the_calls_echo...` (under load). Branch `lane-a-with-auto-call` deleted.
+
+### Running at handoff
+
+- **Lane A** `kyoko-lane-a`: **124** gateway 4002 closes, worker `b2eb0f49` (reports to `300bf7a3`: send it a short note so it reports to you), base `9281edb`, cold target. **Urgent:** the user's real run 4 was closed by Discord with 4002 "Error while decoding payload." 8 times in 17 minutes (each time resume -> InvalidSession -> identify); at the end every 20 s while the user typed in a channel where they can't send (onboarding not finished). Runs of 10-27 had none. Worker has all of this plus the leads (wreq websocket `d6245b6`, presence resend `102cd95`, op 8 after 117, op 37, op 4 fields, typing/onboarding). Verify: full verify + tls-capture; check the outgoing-message debug log it adds never logs values.
+- Lanes B and C: idle, targets cleaned.
+
+### Real run 4 (2026-10-30, main `7d9f340`)
+
+Recipe as before (tenth section): rebuilt the main checkout (`cargo build -p kyoko` with the BoringSSL env vars), launched with `--log info,gateway=debug`, logs `nguyenvu\.orchestrator\real-run\stdout-4.txt` / `stderr-4.txt`. I stopped it by PID once the closes came every 20 s (identify storm risk). stderr empty: no process crash. Mic `input stream error ... buffer underrun or overrun` a few times a minute in voice. Watch with a Monitor on the stdout log (`close frame code`, `InvalidSession`, `gateway identify`, `ERROR`, `WARN` minus the mic line), and stop the run yourself if closes repeat quickly.
+
+**The user's 16 findings are in `nguyenvu\.orchestrator\real-run\run4-findings.md`** (outside the repo; screenshots in `real-run\screens\run4\`, real people's names: never copy into the repo). Turn them into tickets (rail hover/tooltips/cursor/logo polish; server context menu; server folders and unread pill; voice badge green when joined; voice row connected state + Discord's mute/deafen state machine; voice channel chat beside the call (image-14 vs 15); server-profile avatars in the voice member list; animated avatars and banners (hover/open rules, transparent background); profile theme colours; clicking a voice member opens their profile; composer refusing typing without Send Messages; the onboarding 403/toast/banner). Ask the user how to order them if unclear; 124 first. Before the next real run, 124 must be merged.
+
+### What's left
+
+124 (running), the run 4 tickets (to write), 74 Chrome 157 bump after 2026-11-03, 75 crash (no crash in run 4; ask the user whether the 10-27 crash was this same "Waiting for connection" disconnect; if so close 75 into 124), 102 real call (partly tested in run 4: voice joined fine; ringing, NS/AEC, streams, embeds not reported yet). Skipped: 39, 58.
 ## Latest: fourteenth orchestrator hands off (zeron chat `5e46db85`, "kyoko orchestrator 14", same machine, main `e0065e5` + this note)
 
 Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-29).
