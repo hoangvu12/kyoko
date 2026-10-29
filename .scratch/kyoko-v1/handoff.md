@@ -1,5 +1,48 @@
 # kyoko v1 orchestrator handoff
 
+## Latest: thirteenth orchestrator hands off (chat `a9466879`, "kyoko orchestrator 13", same machine, main `27fdb1d` + this note)
+
+Everything below still applies unless this section says otherwise. The user asked for this handoff (2026-10-29).
+
+### Chats moved to the zeron app
+
+The user moved every chat from Roboco to **zeron** mid-session: use the `mcp__zeron__*` tools (`list_chats`, `read_chat`, `send_messages`, `create_chats`, `archive_chat`); same chat ids. Leave the old orchestrator chat `22c07f0d` ("kyoko orchestrator 12") stopped: it got a stray "start the work" message and was interrupted; two orchestrators on the same lanes would collide. **Completion notices of the two running workers go to `a9466879`, not to you:** poll with `list_chats` / `read_chat <id> limit 1 include_tools false`, or send each a short note so its next turn reports to you.
+
+### Decisions the user made this session
+
+- **Push to talk like Discord** (low-level hook, key still reaches other apps, Mouse 4/5, release delay). Done in 114.
+- **HTTP/2 handshake leftovers** (priority chaining on overlapping image requests, HTTP/3, ECH, resumption): leave as they are; look again during the Chrome 157 bump (note added to 74).
+- **102 real call: not now.**
+- **Noise suppression "the best, close to Krisp", on by default**: DeepFilterNet3 (High Quality, default) + RNNoise 0.2 head (Low CPU) + Off. Ticket 115. Echo cancellation + AGC via `sonora` next (116, blocked by 115).
+- **115's test speech fixture**: the user agreed it should not be Windows TTS output; the worker is replacing it with a public-domain recording (asked 2026-10-29).
+
+### Waiting on the user (ask in plain words)
+
+1. **115 exe size.** Release `kyoko.exe` goes 89.0 MB -> 125.4 MB (+36.4 MB): 11.5 MB weights (DFN3 8.0, RNNoise 3.5), the rest tract (tract-onnx with protobuf, tract-pulse, tract-transformers, linalg). Zipped, today's 89 MB exe is 32.6 MB (oxidcord's 0.4.3 installer is 27.1 MB, same release profile), so the installer would grow roughly +18-20 MB (estimate). Proposed shrink: convert the ONNX model to NNEF at build time and ship only tract's core + tract-nnef (no tract-onnx); the same model and weights, so sound and CPU should not change, and the tests prove it. The user asked "shrink like how? does it affect anything?" and hasn't decided; the lane C worker was asked to report feasibility (do all ops convert, bit-identical or near, size estimate) without starting it. 115 is verified green at `7cf70a5` but held; after the fixture swap it needs a re-verify.
+2. **oxidcord upstream** (research 2026-10-29; asked twice, no answer yet): kyoko forked at oxidcord `b852253`; upstream has 41 commits since. A trial cherry-picked 18 candidates: 0 applied clean (small fixes 1-3 conflict hunks, features 10-26; a full merge ~270 hunks, not viable). Proposed routine: `upstream` remote with `--no-tags`, a tracked "last reviewed" commit (`.scratch/upstream/last-reviewed`, `b852253`), port via path-limited `git diff X^ X -- crates/... | git apply -3`, commit "Ported from oxidcord <sha>"; UI features as tickets naming the upstream sha. Worth taking now: **1066772** (READY members carrying only `user_id` are dropped; kyoko has the same bug in `ready.rs`, so own roles/permissions can be wrong; also send/attach gating), **c6ea319** (`PIN_MESSAGES`/`BYPASS_SLOWMODE` bits, `can_pin`), **c494901** (owner-only ACL on secret files, no plaintext fallback when the keyring fails). Later as tickets: d0b2495 mention chime/DND, fc1dc43 provider embeds, 88dced0 + db5bfa6 GIF performance, b3c036b paste/drop files. Spec (`spec.md` ~72, ~259-261) says hand-port; this routine keeps a human review, so ask before switching. Lane A is idle waiting on this answer. Note: oxidcord-ref has 14 staged files (`crates/ui`, `apps/desktop`, Oct 26) from an older parity patch; leave them.
+
+### Merged this session (Answers written)
+
+113 Go Live stream audio + full-window viewer, 91 inline video (`crates/video`), 114 push to talk hooks, 104 camera send (encoder in `crates/video`). New tickets: 114, 115, 116.
+
+### State now
+
+- **Lane A** `kyoko-lane-a`: idle on `0163154`, target cleaned. Next: the oxidcord fixes if the user says yes; else nothing unblocked.
+- **Lane B** `kyoko-lane-b`: **105** screen capture + Go Live picker, worker `e02b4654` (parent `a9466879`), base `27fdb1d`, cold target. Then **107** going live (blocked by 105 and 106; reuse 104's `video-send` thread, Ready's layers, op 12 builder; 113's `AudioIo::Playback` for viewers).
+- **Lane C** `kyoko-lane-c`: **115** noise suppression, worker `315fd3e1` (parent `a9466879`), one commit `7cf70a5` on `27fdb1d`, verified green by me (all steps, tls 0/0, captures `settings-voice`, `settings-voice-processing` look right). Now swapping the speech fixture and answering the NNEF question; then re-verify, then merge per the user's size decision. Then **116** echo cancellation (vet `sonora` first).
+- Disk ~190 GB free (lanes A and B cleaned).
+
+### What's left
+
+105, 107, 115 (held), 116, oxidcord fixes (awaiting answer), 74 part 2b Chrome 157 after 2026-11-03 (also capture an `<audio>`: kyoko's audio `accept-encoding` is a guess, see 91's Answer), 75 crash needs a real run with stderr, 102 user's real call (`ready-for-human`, "not now"), 108 DM calls (`needs-triage`). Skipped: 39, 58. Small leftovers: 103's hardware decode note, 104's hardware encode note, 115's NNEF shrink if not done.
+
+### Gotchas this session
+
+- **A worker's squash deleted tickets** that landed on main meanwhile (113 dropped 115/116; restored `9fc213c`). rules.md now has a Squashing rule; before merging always `git diff --stat origin/main..lane-x | Select-String scratch`.
+- **PowerShell `[IO.File]` resolves relative paths against the process cwd, not `Set-Location`**: a relative path once edited lane C's copy of a ticket instead of main's. Use absolute paths.
+- New load flake in rules.md: `timeline::video_tests::a_video_attachment_plays_inline_with_discords_controls_and_pauses_off_screen` (twice). Once in headless-run: "redrawing the timeline asked ShowMeYourName again" (passed 3/3 after).
+- Verify recipe used for every merge: Bash background `verify.sh <lane>` with the BoringSSL env vars, then `cargo xtask tls-capture --client wreq --h2 --compare chrome-156` and `cargo xtask parity capture --apps kyoko --port <port> --screens ...` appended to `target/orch-verify.log`; grep `^=== (exit|done)|\.\.\. FAILED|luau0-src|differences\)|captured  `.
+
 ## Latest: twelfth orchestrator hands off (roboco chat `22c07f0d`, "kyoko orchestrator 12", same machine, main `6a41204` + this note)
 
 Everything below still applies unless this section says otherwise. Handed off because my context grew large (2026-10-29).
