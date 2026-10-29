@@ -31,6 +31,7 @@ mod members;
 mod mentions;
 mod moderation;
 mod navigation;
+mod permissions;
 mod polls;
 mod profile_actions;
 mod reactions;

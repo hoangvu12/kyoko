@@ -75,11 +75,24 @@ fn live_guilds<'a>(fixtures: &'a Fixtures, store: &Store) -> impl Iterator<Item 
 		.filter(|guild| !store.left_guilds.contains(&guild.id))
 }
 
-fn merged_members(fixtures: &Fixtures, store: &Store) -> Value {
+fn merged_members(fixtures: &Fixtures, store: &Store, dedupe: bool) -> Value {
 	let per_guild: Vec<Vec<Value>> = live_guilds(fixtures, store)
-		.map(|guild| vec![to_json(guild.current_member())])
+		.map(|guild| vec![merged_member(guild, dedupe)])
 		.collect();
 	json!(per_guild)
+}
+
+fn merged_member(guild: &GuildFixture, dedupe: bool) -> Value {
+	let member = guild.current_member();
+	let mut value = to_json(member);
+	if dedupe
+		&& let Some(fields) = value.as_object_mut()
+		&& let Some(user) = &member.user
+	{
+		fields.remove("user");
+		fields.insert("user_id".to_owned(), json!(user.id.to_string()));
+	}
+	value
 }
 
 fn referenced_users<'a>(fixtures: &'a Fixtures, store: &Store) -> Vec<&'a User> {
@@ -282,7 +295,7 @@ pub fn build(
 			"client_info": { "client": "desktop", "os": "windows", "version": 0 },
 			"active": true,
 		}],
-		"merged_members": merged_members(fixtures, &store),
+		"merged_members": merged_members(fixtures, &store, dedupe),
 		"analytics_token": "x",
 		"api_code_version": API_CODE_VERSION,
 		"apex_experiments": { "installation": installation_id(shared.config.seed) },
@@ -307,7 +320,7 @@ pub fn build(
 	};
 	let supplemental = json!({
 		"merged_presences": merged_presences,
-		"merged_members": merged_members(fixtures, &store),
+		"merged_members": merged_members(fixtures, &store, dedupe),
 		"guilds": live_guilds(fixtures, &store)
 			.map(|guild| json!({ "id": guild.id.to_string(), "voice_states": guild.voice_states }))
 			.collect::<Vec<_>>(),

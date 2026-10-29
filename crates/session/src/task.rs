@@ -1379,6 +1379,9 @@ impl Core {
 	}
 
 	fn typing(&mut self, channel_id: Snowflake) {
+		if !self.may_send(channel_id) {
+			return;
+		}
 		let now = StdInstant::now();
 		if self
 			.typing_sent

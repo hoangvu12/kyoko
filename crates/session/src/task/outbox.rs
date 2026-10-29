@@ -222,6 +222,9 @@ pub(crate) fn too_large(files: &[UploadFile], limit: u64) -> Option<String> {
 
 impl Core {
 	pub(super) fn send_message(&mut self, outgoing: Outgoing) {
+		if !self.send_allowed(outgoing.channel_id, !outgoing.files.is_empty()) {
+			return;
+		}
 		let Some(author) = self.current_user() else {
 			tracing::warn!("message not sent, no signed in user");
 			return;

@@ -15,6 +15,8 @@ pub const MEMBER_QUARANTINED_USERNAME: u64 = 1 << 7;
 #[serde(default)]
 pub struct Member {
 	pub user: Option<User>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub user_id: Option<Snowflake>,
 	pub nick: Option<String>,
 	pub avatar: Option<String>,
 	pub banner: Option<String>,
@@ -32,4 +34,10 @@ pub struct Member {
 	pub communication_disabled_until: Option<DateTime<Utc>>,
 	pub avatar_decoration_data: Option<AvatarDecorationData>,
 	pub guild_id: Option<Snowflake>,
+}
+
+impl Member {
+	pub fn id(&self) -> Option<Snowflake> {
+		self.user.as_ref().map(|user| user.id).or(self.user_id)
+	}
 }

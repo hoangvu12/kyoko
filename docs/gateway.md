@@ -21,7 +21,7 @@ IDENTIFY's `capabilities` is `gateway::ADVERTISED_CAPABILITIES`, built from the 
 | 1 | NO_AFFINE_USER_IDS | no | Changes which presences and members arrive for implicit relationships. Not needed, and untested against real traffic. |
 | 2 | VERSIONED_READ_STATES | yes | `read_state` is an `{entries, version, partial}` container. `EntryContainer` reads both shapes. |
 | 3 | VERSIONED_USER_GUILD_SETTINGS | yes | The same container for `user_guild_settings`. |
-| 4 | DEDUPE_USER_OBJECTS | yes | Users come once in READY `users`. DMs carry `recipient_ids`, relationships carry ids. State resolves both. |
+| 4 | DEDUPE_USER_OBJECTS | yes | Users come once in READY `users`. DMs carry `recipient_ids`, relationships carry ids, `merged_members` carry `user_id` instead of `user` (`Member::id`). State resolves all three; mockcord sends the same shape. |
 | 5 | PRIORITIZED_READY_PAYLOAD | yes | Presences, merged members and voice states arrive in READY_SUPPLEMENTAL, which state applies. |
 | 6 | MULTIPLE_GUILD_EXPERIMENT_POPULATIONS | yes | Only changes the experiments shape. Kyoko reads no experiments. |
 | 7 | NON_CHANNEL_READ_STATES | yes | `read_state` gains entries for guild events, the notification centre and so on. State keeps only channel entries. |

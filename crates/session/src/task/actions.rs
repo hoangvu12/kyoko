@@ -81,6 +81,28 @@ impl Core {
 		allowed
 	}
 
+	pub(super) fn may_send(&self, channel_id: Snowflake) -> bool {
+		let state = self.state.read();
+		state.channel_guild(channel_id).is_none() || state.can_send(channel_id)
+	}
+
+	pub(super) fn send_allowed(&mut self, channel_id: Snowflake, with_files: bool) -> bool {
+		let (send, attach) = {
+			let state = self.state.read();
+			let guild = state.channel_guild(channel_id).is_some();
+			(
+				!guild || state.can_send(channel_id),
+				!guild || !with_files || state.can_attach(channel_id),
+			)
+		};
+		if !send {
+			self.reject("You do not have permission to send messages in this channel");
+		} else if !attach {
+			self.reject("You need the Attach Files permission");
+		}
+		send && attach
+	}
+
 	pub(super) fn spawn_action<F, Fut>(&self, what: &'static str, call: F)
 	where
 		F: FnOnce(RestClient) -> Fut,

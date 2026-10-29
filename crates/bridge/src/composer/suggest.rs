@@ -13,6 +13,7 @@ const LOCKED_ROWS: usize = 2;
 const MIN_EMOJI_QUERY: usize = 2;
 const RECENT_AUTHORS: usize = 200;
 const RANK_CANDIDATES: usize = 100;
+const NO_SEND_PERMISSION: &str = "You do not have permission to send messages in this channel.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
@@ -419,6 +420,7 @@ pub fn placeholder(state: &State, channel_id: Snowflake) -> String {
 			format!("Message @{name}")
 		}
 		ChannelType::GroupDm => format!("Message {}", channel.name.clone().unwrap_or_default()),
+		_ if !state.can_send(channel_id) => NO_SEND_PERMISSION.to_owned(),
 		_ => format!("Message #{}", channel.name.clone().unwrap_or_default()),
 	}
 }

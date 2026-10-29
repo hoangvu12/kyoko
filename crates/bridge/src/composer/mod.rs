@@ -42,6 +42,7 @@ const SERVER_ONLY: &str = "This command only works in a server";
 const SIGNED_OUT: &str = "You are signed out.";
 const NO_THREADS: &str = "Threads can't be started in this channel";
 const NOTHING_FOUND: &str = "Nothing to send yet";
+const NO_ATTACH_PERMISSION: &str = "You do not have permission to attach files in this channel.";
 const THREAD_ARCHIVE_MINUTES: u32 = 4320;
 
 #[derive(Default)]
@@ -707,6 +708,9 @@ impl Composer {
 
 	pub fn attach(&mut self, state: &State, file: UploadFile) -> Result<u64, String> {
 		let channel_id = self.channel_id.ok_or_else(|| "Open a channel first".to_owned())?;
+		if state.channel_guild(channel_id).is_some() && !state.can_attach(channel_id) {
+			return Err(NO_ATTACH_PERMISSION.to_owned());
+		}
 		if self.files.len() >= MAX_ATTACHMENTS {
 			return Err(format!("You can attach up to {MAX_ATTACHMENTS} files"));
 		}

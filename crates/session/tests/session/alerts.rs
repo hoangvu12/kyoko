@@ -421,3 +421,43 @@ async fn a_burst_of_messages_raises_only_a_few_alerts() {
 	assert_eq!(seen.collect(&running), 3);
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_muted_guild_dims_its_icon_but_not_its_channels() {
+	let running = Running::start_with(roomy("alerts-muted-rows")).await;
+	let scene = scene(&running).await;
+	let guild_id = scene.guild_id;
+	running.session().send(Command::MuteGuild {
+		guild_id,
+		until: None,
+	});
+	running
+		.until("the guild to be muted", move |state| {
+			state
+				.guild_summaries()
+				.iter()
+				.any(|summary| summary.id == guild_id && summary.muted)
+		})
+		.await;
+	let muted_channel = running
+		.fixtures()
+		.guilds
+		.iter()
+		.find(|guild| guild.id == guild_id.get())
+		.map(|guild| Snowflake(guild.muted_channel_id));
+	let rows: Vec<_> = running
+		.session()
+		.state()
+		.read()
+		.guild_channel_tree(guild_id)
+		.into_iter()
+		.flat_map(|node| node.children)
+		.collect();
+	assert!(rows.len() > 1);
+	assert!(
+		rows.iter()
+			.all(|row| row.muted == (Some(row.id) == muted_channel)),
+		"only the channel muted on its own is dimmed"
+	);
+	running.stop().await;
+}

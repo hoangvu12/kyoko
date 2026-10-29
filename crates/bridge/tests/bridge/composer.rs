@@ -1300,3 +1300,43 @@ async fn a_command_with_only_optional_options_lists_them_at_once_and_runs_the_on
 	assert!(composer.cancel_command());
 	running.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_channel_i_cannot_send_in_says_so_and_refuses_files() {
+	let running = Running::start_with(
+		"composer-no-send",
+		MockConfig {
+			guilds: 3,
+			..MockConfig::default()
+		},
+	)
+	.await;
+	let fixtures = running.server.fixtures();
+	let muted_guild = &fixtures.guilds[2];
+	let guild_id = Snowflake(muted_guild.id);
+	let channel_id = muted_guild
+		.message_channel_ids
+		.iter()
+		.copied()
+		.map(Snowflake)
+		.find(|id| {
+			fixtures.channels.get(&id.get()).is_some_and(|channel| {
+				channel.kind == ChannelType::GuildText && channel.name.as_deref() != Some("staff-only")
+			})
+		})
+		.expect("a text channel");
+	let state = running.session().state().clone();
+	assert_eq!(
+		bridge::placeholder(&state.read(), channel_id),
+		"You do not have permission to send messages in this channel."
+	);
+	let mut composer = Composer::default();
+	composer.open(&state.read(), Some(guild_id), Some(channel_id));
+	let file = UploadFile::new("notes.txt", vec![1u8; 8], "text/plain");
+	assert_eq!(
+		composer.attach(&state.read(), file),
+		Err("You do not have permission to attach files in this channel.".to_owned())
+	);
+	assert!(composer.files().is_empty());
+	running.stop().await;
+}
